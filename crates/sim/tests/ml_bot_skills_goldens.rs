@@ -5,15 +5,14 @@ use solomon_sim::ml_bot::{
     MlBotPolicySkillDescriptorInput, describe_ml_bot_policy_skill, ml_bot_policy_skill_coverage_key,
 };
 use solomon_sim::profile::{
-    NativeSkillBookState, NativeSkillStatBookValue, PlayerStatBookComponent, WizardDiscipline,
-    WizardElement,
+    PlayerStatBookComponent, SkillBookState, SkillStatBookValue, WizardDiscipline, WizardElement,
 };
 
 #[test]
 fn all_native_skill_and_weld_descriptors_match_source_rows_and_boundaries() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/ml-bot-skills-goldens.json")).unwrap();
-    let mut book = NativeSkillBookState::new(WizardElement::Fire, WizardDiscipline::Arcane);
+    let mut book = SkillBookState::new(WizardElement::Fire, WizardDiscipline::Arcane);
     for (index, value) in fixture["book"]["permanentRanks"].as_array().unwrap().iter().enumerate() {
         book.permanent_ranks[index] = value.as_u64().unwrap() as u32;
     }
@@ -32,11 +31,11 @@ fn all_native_skill_and_weld_descriptors_match_source_rows_and_boundaries() {
         if let Some(overrides) = case["override"].as_object() {
             for (name, value) in overrides {
                 let property = if let Some(values) = value.as_array() {
-                    NativeSkillStatBookValue::Ranks(
+                    SkillStatBookValue::Ranks(
                         values.iter().map(|value| value.as_f64().unwrap()).collect(),
                     )
                 } else {
-                    NativeSkillStatBookValue::Scalar(value.as_f64().unwrap())
+                    SkillStatBookValue::Scalar(value.as_f64().unwrap())
                 };
                 std::sync::Arc::make_mut(&mut stat_book.entries)[input.skill_id]
                     .numeric_properties

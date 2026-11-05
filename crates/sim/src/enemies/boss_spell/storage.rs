@@ -1,13 +1,13 @@
 //! Boss spells in admission order, including child-before-parent admission.
 
-use super::NativeBossSpell;
+use super::BossSpell;
 
 /// Live boss spells in admission order. While a phase collects births, spells
 /// pushed during that phase wait in `births` until the phase admits them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BossSpells {
-    spells: Vec<NativeBossSpell>,
-    births: Option<Vec<NativeBossSpell>>,
+    spells: Vec<BossSpell>,
+    births: Option<Vec<BossSpell>>,
 }
 
 impl BossSpells {
@@ -19,11 +19,11 @@ impl BossSpells {
         self.spells.is_empty()
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, NativeBossSpell> {
+    pub fn iter(&self) -> std::slice::Iter<'_, BossSpell> {
         self.spells.iter()
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, NativeBossSpell> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, BossSpell> {
         self.spells.iter_mut()
     }
 
@@ -35,14 +35,14 @@ impl BossSpells {
     }
 
     /// Admits a spell, or holds it for the phase that is collecting births.
-    pub fn push(&mut self, spell: NativeBossSpell) {
+    pub fn push(&mut self, spell: BossSpell) {
         match &mut self.births {
             Some(births) => births.push(spell),
             None => self.spells.push(spell),
         }
     }
 
-    pub fn retain(&mut self, keep: impl FnMut(&NativeBossSpell) -> bool) {
+    pub fn retain(&mut self, keep: impl FnMut(&BossSpell) -> bool) {
         self.spells.retain(keep);
     }
 
@@ -51,7 +51,7 @@ impl BossSpells {
         self.births = Some(Vec::new());
     }
 
-    pub(crate) fn take_births(&mut self) -> Vec<NativeBossSpell> {
+    pub(crate) fn take_births(&mut self) -> Vec<BossSpell> {
         std::mem::take(self.births.as_mut().expect("boss spell phase collects its births"))
     }
 
@@ -59,7 +59,7 @@ impl BossSpells {
     /// ahead of it and take their first step on the next pass.
     pub(crate) fn advance(
         &mut self,
-        mut step: impl FnMut(&mut NativeBossSpell) -> (bool, Vec<NativeBossSpell>),
+        mut step: impl FnMut(&mut BossSpell) -> (bool, Vec<BossSpell>),
     ) {
         let population = std::mem::take(&mut self.spells);
         self.spells.reserve(population.len());
@@ -73,8 +73,8 @@ impl BossSpells {
     }
 }
 
-impl FromIterator<NativeBossSpell> for BossSpells {
-    fn from_iter<I: IntoIterator<Item = NativeBossSpell>>(spells: I) -> Self {
+impl FromIterator<BossSpell> for BossSpells {
+    fn from_iter<I: IntoIterator<Item = BossSpell>>(spells: I) -> Self {
         Self { spells: spells.into_iter().collect(), births: None }
     }
 }

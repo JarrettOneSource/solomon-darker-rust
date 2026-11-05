@@ -6,7 +6,7 @@
 
 mod build;
 
-pub use build::build_native_nav_mesh;
+pub use build::build_nav_mesh;
 
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -101,7 +101,7 @@ impl NavigationSet {
             prepared.push(PreparedNavigationMesh {
                 bounds,
                 clearance,
-                mesh: build_native_nav_mesh(bounds, &collision, clearance),
+                mesh: build_nav_mesh(bounds, &collision, clearance),
             });
         }
         Self::new(loaded.source_sha256.clone(), loaded.geometry_sha256.clone(), prepared)
@@ -123,7 +123,7 @@ impl NavigationSet {
 
     /// Explicit source prewarming, using the current geometry rather than a substitute map.
     pub fn prepare(&self, bounds: BoneyardBounds, world: &BoneyardCollisionWorld, clearance: f64) {
-        self.native_nav_mesh(bounds, world, clearance);
+        self.nav_mesh(bounds, world, clearance);
     }
 
     #[must_use]
@@ -144,11 +144,11 @@ impl NavigationSet {
             // A clear source route does not initialize the lazy cache.
             return Some(vec![request.start, request.end]);
         }
-        let prepared = self.native_nav_mesh(request.bounds, world, request.clearance);
+        let prepared = self.nav_mesh(request.bounds, world, request.clearance);
         route_from_mesh(request, &prepared.mesh, world)
     }
 
-    fn native_nav_mesh(
+    fn nav_mesh(
         &self,
         bounds: BoneyardBounds,
         world: &BoneyardCollisionWorld,
@@ -163,7 +163,7 @@ impl NavigationSet {
         let prepared = Arc::new(PreparedNavigationMesh {
             bounds,
             clearance,
-            mesh: build_native_nav_mesh(bounds, world, clearance),
+            mesh: build_nav_mesh(bounds, world, clearance),
         });
         meshes.push(Arc::clone(&prepared));
         prepared

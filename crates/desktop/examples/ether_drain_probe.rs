@@ -9,10 +9,9 @@ mod native {
     use solomon_sim::Vec2;
     use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
     use solomon_sim::secondary::ether_drain::{
-        NativeEtherDrainAnimation as Animation, NativeEtherDrainAtlas as Atlas,
-        NativeEtherDrainState,
+        EtherDrainAnimation as Animation, EtherDrainAtlas as Atlas, EtherDrainState,
     };
-    use solomon_sim::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
+    use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState};
     use solomon_web::Camera;
     use solomon_web::enemies::EnemyView;
     use solomon_web::secondary::SecondaryView;
@@ -34,10 +33,10 @@ mod native {
         retain_image: bool,
     }
 
-    fn actor(animations: Vec<Animation>) -> NativeSecondaryActorState {
-        let mut actor = NativeSecondaryActorState::new(
+    fn actor(animations: Vec<Animation>) -> SecondaryActorState {
+        let mut actor = SecondaryActorState::new(
             1,
-            NativeSecondaryActorKind::EtherDrain,
+            SecondaryActorKind::EtherDrain,
             "caster".into(),
             "boneyard:probe".into(),
             Some(74),
@@ -50,7 +49,7 @@ mod native {
             manager_lane: WorldManagerLane::Transient,
             registration_ordinal: 1,
         }];
-        actor.ether_drain = Some(NativeEtherDrainState { animations, ..Default::default() });
+        actor.ether_drain = Some(EtherDrainState { animations, ..Default::default() });
         actor
     }
 
@@ -309,7 +308,7 @@ mod native {
         std::fs::create_dir_all(output).map_err(|error| error.to_string())?;
         let mut results = Vec::new();
         for case in cases() {
-            renderer.set_native_world_pixel_centers(case.pixel_centers);
+            renderer.set_world_pixel_centers(case.pixel_centers);
             let mut captures = Vec::new();
             let mut baseline = Vec::new();
             for expected in [false, true] {

@@ -1,13 +1,13 @@
 use serde_json::{Value, json};
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 use solomon_sim::spells::model::SpellState;
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
 };
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "weld_step_goldens/rows.rs"]
 mod rows;
@@ -30,7 +30,7 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
         let mut mana = case["mana"].as_f64().unwrap();
         let mut wizard = HubWizard::at(Vec2::new(100.0, 200.0));
         let mut state = SpellState::default();
-        let mut rng = NativeRng::new(731);
+        let mut rng = Rng::new(731);
         let mut order = WorldPainterOrder { next_actor_ordinal: 49, next_transient_ordinal: 3 };
         let targets = [PrimarySpellTarget {
             active: true,
@@ -42,7 +42,7 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
             grid_position: None,
             id: "enemy:1".into(),
             kind: PrimarySpellTargetKind::Enemy,
-            native_priority: 0,
+            priority: 0,
             pending_remove: false,
             position: Vec2::new(450.0, 200.0),
             query_lane: PrimarySpellQueryLane::Grid,
@@ -55,7 +55,7 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
             let result = state.step_primary(
                 &mut wizard,
                 PrimarySpellCastAuthority {
-                    weapon_kind: Some(NativePlayerWeaponKind::Staff),
+                    weapon_kind: Some(PlayerWeaponKind::Staff),
                     alive: true,
                     available_mana: mana,
                     cast_progress_factor: progress,

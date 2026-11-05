@@ -8,8 +8,8 @@ use crate::combat::PlayerLifeState;
 use crate::enemies::model::{EnemyEvent, EnemyEventKind};
 use crate::game_run::GameRunPhase;
 use crate::painter::WorldManagerLane;
-use crate::secondary::{NativePlayerFlashResponseInput, NativeSecondaryScreenFlashState};
-use crate::spells::boneyard::boneyard_native_secondary_targets;
+use crate::secondary::{PlayerFlashResponseInput, SecondaryScreenFlashState};
+use crate::spells::boneyard::boneyard_secondary_targets;
 use std::collections::BTreeSet;
 
 impl GameSession {
@@ -59,7 +59,7 @@ impl GameSession {
         }
         let world_key = format!("boneyard:{}", world.loaded.run_id);
         for (target, duration) in &staff.dazzle_requests {
-            crate::secondary::apply_native_secondary_dazzle(
+            crate::secondary::apply_secondary_dazzle(
                 &mut self.secondary.target_effects,
                 &world_key,
                 *target,
@@ -71,7 +71,7 @@ impl GameSession {
                 owner,
                 &world_key,
                 *position,
-                NativeSecondaryScreenFlashState {
+                SecondaryScreenFlashState {
                     alpha: 1.0,
                     blue: 1.0,
                     decay_per_tick: 0.1_f32 as f64,
@@ -109,10 +109,10 @@ impl GameSession {
                         self.participants.get(id).expect("participant exists").wizard.position;
                     let world_key = self.world_key(id).unwrap();
                     let targets: Vec<_> = self.boneyard.as_ref().map_or_else(Vec::new, |world| {
-                        boneyard_native_secondary_targets(
+                        boneyard_secondary_targets(
                             &world.enemies,
                             position,
-                            crate::harmful::NATIVE_FLASH_RESPONSE_RADIUS,
+                            crate::harmful::FLASH_RESPONSE_RADIUS,
                         )
                         .into_iter()
                         .map(|target| target.id)
@@ -120,7 +120,7 @@ impl GameSession {
                     });
                     let first_event = self.secondary.next_event_id;
                     self.secondary.materialize_player_flash_response(
-                        NativePlayerFlashResponseInput {
+                        PlayerFlashResponseInput {
                             owner_id: id,
                             position,
                             response,
@@ -153,8 +153,8 @@ impl GameSession {
                             participant.player.selection.element,
                             &participant.player.economy.equipment,
                         );
-                    let weapon = crate::death_animations::create_native_death_weapon_actor(
-                        crate::death_animations::NativeDeathWeaponBirth {
+                    let weapon = crate::death_animations::create_death_weapon_actor(
+                        crate::death_animations::DeathWeaponBirth {
                             death_epoch: participant.player.combat.death_epoch,
                             heading_index: participant.wizard.heading_index,
                             id: world.next_death_weapon_id,
@@ -177,7 +177,7 @@ impl GameSession {
 
     pub(super) fn step_death_weapons(&mut self, tick: u64) {
         if let Some(world) = &mut self.boneyard {
-            crate::death_animations::step_native_death_weapon_actors(
+            crate::death_animations::step_death_weapon_actors(
                 &mut world.death_weapons,
                 tick,
                 &mut self.secondary.rng,

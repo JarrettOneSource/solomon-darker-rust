@@ -9,8 +9,8 @@ use solomon_sim::modding::consumable_presentation::{
     mod_consumable_effect_plan, mod_consumable_ring_rgba,
 };
 use solomon_sim::modding::inventory::GameSimulationModEffect;
-use solomon_sim::presentation::multiply_native_tints;
-use solomon_sim::spells::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
+use solomon_sim::presentation::multiply_tints;
+use solomon_sim::spells::presentation::{SpellBlend, SpellSprite, SpellSpritePlan};
 
 use crate::courtyard::Camera;
 use crate::spells::SpellView;
@@ -71,7 +71,7 @@ impl ModConsumableEffectsView {
     pub fn draw(&self, renderer: &mut Renderer, camera: &Camera, spells: &SpellView) {
         for view in &self.views {
             let plan = &view.plan;
-            let tint = multiply_native_tints(plan.tint, view.world_tint);
+            let tint = multiply_tints(plan.tint, view.world_tint);
             let diameter = plan.radius * 2.0;
             renderer.draw(
                 &self.ring,
@@ -100,7 +100,7 @@ impl ModConsumableEffectsView {
             if !plan.flash_visible {
                 continue;
             }
-            let mut flashes = NativeSpellSpritePlan {
+            let mut flashes = SpellSpritePlan {
                 position: view.position,
                 world_y: view.position.y,
                 sort_bias: 0.0,
@@ -108,7 +108,7 @@ impl ModConsumableEffectsView {
                 draws: Vec::with_capacity(4),
             };
             for index in 0..4 {
-                let mut draw = NativeSpellSprite::new(110, plan.flash_scales[index]);
+                let mut draw = SpellSprite::new(110, plan.flash_scales[index]);
                 draw.alpha = plan.flash_alphas[index];
                 draw.blend = SpellBlend::Add;
                 draw.rotation = plan.flash_rotations[index];

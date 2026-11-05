@@ -8,12 +8,11 @@ use crate::Vec2;
 use crate::float::fround;
 use crate::secondary::presentation::draws::repeated_float_multiply;
 use crate::spells::weld::{
-    NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS, decay_native_region_camera_displacement,
-    native_camera_magnitude_squared,
+    FLAME_CAMERA_MAX_PRESENTATION_TICKS, camera_magnitude_squared, decay_region_camera_displacement,
 };
 
 #[derive(Clone, Debug)]
-pub struct NativeRegionCameraPresentation {
+pub struct RegionCameraPresentation {
     checkpoint_tick: i64,
     checkpoint: Vec2,
     tick: u64,
@@ -22,12 +21,11 @@ pub struct NativeRegionCameraPresentation {
     after_decay: BTreeMap<u64, Vec2>,
 }
 
-impl NativeRegionCameraPresentation {
+impl RegionCameraPresentation {
     #[must_use]
     pub fn new(initial_tick: u64) -> Self {
         Self {
-            checkpoint_tick: initial_tick as i64
-                - NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS as i64,
+            checkpoint_tick: initial_tick as i64 - FLAME_CAMERA_MAX_PRESENTATION_TICKS as i64,
             checkpoint: Vec2::ZERO,
             tick: initial_tick,
             value: Vec2::ZERO,
@@ -50,7 +48,7 @@ impl NativeRegionCameraPresentation {
             return;
         }
         self.tick = tick;
-        let floor = tick as i64 - NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS as i64;
+        let floor = tick as i64 - FLAME_CAMERA_MAX_PRESENTATION_TICKS as i64;
         if floor > self.checkpoint_tick {
             self.checkpoint = self.replay(floor);
             self.checkpoint_tick = floor;
@@ -68,7 +66,7 @@ impl NativeRegionCameraPresentation {
             repeated_float_multiply(fround(displacement.y), 0.75_f32 as f64, elapsed),
         );
         if self.after_decay.get(&self.tick).is_none_or(|previous| {
-            native_camera_magnitude_squared(proposal) > native_camera_magnitude_squared(*previous)
+            camera_magnitude_squared(proposal) > camera_magnitude_squared(*previous)
         }) {
             self.after_decay.insert(self.tick, proposal);
         }
@@ -81,9 +79,9 @@ impl NativeRegionCameraPresentation {
             return;
         }
         let proposal = Vec2::new(fround(displacement.x), fround(displacement.y));
-        let squared = native_camera_magnitude_squared(proposal);
+        let squared = camera_magnitude_squared(proposal);
         if self.before_decay.get(&birth_tick).is_none_or(|(previous, previous_order)| {
-            let previous_squared = native_camera_magnitude_squared(*previous);
+            let previous_squared = camera_magnitude_squared(*previous);
             squared > previous_squared || (squared == previous_squared && order < *previous_order)
         }) {
             self.before_decay.insert(birth_tick, (proposal, order));
@@ -102,22 +100,22 @@ impl NativeRegionCameraPresentation {
             .filter(|at| tick < *at as i64 && *at as i64 <= through_tick)
             .collect();
         for at in changes {
-            value = decay_native_region_camera_displacement(value, (at as i64 - tick - 1) as u64);
+            value = decay_region_camera_displacement(value, (at as i64 - tick - 1) as u64);
             if let Some((before, _)) = self.before_decay.get(&at) {
                 value = stronger(value, *before);
             }
-            value = decay_native_region_camera_displacement(value, 1);
+            value = decay_region_camera_displacement(value, 1);
             if let Some(after) = self.after_decay.get(&at) {
                 value = stronger(value, *after);
             }
             tick = at as i64;
         }
-        decay_native_region_camera_displacement(value, (through_tick - tick) as u64)
+        decay_region_camera_displacement(value, (through_tick - tick) as u64)
     }
 }
 
 fn stronger(current: Vec2, proposal: Vec2) -> Vec2 {
-    if native_camera_magnitude_squared(proposal) > native_camera_magnitude_squared(current) {
+    if camera_magnitude_squared(proposal) > camera_magnitude_squared(current) {
         proposal
     } else {
         current

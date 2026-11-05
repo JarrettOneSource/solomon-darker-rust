@@ -28,7 +28,7 @@ pub enum SavedParticipant {
     Retired {
         participant: Box<SessionParticipant>,
         economy: Box<solomon_sim::economy::HubEconomyState>,
-        hagatha_runtime: solomon_sim::profile::NativeHagathaRuntimeState,
+        hagatha_runtime: solomon_sim::profile::HagathaRuntimeState,
     },
 }
 

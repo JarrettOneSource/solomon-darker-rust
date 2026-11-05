@@ -11,13 +11,13 @@ use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
 struct Fixture {
     selection: NewGameSelection,
-    book: NativeSkillBookState,
+    book: SkillBookState,
     stat_book: PlayerStatBookComponent,
     economy: HubEconomyState,
     belt: PlayerBeltComponent,
     progression: PlayerProgressionState,
     resources: PlayerCombatState,
-    offensive: NativeOffensiveSpellFactors,
+    offensive: OffensiveSpellFactors,
 }
 
 fn potion(id: u64, slot: usize) -> HubInventoryItem {
@@ -47,7 +47,7 @@ impl Fixture {
             DOWSING_EQUIPMENT_RECIPES.iter().find(|recipe| recipe.equipment_type == kind).unwrap();
         economy.equipment.set(slot, Some(create_equipment_inventory_item(recipe, 900)));
         economy.owned_perk_selectors = vec![19];
-        let book = NativeSkillBookState::new(element, discipline);
+        let book = SkillBookState::new(element, discipline);
         let belt = PlayerBeltComponent::new(&book);
         Self {
             selection: NewGameSelection { name: "Report 50".into(), element, discipline },
@@ -57,7 +57,7 @@ impl Fixture {
             belt,
             progression: PlayerProgressionState::new(1),
             resources: PlayerCombatState::default(),
-            offensive: NativeOffensiveSpellFactors::default(),
+            offensive: OffensiveSpellFactors::default(),
         }
     }
 

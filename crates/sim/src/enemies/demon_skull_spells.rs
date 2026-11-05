@@ -1,6 +1,6 @@
 //! Discorporeal eye, bite, spit and mouth authority from `enemies/demon-skull-spells.ts`.
 
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpell, BossSpellKind};
 use super::demon_skull_attachments::DEMON_SKULL_EYE_ATTACHMENTS;
 use super::demon_skull_effects::*;
 use super::effects::{DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec};
@@ -18,32 +18,29 @@ use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::line_obstruction::clip_line_to_bounds;
 use crate::painter::WorldPainterOrder;
-use crate::spells::fire::{
-    CreateNativeFirePatchOptions, spawn_native_fire_patch, step_native_fire_patch,
-};
+use crate::spells::fire::{CreateFirePatchOptions, spawn_native_fire_patch, step_fire_patch};
 use crate::spells::model::FirePatchType;
-use crate::spells::targeting::native_primary_polygon_targets;
+use crate::spells::targeting::primary_polygon_targets;
 
 #[must_use]
-pub fn native_demon_skull_facing(heading: f64) -> usize {
+pub fn demon_skull_facing(heading: f64) -> usize {
     (((heading.round_ties_even() + 7.0) / 15.0).trunc().rem_euclid(24.0)) as usize
 }
 #[must_use]
-pub fn native_demon_skull_bob(phase: f64) -> f64 {
+pub fn demon_skull_bob(phase: f64) -> f64 {
     fround(float::sin(phase * std::f64::consts::PI / 180.0) * 10.0 - 25.0)
 }
 #[must_use]
-pub fn native_demon_skull_eyes(
+pub fn demon_skull_eyes(
     position: Vec2,
     brain: &DemonSkullBrain,
     scale: f64,
     heading: f64,
 ) -> [Vec2; 2] {
-    let points =
-        DEMON_SKULL_EYE_ATTACHMENTS[brain.body_pose as usize][native_demon_skull_facing(heading)];
+    let points = DEMON_SKULL_EYE_ATTACHMENTS[brain.body_pose as usize][demon_skull_facing(heading)];
     let root = Vec2::new(
         position.x + brain.body_offset.x,
-        position.y + brain.body_offset.y + native_demon_skull_bob(brain.body_phase_deg),
+        position.y + brain.body_offset.y + demon_skull_bob(brain.body_phase_deg),
     );
     points.map(|point| {
         Vec2::new(fround(root.x + point.x * 2.0 * scale), fround(root.y + point.y * 2.0 * scale))
@@ -95,8 +92,7 @@ pub fn fire_demon_skull_eyes(
     let EnemyBrain::DemonSkull(brain) = &actor.brain else {
         panic!("DemonSkull eyes require their owner")
     };
-    let eyes =
-        native_demon_skull_eyes(actor.position, brain, actor.config.scale, brain.body_heading_deg);
+    let eyes = demon_skull_eyes(actor.position, brain, actor.config.scale, brain.body_heading_deg);
     for position in eyes {
         let phase = world.steering_rng.draw_scaled_float(360.0, false);
         let spell = world.create_boss_spell(
@@ -137,11 +133,10 @@ pub fn bite_demon_skull(
         let EnemyBrain::DemonSkull(brain) = &actor.brain else {
             panic!("DemonSkull bite requires its owner")
         };
-        let entry =
-            99 + brain.body_pose as usize * 24 + native_demon_skull_facing(brain.body_heading_deg);
+        let entry = 99 + brain.body_pose as usize * 24 + demon_skull_facing(brain.body_heading_deg);
         let offset = Vec2::new(
             brain.body_offset.x,
-            brain.body_offset.y + native_demon_skull_bob(brain.body_phase_deg),
+            brain.body_offset.y + demon_skull_bob(brain.body_phase_deg),
         );
         for index in 0..10 {
             world.spawn_simple_death_effect(
@@ -149,9 +144,7 @@ pub fn bite_demon_skull(
                 context.tick,
                 SimpleDeathEffectSpec {
                     alpha: fround(fround(0.1) * f64::from(index + 1)),
-                    alpha_loss_per_tick: fround(
-                        super::effects::NATIVE_FADE_ALPHA_LOSS * fround(0.35),
-                    ),
+                    alpha_loss_per_tick: fround(super::effects::FADE_ALPHA_LOSS * fround(0.35)),
                     atlas: EnemyEffectAtlas::Unholy,
                     entry,
                     blend_mode: EnemyEffectBlend::Normal,
@@ -272,7 +265,7 @@ pub fn spit_demon_skull_fire(
 
 pub fn step_demon_skull_spell(
     world: &mut EnemyWorld,
-    spell: &mut NativeBossSpell,
+    spell: &mut BossSpell,
     context: &mut EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> bool {
@@ -305,7 +298,7 @@ pub fn step_demon_skull_spell(
             true
         }
         BossSpellKind::GreenFire { fire, .. } => {
-            let (retained, radial) = step_native_fire_patch(fire, context.tick);
+            let (retained, radial) = step_fire_patch(fire, context.tick);
             if let Some(radial) = radial {
                 for player in context.players {
                     if target_eligible(player)
@@ -407,7 +400,7 @@ pub fn step_demon_skull_spell(
 
 fn impact_eye(
     world: &mut EnemyWorld,
-    spell: &NativeBossSpell,
+    spell: &BossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
@@ -451,7 +444,7 @@ fn impact_eye(
 
 fn impact_spit(
     world: &mut EnemyWorld,
-    spell: &NativeBossSpell,
+    spell: &BossSpell,
     context: &mut EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
@@ -545,7 +538,7 @@ fn impact_spit(
             0,
         );
         world.next_synthetic_spawn_intent_id += 1;
-        intent.native_type_id = 2044;
+        intent.type_id = 2044;
         intent.green_imp_spit_damage = Some(spell.owner.damage);
         world.materialize_step_intents(&[intent], context, None, order);
     }
@@ -572,7 +565,7 @@ pub fn spawn_green_fire(
         order,
     );
     let mut fire = spawn_native_fire_patch(
-        CreateNativeFirePatchOptions {
+        CreateFirePatchOptions {
             atlas_phase_step: None,
             burn_damage: 0.0,
             damage,
@@ -594,7 +587,7 @@ pub fn spawn_green_fire(
     );
     fire.atlas_phase = world.steering_rng.draw_scaled_float(32.0, false);
     fire.horizontal_sign = if world.steering_rng.draw_sign(1.0) < 0.0 { -1.0 } else { 1.0 };
-    world.boss_spells.push(NativeBossSpell {
+    world.boss_spells.push(BossSpell {
         owner: super::boss_spell::BossSpellOwner { position: fire.position, ..owner },
         kind: BossSpellKind::GreenFire { fire: Box::new(fire), glow },
     });
@@ -602,7 +595,7 @@ pub fn spawn_green_fire(
 
 fn spawn_rising_burst(
     world: &mut EnemyWorld,
-    source: &NativeBossSpell,
+    source: &BossSpell,
     tick: u64,
     eye: bool,
     order: &mut WorldPainterOrder,
@@ -633,7 +626,7 @@ pub fn step_demon_skull_mouth_beam(
 ) {
     let unit = direction(actor.heading_deg, 1.0);
     let mut endpoint = advance(actor.position, unit, 1500.0);
-    if let Some(bounds) = context.native_view_bounds {
+    if let Some(bounds) = context.view_bounds {
         endpoint = clip_line_to_bounds(actor.position, endpoint, bounds)
             .map_or(actor.position, |(_, end)| end);
     }
@@ -680,7 +673,7 @@ pub fn step_demon_skull_mouth_beam(
     if context.tick.is_multiple_of(5) {
         let targets = world.mouth_targets(context.players, context.puppet_targets, Some(actor.id));
         let rows: Vec<_> = targets.iter().map(|target| target.target.clone()).collect();
-        for target in native_primary_polygon_targets(u32::MAX, &polygon, &rows) {
+        for target in primary_polygon_targets(u32::MAX, &polygon, &rows) {
             let offset = world.random_enemy_offset(10.0);
             let scale = (1.0 + world.steering_rng.draw_scaled_float(0.5, false)) * 2.0;
             world.spawn_simple_death_effect(
@@ -809,7 +802,7 @@ fn action_sound_gain(
     event.gain_scale = Some(gain);
     world.emit_event(event);
 }
-fn owner(spell: &NativeBossSpell) -> DeathEffectOwner {
+fn owner(spell: &BossSpell) -> DeathEffectOwner {
     DeathEffectOwner { id: spell.owner.owner_actor_id, position: spell.owner.position }
 }
 fn direction(heading: f64, length: f64) -> Vec2 {
@@ -835,6 +828,6 @@ fn blocked_line(
         projectile_id: id,
         start,
         end,
-        native_exclusion_mask: mask,
+        exclusion_mask: mask,
     })
 }

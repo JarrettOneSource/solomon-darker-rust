@@ -2,7 +2,7 @@
 //! `spell-combat/projectiles.ts` and `spell-combat/work.ts`.
 
 use super::*;
-use crate::secondary::NativeSecondaryElectricBurnEffectState;
+use crate::secondary::SecondaryElectricBurnEffectState;
 
 impl ContactWork<'_, '_> {
     pub(super) fn apply_channel_projectile_force(
@@ -46,7 +46,7 @@ impl ContactWork<'_, '_> {
 
     pub(super) fn resolve_weld_projectile_contact(
         &mut self,
-        spell: &NativeWeldProjectileState,
+        spell: &WeldProjectileState,
         rows: &[TargetRow],
     ) {
         let common = &spell.common;
@@ -54,7 +54,7 @@ impl ContactWork<'_, '_> {
         let mut targets =
             if magic_missile { self.context.primary_scenery_targets.to_vec() } else { Vec::new() };
         targets.extend(rows.iter().map(|row| row.target.clone()));
-        let target = first_native_primary_point_contact(PrimaryPointContactQuery {
+        let target = first_primary_point_contact(PrimaryPointContactQuery {
             actor_mask: if magic_missile && (common.age_ticks >= 200 || spell.target_id.is_none()) {
                 0x6
             } else {
@@ -84,8 +84,8 @@ impl ContactWork<'_, '_> {
             };
             self.target_effect(
                 row.actor_id,
-                NativeSecondaryTargetEffectPatch {
-                    electric_burn: Some(Some(NativeSecondaryElectricBurnEffectState {
+                SecondaryTargetEffectPatch {
+                    electric_burn: Some(Some(SecondaryElectricBurnEffectState {
                         arc_count: arcs.round().max(0.0) as usize,
                         damage_per_tick: common.damage / ticks as f64,
                         owner_id: common.owner_id.clone(),
@@ -93,7 +93,7 @@ impl ContactWork<'_, '_> {
                         stun_factor: stun,
                         ticks,
                     })),
-                    ..NativeSecondaryTargetEffectPatch::default()
+                    ..SecondaryTargetEffectPatch::default()
                 },
             );
         }
@@ -136,7 +136,7 @@ impl ContactWork<'_, '_> {
 
     /// Widen owns Frost Missile's radial cold; Chill Wind occupies a different
     /// vector cell and never selects this lane. Terrain contact uses the same body.
-    pub(super) fn resolve_frost_missile_area_contact(&mut self, spell: &NativeWeldProjectileState) {
+    pub(super) fn resolve_frost_missile_area_contact(&mut self, spell: &WeldProjectileState) {
         if spell.build_id != 1001
             || spell.vector[6] <= 0.0
             || spell.common.damage <= 0.0
@@ -167,7 +167,7 @@ impl ContactWork<'_, '_> {
 
     fn queue_frost_missile_cold(&mut self, row: &TargetRow) {
         use crate::enemies::model::{EnemyEvent, EnemyEventKind, EnemySound};
-        self.weld_cold(row.actor_id, NATIVE_WELD_FROST_SLOW_FACTOR, 150);
+        self.weld_cold(row.actor_id, WELD_FROST_SLOW_FACTOR, 150);
         let pitch = self.rng.draw_scaled_float(0.2_f32 as f64, true);
         let mut event =
             EnemyEvent::new(EnemyEventKind::EnemyDamageSound, row.actor_id, self.context.tick);
@@ -178,10 +178,10 @@ impl ContactWork<'_, '_> {
         self.enemies.emit_event(event);
     }
 
-    fn finish_weld_projectile_contact(&mut self, spell: &NativeWeldProjectileState) {
+    fn finish_weld_projectile_contact(&mut self, spell: &WeldProjectileState) {
         if spell.build_id == 1000 {
             let effects = self.detonate_weld_fire(
-                NativeWeldActorBirth {
+                WeldActorBirth {
                     build_id: spell.build_id,
                     direction: spell.common.direction,
                     id: self.next_id,
@@ -206,26 +206,26 @@ impl ContactWork<'_, '_> {
     pub(super) fn weld_cold(&mut self, actor_id: usize, factor: f64, ticks: u64) {
         self.target_effect(
             actor_id,
-            NativeSecondaryTargetEffectPatch {
+            SecondaryTargetEffectPatch {
                 cold_slow_factor: Some(factor),
                 cold_slow_material: Some(true),
                 cold_slow_ticks: Some(ticks),
-                ..NativeSecondaryTargetEffectPatch::default()
+                ..SecondaryTargetEffectPatch::default()
             },
         );
     }
 
     pub(super) fn enroll_weld_combat_actor(
         &mut self,
-        mut actor: NativeWeldWorldActor,
+        mut actor: WeldWorldActor,
     ) -> PrimarySpellTransient {
-        enroll_native_weld_actor_painter(actor.common_mut(), self.order);
+        enroll_weld_actor_painter(actor.common_mut(), self.order);
         PrimarySpellTransient::Weld(actor)
     }
 
     pub(super) fn detonate_weld_fire(
         &mut self,
-        birth: NativeWeldActorBirth<'_>,
+        birth: WeldActorBirth<'_>,
         seed: u32,
         impact: bool,
     ) -> Vec<PrimarySpellTransient> {
@@ -249,18 +249,18 @@ impl ContactWork<'_, '_> {
 
     pub(super) fn publish_weld_boulder_debris(
         &mut self,
-        boulder: &NativeWeldEtherealBoulderState,
+        boulder: &WeldEtherealBoulderState,
         scale: f64,
     ) {
-        let debris = create_native_weld_boulder_contact_debris_program(scale, self.rng);
+        let debris = create_weld_boulder_contact_debris_program(scale, self.rng);
         let id = self.next_id;
         self.next_id += 1;
         // Preserve the native contact program and ID even for an exhausted 0/0 pool.
         if !scale.is_finite() {
             return;
         }
-        let actor = create_native_weld_boulder_debris_actor(
-            NativeWeldActorBirth {
+        let actor = create_weld_boulder_debris_actor(
+            WeldActorBirth {
                 build_id: 1006,
                 direction: boulder.common.direction,
                 id,
@@ -272,7 +272,7 @@ impl ContactWork<'_, '_> {
             },
             debris,
         );
-        let effect = self.enroll_weld_combat_actor(NativeWeldWorldActor::BoulderDebris(actor));
+        let effect = self.enroll_weld_combat_actor(WeldWorldActor::BoulderDebris(actor));
         self.impact_transients.push(effect);
     }
 }

@@ -8,7 +8,7 @@ use std::rc::Rc;
 use crate::hotbar::HotbarSelection;
 use crate::platform::{KeyboardEffect, KeyboardEvent, KeyboardListener};
 use solomon_sim::Vec2;
-use solomon_sim::belt::{NATIVE_BELT_SLOT_COUNT, PLAYER_BELT_SLOT_COUNT};
+use solomon_sim::belt::{BELT_SLOT_COUNT, PLAYER_BELT_SLOT_COUNT};
 use solomon_sim::input::{
     BeltInputSource, GameplayAction, GameplayAim, GameplayInputSample, HeldBeltInputs,
     MovementKeys, StandardGameplayState, joystick_vector, movement_from_gamepad, sample_movement,
@@ -255,7 +255,7 @@ impl MovementInput {
     }
     pub fn set_touch_quickbar(&self, slot: usize, pressed: bool, fallback_direction: Option<Vec2>) {
         let mut state = self.state.borrow_mut();
-        if state.world_input_blocked() || slot >= NATIVE_BELT_SLOT_COUNT {
+        if state.world_input_blocked() || slot >= BELT_SLOT_COUNT {
             return;
         }
         if pressed {
@@ -410,7 +410,7 @@ impl MovementInput {
                 return Ok(());
             }
             state.hotbar_bank = bank;
-            for slot in 0..NATIVE_BELT_SLOT_COUNT {
+            for slot in 0..BELT_SLOT_COUNT {
                 state.belt.release_source(BeltInputSource::Touch(slot));
             }
             state.touch_belt_pointers.drain().map(|(id, _)| id).collect()

@@ -462,7 +462,7 @@ fn paint_native_name(
     scale: f32,
 ) {
     use solomon_sim::menu::create_name::layout_create_wizard_name;
-    use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextLayout};
+    use solomon_sim::ui_text::{UiFontName, UiTextLayout};
     // Source permits the empty editable draft and paints no heading glyphs.
     // Genericus is substituted only by final loadout admission.
     if text.is_empty() {
@@ -478,8 +478,8 @@ fn paint_native_name(
     crate::gpu_ui::paint_text_layout(
         frame,
         painter,
-        &NativeUiTextLayout {
-            font: NativeUiFontName::Heading,
+        &UiTextLayout {
+            font: UiFontName::Heading,
             glyphs: name.glyphs,
             lines: Vec::new(),
             width: name.width,

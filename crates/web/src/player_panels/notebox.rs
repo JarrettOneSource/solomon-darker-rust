@@ -1,12 +1,10 @@
 //! Non-modal stock NPC instruction/failure. Its presentation clock never changes
 //! the accepted session; clicking the visible box starts the native dismissal fade.
 use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
-use solomon_sim::native_ui_notebox::{
-    NativeNoteboxKind, native_notebox_duration_ms, native_notebox_layout, native_notebox_opacity,
-};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
+use solomon_sim::ui_notebox::{NoteboxKind, notebox_duration_ms, notebox_layout, notebox_opacity};
+use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 struct Notice {
-    kind: NativeNoteboxKind,
+    kind: NoteboxKind,
     text: String,
     started_at: f64,
     dismissed: Option<f64>,
@@ -24,7 +22,7 @@ impl NpcNotebox {
     pub fn show(
         &mut self,
         _atlas: &StockAtlas,
-        kind: NativeNoteboxKind,
+        kind: NoteboxKind,
         text: &str,
         now: f64,
     ) -> Result<(), String> {
@@ -36,7 +34,7 @@ impl NpcNotebox {
             now - notice.started_at
                 >= notice
                     .dismissed
-                    .map_or_else(|| native_notebox_duration_ms(notice.kind), |at| at + 200.0)
+                    .map_or_else(|| notebox_duration_ms(notice.kind), |at| at + 200.0)
         }) {
             self.reset();
         }
@@ -52,7 +50,7 @@ impl NpcNotebox {
         viewport: (i32, i32),
     ) -> Result<(), String> {
         let Some(notice) = &mut self.active else { return Ok(()) };
-        let layout = native_notebox_layout(&notice.text);
+        let layout = notebox_layout(&notice.text);
         let scale = (viewport.0 as f32 / 1600.0).min(viewport.1 as f32 / 900.0);
         let layer = Self::layer_id();
         frame.ctx.set_transform_layer(
@@ -66,8 +64,8 @@ impl NpcNotebox {
             ),
         );
         let elapsed = (now - notice.started_at).max(0.0);
-        let opacity = native_notebox_opacity(notice.kind, elapsed, notice.dismissed) as f32;
-        let tint = if notice.kind == NativeNoteboxKind::Failure {
+        let opacity = notebox_opacity(notice.kind, elapsed, notice.dismissed) as f32;
+        let tint = if notice.kind == NoteboxKind::Failure {
             egui::Color32::from_rgb(255, 64, 64)
         } else {
             egui::Color32::WHITE
@@ -89,7 +87,7 @@ impl NpcNotebox {
                 frame.record(
                     "npc:notebox",
                     &notice.text,
-                    if notice.kind == NativeNoteboxKind::Failure { "alert" } else { "status" },
+                    if notice.kind == NoteboxKind::Failure { "alert" } else { "status" },
                     &response,
                 );
                 if response.clicked() && notice.dismissed.is_none() {
@@ -97,7 +95,7 @@ impl NpcNotebox {
                 }
                 for _ in 0..2 {
                     if let Err(message) =
-                        atlas.paint_native_frame(frame, ui.painter(), 64, r, true, tint)
+                        atlas.paint_stock_frame(frame, ui.painter(), 64, r, true, tint)
                     {
                         error = Some(message);
                     }
@@ -105,15 +103,11 @@ impl NpcNotebox {
                 native_text(
                     frame,
                     ui.painter(),
-                    &NativeUiTextSpec {
-                        tint: if notice.kind == NativeNoteboxKind::Failure {
-                            0xff4040
-                        } else {
-                            0xd9ba70
-                        },
+                    &UiTextSpec {
+                        tint: if notice.kind == NoteboxKind::Failure { 0xff4040 } else { 0xd9ba70 },
                         alpha: opacity as f64,
-                        ..NativeUiTextSpec::new(
-                            NativeUiFontName::Menu,
+                        ..UiTextSpec::new(
+                            UiFontName::Menu,
                             &notice.text,
                             layout.panel_left + layout.panel_width / 2.0,
                             layout.panel_top + layout.text_baseline,

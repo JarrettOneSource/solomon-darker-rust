@@ -5,12 +5,11 @@ use solomon_sim::audio::{AudioCue, AudioOptions};
 use solomon_sim::boneyard::BoneyardWorld;
 use solomon_sim::boneyard::encounter::SolomonPhase;
 use solomon_sim::boneyard::tutorial::{
-    NativeTutorialBindingLabels, NativeTutorialCue, NativeTutorialInputMode, NativeTutorialSpeaker,
-    native_tutorial_amulet_identity_matches, native_tutorial_instruction_baselines,
-    native_tutorial_presentation,
+    TutorialBindingLabels, TutorialCue, TutorialInputMode, TutorialSpeaker,
+    tutorial_amulet_identity_matches, tutorial_instruction_baselines, tutorial_presentation,
 };
 use solomon_sim::economy::project_inventory_items;
-use solomon_sim::loot::NativeLootDropKind;
+use solomon_sim::loot::LootDropKind;
 use solomon_sim::player::PlayerState;
 use solomon_sim::settings::{GameSettings, game_binding_label};
 use solomon_sim::{HubWizard, Vec2};
@@ -84,9 +83,9 @@ impl TutorialScene {
         let right = game_binding_label(&controls.move_right);
         let potion = game_binding_label(&controls.belt[3]);
         let secondary = game_binding_label(&controls.belt[0]);
-        let presentation = native_tutorial_presentation(
+        let presentation = tutorial_presentation(
             state,
-            NativeTutorialBindingLabels {
+            TutorialBindingLabels {
                 inventory: &inventory,
                 move_down: &down,
                 move_left: &left,
@@ -97,16 +96,16 @@ impl TutorialScene {
                 skills: &skills,
             },
             if frame.coarse_pointer {
-                NativeTutorialInputMode::Mobile
+                TutorialInputMode::Mobile
             } else {
-                NativeTutorialInputMode::Desktop
+                TutorialInputMode::Desktop
             },
         );
         let size = Vec2::new(f64::from(width.max(1)), f64::from(height.max(1)));
         let layout = solomon_sim::viewport::game_viewport(size);
         let scale = layout.display_scale;
         let viewport = layout.logical_size;
-        let baselines = native_tutorial_instruction_baselines(state.stage, viewport.y);
+        let baselines = tutorial_instruction_baselines(state.stage, viewport.y);
         let world_to_screen = |position: Vec2| {
             Vec2::new(
                 (position.x - frame.camera.origin.x) * frame.camera.scale,
@@ -121,7 +120,7 @@ impl TutorialScene {
                     .loot
                     .actors
                     .iter()
-                    .find(|actor| actor.kind == NativeLootDropKind::Sack)
+                    .find(|actor| actor.kind == LootDropKind::Sack)
                     .map(|actor| physical(world_to_screen(actor.position)))
             })
             .flatten();
@@ -147,7 +146,7 @@ impl TutorialScene {
         };
         let amulet = project_inventory_items(&frame.player.economy.backpack)
             .into_iter()
-            .find(|entry| native_tutorial_amulet_identity_matches(entry.item))
+            .find(|entry| tutorial_amulet_identity_matches(entry.item))
             .map(|entry| entry.item.id);
         let view = TutorialViewSnapshot {
             stage: state.stage.id(),
@@ -170,8 +169,8 @@ impl TutorialScene {
             narration: state.narration.current.as_ref().map(|event| TutorialNarrationView {
                 event_id: event.event_id,
                 speaker: match event.speaker {
-                    NativeTutorialSpeaker::Sirmin => "Sirmin",
-                    NativeTutorialSpeaker::Solomon => "Solomon Dark",
+                    TutorialSpeaker::Sirmin => "Sirmin",
+                    TutorialSpeaker::Solomon => "Solomon Dark",
                 },
                 text: &event.text,
             }),
@@ -183,7 +182,7 @@ impl TutorialScene {
 }
 
 fn stop_narration(audio: &GameAudio) -> Result<(), String> {
-    for cue in NativeTutorialCue::ALL {
+    for cue in TutorialCue::ALL {
         audio.stop_stream(
             AudioCue::from_id(cue.id()).expect("stock Tutorial cue in audio catalog"),
         )?;

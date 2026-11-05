@@ -167,9 +167,9 @@ impl GameplayInputState {
                 (point.x - press.origin.x) / press.scale,
                 (point.y - press.origin.y) / press.scale,
             );
-            let changed_bank = press.slot / NATIVE_BELT_SLOT_COUNT != bank;
+            let changed_bank = press.slot / BELT_SLOT_COUNT != bank;
             let pulled =
-                solomon_sim::hud::belt_pull_off::native_belt_pull_off_started(Vec2::ZERO, movement);
+                solomon_sim::hud::belt_pull_off::belt_pull_off_started(Vec2::ZERO, movement);
             if changed_bank || pulled {
                 self.touch_belt_pointers.remove(&id);
                 if pulled && !changed_bank && !self.world_input_blocked() {
@@ -197,7 +197,7 @@ impl GameplayInputState {
             if released
                 && !self.world_input_blocked()
                 && press.cast_eligible
-                && press.slot / NATIVE_BELT_SLOT_COUNT == bank
+                && press.slot / BELT_SLOT_COUNT == bank
             {
                 self.activate_ui_belt(press.slot);
             }

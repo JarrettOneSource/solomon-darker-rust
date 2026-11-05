@@ -1,6 +1,6 @@
 //! GPU Party scroll/copy state. The host retains membership and directory authority.
 
-use solomon_sim::social::party_ui::NativePartyMenuTab;
+use solomon_sim::social::party_ui::PartyMenuTab;
 
 #[derive(Default)]
 pub(in crate::social) struct PartyMenuInteraction {
@@ -9,7 +9,7 @@ pub(in crate::social) struct PartyMenuInteraction {
     copied_until: Option<f64>,
 }
 impl PartyMenuInteraction {
-    pub fn select_tab(&mut self, _tab: NativePartyMenuTab, opening: bool) {
+    pub fn select_tab(&mut self, _tab: PartyMenuTab, opening: bool) {
         if opening {
             self.scroll_y = 0.0;
         }

@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::line::{native_line_color, native_line_vertices};
+use solomon_sim::line::{line_color, line_vertices};
 use solomon_sim::profile::seeker::*;
 
 fn point(value: &Value) -> Vec2 {
@@ -11,15 +11,15 @@ fn point(value: &Value) -> Vec2 {
 fn point_snapshot(value: Vec2) -> Value {
     json!({ "x": value.x, "y": value.y })
 }
-fn kind(value: &Value) -> NativeHagathaSeekerTargetKind {
+fn kind(value: &Value) -> HagathaSeekerTargetKind {
     match value.as_str().unwrap() {
-        "bonus" => NativeHagathaSeekerTargetKind::Bonus,
-        "gold" => NativeHagathaSeekerTargetKind::Gold,
-        "sack" => NativeHagathaSeekerTargetKind::Sack,
+        "bonus" => HagathaSeekerTargetKind::Bonus,
+        "gold" => HagathaSeekerTargetKind::Gold,
+        "sack" => HagathaSeekerTargetKind::Sack,
         other => panic!("unknown Seeker target {other}"),
     }
 }
-fn segment_snapshot(value: NativeHagathaSeekerSegment) -> Value {
+fn segment_snapshot(value: HagathaSeekerSegment) -> Value {
     json!({
         "alpha": value.alpha,
         "end": point_snapshot(value.end),
@@ -31,7 +31,7 @@ fn segment_snapshot(value: NativeHagathaSeekerSegment) -> Value {
         "width": value.width,
     })
 }
-fn mesh_snapshot(value: NativeHagathaSeekerMeshPlan) -> Value {
+fn mesh_snapshot(value: HagathaSeekerMeshPlan) -> Value {
     json!({ "alpha": value.alpha, "alphaByte": value.alpha_byte, "uvs": value.uvs, "vertices": value.vertices })
 }
 fn assert_snapshot(actual: &Value, expected: &Value, label: &str) {
@@ -62,13 +62,13 @@ fn seeker_loot_admission_float_pulses_ramp_meshes_and_line_colors_replay_the_sou
             .as_array()
             .unwrap()
             .iter()
-            .map(|target| NativeHagathaSeekerTarget {
+            .map(|target| HagathaSeekerTarget {
                 id: target["id"].as_u64().unwrap() as usize,
                 kind: kind(&target["kind"]),
                 position: point(&target["position"]),
             })
             .collect::<Vec<_>>();
-        let segments = native_hagatha_seeker_segments(
+        let segments = hagatha_seeker_segments(
             point(&case["position"]),
             &targets,
             case["tick"].as_f64().unwrap(),
@@ -80,14 +80,14 @@ fn seeker_loot_admission_float_pulses_ramp_meshes_and_line_colors_replay_the_sou
         );
         let meshes = segments
             .into_iter()
-            .map(native_hagatha_seeker_mesh_plan)
+            .map(hagatha_seeker_mesh_plan)
             .map(mesh_snapshot)
             .collect::<Vec<_>>();
         assert_snapshot(&json!(meshes), &case["meshes"], &format!("Seeker meshes {index}"));
     }
     for case in fixture["lines"].as_array().unwrap() {
         assert_snapshot(
-            &json!(native_line_vertices(
+            &json!(line_vertices(
                 point(&case["start"]),
                 point(&case["end"]),
                 case["width"].as_f64().unwrap()
@@ -99,7 +99,7 @@ fn seeker_loot_admission_float_pulses_ramp_meshes_and_line_colors_replay_the_sou
     for case in fixture["colors"].as_array().unwrap() {
         let channels = case["channels"].as_array().unwrap();
         assert_eq!(
-            native_line_color(
+            line_color(
                 channels[0].as_f64().unwrap(),
                 channels[1].as_f64().unwrap(),
                 channels[2].as_f64().unwrap(),
@@ -110,7 +110,7 @@ fn seeker_loot_admission_float_pulses_ramp_meshes_and_line_colors_replay_the_sou
     }
     for case in fixture["alphaMeshes"].as_array().unwrap() {
         let value = &case["segment"];
-        let segment = NativeHagathaSeekerSegment {
+        let segment = HagathaSeekerSegment {
             alpha: value["alpha"].as_f64().unwrap(),
             end: point(&value["end"]),
             end_visible: value["endVisible"].as_bool().unwrap(),
@@ -121,12 +121,12 @@ fn seeker_loot_admission_float_pulses_ramp_meshes_and_line_colors_replay_the_sou
             width: value["width"].as_f64().unwrap(),
         };
         assert_snapshot(
-            &mesh_snapshot(native_hagatha_seeker_mesh_plan(segment)),
+            &mesh_snapshot(hagatha_seeker_mesh_plan(segment)),
             &case["mesh"],
             "alpha-byte mesh",
         );
     }
-    let program = NATIVE_HAGATHA_SEEKER_PROGRAM;
+    let program = HAGATHA_SEEKER_PROGRAM;
     assert_snapshot(
         &json!({
             "distanceCap": program.distance_cap,
@@ -145,9 +145,9 @@ fn seeker_loot_admission_float_pulses_ramp_meshes_and_line_colors_replay_the_sou
         &fixture["program"],
         "authored Seeker program",
     );
-    assert_eq!(json!(NATIVE_HAGATHA_SEEKER_RAMP_RGBA), fixture["ramp"]);
+    assert_eq!(json!(HAGATHA_SEEKER_RAMP_RGBA), fixture["ramp"]);
     assert_snapshot(
-        &json!({ "transparent": NATIVE_HAGATHA_SEEKER_TRANSPARENT_U, "visible": NATIVE_HAGATHA_SEEKER_VISIBLE_U }),
+        &json!({ "transparent": HAGATHA_SEEKER_TRANSPARENT_U, "visible": HAGATHA_SEEKER_VISIBLE_U }),
         &fixture["rampU"],
         "ramp coordinates",
     );

@@ -1,14 +1,12 @@
 //! Current Create roots preserve primary-owned starters and native class titles.
 
 use serde_json::{Value, json};
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::profile::create::{
-    NATIVE_CREATE_ENTRY_FADE_MS, NATIVE_CREATE_RANDOMIZE_FINALIZE_MS, NativeCreateLoadoutSelection,
-    finalize_native_create_loadout,
+    CREATE_ENTRY_FADE_MS, CREATE_RANDOMIZE_FINALIZE_MS, CreateLoadoutSelection,
+    finalize_create_loadout,
 };
-use solomon_sim::profile::{
-    NativeSkillBookState, WizardDiscipline, WizardElement, native_wizard_class_title,
-};
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement, wizard_class_title};
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/website/create-loadout-goldens.json")).unwrap()
@@ -37,7 +35,7 @@ fn all_current_create_root_pairs_preserve_their_source_book_and_class() {
             .into_iter()
             .find(|discipline| Some(discipline.as_str()) == case["config"]["discipline"].as_str())
             .unwrap_or_else(|| panic!("unsupported current root: {}", case["config"]));
-        let book = NativeSkillBookState::new(element, discipline);
+        let book = SkillBookState::new(element, discipline);
         assert_eq!(
             json!({
                 "advancedUnlocks": book.advanced_unlocks,
@@ -54,24 +52,24 @@ fn all_current_create_root_pairs_preserve_their_source_book_and_class() {
             "{}",
             case["config"],
         );
-        assert_eq!(native_wizard_class_title(element, discipline), case["classTitle"]);
+        assert_eq!(wizard_class_title(element, discipline), case["classTitle"]);
     }
 }
 
 #[test]
 fn current_create_finalization_preserves_missing_choice_draw_order() {
     let fixture = fixture();
-    assert_eq!(NATIVE_CREATE_ENTRY_FADE_MS, fixture["entryFadeMs"]);
-    assert_eq!(NATIVE_CREATE_RANDOMIZE_FINALIZE_MS, fixture["randomizeFinalizeMs"]);
+    assert_eq!(CREATE_ENTRY_FADE_MS, fixture["entryFadeMs"]);
+    assert_eq!(CREATE_RANDOMIZE_FINALIZE_MS, fixture["randomizeFinalizeMs"]);
     for case in fixture["finalizations"].as_array().unwrap() {
         let source = &case["state"];
-        let mut rng = NativeRng::new(0);
+        let mut rng = Rng::new(0);
         rng.index_a = source["indexA"].as_u64().unwrap() as usize;
         rng.index_b = source["indexB"].as_u64().unwrap() as usize;
         for (index, word) in source["words"].as_array().unwrap().iter().enumerate() {
             rng.words[index] = word.as_u64().unwrap() as u32;
         }
-        let selection = NativeCreateLoadoutSelection {
+        let selection = CreateLoadoutSelection {
             name: case["selection"]["displayName"].as_str().unwrap().into(),
             element: element(&case["selection"]["element"]),
             discipline: discipline(&case["selection"]["discipline"]),
@@ -82,7 +80,7 @@ fn current_create_finalization_preserves_missing_choice_draw_order() {
             .iter()
             .map(|value| value.as_u64().unwrap() as usize)
             .collect::<Vec<_>>();
-        let config = finalize_native_create_loadout(&mut rng, &selection, &disabled);
+        let config = finalize_create_loadout(&mut rng, &selection, &disabled);
         assert_eq!(
             json!({
                 "config": {

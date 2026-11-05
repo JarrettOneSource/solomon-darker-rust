@@ -4,10 +4,10 @@
 use crate::float;
 use crate::float::fround;
 use crate::spells::targeting::native_point_in_polygon;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeDarkFireballState {
+pub struct DarkFireballState {
     pub age_ticks: u64,
     pub arc_phase: f64,
     pub arc_phase_step: f64,
@@ -18,13 +18,13 @@ pub struct NativeDarkFireballState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeDarkFireballStep {
+pub struct DarkFireballStep {
     pub impact: bool,
-    pub spell: NativeDarkFireballState,
+    pub spell: DarkFireballState,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeRainOfBonesState {
+pub struct RainOfBonesState {
     pub alpha: f64,
     pub phase: f64,
     pub position: Vec2,
@@ -34,21 +34,21 @@ pub struct NativeRainOfBonesState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeRainBone {
+pub struct RainBone {
     pub entry: usize,
     pub position: Vec2,
     pub rotation_deg: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeRainOfBonesStep {
-    pub bone: Option<NativeRainBone>,
-    pub state: NativeRainOfBonesState,
+pub struct RainOfBonesStep {
+    pub bone: Option<RainBone>,
+    pub state: RainOfBonesState,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeDireFireState {
+pub struct DireFireState {
     pub alpha: f64,
     pub glow: bool,
     pub phase: f64,
@@ -61,7 +61,7 @@ pub struct NativeDireFireState {
 }
 
 #[must_use]
-pub fn native_blightning_contains(origin: Vec2, heading: f64, point: Vec2) -> bool {
+pub fn blightning_contains(origin: Vec2, heading: f64, point: Vec2) -> bool {
     let direction = heading_vector(heading);
     let corner = |forward, across| {
         Vec2::new(
@@ -76,23 +76,23 @@ pub fn native_blightning_contains(origin: Vec2, heading: f64, point: Vec2) -> bo
 }
 
 #[must_use]
-pub fn native_tragic_circle_contains(origin: Vec2, point: Vec2) -> bool {
+pub fn tragic_circle_contains(origin: Vec2, point: Vec2) -> bool {
     let x = (origin.x - point.x) / 212.0;
     let y = (origin.y - point.y) / (fround(210.0 * 0.800_000_011_920_929) + 2.0);
     x * x + y * y < 1.0
 }
 
 #[must_use]
-pub fn create_native_dark_fireballs(
+pub fn create_dark_fireballs(
     origin: Vec2,
     heading: f64,
     ring: bool,
     target_distance: Option<f64>,
-    rng: &mut NativeRng,
-) -> Vec<NativeDarkFireballState> {
+    rng: &mut Rng,
+) -> Vec<DarkFireballState> {
     if !ring {
         let direction = heading_vector(heading);
-        return vec![NativeDarkFireballState {
+        return vec![DarkFireballState {
             age_ticks: 0,
             arc_phase: 0.0,
             arc_phase_step: 0.0,
@@ -121,7 +121,7 @@ pub fn create_native_dark_fireballs(
             }
             arc_phase_step = fround(180.0 / (distance / 3.0));
         }
-        spells.push(NativeDarkFireballState {
+        spells.push(DarkFireballState {
             age_ticks: 0,
             arc_phase: 0.0,
             arc_phase_step,
@@ -138,14 +138,11 @@ pub fn create_native_dark_fireballs(
 }
 
 #[must_use]
-pub fn step_native_dark_fireball(
-    source: NativeDarkFireballState,
-    actor_time_scale: f64,
-) -> NativeDarkFireballStep {
+pub fn step_dark_fireball(source: DarkFireballState, actor_time_scale: f64) -> DarkFireballStep {
     let arc_phase = fround(source.arc_phase + source.arc_phase_step);
-    NativeDarkFireballStep {
+    DarkFireballStep {
         impact: source.arc_phase_step > 0.0 && arc_phase >= 180.0,
-        spell: NativeDarkFireballState {
+        spell: DarkFireballState {
             age_ticks: source.age_ticks + 1,
             arc_phase,
             position: Vec2::new(
@@ -159,9 +156,9 @@ pub fn step_native_dark_fireball(
 }
 
 #[must_use]
-pub fn create_native_rain_of_bones(position: Vec2, rng: &mut NativeRng) -> NativeRainOfBonesState {
+pub fn create_rain_of_bones(position: Vec2, rng: &mut Rng) -> RainOfBonesState {
     let rotation_sign = rng.draw_sign(1.0);
-    NativeRainOfBonesState {
+    RainOfBonesState {
         alpha: 0.0,
         phase: 0.0,
         position,
@@ -172,17 +169,14 @@ pub fn create_native_rain_of_bones(position: Vec2, rng: &mut NativeRng) -> Nativ
 }
 
 #[must_use]
-pub fn step_native_rain_of_bones(
-    source: NativeRainOfBonesState,
-    rng: &mut NativeRng,
-) -> NativeRainOfBonesStep {
+pub fn step_rain_of_bones(source: RainOfBonesState, rng: &mut Rng) -> RainOfBonesStep {
     let remaining_ticks = source.remaining_ticks - 1;
     let alpha = if remaining_ticks > 0 {
         fround(source.alpha + 0.050_000_000_745_058_06).min(1.0)
     } else {
         fround(source.alpha - 0.009_999_999_776_482_582)
     };
-    let state = NativeRainOfBonesState {
+    let state = RainOfBonesState {
         alpha,
         remaining_ticks,
         phase: fround(source.phase + 1.0),
@@ -201,7 +195,7 @@ pub fn step_native_rain_of_bones(
         let angle = rng.draw_scaled_float(360.0, false);
         let rotation_deg = rng.draw_scaled_float(360.0, false);
         let direction = heading_vector(angle);
-        bone = Some(NativeRainBone {
+        bone = Some(RainBone {
             entry: (if skull == 3 { 1819 } else { 113 }) + entry as usize,
             position: Vec2::new(
                 fround(source.position.x + fround(radius * direction.x)),
@@ -219,10 +213,10 @@ pub fn step_native_rain_of_bones(
             rng.draw_word();
         }
     }
-    NativeRainOfBonesStep { bone, state }
+    RainOfBonesStep { bone, state }
 }
 
-fn roll_rain_drop(alpha: f64, rng: &mut NativeRng) -> bool {
+fn roll_rain_drop(alpha: f64, rng: &mut Rng) -> bool {
     let mut admitted = false;
     if alpha > 0.75 {
         admitted = rng.draw_integer(2) == 1;
@@ -237,7 +231,7 @@ fn roll_rain_drop(alpha: f64, rng: &mut NativeRng) -> bool {
 }
 
 #[must_use]
-pub fn create_native_dire_fire(rng: &mut NativeRng) -> NativeDireFireState {
+pub fn create_dire_fire(rng: &mut Rng) -> DireFireState {
     let phase = rng.draw_scaled_float(32.0, false);
     let scale_sign = rng.draw_sign(1.0);
     let first_phase = rng.draw_scaled_float(360.0, false);
@@ -246,7 +240,7 @@ pub fn create_native_dire_fire(rng: &mut NativeRng) -> NativeDireFireState {
     let second_rate = rng.draw_scaled_float(0.5, false);
     let first_sign = rng.draw_sign(1.0);
     let second_sign = rng.draw_sign(1.0);
-    NativeDireFireState {
+    DireFireState {
         alpha: 2.0,
         glow: true,
         phase,
@@ -260,10 +254,7 @@ pub fn create_native_dire_fire(rng: &mut NativeRng) -> NativeDireFireState {
 }
 
 #[must_use]
-pub fn step_native_dire_fire(
-    source: NativeDireFireState,
-    rng: &mut NativeRng,
-) -> NativeDireFireState {
+pub fn step_dire_fire(source: DireFireState, rng: &mut Rng) -> DireFireState {
     let first = rng.draw_scaled_float(0.200_000_002_980_232_24, false);
     let second = rng.draw_scaled_float(0.200_000_002_980_232_24, false);
     let rate =
@@ -272,7 +263,7 @@ pub fn step_native_dire_fire(
     if phase >= 32.0 {
         phase = fround(phase - 32.0);
     }
-    NativeDireFireState {
+    DireFireState {
         alpha: fround(source.alpha - 0.009_999_999_776_482_582),
         phase,
         ramp: fround(source.ramp + 0.050_000_000_745_058_06).min(1.0),

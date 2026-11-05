@@ -3,9 +3,9 @@
 use crate::gpu_ui::{self, StockAtlas, UiFrame};
 use egui::{Color32, Rect, pos2, vec2};
 use solomon_sim::boneyard::spectator::{
-    BoneyardSpectatorStatusPresentation, NativeSpectatorHudLayout, native_spectator_hud_layout,
+    BoneyardSpectatorStatusPresentation, SpectatorHudLayout, spectator_hud_layout,
 };
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec};
 use solomon_sim::viewport::GameViewport;
 
 pub struct SpectatorStatusView {
@@ -33,7 +33,7 @@ impl SpectatorStatusView {
     }
     pub fn paint(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         let Some((status, viewport)) = &self.previous else { return Ok(()) };
-        let layout = native_spectator_hud_layout(viewport.logical_size);
+        let layout = spectator_hud_layout(viewport.logical_size);
         let scale = viewport.display_scale as f32;
         let painter = frame.ctx.layer_painter(self.layer_id());
         let origin = pos2(layout.surface.x as f32 * scale, layout.surface.y as f32 * scale);
@@ -68,7 +68,7 @@ impl SpectatorStatusView {
         &self,
         frame: &mut UiFrame<'_>,
         painter: &egui::Painter,
-        layout: &NativeSpectatorHudLayout,
+        layout: &SpectatorHudLayout,
         text: &str,
         origin: egui::Pos2,
         scale: f32,
@@ -134,12 +134,12 @@ impl SpectatorStatusView {
         gpu_ui::native_text(
             frame,
             painter,
-            &NativeUiTextSpec {
-                align: NativeUiTextAlign::Left,
+            &UiTextSpec {
+                align: UiTextAlign::Left,
                 scale: f64::from(scale),
                 tint: 0xffe68c,
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::Medium,
+                ..UiTextSpec::new(
+                    UiFontName::Medium,
                     text,
                     f64::from(origin.x) + layout.text.x * f64::from(scale),
                     f64::from(origin.y) + layout.text.y * f64::from(scale),

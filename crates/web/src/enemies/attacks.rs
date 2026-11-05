@@ -3,7 +3,7 @@
 use solomon_sim::Vec2;
 use solomon_sim::enemies::EnemyToken;
 use solomon_sim::enemies::attack_presentation::{
-    EnemyAttackEffectKind, EnemyRawFireBurstKind, native_enemy_attack_effect_plan_at_age,
+    EnemyAttackEffectKind, EnemyRawFireBurstKind, enemy_attack_effect_plan_at_age,
 };
 use solomon_sim::enemies::model::EnemyEventKind;
 use solomon_sim::enemies::world::EnemyWorld;
@@ -82,7 +82,7 @@ impl EnemyView {
                 (tick - effect.spawn_tick as f64).max(0.0)
             };
             effect.born_this_paint = false;
-            let Some(plan) = native_enemy_attack_effect_plan_at_age(effect.kind, *id, age) else {
+            let Some(plan) = enemy_attack_effect_plan_at_age(effect.kind, *id, age) else {
                 expired.push(*id);
                 continue;
             };

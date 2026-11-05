@@ -5,6 +5,7 @@
 
 pub mod audio;
 pub mod battle;
+mod beam_mesh;
 mod boneyard;
 pub mod boneyard_weather;
 pub mod cheats;
@@ -37,7 +38,6 @@ pub mod mod_presentation_assets;
 pub mod mod_skill_quickbar;
 pub mod mod_skills;
 pub mod mod_world_overlays;
-mod native_mesh;
 pub mod navigation_data;
 pub mod network;
 mod npc;

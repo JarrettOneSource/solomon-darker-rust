@@ -5,11 +5,11 @@
 use crate::float;
 use crate::float::fround;
 use crate::spells::presentation::{SpellAtlas, SpellBlend};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 /// Fractional display fields shared by projectile and terminal snapshot effects.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemyEffectPresentationInput {
+pub struct EnemyEffectPresentationInput {
     pub age_ticks: f64,
     pub rotation_radians: f64,
 }
@@ -31,7 +31,7 @@ pub enum NativeEnemyProjectilePayload {
     None,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemyProjectileVisual {
+pub struct EnemyProjectileVisual {
     pub age_ticks: u64,
     pub heading_degrees: f64,
     pub id: u64,
@@ -45,7 +45,7 @@ pub struct NativeEnemyProjectileVisual {
     pub visual_scale: f64,
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeEnemyProjectileLayer {
+pub struct EnemyProjectileLayer {
     pub alpha: f64,
     pub atlas: SpellAtlas,
     pub blend: SpellBlend,
@@ -58,7 +58,7 @@ pub struct NativeEnemyProjectileLayer {
     pub scale_y: Option<f64>,
     pub tint: u32,
 }
-impl NativeEnemyProjectileLayer {
+impl EnemyProjectileLayer {
     fn new(atlas: SpellAtlas, entry: usize, role: &str) -> Self {
         Self {
             alpha: 1.0,
@@ -75,33 +75,30 @@ impl NativeEnemyProjectileLayer {
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemyProjectileStreak {
+pub struct EnemyProjectileStreak {
     pub alpha: f64,
     pub end: Vec2,
     pub start: Vec2,
     pub width: f64,
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeEnemyProjectilePlan {
-    pub layers: Vec<NativeEnemyProjectileLayer>,
-    pub underlays: Vec<NativeEnemyProjectileLayer>,
+pub struct EnemyProjectilePlan {
+    pub layers: Vec<EnemyProjectileLayer>,
+    pub underlays: Vec<EnemyProjectileLayer>,
     pub position: Vec2,
-    pub streak: Option<NativeEnemyProjectileStreak>,
+    pub streak: Option<EnemyProjectileStreak>,
 }
 
-pub fn native_enemy_projectile_plan(
-    projectile: &NativeEnemyProjectileVisual,
-    tick: f64,
-) -> NativeEnemyProjectilePlan {
-    native_enemy_projectile_plan_at_age(projectile, tick, projectile.age_ticks as f64)
+pub fn enemy_projectile_plan(projectile: &EnemyProjectileVisual, tick: f64) -> EnemyProjectilePlan {
+    enemy_projectile_plan_at_age(projectile, tick, projectile.age_ticks as f64)
 }
 
 #[must_use]
-pub fn native_enemy_projectile_plan_at_age(
-    projectile: &NativeEnemyProjectileVisual,
+pub fn enemy_projectile_plan_at_age(
+    projectile: &EnemyProjectileVisual,
     tick: f64,
     age_ticks: f64,
-) -> NativeEnemyProjectilePlan {
+) -> EnemyProjectilePlan {
     assert!(
         tick.is_finite() && tick >= 0.0,
         "enemy projectile presentation tick is finite and non-negative"
@@ -124,11 +121,8 @@ pub fn native_enemy_projectile_plan_at_age(
             };
             let rotation = degrees(projectile.visual_phase_degrees);
             let alpha = projectile.visual_scale.min(1.0);
-            let mut body = NativeEnemyProjectileLayer::new(
-                SpellAtlas::BadGuys,
-                2,
-                &format!("arrow-{payload}"),
-            );
+            let mut body =
+                EnemyProjectileLayer::new(SpellAtlas::BadGuys, 2, &format!("arrow-{payload}"));
             body.alpha = alpha;
             body.offset = Vec2::new(0.0, projectile.vertical_offset);
             body.rotation_radians = rotation;
@@ -138,7 +132,7 @@ pub fn native_enemy_projectile_plan_at_age(
                 let x = float::sin(heading) * projectile.speed;
                 let y = -float::cos(heading) * projectile.speed;
                 let age = age_ticks.min(35.0);
-                streak = Some(NativeEnemyProjectileStreak {
+                streak = Some(EnemyProjectileStreak {
                     alpha: 0.5
                         * (fround(0.8) + unit(projectile.id, tick, 2) * fround(1.0 - fround(0.8))),
                     start: Vec2::new(
@@ -152,7 +146,7 @@ pub fn native_enemy_projectile_plan_at_age(
             if projectile.payload != Payload::Normal {
                 let height = if projectile.vertical_offset == 0.0 { 0.35 } else { 1.0 };
                 let scale = 0.5 + unit(projectile.id, tick, 0) * 0.5 * height;
-                let mut overlay = NativeEnemyProjectileLayer::new(
+                let mut overlay = EnemyProjectileLayer::new(
                     SpellAtlas::BadGuys,
                     if projectile.payload == Payload::Fire {
                         255 + (tick / 5 % 12) as usize
@@ -180,7 +174,7 @@ pub fn native_enemy_projectile_plan_at_age(
                 }
                 layers.push(overlay);
             }
-            let mut shadow = NativeEnemyProjectileLayer::new(
+            let mut shadow = EnemyProjectileLayer::new(
                 SpellAtlas::BadGuys,
                 if projectile.vertical_offset == 0.0 { 3 } else { 2 },
                 "arrow-ground-shadow",
@@ -194,13 +188,13 @@ pub fn native_enemy_projectile_plan_at_age(
             assert_eq!(projectile.payload, Payload::Fire, "Firebolt payload is Fire");
             let alpha = lifetime_alpha(projectile, age);
             let mut glow =
-                NativeEnemyProjectileLayer::new(SpellAtlas::BadGuys, 15, "firebolt-orange-glow");
+                EnemyProjectileLayer::new(SpellAtlas::BadGuys, 15, "firebolt-orange-glow");
             glow.alpha = alpha * 0.5;
             glow.blend = SpellBlend::Add;
             glow.offset = Vec2::new(0.0, -15.0);
             glow.scale = 2.0;
             glow.tint = 0xff8000;
-            let mut body = NativeEnemyProjectileLayer::new(
+            let mut body = EnemyProjectileLayer::new(
                 SpellAtlas::BadGuys,
                 255 + (age % 12) as usize,
                 "firebolt-body",
@@ -220,7 +214,7 @@ pub fn native_enemy_projectile_plan_at_age(
             };
             let alpha = lifetime_alpha(projectile, age);
             let phase = projectile.visual_phase_degrees;
-            let mut body = NativeEnemyProjectileLayer::new(
+            let mut body = EnemyProjectileLayer::new(
                 SpellAtlas::BadGuys,
                 entry,
                 &format!("guided-missile-{payload}-body"),
@@ -230,7 +224,7 @@ pub fn native_enemy_projectile_plan_at_age(
             body.offset = Vec2::new(0.0, -15.0);
             body.scale =
                 1.1 + float::sin(degrees(phase * 15.0)).abs() * 0.15 * projectile.visual_scale;
-            let mut aura = NativeEnemyProjectileLayer::new(
+            let mut aura = EnemyProjectileLayer::new(
                 SpellAtlas::BadGuys,
                 112,
                 &format!("guided-missile-{payload}-aura"),
@@ -246,7 +240,7 @@ pub fn native_enemy_projectile_plan_at_age(
         Kind::DemonBomb => {
             assert_eq!(projectile.payload, Payload::None, "Demon Bomb has no payload");
             for index in 0..3 {
-                let mut draw = NativeEnemyProjectileLayer::new(
+                let mut draw = EnemyProjectileLayer::new(
                     SpellAtlas::BadGuys,
                     267 + (word(projectile.id, tick, index) % 4) as usize,
                     &format!("demon-bomb-sample-{index}"),
@@ -257,7 +251,7 @@ pub fn native_enemy_projectile_plan_at_age(
                 layers.push(draw);
             }
             if projectile.speed <= 2.0 {
-                let mut draw = NativeEnemyProjectileLayer::new(
+                let mut draw = EnemyProjectileLayer::new(
                     SpellAtlas::DeadHawg,
                     46 + (tick / 2 % 32) as usize,
                     "demon-bomb-ground",
@@ -273,7 +267,7 @@ pub fn native_enemy_projectile_plan_at_age(
                 layers.push(draw);
             }
             let mut glow =
-                NativeEnemyProjectileLayer::new(SpellAtlas::BadGuys, 15, "demon-bomb-ground-glow");
+                EnemyProjectileLayer::new(SpellAtlas::BadGuys, 15, "demon-bomb-ground-glow");
             glow.alpha = 0.25;
             glow.blend = SpellBlend::Add;
             glow.scale_y = Some(0.8_f32 as f64);
@@ -291,12 +285,10 @@ pub fn native_enemy_projectile_plan_at_age(
             }
             let scale = projectile.visual_scale;
             let pulse = float::sin(degrees(age as f64)) * 0.25 + 0.75;
-            let mut outer =
-                NativeEnemyProjectileLayer::new(SpellAtlas::DeadHawg, 0, "poison-pool-outer");
+            let mut outer = EnemyProjectileLayer::new(SpellAtlas::DeadHawg, 0, "poison-pool-outer");
             outer.alpha = 0.5 * alpha;
             outer.scale = scale;
-            let mut inner =
-                NativeEnemyProjectileLayer::new(SpellAtlas::DeadHawg, 0, "poison-pool-inner");
+            let mut inner = EnemyProjectileLayer::new(SpellAtlas::DeadHawg, 0, "poison-pool-inner");
             inner.alpha = pulse * alpha;
             inner.scale = (scale - 0.6).max(0.0) * scale * 0.75;
             underlays.extend([outer, inner]);
@@ -307,13 +299,13 @@ pub fn native_enemy_projectile_plan_at_age(
             layer.scale_y = Some(layer.scale);
         }
     }
-    NativeEnemyProjectilePlan { layers, underlays, position: projectile.position, streak }
+    EnemyProjectilePlan { layers, underlays, position: projectile.position, streak }
 }
 
 fn degrees(value: f64) -> f64 {
     value * std::f64::consts::PI / 180.0
 }
-fn lifetime_alpha(projectile: &NativeEnemyProjectileVisual, age: u64) -> f64 {
+fn lifetime_alpha(projectile: &EnemyProjectileVisual, age: u64) -> f64 {
     (projectile.lifetime_ticks.saturating_sub(age) as f64 / 100.0).min(1.0)
 }
 fn word(id: u64, tick: u64, channel: u32) -> u32 {
@@ -325,19 +317,19 @@ fn word(id: u64, tick: u64, channel: u32) -> u32 {
     value ^ (value >> 15)
 }
 fn unit(id: u64, tick: u64, channel: u32) -> f64 {
-    crate::random_domain::native_random_float_from_word(word(id, tick, channel), 1.0)
+    crate::random_domain::random_float_from_word(word(id, tick, channel), 1.0)
 }
 
-pub fn native_death_magic_layers(
+pub fn death_magic_layers(
     position: Vec2,
     scale: f64,
     phase: f64,
-    rng: &mut NativeRng,
-) -> Vec<NativeEnemyProjectileLayer> {
+    rng: &mut Rng,
+) -> Vec<EnemyProjectileLayer> {
     let mut layers = Vec::new();
     for pass in 0..2 {
         let pulse = float::sin(degrees(phase * 15.0)).abs();
-        let mut outer = NativeEnemyProjectileLayer::new(
+        let mut outer = EnemyProjectileLayer::new(
             SpellAtlas::BadGuys,
             110,
             &format!("death-magic-outer-disk-{pass}"),
@@ -347,7 +339,7 @@ pub fn native_death_magic_layers(
         outer.scale = (pulse * (0.15_f32 as f64) + 2.5) * scale;
         outer.tint = 0;
         layers.push(outer);
-        let mut inner = NativeEnemyProjectileLayer::new(
+        let mut inner = EnemyProjectileLayer::new(
             SpellAtlas::BadGuys,
             110,
             &format!("death-magic-inner-disk-{pass}"),
@@ -365,7 +357,7 @@ pub fn native_death_magic_layers(
         let tint = ((red * 255.0 + 0.5).floor() as u32) << 16
             | ((green * 255.0 + 0.5).floor() as u32) << 8
             | (green * 255.0 + 0.5).floor() as u32;
-        let mut center = NativeEnemyProjectileLayer::new(
+        let mut center = EnemyProjectileLayer::new(
             SpellAtlas::BadGuys,
             111,
             &format!("death-magic-center-{pass}"),
@@ -384,7 +376,7 @@ pub fn native_death_magic_layers(
             let angle = degrees(rng.draw_scaled_float(360.0, false));
             let size = (0.25 + rng.draw_scaled_float(0.2_f32 as f64, false)) * scale;
             let rotation = degrees(rng.draw_scaled_float(360.0, false));
-            let mut draw = NativeEnemyProjectileLayer::new(
+            let mut draw = EnemyProjectileLayer::new(
                 SpellAtlas::BadGuys,
                 111,
                 &format!("death-magic-spark-{pass}-{spark}"),
@@ -400,7 +392,7 @@ pub fn native_death_magic_layers(
             draw.tint = tint;
             layers.push(draw);
         }
-        let mut star = NativeEnemyProjectileLayer::new(
+        let mut star = EnemyProjectileLayer::new(
             SpellAtlas::BadGuys,
             112,
             &format!("death-magic-star-{pass}"),

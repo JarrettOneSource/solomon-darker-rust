@@ -31,7 +31,7 @@ impl PlayerPanels {
             return;
         }
         let exists = self.active_items(snapshot).iter().any(|item| {
-            item.id == item_id && item.kind == HubItemKind::Sack && item.native_type_id == 7008
+            item.id == item_id && item.kind == HubItemKind::Sack && item.type_id == 7008
         });
         if !exists {
             return;

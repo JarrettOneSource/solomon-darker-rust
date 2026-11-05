@@ -26,7 +26,7 @@ fn main() -> Result<(), String> {
                     root,
                 )?);
                 renderer.begin_frame(256, 256, [256.0; 2]);
-                renderer.set_native_world_pixel_centers(true);
+                renderer.set_world_pixel_centers(true);
                 let mut read_pixels = |renderer: &mut solomon_graphics::Renderer| {
                     let gl = renderer.graphics_context();
                     let mut pixels = vec![0; 256 * 256 * 4];

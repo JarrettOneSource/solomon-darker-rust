@@ -1,13 +1,11 @@
 //! Staff proc and Pike-break stock sprites share the secondary atlas submission.
 
 use solomon_sim::Vec2;
-use solomon_sim::secondary::presentation::{NativeSecondaryAtlas, NativeSecondarySpriteDraw};
+use solomon_sim::secondary::presentation::{SecondaryAtlas, SecondarySpriteDraw};
 use solomon_sim::spells::staff::presentation::{
-    native_player_staff_pike_break_draws, native_player_staff_vfx_render_plan,
+    player_staff_pike_break_draws, player_staff_vfx_render_plan,
 };
-use solomon_sim::spells::staff::{
-    NativePlayerStaffPikeBreakVfx, NativePlayerStaffTransient, NativePlayerStaffVfx,
-};
+use solomon_sim::spells::staff::{PlayerStaffPikeBreakVfx, PlayerStaffTransient, PlayerStaffVfx};
 
 use super::{SecondaryPainter, SecondaryView};
 use crate::courtyard::Camera;
@@ -17,16 +15,14 @@ impl SecondaryView {
     /// Joins visible children directly from PrimarySpellTransient::Staff. Action
     /// and contact owners have no source painter; their emitted VFX own the rows.
     #[must_use]
-    pub fn staff_painter(state: &NativePlayerStaffTransient) -> Option<SecondaryPainter> {
+    pub fn staff_painter(state: &PlayerStaffTransient) -> Option<SecondaryPainter> {
         let position = match state {
-            NativePlayerStaffTransient::Vfx(state) => {
-                native_player_staff_vfx_render_plan(state).position
-            }
-            NativePlayerStaffTransient::PikeBreak(state) => state.position,
-            NativePlayerStaffTransient::Action(_)
-            | NativePlayerStaffTransient::Contact(_)
-            | NativePlayerStaffTransient::ContactKnockback(_)
-            | NativePlayerStaffTransient::Knockback(_) => return None,
+            PlayerStaffTransient::Vfx(state) => player_staff_vfx_render_plan(state).position,
+            PlayerStaffTransient::PikeBreak(state) => state.position,
+            PlayerStaffTransient::Action(_)
+            | PlayerStaffTransient::Contact(_)
+            | PlayerStaffTransient::ContactKnockback(_)
+            | PlayerStaffTransient::Knockback(_) => return None,
         };
         let registration = state
             .common()
@@ -43,21 +39,21 @@ impl SecondaryView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        state: &NativePlayerStaffTransient,
+        state: &PlayerStaffTransient,
         world_tint: u32,
     ) {
         match state {
-            NativePlayerStaffTransient::Vfx(state) => {
+            PlayerStaffTransient::Vfx(state) => {
                 self.draw_staff_vfx(renderer, camera, state, world_tint)
             }
-            NativePlayerStaffTransient::PikeBreak(state) => {
+            PlayerStaffTransient::PikeBreak(state) => {
                 self.draw_staff_pike_break(renderer, camera, state, world_tint)
             }
             // These source owners perform combat work and have no visual root.
-            NativePlayerStaffTransient::Action(_)
-            | NativePlayerStaffTransient::Contact(_)
-            | NativePlayerStaffTransient::ContactKnockback(_)
-            | NativePlayerStaffTransient::Knockback(_) => {}
+            PlayerStaffTransient::Action(_)
+            | PlayerStaffTransient::Contact(_)
+            | PlayerStaffTransient::ContactKnockback(_)
+            | PlayerStaffTransient::Knockback(_) => {}
         }
     }
 
@@ -65,13 +61,13 @@ impl SecondaryView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        state: &NativePlayerStaffVfx,
+        state: &PlayerStaffVfx,
         world_tint: u32,
     ) {
-        let plan = native_player_staff_vfx_render_plan(state);
-        let draw = NativeSecondarySpriteDraw {
+        let plan = player_staff_vfx_render_plan(state);
+        let draw = SecondarySpriteDraw {
             alpha: plan.alpha,
-            atlas: NativeSecondaryAtlas::BadGuys,
+            atlas: SecondaryAtlas::BadGuys,
             blend: plan.blend,
             color_mode: None,
             clip: None,
@@ -90,13 +86,13 @@ impl SecondaryView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        state: &NativePlayerStaffPikeBreakVfx,
+        state: &PlayerStaffPikeBreakVfx,
         world_tint: u32,
     ) {
-        for plan in native_player_staff_pike_break_draws(state) {
-            let draw = NativeSecondarySpriteDraw {
+        for plan in player_staff_pike_break_draws(state) {
+            let draw = SecondarySpriteDraw {
                 alpha: plan.alpha,
-                atlas: NativeSecondaryAtlas::BadGuys,
+                atlas: SecondaryAtlas::BadGuys,
                 blend: plan.blend,
                 color_mode: None,
                 clip: None,

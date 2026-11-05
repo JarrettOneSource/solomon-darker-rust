@@ -29,8 +29,8 @@
   gameplay or be saved as authoritative state.
 - **Hub prediction**: bounded local movement between snapshots, reconciled on receipt.
 - **Single-precision boundary**: a deliberate narrowing through `float::fround`.
-- **Native RNG**: the 55-word lagged-Fibonacci generator, with 30-bit words and
-  float divisor 100000.
+- **RNG** (`Rng`): the original game's 55-word lagged-Fibonacci generator, with
+  30-bit words and float divisor 100000.
 - **Semantic word**: an RNG word reduced to a bounded integer or scaled float.
 - **Collision fallback sampler**: the separate xorshift state consumed by unresolved
   courtyard collision.

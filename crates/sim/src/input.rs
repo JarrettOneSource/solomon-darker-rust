@@ -4,8 +4,8 @@
 mod gameplay;
 pub use gameplay::{
     BeltInputSource, GameplayAction, GameplayAim, GameplayInputSample, HeldBeltInputs,
-    StandardGamepadSnapshot, StandardGameplaySample, StandardGameplayState,
-    project_native_stick_aim, project_native_world_pointer,
+    StandardGamepadSnapshot, StandardGameplaySample, StandardGameplayState, project_stick_aim,
+    project_world_pointer,
 };
 
 use crate::Vec2;

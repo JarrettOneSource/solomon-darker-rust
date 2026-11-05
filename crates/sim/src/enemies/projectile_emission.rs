@@ -5,9 +5,7 @@ use super::mage_attachments::MAGE_LIGHTNING_ATTACHMENTS;
 use super::model::*;
 use super::movement::staff_attack_speed;
 use super::projectiles::*;
-use super::ranged::{
-    ArcherVolleyRequest, build_native_archer_volley, native_enemy_projectile_velocity,
-};
+use super::ranged::{ArcherVolleyRequest, build_archer_volley, enemy_projectile_velocity};
 use super::targeting::{target_by_id, target_eligible};
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
@@ -146,9 +144,9 @@ pub fn spawn_projectile(
         light_registration: light.then_some(registration),
         lifetime_ticks: lifetime,
         minimum_speed: minimum,
-        native_type_id: kind.native_type_id(),
-        native_cell_binding_order: world.next_native_cell_binding_order,
-        native_registration_order: world.next_native_registration_order,
+        type_id: kind.type_id(),
+        native_cell_binding_order: world.next_cell_binding_order,
+        native_registration_order: world.next_registration_order,
         owner_actor_id: actor.id,
         painter_registration: registration,
         payload,
@@ -185,17 +183,16 @@ pub fn spawn_projectile(
         visual_scale: scale,
     };
     let projectile = match kind {
-        EnemyProjectileKind::Arrow => EnemyProjectile::Arrow {
-            state,
-            velocity: native_enemy_projectile_velocity(heading, speed),
-        },
+        EnemyProjectileKind::Arrow => {
+            EnemyProjectile::Arrow { state, velocity: enemy_projectile_velocity(heading, speed) }
+        }
         EnemyProjectileKind::DemonBomb => EnemyProjectile::DemonBomb(state),
         EnemyProjectileKind::Firebolt => EnemyProjectile::Firebolt(state),
         EnemyProjectileKind::GuidedMissile => EnemyProjectile::GuidedMissile(state),
         EnemyProjectileKind::PoisonPool => EnemyProjectile::PoisonPool(state),
     };
-    world.next_native_cell_binding_order += 1;
-    world.next_native_registration_order += 1;
+    world.next_cell_binding_order += 1;
+    world.next_registration_order += 1;
     world.next_projectile_id += 1;
     world.projectiles.push(projectile.clone());
     let mut event = EnemyEvent::new(EnemyEventKind::ProjectileSpawned, actor.id, tick);
@@ -223,7 +220,7 @@ pub fn emit_archer_volley(
     else {
         return;
     };
-    let volley = build_native_archer_volley(
+    let volley = build_archer_volley(
         ArcherVolleyRequest {
             accuracy_mode,
             arrow_type,

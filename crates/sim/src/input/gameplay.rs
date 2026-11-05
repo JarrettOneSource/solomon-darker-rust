@@ -266,7 +266,7 @@ impl HeldBeltInputs {
 /// Website `input/gameplay-pointer.ts`. The caller supplies the actual drawing viewport,
 /// including any renderer letterbox, rather than assuming that it fills the canvas.
 #[must_use]
-pub fn project_native_world_pointer(
+pub fn project_world_pointer(
     pointer: Vec2,
     surface: crate::hud::HudRect,
     viewport: Vec2,
@@ -292,7 +292,7 @@ pub fn project_native_world_pointer(
 }
 
 #[must_use]
-pub fn project_native_stick_aim(
+pub fn project_stick_aim(
     direction: Vec2,
     player: Vec2,
     viewport: Vec2,

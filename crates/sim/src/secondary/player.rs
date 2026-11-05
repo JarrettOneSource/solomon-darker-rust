@@ -1,62 +1,62 @@
 //! Secondary player clocks, reserve and Focus recharge from native-secondary-abilities.ts.
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::float::fround;
-use crate::profile::offensive::NativeOffensiveSpellFactors;
-use crate::profile::{NativeSkillBookState, native_skill_category, native_skill_root};
-use crate::spells::casting::{NativePlayerWeaponKind, native_forward_action_marker_crossed};
+use crate::profile::offensive::OffensiveSpellFactors;
+use crate::profile::{SkillBookState, skill_category, skill_root};
+use crate::spells::casting::{PlayerWeaponKind, forward_action_marker_crossed};
 
 use super::{
-    NativeSecondaryAbilityId, effective_secondary_ability_rank_stats, effective_skill_value,
-    native_secondary_cooldown_capacity_ticks,
+    SecondaryAbilityId, effective_secondary_ability_rank_stats, effective_skill_value,
+    secondary_cooldown_capacity_ticks,
 };
 
-pub const NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS: f64 = 150.0;
+pub const SECONDARY_GLOBAL_COOLDOWN_TICKS: f64 = 150.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(try_from = "saved_cast::Document"))]
-pub struct NativeSecondaryCastAction {
-    pub weapon_kind: Option<NativePlayerWeaponKind>,
+pub struct SecondaryCastAction {
+    pub weapon_kind: Option<PlayerWeaponKind>,
     pub progress: f64,
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
-    pub hand: Option<NativeHandCast2>,
+    pub hand: Option<HandCast2>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHandCast2 {
+pub struct HandCast2 {
     pub pose: usize,
     pub done: bool,
 }
 
-impl NativeSecondaryCastAction {
+impl SecondaryCastAction {
     #[must_use]
-    pub fn new(weapon_kind: Option<NativePlayerWeaponKind>) -> Self {
+    pub fn new(weapon_kind: Option<PlayerWeaponKind>) -> Self {
         Self {
             weapon_kind,
             progress: 0.0,
-            hand: weapon_kind.is_none().then_some(NativeHandCast2 { pose: 0, done: false }),
+            hand: weapon_kind.is_none().then_some(HandCast2 { pose: 0, done: false }),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct NativeSecondaryCastStep {
-    pub action: Option<NativeSecondaryCastAction>,
+pub struct SecondaryCastStep {
+    pub action: Option<SecondaryCastAction>,
     pub marker_crossed: bool,
 }
 
 #[must_use]
-pub fn step_native_secondary_cast_action(
-    action: Option<NativeSecondaryCastAction>,
+pub fn step_secondary_cast_action(
+    action: Option<SecondaryCastAction>,
     faster_caster_percent: f64,
     action_time_factor: f64,
-) -> NativeSecondaryCastStep {
-    let Some(mut action) = action else { return NativeSecondaryCastStep::default() };
+) -> SecondaryCastStep {
+    let Some(mut action) = action else { return SecondaryCastStep::default() };
     let previous = action.progress;
     if action.weapon_kind.is_none() {
-        let hand = action.hand.get_or_insert(NativeHandCast2 {
+        let hand = action.hand.get_or_insert(HandCast2 {
             pose: if action.progress == 0.0 {
                 0
             } else if action.progress < 1.0 {
@@ -67,7 +67,7 @@ pub fn step_native_secondary_cast_action(
             done: action.progress >= 6.0,
         });
         if hand.done {
-            return NativeSecondaryCastStep::default();
+            return SecondaryCastStep::default();
         }
         // Bare Cast2 has a fixed born .095 rate. The native admission helper
         // 0x005297D0 applies no Faster Caster construction multiplier.
@@ -80,18 +80,18 @@ pub fn step_native_secondary_cast_action(
             0
         };
         hand.done = action.progress >= 6.0;
-        return NativeSecondaryCastStep {
+        return SecondaryCastStep {
             action: Some(action),
-            marker_crossed: native_forward_action_marker_crossed(previous, action.progress, 1.0),
+            marker_crossed: forward_action_marker_crossed(previous, action.progress, 1.0),
         };
     }
-    let staff = action.weapon_kind == Some(NativePlayerWeaponKind::Staff);
+    let staff = action.weapon_kind == Some(PlayerWeaponKind::Staff);
     let rate = if staff { 0.1_f32 as f64 } else { 0.095_f32 as f64 };
     let factor = fround(1.0 + faster_caster_percent / 100.0);
     action.progress = fround(action.progress + factor * rate);
     let end = if staff { 5.0 } else { 6.0 };
-    NativeSecondaryCastStep {
-        marker_crossed: native_forward_action_marker_crossed(
+    SecondaryCastStep {
+        marker_crossed: forward_action_marker_crossed(
             previous,
             action.progress,
             if staff { 0.0 } else { 1.0 },
@@ -102,18 +102,18 @@ pub fn step_native_secondary_cast_action(
 
 #[cfg(feature = "persistence")]
 mod saved_cast {
-    use super::{NativeHandCast2, NativePlayerWeaponKind, NativeSecondaryCastAction};
+    use super::{HandCast2, PlayerWeaponKind, SecondaryCastAction};
 
     #[derive(serde::Deserialize)]
     #[serde(rename = "NativeSecondaryCastAction")]
     pub(super) struct Document {
-        weapon_kind: Option<NativePlayerWeaponKind>,
+        weapon_kind: Option<PlayerWeaponKind>,
         progress: f64,
         #[serde(default)]
-        hand: Option<NativeHandCast2>,
+        hand: Option<HandCast2>,
     }
 
-    impl TryFrom<Document> for NativeSecondaryCastAction {
+    impl TryFrom<Document> for SecondaryCastAction {
         type Error = &'static str;
         fn try_from(value: Document) -> Result<Self, Self::Error> {
             if !value.progress.is_finite()
@@ -133,8 +133,8 @@ mod saved_cast {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryPlayerState {
-    pub cast_action: Option<NativeSecondaryCastAction>,
+pub struct SecondaryPlayerState {
+    pub cast_action: Option<SecondaryCastAction>,
     pub cast_sequence: u64,
     pub cast_spin_ticks_remaining: u64,
     #[cfg_attr(feature = "persistence", serde(with = "crate::persistence::fixed_array"))]
@@ -145,7 +145,7 @@ pub struct NativeSecondaryPlayerState {
     pub fizzle_sequence: u64,
     pub global_cooldown_ticks: f64,
     pub held_slot: Option<usize>,
-    pub last_skill_id: Option<NativeSecondaryAbilityId>,
+    pub last_skill_id: Option<SecondaryAbilityId>,
     pub magic_shield_absorb: f64,
     pub magic_shield_explosion_damage: f64,
     pub magic_shield_maximum: f64,
@@ -158,7 +158,7 @@ pub struct NativeSecondaryPlayerState {
     pub stoneskin_ticks_remaining: u64,
 }
 
-impl Default for NativeSecondaryPlayerState {
+impl Default for SecondaryPlayerState {
     fn default() -> Self {
         Self {
             cast_action: None,
@@ -185,22 +185,22 @@ impl Default for NativeSecondaryPlayerState {
     }
 }
 
-impl NativeSecondaryPlayerState {
-    pub fn start_cast(&mut self, weapon_kind: Option<NativePlayerWeaponKind>) {
-        self.cast_action = Some(NativeSecondaryCastAction::new(weapon_kind));
+impl SecondaryPlayerState {
+    pub fn start_cast(&mut self, weapon_kind: Option<PlayerWeaponKind>) {
+        self.cast_action = Some(SecondaryCastAction::new(weapon_kind));
     }
 
     /// Fractional recharge factors stay in doubles; the source does not narrow these timers.
     pub fn step(
         &mut self,
-        skill_book: &NativeSkillBookState,
+        skill_book: &SkillBookState,
         secondary_recharge_factor: f64,
-        offensive_factors: &NativeOffensiveSpellFactors,
+        offensive_factors: &OffensiveSpellFactors,
         action_time_factor: f64,
     ) -> bool {
-        for ability in NativeSecondaryAbilityId::ALL {
+        for ability in SecondaryAbilityId::ALL {
             self.cooldown_maximum_ticks_by_skill[ability.skill_id()] =
-                native_secondary_cooldown_capacity_ticks(skill_book, ability);
+                secondary_cooldown_capacity_ticks(skill_book, ability);
         }
         for skill_id in 0..self.cooldown_ticks_by_skill.len() {
             let ticks = self.cooldown_ticks_by_skill[skill_id];
@@ -210,8 +210,7 @@ impl NativeSecondaryPlayerState {
             }
             let mut recharge = secondary_recharge_factor;
             if let Some(equipment) = &offensive_factors.equipment {
-                let class_id =
-                    native_skill_root(skill_id).expect("cooling secondary has a native class");
+                let class_id = skill_root(skill_id).expect("cooling secondary has a native class");
                 recharge = recharge.max(equipment.class_recharge[class_id].apply(1.0));
             }
             self.cooldown_ticks_by_skill[skill_id] =
@@ -223,7 +222,7 @@ impl NativeSecondaryPlayerState {
         self.magic_shield_pulse_ticks = self.magic_shield_pulse_ticks.saturating_sub(1);
         self.planewalker_ticks_remaining = self.planewalker_ticks_remaining.saturating_sub(1);
         self.stoneskin_ticks_remaining = self.stoneskin_ticks_remaining.saturating_sub(1);
-        let step = step_native_secondary_cast_action(
+        let step = step_secondary_cast_action(
             self.cast_action,
             effective_skill_value(skill_book, 70, "mValue"),
             action_time_factor,
@@ -235,10 +234,10 @@ impl NativeSecondaryPlayerState {
     /// Focus may leave the existing cooldown untouched after consuming its native chance draw.
     pub fn begin_cooldown(
         &mut self,
-        ability: NativeSecondaryAbilityId,
+        ability: SecondaryAbilityId,
         ticks: f64,
         focus_instant_recharge_chance_percent: f64,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
     ) {
         self.cooldown_maximum_ticks_by_skill[ability.skill_id()] = ticks;
         if ticks > 0.0 && focus_instant_recharge_chance_percent > 0.0 {
@@ -249,16 +248,16 @@ impl NativeSecondaryPlayerState {
         }
         self.cooldown_ticks_by_skill[ability.skill_id()] = ticks;
         for cooldown in &mut self.cooldown_ticks_by_skill {
-            if *cooldown < NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS {
+            if *cooldown < SECONDARY_GLOBAL_COOLDOWN_TICKS {
                 *cooldown = 0.0;
             }
         }
-        self.global_cooldown_ticks = NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS;
+        self.global_cooldown_ticks = SECONDARY_GLOBAL_COOLDOWN_TICKS;
     }
 
     pub fn cooldown_rejuvenation(&mut self) {
         for (skill_id, ticks) in self.cooldown_ticks_by_skill.iter_mut().enumerate() {
-            if native_skill_category(skill_id) == Some(2) {
+            if skill_category(skill_id) == Some(2) {
                 *ticks = 0.0;
             }
         }
@@ -266,18 +265,16 @@ impl NativeSecondaryPlayerState {
     }
 
     #[must_use]
-    pub fn mana_reserve(&self, skill_book: &NativeSkillBookState, maximum_mana: f64) -> f64 {
+    pub fn mana_reserve(&self, skill_book: &SkillBookState, maximum_mana: f64) -> f64 {
         let mut reserved_mana = 0.0;
         if self.firewalker {
-            let stats = effective_secondary_ability_rank_stats(
-                skill_book,
-                NativeSecondaryAbilityId::Firewalker,
-            );
+            let stats =
+                effective_secondary_ability_rank_stats(skill_book, SecondaryAbilityId::Firewalker);
             reserved_mana = stats.value("mHoard").unwrap_or(0.0);
         }
         for (active, ability) in [
-            (self.mindstar, NativeSecondaryAbilityId::Mindstar),
-            (self.regenerate, NativeSecondaryAbilityId::Regenerate),
+            (self.mindstar, SecondaryAbilityId::Mindstar),
+            (self.regenerate, SecondaryAbilityId::Regenerate),
         ] {
             if active {
                 let stats = effective_secondary_ability_rank_stats(skill_book, ability);
@@ -301,7 +298,7 @@ impl NativeSecondaryPlayerState {
 }
 
 #[must_use]
-pub fn native_plane_orb_damage(skill_book: &NativeSkillBookState) -> f64 {
+pub fn plane_orb_damage(skill_book: &SkillBookState) -> f64 {
     let mut total = 0;
     for skill_id in [8, 10, 9, 13, 14, 15, 12] {
         total += skill_book.effective_ranks[skill_id];

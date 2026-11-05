@@ -5,7 +5,7 @@ use super::{GameChatWorldKind, GameSessionKind};
 /// The host still validates the command. The source presents Invite to Party in
 /// a leader's private College when the resolved wizard is also in a Hub.
 #[must_use]
-pub fn native_player_card_college_invite_available(
+pub fn player_card_college_invite_available(
     session_kind: GameSessionKind,
     world_kind: GameChatWorldKind,
     local_player_is_leader: bool,

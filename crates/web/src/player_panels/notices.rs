@@ -15,12 +15,8 @@ use super::chrome::PanelCanvas;
 use crate::gpu_ui::UiFrame;
 use solomon_sim::Vec2;
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::messages::{
-    NativeUiMessageDataLineSpec, layout_native_ui_single_action_message,
-};
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
-};
+use solomon_sim::ui_text::messages::{UiMessageDataLineSpec, layout_ui_single_action_message};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, measure_ui_text};
 impl PlayerPanels {
     pub(crate) fn draw_notice(
         &self,
@@ -41,8 +37,8 @@ impl PlayerPanels {
         c.frame.announce("panel:notice", &format!("{title}. {summary} {body}"));
         match notice {
             PlayerPanelNotice::Standard { .. } => {
-                let mut lines = vec![NativeUiMessageDataLineSpec {
-                    font: NativeUiFontName::Menu,
+                let mut lines = vec![UiMessageDataLineSpec {
+                    font: UiFontName::Menu,
                     text: title,
                     gap_after: 10.0,
                     tint: 0xffffff,
@@ -60,17 +56,17 @@ impl PlayerPanels {
                 if clothing || title == "NOT ENOUGH GOLD!" {
                     lines.push(data_line(""));
                 }
-                let layout = layout_native_ui_single_action_message(
+                let layout = layout_ui_single_action_message(
                     Vec2::new(800.0, if clothing { 450.0 } else { 350.0 }),
                     &lines,
                 )?;
                 self.notice_frame(c, layout.frame_bounds)?;
                 for (index, line) in layout.lines.iter().enumerate() {
-                    let spec = NativeUiTextSpec {
-                        align: NativeUiTextAlign::Left,
+                    let spec = UiTextSpec {
+                        align: UiTextAlign::Left,
                         tint: line.tint,
                         line_height: Some(line.line_height),
-                        ..NativeUiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
+                        ..UiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
                     };
                     if index == 0 {
                         c.labeled_text("panel:notice-title", &spec);
@@ -91,16 +87,16 @@ impl PlayerPanels {
                 self.notice_frame(c, HudRect::new(539.5, 382.5, 524.0, 336.0))?;
                 c.labeled_text(
                     "panel:notice-title",
-                    &NativeUiTextSpec {
-                        align: NativeUiTextAlign::Left,
-                        ..NativeUiTextSpec::new(NativeUiFontName::Menu, title, 614.0, 478.0)
+                    &UiTextSpec {
+                        align: UiTextAlign::Left,
+                        ..UiTextSpec::new(UiFontName::Menu, title, 614.0, 478.0)
                     },
                 );
-                c.text(&NativeUiTextSpec {
-                    align: NativeUiTextAlign::Left,
+                c.text(&UiTextSpec {
+                    align: UiTextAlign::Left,
                     line_height: Some(17.0),
                     max_width: Some(376.0),
-                    ..NativeUiTextSpec::new(NativeUiFontName::Medium, body, 614.0, 511.0)
+                    ..UiTextSpec::new(UiFontName::Medium, body, 614.0, 511.0)
                 });
                 self.notice_button(
                     c,
@@ -120,29 +116,29 @@ impl PlayerPanels {
                 )?;
             }
             PlayerPanelNotice::UnforgeResult { outcome_tint, .. } => {
-                let line_width = measure_native_ui_text(title, NativeUiFontName::Menu, 1.0)
-                    .max(measure_native_ui_text(summary, NativeUiFontName::Medium, 1.0))
-                    .max(measure_native_ui_text(body, NativeUiFontName::Medium, 1.0));
+                let line_width = measure_ui_text(title, UiFontName::Menu, 1.0)
+                    .max(measure_ui_text(summary, UiFontName::Medium, 1.0))
+                    .max(measure_ui_text(body, UiFontName::Medium, 1.0));
                 let inner_width = line_width + 141.0;
                 let left = 801.5 - inner_width / 2.0;
                 self.notice_frame(c, HudRect::new(left - 5.0, 391.5, inner_width + 10.0, 318.0))?;
                 c.labeled_text(
                     "panel:notice-title",
-                    &NativeUiTextSpec {
-                        align: NativeUiTextAlign::Left,
-                        ..NativeUiTextSpec::new(NativeUiFontName::Menu, title, left + 70.5, 485.0)
+                    &UiTextSpec {
+                        align: UiTextAlign::Left,
+                        ..UiTextSpec::new(UiFontName::Menu, title, left + 70.5, 485.0)
                     },
                 );
                 self.notice_text(
                     c,
-                    NativeUiFontName::Medium,
+                    UiFontName::Medium,
                     summary,
                     Vec2::new(left + 70.5, 520.0),
                     0xd9ba70,
                 )?;
                 self.notice_text(
                     c,
-                    NativeUiFontName::Medium,
+                    UiFontName::Medium,
                     body,
                     Vec2::new(left + 70.5, 537.0),
                     *outcome_tint,
@@ -184,15 +180,15 @@ impl PlayerPanels {
     fn notice_text(
         &self,
         c: &PanelCanvas<'_, '_>,
-        font: NativeUiFontName,
+        font: UiFontName,
         text: &str,
         position: Vec2,
         tint: u32,
     ) -> Result<(), String> {
-        c.text(&NativeUiTextSpec {
-            align: NativeUiTextAlign::Left,
+        c.text(&UiTextSpec {
+            align: UiTextAlign::Left,
             tint,
-            ..NativeUiTextSpec::new(font, text, position.x, position.y)
+            ..UiTextSpec::new(font, text, position.x, position.y)
         });
         Ok(())
     }
@@ -205,16 +201,11 @@ impl PlayerPanels {
         baseline: f64,
         _default_focus: bool,
     ) -> Result<(), String> {
-        let button = c.native_button_art(&self.ui, action, label, r)?;
-        button.text(&solomon_sim::native_ui_text::buttons::fit_native_ui_button_label(
-            NativeUiTextSpec {
+        let button = c.button_art(&self.ui, action, label, r)?;
+        button.text(&solomon_sim::ui_text::buttons::fit_ui_button_label(
+            UiTextSpec {
                 tint: 0xd9ba70,
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::Menu,
-                    label,
-                    r.width / 2.0,
-                    baseline - r.y,
-                )
+                ..UiTextSpec::new(UiFontName::Menu, label, r.width / 2.0, baseline - r.y)
             },
             HudRect::new(0.0, 0.0, r.width, r.height),
             r.height / 69.0,
@@ -222,11 +213,6 @@ impl PlayerPanels {
         Ok(())
     }
 }
-fn data_line(text: &str) -> NativeUiMessageDataLineSpec<'_> {
-    NativeUiMessageDataLineSpec {
-        font: NativeUiFontName::Medium,
-        gap_after: 0.0,
-        text,
-        tint: 0xffffff,
-    }
+fn data_line(text: &str) -> UiMessageDataLineSpec<'_> {
+    UiMessageDataLineSpec { font: UiFontName::Medium, gap_after: 0.0, text, tint: 0xffffff }
 }

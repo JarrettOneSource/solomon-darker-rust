@@ -62,7 +62,7 @@ fn borrowed_frames_decode_as_owned_checkpoints_and_reject_invalid_membership_ato
     let mut source = session();
     source.inventory_dye_sessions.insert(
         "zeta".into(),
-        solomon_sim::economy::NativeInventoryDyeSession {
+        solomon_sim::economy::InventoryDyeSession {
             id: "dye-frame-1".into(),
             dye_item_id: 7,
             kit_consumed: false,

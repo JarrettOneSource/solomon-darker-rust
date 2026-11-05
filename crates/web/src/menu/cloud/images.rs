@@ -131,7 +131,7 @@ fn missing(frame: &UiFrame<'_>, ui: &Ui, rect: Rect, _alt: &str) -> Result<(), S
         frame,
         ui,
         "NO\nIMAGE",
-        solomon_sim::native_ui_text::NativeUiFontName::Medium,
+        solomon_sim::ui_text::UiFontName::Medium,
         0.85,
         0xa99a70,
         rect,

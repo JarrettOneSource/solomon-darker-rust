@@ -2,7 +2,7 @@
 //! Family modules own behavior; targeting and presentation read these records directly.
 
 use super::config::EnemyConfig;
-use super::path::NativeEnemyPathState;
+use super::path::EnemyPathState;
 use crate::Vec2;
 pub use crate::combat::PuppetHitState as PuppetHit;
 
@@ -564,7 +564,7 @@ pub struct EnemyActor {
     pub next_target_refresh_tick: u64,
     pub native_cell_binding_order: usize,
     pub native_registration_order: usize,
-    pub path: NativeEnemyPathState,
+    pub path: EnemyPathState,
     pub position: Vec2,
     pub reward_granted: bool,
     pub rest_body_pose: f64,
@@ -1341,7 +1341,8 @@ pub struct EnemyMaggotActor {
     pub blizzard_push_last_tick: Option<u64>,
     pub combat_active: bool,
     /// Native category/grid admission used by scenery presentation.
-    pub native_tree_query_member: bool,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_tree_query_member"))]
+    pub tree_query_member: bool,
     pub collision_radius: f64,
     pub current_health: f64,
     pub death_offsets: Vec<Vec2>,
@@ -1371,7 +1372,7 @@ pub struct EnemyMaggotActor {
     pub native_cell_binding_order: usize,
     pub native_registration_order: usize,
     pub owner_coffin_actor_id: usize,
-    pub path: NativeEnemyPathState,
+    pub path: EnemyPathState,
     pub poison_damage: f64,
     pub poison_duration: f64,
     pub position: Vec2,

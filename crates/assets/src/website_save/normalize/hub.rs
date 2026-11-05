@@ -2,7 +2,7 @@
 //! its ambient population, and restart the superseded pre-schema-15 College walk.
 
 use serde_json::{Value, json};
-use solomon_sim::hub::college_intro::NativeCollegeIntroState;
+use solomon_sim::hub::college_intro::CollegeIntroState;
 use solomon_sim::hub::npc::HUB_SKORCHA_PLACEMENTS;
 use solomon_sim::hub::regions::HubRegion;
 
@@ -68,7 +68,7 @@ pub(crate) fn participant(
         version < 15 && value["transition"]["phase"].as_str() == Some("college-intro");
     if legacy_intro {
         return Ok((
-            json!({"collegeIntro":encode(&NativeCollegeIntroState::new())?, "region":"courtyard","transition":null}),
+            json!({"collegeIntro":encode(&CollegeIntroState::new())?, "region":"courtyard","transition":null}),
             true,
         ));
     }
@@ -207,6 +207,6 @@ fn skorcha(value: &Value) -> Result<(), String> {
     integer_within(&value["dismissalIndex"], "game save Skorcha dismissal", 0, 2)?;
     integer_within(&value["gesture"], "game save Skorcha gesture", 0, 2)?;
     integer_within(&value["gestureTicksRemaining"], "game save Skorcha gesture timer", 0, 29)?;
-    let _: solomon_sim::NativeRng = decode(value["rng"].clone())?;
+    let _: solomon_sim::Rng = decode(value["rng"].clone())?;
     Ok(())
 }

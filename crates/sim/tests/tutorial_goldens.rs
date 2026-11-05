@@ -40,11 +40,11 @@ fn compare(actual: &Value, expected: &Value, label: &str) {
     assert_website_json(actual, expected, label, &[]);
 }
 
-fn initial(fixture: &Value) -> NativeTutorialState {
-    NativeTutorialState::new(point(&fixture["position"]), 3, fixture["seed"].as_str().unwrap())
+fn initial(fixture: &Value) -> TutorialState {
+    TutorialState::new(point(&fixture["position"]), 3, fixture["seed"].as_str().unwrap())
 }
 
-fn after_intro(state: &mut NativeTutorialState) {
+fn after_intro(state: &mut TutorialState) {
     state.intro_active = false;
     state.intro_blend = 1.0;
     state.intro_delay_ticks_remaining = 0;
@@ -52,10 +52,10 @@ fn after_intro(state: &mut NativeTutorialState) {
     state.intro_movement_ticks_remaining = 250;
 }
 
-fn patch_state(state: &mut NativeTutorialState, patch: &Value) {
+fn patch_state(state: &mut TutorialState, patch: &Value) {
     for (field, value) in patch.as_object().unwrap() {
         match field.as_str() {
-            "stage" => state.stage = NativeTutorialStage::from_id(integer(value) as u8).unwrap(),
+            "stage" => state.stage = TutorialStage::from_id(integer(value) as u8).unwrap(),
             "stageTicks" => state.stage_ticks = integer(value),
             "inventoryOpened" => state.inventory_opened = value.as_bool().unwrap(),
             "inventorySeen" => state.inventory_seen = value.as_bool().unwrap(),
@@ -69,14 +69,14 @@ fn patch_state(state: &mut NativeTutorialState, patch: &Value) {
     }
 }
 
-fn input(value: &Value) -> NativeTutorialTickInput {
+fn input(value: &Value) -> TutorialTickInput {
     let phase = match value["solomonPhase"].as_str() {
         None => None,
         Some("speaking") => Some(SolomonPhase::Speaking),
         Some("retreat-accelerating") => Some(SolomonPhase::RetreatAccelerating),
         Some(value) => panic!("unhandled source Solomon input {value}"),
     };
-    NativeTutorialTickInput {
+    TutorialTickInput {
         acid_rain_cast_sequence: integer(&value["acidRainCastSequence"]),
         acid_rain_last_skill_id: value["acidRainLastSkillId"].as_u64().map(|id| id as usize),
         camera_lock_safety_clear: value["cameraLockSafetyClear"].as_bool().unwrap(),
@@ -104,7 +104,7 @@ fn spawn_row(spawn: &EnemySpawnIntent) -> Value {
     recipe["pathfindingMode"] = json!(spawn.pathfinding_mode);
     let mut row = json!({ "authoredRecipe": recipe, "enemyToken": spawn.enemy_token.id(),
         "flags": [], "flanking": spawn.flanking, "id": spawn.id,
-        "locationPolicy": "near-player", "nativeTypeId": spawn.native_type_id,
+        "locationPolicy": "near-player", "nativeTypeId": spawn.type_id,
         "pathfindingMode": spawn.pathfinding_mode, "position": point_row(spawn.position),
         "positionPolicy": policy_id(spawn.position_policy), "spawnTick": spawn.spawn_tick,
         "waveOrdinal": spawn.wave_ordinal });
@@ -114,13 +114,13 @@ fn spawn_row(spawn: &EnemySpawnIntent) -> Value {
     row
 }
 
-fn result_row(state: &NativeTutorialState, result: &NativeTutorialTickResult) -> Value {
+fn result_row(state: &TutorialState, result: &TutorialTickResult) -> Value {
     json!({ "forceOfferSkillIds": result.force_offer_skill_ids, "grantExperience": result.grant_experience,
         "spawnIntents": result.spawn_intents.iter().map(spawn_row).collect::<Vec<_>>(), "state": state_row(state) })
 }
 
-fn presentation_row(state: &NativeTutorialState) -> Value {
-    let bindings = NativeTutorialBindingLabels {
+fn presentation_row(state: &TutorialState) -> Value {
+    let bindings = TutorialBindingLabels {
         inventory: "I",
         move_down: "S",
         move_left: "A",
@@ -131,17 +131,17 @@ fn presentation_row(state: &NativeTutorialState) -> Value {
         skills: "K",
     };
     let row = |mode| {
-        let plan = native_tutorial_presentation(state, bindings, mode);
+        let plan = tutorial_presentation(state, bindings, mode);
         json!({ "heading": plan.heading, "subheading": plan.subheading,
             "hud": { "combat": plan.hud.combat, "inventory": plan.hud.inventory,
                 "quickbar": plan.hud.quickbar, "skills": plan.hud.skills, "spell": plan.hud.spell } })
     };
-    json!({ "desktop": row(NativeTutorialInputMode::Desktop), "mobile": row(NativeTutorialInputMode::Mobile),
-        "baselines": native_tutorial_instruction_baselines(state.stage, 900.0)
+    json!({ "desktop": row(TutorialInputMode::Desktop), "mobile": row(TutorialInputMode::Mobile),
+        "baselines": tutorial_instruction_baselines(state.stage, 900.0)
             .map(|baseline|json!({ "heading": baseline.heading, "subheading": baseline.subheading })),
-        "forcedVelocity": native_tutorial_forced_velocity(state).map(point_row),
-        "hostilePaused": native_tutorial_hostile_scene_paused(state),
-        "camera": native_tutorial_camera_bounds(state).map(bounds_row) })
+        "forcedVelocity": tutorial_forced_velocity(state).map(point_row),
+        "hostilePaused": tutorial_hostile_scene_paused(state),
+        "camera": tutorial_camera_bounds(state).map(bounds_row) })
 }
 
 #[test]
@@ -175,10 +175,10 @@ fn tutorial_intro_stages_surfaces_and_instructions_match_the_source() {
     for case in fixture["surfaces"].as_array().unwrap() {
         let mut state = initial(&fixture);
         after_intro(&mut state);
-        state.stage = NativeTutorialStage::from_id(integer(&case["stage"]) as u8).unwrap();
+        state.stage = TutorialStage::from_id(integer(&case["stage"]) as u8).unwrap();
         state.inventory_seen = true;
         state.skills_seen = true;
-        let action = NativeTutorialSurfaceAction::ALL
+        let action = TutorialSurfaceAction::ALL
             .into_iter()
             .find(|action| action.id() == case["action"].as_str().unwrap())
             .unwrap();
@@ -189,7 +189,7 @@ fn tutorial_intro_stages_surfaces_and_instructions_match_the_source() {
     for case in fixture["acknowledgements"].as_array().unwrap() {
         let mut state = initial(&fixture);
         after_intro(&mut state);
-        state.stage = NativeTutorialStage::from_id(integer(&case["stage"]) as u8).unwrap();
+        state.stage = TutorialStage::from_id(integer(&case["stage"]) as u8).unwrap();
         state.intro_active = case["introActive"].as_bool().unwrap();
         state.acknowledge_movement_instruction(
             case["input"]["movementEpochActive"].as_bool().unwrap(),
@@ -206,7 +206,7 @@ fn tutorial_waves_and_all_narration_cues_preserve_future_cursors() {
         let mut state = initial(&fixture);
         after_intro(&mut state);
         state.active = false;
-        state.stage = NativeTutorialStage::Survive;
+        state.stage = TutorialStage::Survive;
         state.wave_ordinal = integer(&case["waveOrdinal"]);
         state.survival_enabled = state.wave_ordinal == 6;
         let mut frames = case["frames"].as_array().unwrap().iter().peekable();
@@ -238,7 +238,7 @@ fn tutorial_waves_and_all_narration_cues_preserve_future_cursors() {
     let mut state = initial(&fixture);
     after_intro(&mut state);
     state.active = false;
-    state.narration.pending = NativeTutorialCue::ALL.to_vec();
+    state.narration.pending = TutorialCue::ALL.to_vec();
     let mut frames = fixture["narration"].as_array().unwrap().iter().peekable();
     for tick in 1..15000 {
         let mut context = input(&fixture["baseInput"]);
@@ -266,7 +266,7 @@ fn tutorial_camera_and_spawn_domain_match_the_authored_fence() {
         state.camera_lock_triggered = true;
         state.camera_lock_age_ticks = number(&case["age"]);
         compare(
-            &native_tutorial_camera_bounds(&state).map(bounds_row).unwrap(),
+            &tutorial_camera_bounds(&state).map(bounds_row).unwrap(),
             &case["bounds"],
             "camera interpolation",
         );
@@ -275,11 +275,11 @@ fn tutorial_camera_and_spawn_domain_match_the_authored_fence() {
         let position = point(&case["point"]);
         let radius = number(&case["radius"]);
         assert_eq!(
-            native_tutorial_enemy_camera_position_is_allowed(position, radius),
+            tutorial_enemy_camera_position_is_allowed(position, radius),
             case["camera"].as_bool().unwrap()
         );
         assert_eq!(
-            native_tutorial_enemy_spawn_position_is_allowed(position, radius),
+            tutorial_enemy_spawn_position_is_allowed(position, radius),
             case["spawn"].as_bool().unwrap()
         );
     }
@@ -288,9 +288,9 @@ fn tutorial_camera_and_spawn_domain_match_the_authored_fence() {
 fn item_row(item: &HubInventoryItem) -> Value {
     let mut row = json!({ "equipmentType": item.equipment_type.map(|kind|kind.as_str()),
         "iconRecords": item.icon_records, "id": item.id, "kind": item.kind.as_str(),
-        "name": item.name, "nativeSubtype": item.native_subtype, "nativeTypeId": item.native_type_id,
+        "name": item.name, "nativeSubtype": item.subtype, "nativeTypeId": item.type_id,
         "quantity": item.quantity, "rarity": null, "recipeIndex": item.recipe_index });
-    if let Some(selector) = item.native_selector {
+    if let Some(selector) = item.selector {
         row["nativeSelector"] = json!(selector);
     }
     if let Some(tints) = item.icon_tints {
@@ -312,16 +312,16 @@ fn item_row(item: &HubInventoryItem) -> Value {
 fn tutorial_authored_recipes_groups_cues_and_reward_items_are_complete() {
     let fixture = fixture();
     let tables = &fixture["tables"];
-    for uid in NATIVE_TUTORIAL_MONSTER_UIDS {
-        let definition = native_tutorial_monster_recipe(uid).unwrap();
+    for uid in TUTORIAL_MONSTER_UIDS {
+        let definition = tutorial_monster_recipe(uid).unwrap();
         let mut actual = recipe_snapshot(&definition.recipe);
         actual["enemyToken"] = json!(definition.enemy_token.id());
         actual["flanking"] = json!(definition.flanking);
         actual["pathfindingMode"] = json!(definition.pathfinding_mode);
         compare(&actual, &tables["recipes"][uid.to_string()], "authored recipe");
     }
-    for uid in NATIVE_TUTORIAL_GROUP_UIDS {
-        let group = native_tutorial_uid_group(uid).unwrap();
+    for uid in TUTORIAL_GROUP_UIDS {
+        let group = tutorial_uid_group(uid).unwrap();
         compare(
             &json!({ "memberUids": group.member_uids, "positionCacheDword": group.position_cache_dword,
             "shareFinalRoot": group.share_final_root }),
@@ -330,12 +330,12 @@ fn tutorial_authored_recipes_groups_cues_and_reward_items_are_complete() {
         );
     }
     for wave in 1..=6 {
-        let rows: Vec<_> = native_tutorial_wave_batches(wave).iter().map(|batch|json!({
+        let rows: Vec<_> = tutorial_wave_batches(wave).iter().map(|batch|json!({
             "count": batch.count, "groupUid": batch.group_uid, "positionPolicy": policy_id(batch.position_policy),
             "recipeUid": batch.recipe_uid, "tick": batch.tick })).collect();
         compare(&json!(rows), &tables["batches"][wave.to_string()], "wave batches");
     }
-    for cue in NativeTutorialCue::ALL {
+    for cue in TutorialCue::ALL {
         let definition = cue.definition();
         compare(
             &json!({ "durationTicks": definition.duration_ticks, "speaker": definition.speaker.id(),
@@ -344,11 +344,11 @@ fn tutorial_authored_recipes_groups_cues_and_reward_items_are_complete() {
             "narration definition",
         );
     }
-    let fires: Vec<_> = NATIVE_TUTORIAL_FIRES.iter().map(|fire|json!({ "damage": fire.damage,
+    let fires: Vec<_> = TUTORIAL_FIRES.iter().map(|fire|json!({ "damage": fire.damage,
         "lifetimeTicks": fire.lifetime_ticks, "position": point_row(fire.position), "radius": fire.radius })).collect();
     compare(&json!(fires), &tables["fires"], "authored fire");
-    compare(&item_row(&native_tutorial_amulet_item()), &tables["amulet"], "amulet");
-    compare(&item_row(&native_tutorial_health_potion_item()), &tables["potion"], "potion");
-    assert!(native_tutorial_amulet_identity_matches(&native_tutorial_amulet_item()));
-    assert_eq!(native_tutorial_dialogue_ticks(), integer(&tables["dialogueTicks"]));
+    compare(&item_row(&tutorial_amulet_item()), &tables["amulet"], "amulet");
+    compare(&item_row(&tutorial_health_potion_item()), &tables["potion"], "potion");
+    assert!(tutorial_amulet_identity_matches(&tutorial_amulet_item()));
+    assert_eq!(tutorial_dialogue_ticks(), integer(&tables["dialogueTicks"]));
 }

@@ -6,7 +6,7 @@ use super::earth::{EarthBoulderVector3, earth_boulder_transform_point};
 use super::model::{
     EarthBoulderOrientation, PrimarySpellEarthProjectile, PrimarySpellProjectilePhase,
 };
-use super::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
+use super::presentation::{SpellBlend, SpellSprite, SpellSpritePlan};
 use super::visual::visual_unit_random;
 use crate::Vec2;
 use crate::float;
@@ -154,7 +154,7 @@ pub fn earth_boulder_presentation_plan(
 pub fn earth_boulder_sprite_plan(
     state: &PrimarySpellEarthProjectile,
     render_tick: f64,
-) -> NativeSpellSpritePlan {
+) -> SpellSpritePlan {
     earth_boulder_sprite_plan_at_age(state, render_tick, state.common.age_ticks as f64)
 }
 
@@ -164,35 +164,35 @@ pub fn earth_boulder_sprite_plan_at_age(
     state: &PrimarySpellEarthProjectile,
     render_tick: f64,
     age_ticks: f64,
-) -> NativeSpellSpritePlan {
+) -> SpellSpritePlan {
     let mut input = EarthBoulderPresentationState::from(state);
     input.age_ticks = age_ticks;
     let geometry = earth_boulder_presentation_plan(&input, render_tick);
-    let mut plan = NativeSpellSpritePlan::at(state.common.position);
+    let mut plan = SpellSpritePlan::at(state.common.position);
     plan.region_light_point = Some(state.common.position);
     plan.sort_bias = geometry.sort_bias;
-    plan.draws.push(NativeSpellSprite {
+    plan.draws.push(SpellSprite {
         alpha: geometry.aura.alpha,
         offset: geometry.visual_offset,
         tint: 0xe6ffe6,
-        ..NativeSpellSprite::new(geometry.aura.record, geometry.aura.scale)
+        ..SpellSprite::new(geometry.aura.record, geometry.aura.scale)
     });
-    plan.draws.push(NativeSpellSprite {
+    plan.draws.push(SpellSprite {
         alpha: geometry.opening_flash.alpha,
         blend: SpellBlend::Add,
         offset: geometry.visual_offset,
         rotation: geometry.opening_flash.rotation,
-        ..NativeSpellSprite::new(geometry.opening_flash.record, geometry.opening_flash.scale)
+        ..SpellSprite::new(geometry.opening_flash.record, geometry.opening_flash.scale)
     });
     for rock in geometry.rocks {
-        plan.draws.push(NativeSpellSprite {
+        plan.draws.push(SpellSprite {
             alpha: geometry.body_alpha,
             offset: Vec2::new(
                 geometry.visual_offset.x + rock.position.x,
                 geometry.visual_offset.y + rock.position.y,
             ),
             rotation: rock.rotation,
-            ..NativeSpellSprite::new(rock.record, rock.scale)
+            ..SpellSprite::new(rock.record, rock.scale)
         });
     }
     plan

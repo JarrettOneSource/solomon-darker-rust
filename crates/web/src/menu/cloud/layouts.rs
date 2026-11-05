@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{gpu_ui::UiFrame, hosted::SharedMobileUiLayout, menu::HostedMenuAction};
 use egui::{Rect, Ui, Vec2};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec, layout_native_ui_text};
+use solomon_sim::ui_text::{UiFontName, UiTextSpec, layout_ui_text};
 use std::cell::RefCell;
 use std::rc::Rc;
 #[derive(Clone, Copy)]
@@ -191,9 +191,9 @@ impl LayoutsView {
         let content_width = (width - 2.0 * padding.x).max(1.0);
         let top = ui.cursor().min + padding;
         let heading = "MOBILE UI LAYOUTS";
-        let heading_size = text_size(ui, heading, NativeUiFontName::Menu)?;
+        let heading_size = text_size(ui, heading, UiFontName::Menu)?;
         let heading_rect = Rect::from_min_size(top, Vec2::new(content_width, heading_size.y));
-        ink(frame, ui, heading, NativeUiFontName::Menu, 1.0, 0xd9ba70, heading_rect, true)?;
+        ink(frame, ui, heading, UiFontName::Menu, 1.0, 0xd9ba70, heading_rect, true)?;
         frame.record_rect("cloud-layout-heading", heading, "heading", heading_rect, false);
         let header_gap = if short {
             18.0
@@ -221,14 +221,14 @@ impl LayoutsView {
             } else {
                 origin + Vec2::new(index as f32 * (section_width + gap), 0.0)
             };
-            let title_size = text_size(ui, title, NativeUiFontName::Medium)?;
+            let title_size = text_size(ui, title, UiFontName::Medium)?;
             let title_rect = Rect::from_min_size(
                 min + Vec2::new(10.0, 0.0),
                 Vec2::new(section_width - 10.0, title_size.y),
             );
-            ink(frame, ui, title, NativeUiFontName::Medium, 1.0, 0xd9ba70, title_rect, false)?;
+            ink(frame, ui, title, UiFontName::Medium, 1.0, 0xd9ba70, title_rect, false)?;
             let panel_top = min + Vec2::new(0.0, title_size.y + 12.0);
-            let label_size = text_size(ui, "SHARE CODE", NativeUiFontName::Medium)?;
+            let label_size = text_size(ui, "SHARE CODE", UiFontName::Medium)?;
             let field_row_height =
                 if phone { (label_size.y + 7.0 + 30.0 + 20.0).max(44.0) } else { 44.0 };
             let panel_height = if index == 0 { field_row_height + 44.0 + 6.0 } else { 50.0 };
@@ -241,16 +241,7 @@ impl LayoutsView {
                         + Vec2::new(10.0, if phone { 10.0 } else { (44.0 - label_size.y) / 2.0 }),
                     label_size,
                 );
-                ink(
-                    frame,
-                    ui,
-                    "SHARE CODE",
-                    NativeUiFontName::Medium,
-                    1.0,
-                    0xd9ba70,
-                    label_rect,
-                    false,
-                )?;
+                ink(frame, ui, "SHARE CODE", UiFontName::Medium, 1.0, 0xd9ba70, label_rect, false)?;
                 let field = if phone {
                     Rect::from_min_size(
                         panel.min + Vec2::new(10.0, 10.0 + label_size.y + 7.0),
@@ -351,14 +342,9 @@ impl LayoutsView {
             };
             let author = format!("BY {}", layout.author.username);
             let texts = [
-                ("cloud-layout-status", status, NativeUiFontName::Medium, 0xbfffbf),
-                (
-                    "cloud-layout-receipt-code",
-                    layout.code.as_str(),
-                    NativeUiFontName::Menu,
-                    0xd9ba70,
-                ),
-                ("cloud-layout-author", author.as_str(), NativeUiFontName::Medium, 0xd9ba70),
+                ("cloud-layout-status", status, UiFontName::Medium, 0xbfffbf),
+                ("cloud-layout-receipt-code", layout.code.as_str(), UiFontName::Menu, 0xd9ba70),
+                ("cloud-layout-author", author.as_str(), UiFontName::Medium, 0xd9ba70),
             ];
             let sizes = texts
                 .iter()
@@ -428,15 +414,15 @@ impl LayoutsView {
     }
 }
 
-fn text_size(ui: &Ui, text: &str, font: NativeUiFontName) -> Result<Vec2, String> {
-    let layout = layout_native_ui_text(&NativeUiTextSpec {
-        placement: solomon_sim::native_ui_text::NativeUiTextPlacement::Box,
-        ..NativeUiTextSpec::new(font, text, 0.0, 0.0)
+fn text_size(ui: &Ui, text: &str, font: UiFontName) -> Result<Vec2, String> {
+    let layout = layout_ui_text(&UiTextSpec {
+        placement: solomon_sim::ui_text::UiTextPlacement::Box,
+        ..UiTextSpec::new(font, text, 0.0, 0.0)
     });
     if layout.unsupported_code_points.is_empty() {
         Ok(Vec2::new(layout.width as f32, layout.height as f32))
     } else {
-        let size = solomon_sim::native_ui_text::native_ui_font(font).metrics[0] as f32;
+        let size = solomon_sim::ui_text::ui_font(font).metrics[0] as f32;
         Ok(crate::gpu_ui::font_run(
             ui.ctx(),
             egui::FontId::new(size, egui::FontFamily::Name("Cinzel".into())),

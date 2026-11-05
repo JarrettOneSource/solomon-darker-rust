@@ -2,9 +2,9 @@
 //! Text uses the shared authored bitmap metrics; camera scale affects anchors only.
 
 use crate::Vec2;
-use crate::native_ui_text::{
-    NativeUiFontName, NativeUiGlyphLayout, NativeUiTextAlign, NativeUiTextSpec,
-    layout_native_ui_text, measure_native_ui_text, native_ui_glyph_ink_bounds,
+use crate::ui_text::{
+    UiFontName, UiGlyphLayout, UiTextAlign, UiTextSpec, layout_ui_text, measure_ui_text,
+    ui_glyph_ink_bounds,
 };
 
 pub const WORLD_NAMEPLATE_GLYPH_SCALE: f64 = 0.56;
@@ -19,27 +19,27 @@ pub struct WorldNameplateVisualLayout {
     pub cap_box: [f64; 2],
     pub glyph_bounds: [f64; 2],
     pub glyph_offset: Vec2,
-    pub glyphs: Vec<NativeUiGlyphLayout>,
+    pub glyphs: Vec<UiGlyphLayout>,
     pub width: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWorldSpeechLine {
+pub struct WorldSpeechLine {
     pub advance: f64,
-    pub glyphs: Vec<NativeUiGlyphLayout>,
+    pub glyphs: Vec<UiGlyphLayout>,
     pub text: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWorldSpeechLayout {
+pub struct WorldSpeechLayout {
     pub glyph_count: usize,
     pub height: f64,
-    pub lines: Vec<NativeWorldSpeechLine>,
+    pub lines: Vec<WorldSpeechLine>,
     pub width: f64,
 }
 
 #[must_use]
-pub fn native_world_nameplate_health_ratio(current: f64, maximum: f64) -> Option<f64> {
+pub fn world_nameplate_health_ratio(current: f64, maximum: f64) -> Option<f64> {
     if !current.is_finite() || !maximum.is_finite() || maximum <= 0.0 {
         return None;
     }
@@ -48,15 +48,15 @@ pub fn native_world_nameplate_health_ratio(current: f64, maximum: f64) -> Option
 
 #[must_use]
 pub fn world_nameplate_visual_layout(display_name: &str) -> WorldNameplateVisualLayout {
-    let layout = layout_native_ui_text(&NativeUiTextSpec {
-        align: NativeUiTextAlign::Left,
+    let layout = layout_ui_text(&UiTextSpec {
+        align: UiTextAlign::Left,
         scale: WORLD_NAMEPLATE_GLYPH_SCALE,
-        ..NativeUiTextSpec::new(NativeUiFontName::WorldAndRoster, display_name, 0.0, 0.0)
+        ..UiTextSpec::new(UiFontName::WorldAndRoster, display_name, 0.0, 0.0)
     });
     let mut left = 0.0_f64;
     let mut right = layout.width;
     for glyph in &layout.glyphs {
-        let ink = native_ui_glyph_ink_bounds(glyph);
+        let ink = ui_glyph_ink_bounds(glyph);
         left = left.min(ink.left);
         right = right.max(ink.left + ink.width);
     }
@@ -75,21 +75,21 @@ pub fn world_nameplate_visual_layout(display_name: &str) -> WorldNameplateVisual
 }
 
 #[must_use]
-pub fn layout_native_world_speech(text: &str) -> NativeWorldSpeechLayout {
+pub fn layout_world_speech(text: &str) -> WorldSpeechLayout {
     let mut lines = Vec::new();
     let mut content_width = 0.0_f64;
     let mut glyph_count = 0;
     for text in wrap_world_speech(text) {
-        let layout = layout_native_ui_text(&NativeUiTextSpec {
-            align: NativeUiTextAlign::Left,
+        let layout = layout_ui_text(&UiTextSpec {
+            align: UiTextAlign::Left,
             scale: WORLD_SPEECH_GLYPH_SCALE,
-            ..NativeUiTextSpec::new(NativeUiFontName::WorldAndRoster, &text, 0.0, 0.0)
+            ..UiTextSpec::new(UiFontName::WorldAndRoster, &text, 0.0, 0.0)
         });
         content_width = content_width.max(layout.width);
         glyph_count += layout.glyphs.len();
-        lines.push(NativeWorldSpeechLine { advance: layout.width, glyphs: layout.glyphs, text });
+        lines.push(WorldSpeechLine { advance: layout.width, glyphs: layout.glyphs, text });
     }
-    NativeWorldSpeechLayout {
+    WorldSpeechLayout {
         glyph_count,
         height: lines.len() as f64 * WORLD_SPEECH_LINE_HEIGHT + 12.0,
         lines,
@@ -99,7 +99,7 @@ pub fn layout_native_world_speech(text: &str) -> NativeWorldSpeechLayout {
 
 /// `projectNativeWorldPoint` culls the anchor before its whole-pixel placement.
 #[must_use]
-pub fn project_native_world_point(
+pub fn project_world_point(
     point: Vec2,
     translation: Vec2,
     scale: f64,
@@ -126,7 +126,7 @@ pub fn project_native_world_point(
 }
 
 fn speech_text_width(text: &str) -> f64 {
-    measure_native_ui_text(text, NativeUiFontName::WorldAndRoster, WORLD_SPEECH_GLYPH_SCALE)
+    measure_ui_text(text, UiFontName::WorldAndRoster, WORLD_SPEECH_GLYPH_SCALE)
 }
 
 fn wrap_world_speech(text: &str) -> Vec<String> {

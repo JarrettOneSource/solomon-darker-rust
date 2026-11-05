@@ -6,17 +6,17 @@ mod native_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::spells::model::PrimarySpellTransientBase;
-use solomon_sim::spells::staff::{NativeStaffKnockbackActor, step_native_staff_knockback};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::spells::staff::{StaffKnockbackActor, step_staff_knockback};
+use solomon_sim::{Rng, Vec2};
 use std::collections::BTreeMap;
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn rng(rng: &NativeRng) -> Value {
+fn rng(rng: &Rng) -> Value {
     json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":rng.words.as_slice()})
 }
-fn actor(actor: &NativeStaffKnockbackActor) -> Value {
+fn actor(actor: &StaffKnockbackActor) -> Value {
     json!({"ageTicks":actor.common.age_ticks,"arcDegrees":actor.arc_degrees,"id":actor.common.id,"kind":"player-staff-knockback",
         "origin":actor.origin,"ownerId":actor.common.owner_id,"remainingDistance":actor.remaining_distance,"targetIds":actor.target_ids,"worldKey":actor.common.world_key})
 }
@@ -27,7 +27,7 @@ fn current_staff_area_uses_native_proposals_and_removes_missing_rows_before_expi
             .unwrap();
     for case in fixture["staffCases"].as_array().unwrap() {
         let initial = &case["initial"];
-        let mut current = NativeStaffKnockbackActor {
+        let mut current = StaffKnockbackActor {
             common: PrimarySpellTransientBase {
                 age_ticks: 0,
                 id: 1,
@@ -52,9 +52,9 @@ fn current_staff_area_uses_native_proposals_and_removes_missing_rows_before_expi
             .iter()
             .map(|(id, value)| (id.clone(), point(value)))
             .collect();
-        let mut random = NativeRng::new(31);
+        let mut random = Rng::new(31);
         for (index, frame) in case["frames"].as_array().unwrap().iter().enumerate() {
-            let stepped = step_native_staff_knockback(&current, &mut positions, &mut random);
+            let stepped = step_staff_knockback(&current, &mut positions, &mut random);
             let actual = json!({"cameraDisplacement":stepped.camera_displacement,"actor":stepped.actor.as_ref().map(actor),"dazzledTargetIds":stepped.dazzled_target_ids,
                 "displacements":stepped.displacements.iter().map(|row|json!({"targetId":row.target_id,"delta":row.delta})).collect::<Vec<_>>(),
                 "headingPerturbations":stepped.heading_perturbations.iter().map(|row|json!({"targetId":row.target_id,"headingDegrees":row.heading_degrees})).collect::<Vec<_>>(),"rng":rng(&random)});
@@ -79,7 +79,7 @@ struct AreaWorld {
     collision_chain: bool,
     moves: Vec<Value>,
 }
-impl solomon_sim::knockback::NativeKnockbackAreaWorld<String> for AreaWorld {
+impl solomon_sim::knockback::KnockbackAreaWorld<String> for AreaWorld {
     fn position(&self, id: &String) -> Option<Vec2> {
         self.positions.get(id).copied()
     }
@@ -100,7 +100,7 @@ impl solomon_sim::knockback::NativeKnockbackAreaWorld<String> for AreaWorld {
 }
 #[test]
 fn shared_area_queries_observe_each_move_and_visit_new_collision_recipients_once() {
-    use solomon_sim::knockback::{NativeKnockbackArea, step_native_knockback_area};
+    use solomon_sim::knockback::{KnockbackArea, step_knockback_area};
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/current-knockback-area-goldens.json"))
             .unwrap();
@@ -124,11 +124,11 @@ fn shared_area_queries_observe_each_move_and_visit_new_collision_recipients_once
             .map(|id| id.as_str().unwrap().into())
             .collect();
         let mut remaining_distance = initial["remainingDistance"].as_f64().unwrap();
-        let mut random = NativeRng::new(31);
+        let mut random = Rng::new(31);
         for (index, frame) in case["frames"].as_array().unwrap().iter().enumerate() {
             world.moves.clear();
-            let step = step_native_knockback_area(
-                NativeKnockbackArea {
+            let step = step_knockback_area(
+                KnockbackArea {
                     origin: point(&initial["origin"]),
                     remaining_distance,
                     target_ids: &target_ids,

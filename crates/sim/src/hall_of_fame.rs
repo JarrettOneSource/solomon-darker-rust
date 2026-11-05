@@ -41,7 +41,7 @@ pub struct HallOfFameEntry {
 pub fn completed_hall_of_fame_entry(
     run_id: &str,
     phase: crate::game_run::GameRunPhase,
-    score: &crate::score::NativeHallOfFameRunState,
+    score: &crate::score::HallOfFameRunState,
     player: &crate::player::PlayerState,
     wave: u64,
     completed_at_utc: String,

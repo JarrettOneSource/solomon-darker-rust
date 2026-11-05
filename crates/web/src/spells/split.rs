@@ -1,7 +1,7 @@
 //! Deferred native ZAnimSplit owners and clipped Air/channel painter bands.
 
 use solomon_sim::Vec2;
-use solomon_sim::painter::{PainterRegistration, native_zanim_split_band_height};
+use solomon_sim::painter::{PainterRegistration, zanim_split_band_height};
 
 use super::{SpellDraw, SpellPainter, SpellRoot};
 
@@ -28,7 +28,7 @@ pub(super) fn append_split_bands(
         },
         draws: Vec::new(),
     });
-    let height = native_zanim_split_band_height(enhanced_effects);
+    let height = zanim_split_band_height(enhanced_effects);
     let count = ((maximum - minimum) / height).ceil() as usize;
     for band in 0..count {
         let top = minimum + band as f64 * height;
@@ -53,17 +53,17 @@ mod tests {
     use solomon_sim::boneyard::presentation::{BoneyardPainterEntry, boneyard_painter_order};
     use solomon_sim::hub::painter::{PainterLane, PainterLayer, painter_row};
     use solomon_sim::painter::WorldManagerLane;
-    use solomon_sim::spells::air::NativeAirMesh;
-    use solomon_sim::spells::weld::NativeWeldMeshUvSpace;
+    use solomon_sim::spells::air::AirMesh;
+    use solomon_sim::spells::weld::WeldMeshUvSpace;
 
-    use crate::native_mesh::clip_native_mesh;
+    use crate::beam_mesh::clip_to_bands;
 
     use super::*;
 
     fn emitted_beam(enhanced_effects: bool) -> Vec<SpellRoot> {
         // Independent 100-unit vertical strip, wide enough to cross both sides
         // of the native 10,000-unit horizontal clip. UVs span the entire strip.
-        let mesh = NativeAirMesh {
+        let mesh = AirMesh {
             vertices: vec![
                 Vec2::new(-120.0, 0.0),
                 Vec2::new(10_120.0, 0.0),
@@ -89,10 +89,10 @@ mod tests {
             |top, bottom| {
                 vec![SpellDraw::Mesh {
                     record: 44,
-                    triangles: clip_native_mesh(&mesh, origin, top, bottom),
+                    triangles: clip_to_bands(&mesh, origin, top, bottom),
                     alpha: 1.0,
                     tint: 0x8a_ffff,
-                    uv_space: NativeWeldMeshUvSpace::Record,
+                    uv_space: WeldMeshUvSpace::Record,
                 }]
             },
         );

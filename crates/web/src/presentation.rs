@@ -17,7 +17,7 @@ use solomon_protocol::flame_presentation::{FlamePresentationFrame, RetainedFlame
 use solomon_sim::game_run::{GameRunPhase, game_run_world_tick};
 use solomon_sim::painter::PainterRegistration;
 use solomon_sim::session::{GameSession, GameSessionInput};
-use solomon_sim::spells::weld::NativeFlameCameraProposal;
+use solomon_sim::spells::weld::FlameCameraProposal;
 
 pub use enemies::EnemyPresentationMetadata;
 use prediction::LocalHubPrediction;
@@ -88,7 +88,7 @@ pub struct PresentationFrame {
     pub clocks: PresentationClocks,
     pub enemies: Option<EnemyPresentationMetadata>,
     pub flame_epoch: Option<u64>,
-    pub flame_camera_displacements: Vec<NativeFlameCameraProposal>,
+    pub flame_camera_displacements: Vec<FlameCameraProposal>,
 }
 
 struct TimedSession {
@@ -134,7 +134,7 @@ fn scope(session: &GameSession, local_player_id: &str) -> WorldScope {
     }
 }
 
-pub struct NativePresentationTimeline {
+pub struct PresentationTimeline {
     history: VecDeque<TimedSession>,
     tick_rate: u32,
     snapshot_rate: u32,
@@ -147,7 +147,7 @@ pub struct NativePresentationTimeline {
     flame_presentation: Option<RetainedFlamePresentation>,
 }
 
-impl NativePresentationTimeline {
+impl PresentationTimeline {
     /// Rates come from the validated native Welcome, not a second simulation clock.
     #[must_use]
     pub fn new(server_tick_rate: u32, snapshot_rate: u32) -> Self {
@@ -189,7 +189,7 @@ impl NativePresentationTimeline {
     pub fn sample_scenery_actor_poses_at_tick(
         &self,
         tick: f64,
-    ) -> Option<solomon_sim::boneyard::scenery::NativeTreeActorPoses> {
+    ) -> Option<solomon_sim::boneyard::scenery::TreeActorPoses> {
         let (older, newer, blend) = self.retained_position_interval(tick)?;
         Some(scenery::interpolate(older, newer, blend))
     }

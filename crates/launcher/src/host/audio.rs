@@ -10,7 +10,7 @@ use solomon_sim::audio::{AudioCue, AudioEvent};
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::session::GameSession;
 use solomon_sim::spells::model::PrimarySpellTransient;
-use solomon_sim::spells::staff::NativePlayerStaffTransient;
+use solomon_sim::spells::staff::PlayerStaffTransient;
 
 use super::authority::{NativeAuthority, send_control};
 use super::connection::HostConnection;
@@ -106,15 +106,13 @@ pub(super) fn project_listener_audio(
     }
     let mut staff_contacts = Vec::new();
     for transient in session.spells.transients.iter() {
-        if let PrimarySpellTransient::Staff(NativePlayerStaffTransient::Contact(contact)) =
-            transient
-        {
+        if let PrimarySpellTransient::Staff(PlayerStaffTransient::Contact(contact)) = transient {
             staff_contacts.push(contact.clone());
         }
     }
     let alternate = listener.player.combat.life_state != PlayerLifeState::Alive;
     let point_gain = |point| {
-        solomon_sim::region_feedback::native_region_point_gain(
+        solomon_sim::region_feedback::region_point_gain(
             point,
             view.center,
             view.world_width,
@@ -122,7 +120,7 @@ pub(super) fn project_listener_audio(
         )
     };
     let hit_gain = |point| {
-        solomon_sim::region_feedback::native_region_hit_point_gain(
+        solomon_sim::region_feedback::region_hit_point_gain(
             point,
             view.center,
             view.world_width,

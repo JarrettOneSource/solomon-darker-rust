@@ -3,7 +3,7 @@
 use super::{WizardDiscipline, WizardElement};
 
 #[must_use]
-pub const fn native_wizard_class_title(
+pub const fn wizard_class_title(
     element: WizardElement,
     discipline: WizardDiscipline,
 ) -> &'static str {

@@ -69,7 +69,7 @@ impl WizardEquipment {
                 hat: Some(garment.clone()),
                 robe: Some(garment),
                 weapon: Some(PlayerRenderableWeaponAppearance::Native(PlayerWeaponAppearance {
-                    kind: NativePlayerWeaponKind::Staff,
+                    kind: PlayerWeaponKind::Staff,
                     selector: 0,
                 })),
             },

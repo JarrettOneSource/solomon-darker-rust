@@ -4,12 +4,12 @@
 use super::{GameSession, GameSessionInput};
 use crate::Vec2;
 use crate::combat::PlayerLifeState;
-use crate::economy::NativeInventoryDyeSession;
+use crate::economy::InventoryDyeSession;
 use std::collections::BTreeMap;
 
 impl GameSession {
     #[must_use]
-    pub fn inventory_dye_session(&self, id: &str) -> Option<&NativeInventoryDyeSession> {
+    pub fn inventory_dye_session(&self, id: &str) -> Option<&InventoryDyeSession> {
         self.inventory_dye_sessions.get(id)
     }
 

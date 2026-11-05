@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::belt::NativeBeltCommand;
+use solomon_sim::belt::BeltCommand;
 use solomon_sim::economy::{
     DOWSING_EQUIPMENT_RECIPES, EquipmentSlot, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyState,
     HubInventoryAction, HubInventoryItem, TransferDirection, create_equipment_inventory_item,
@@ -102,7 +102,7 @@ fn number(value: &Value) -> f64 {
 fn effect(effect: &InventoryDropEffect) -> Value {
     match effect {
         InventoryDropEffect::Action(value) => json!({"kind":"action", "action":action(value)}),
-        InventoryDropEffect::BindBelt(NativeBeltCommand::BindItem { item_id, slot }) => {
+        InventoryDropEffect::BindBelt(BeltCommand::BindItem { item_id, slot }) => {
             json!({"kind":"belt", "itemId":item_id, "slot":slot})
         }
         InventoryDropEffect::BindBelt(_) => panic!("Source inventory drop does not bind a skill"),

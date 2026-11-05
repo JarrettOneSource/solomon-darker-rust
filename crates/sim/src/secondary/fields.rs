@@ -4,18 +4,17 @@ use super::casting::magic_trap_screen_flash;
 use super::program::*;
 use super::step::{BurnRequest, StepEngine};
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryAudioCue as Cue,
-    NativeSecondaryDamageKind as Damage, NativeSecondaryEventKind as Event,
-    NativeSecondaryTargetEffectPatch as Patch, NativeSecondaryWorld,
+    SecondaryActorKind as Kind, SecondaryAudioCue as Cue, SecondaryDamageKind as Damage,
+    SecondaryEventKind as Event, SecondaryTargetEffectPatch as Patch, SecondaryWorld,
 };
 use crate::Vec2;
 use crate::float::{fround, hypot};
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorState;
 
-pub(super) fn step<W: NativeSecondaryWorld>(
+pub(super) fn step<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let owner = &engine.context.players[&actor.owner_id];

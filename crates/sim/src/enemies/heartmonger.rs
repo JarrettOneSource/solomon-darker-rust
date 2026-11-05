@@ -2,7 +2,7 @@
 //! and `enemies/heartmonger.ts`.
 
 use super::config::EnemyFamilyConfig;
-use super::crow::{NativeCrowTarget, create_native_crow, step_native_crow};
+use super::crow::{CrowTarget, create_crow, step_crow};
 use super::effects::DeathEffectOwner;
 use super::model::*;
 use super::movement::{move_toward_target, staff_movement_speed};
@@ -13,10 +13,10 @@ use super::{EnemyFlag, EnemySpawnIntent, EnemyToken, SpawnPositionPolicy};
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::WorldPainterOrder;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_HEARTMONGER_SUMMON_INTERVALS: [u64; 5] = [0, 350, 250, 150, 75];
-pub const NATIVE_HEARTMONGER_BLIND_CHANCES: [f64; 5] = [0.0, 5.0, 10.0, 30.0, 100.0];
+pub const HEARTMONGER_SUMMON_INTERVALS: [u64; 5] = [0, 350, 250, 150, 75];
+pub const HEARTMONGER_BLIND_CHANCES: [f64; 5] = [0.0, 5.0, 10.0, 30.0, 100.0];
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -27,43 +27,43 @@ pub struct DetachedCrow {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeHeartmongerSummon {
+pub struct HeartmongerSummon {
     pub count: usize,
     pub enemy_token: EnemyToken,
     pub flags: Vec<EnemyFlag>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHeartmongerSound {
+pub struct HeartmongerSound {
     pub pitch: f64,
     pub position: Vec2,
     pub sound: EnemySound,
 }
 
-pub struct NativeHeartmongerContext<'a> {
+pub struct HeartmongerContext<'a> {
     pub admitted: bool,
     pub is_visible: &'a dyn Fn(Vec2) -> bool,
     pub light_intensity: f64,
     pub position: Vec2,
-    pub targets: &'a [NativeCrowTarget<'a>],
+    pub targets: &'a [CrowTarget<'a>],
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeHeartmongerStep {
-    pub sounds: Vec<NativeHeartmongerSound>,
+pub struct HeartmongerStep {
+    pub sounds: Vec<HeartmongerSound>,
     pub struck_target_ids: Vec<String>,
-    pub summons: Vec<NativeHeartmongerSummon>,
+    pub summons: Vec<HeartmongerSummon>,
 }
 
 #[must_use]
 pub fn step_native_heartmonger(
     brain: &mut HeartmongerBrain,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     summon_mode: u8,
-    context: NativeHeartmongerContext<'_>,
-) -> NativeHeartmongerStep {
-    let mut step = NativeHeartmongerStep::default();
-    let interval = NATIVE_HEARTMONGER_SUMMON_INTERVALS[summon_mode as usize];
+    context: HeartmongerContext<'_>,
+) -> HeartmongerStep {
+    let mut step = HeartmongerStep::default();
+    let interval = HEARTMONGER_SUMMON_INTERVALS[summon_mode as usize];
     if brain.activated && interval > 0 {
         // Source decrements to -1 before summoning. The retained state never stores
         // that intermediate negative counter, so zero is the birth boundary here.
@@ -77,7 +77,7 @@ pub fn step_native_heartmonger(
     if rng.draw_integer(200) == 3 {
         let pitch = rng.draw_float_range(0.899_999_976_158_142_1, 1.0);
         let sound = if rng.draw_integer(2) == 0 { EnemySound::Crow1 } else { EnemySound::Crow2 };
-        step.sounds.push(NativeHeartmongerSound { pitch, position: context.position, sound });
+        step.sounds.push(HeartmongerSound { pitch, position: context.position, sound });
     }
     if rng.draw_integer(200) == 5 {
         brain.head_variant = rng.draw_integer(2) as u8;
@@ -85,7 +85,7 @@ pub fn step_native_heartmonger(
     let mut cooldown =
         if context.admitted { brain.crow_cooldown_ticks.saturating_sub(1) } else { 100 };
     brain.crows.retain_mut(|crow| {
-        let flight = step_native_crow(
+        let flight = step_crow(
             crow,
             rng,
             Some(context.position),
@@ -98,14 +98,14 @@ pub fn step_native_heartmonger(
         }
         if let Some(target_id) = flight.struck_target_id {
             step.struck_target_ids.push(target_id);
-            step.sounds.push(NativeHeartmongerSound {
+            step.sounds.push(HeartmongerSound {
                 pitch: 1.0,
                 position: crow.position.expect("a crow completing its dive has a root"),
                 sound: EnemySound::Crow1,
             });
         }
         if let Some(pitch) = flight.return_pitch {
-            step.sounds.push(NativeHeartmongerSound {
+            step.sounds.push(HeartmongerSound {
                 pitch,
                 position: crow.position.expect("a returning crow has a root"),
                 sound: EnemySound::Wings,
@@ -121,11 +121,11 @@ pub fn step_native_heartmonger(
 #[must_use]
 pub fn detach_native_heartmonger_crows(
     brain: &HeartmongerBrain,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     position: Vec2,
     extra_crow_id: usize,
 ) -> Vec<CrowState> {
-    let mut extra = create_native_crow(extra_crow_id, rng);
+    let mut extra = create_crow(extra_crow_id, rng);
     let heading = rng.draw_scaled_float(360.0, false);
     let mut crows = brain.crows.clone();
     for crow in &mut crows {
@@ -143,14 +143,14 @@ pub fn detach_native_heartmonger_crows(
     crows
 }
 
-fn summon_friends(rng: &mut NativeRng, summons: &mut Vec<NativeHeartmongerSummon>) {
+fn summon_friends(rng: &mut Rng, summons: &mut Vec<HeartmongerSummon>) {
     if rng.draw_integer(5) == 1 {
         let flags = if rng.draw_integer(5) == 1 {
             vec![EnemyFlag::Hooded, EnemyFlag::Leading]
         } else {
             Vec::new()
         };
-        summons.push(NativeHeartmongerSummon {
+        summons.push(HeartmongerSummon {
             count: 1,
             enemy_token: EnemyToken::SkeletonArcher,
             flags,
@@ -158,17 +158,17 @@ fn summon_friends(rng: &mut NativeRng, summons: &mut Vec<NativeHeartmongerSummon
         return;
     }
     let flags = if rng.draw_integer(5) == 1 { vec![EnemyFlag::Helm] } else { Vec::new() };
-    summons.push(NativeHeartmongerSummon { count: 1, enemy_token: EnemyToken::Skeleton, flags });
+    summons.push(HeartmongerSummon { count: 1, enemy_token: EnemyToken::Skeleton, flags });
     if rng.draw_integer(10) != 1 {
         return;
     }
-    summons.push(NativeHeartmongerSummon {
+    summons.push(HeartmongerSummon {
         count: rng.draw_integer(2) as usize + 1,
         enemy_token: EnemyToken::Imp,
         flags: Vec::new(),
     });
     if rng.draw_integer(10) == 1 {
-        summons.push(NativeHeartmongerSummon {
+        summons.push(HeartmongerSummon {
             count: rng.draw_integer(2) as usize + 1,
             enemy_token: EnemyToken::Imp,
             flags: Vec::new(),
@@ -193,14 +193,14 @@ pub fn step_heartmonger(
     let mut targets = Vec::new();
     for target in context.players {
         if target_eligible(target) {
-            targets.push(NativeCrowTarget { id: &target.id, position: target.position });
+            targets.push(CrowTarget { id: &target.id, position: target.position });
         }
     }
     let step = step_native_heartmonger(
         &mut brain,
         &mut world.steering_rng,
         summon_mode,
-        NativeHeartmongerContext {
+        HeartmongerContext {
             admitted: visibility.admitted,
             is_visible: context.projected_point_visible.unwrap_or(&|_| true),
             light_intensity: visibility.intensity,
@@ -372,7 +372,7 @@ impl EnemyWorld {
 
     pub fn step_detached_crows(&mut self, context: &EnemyStepContext<'_>) {
         self.detached_crows.retain_mut(|source| {
-            let step = step_native_crow(
+            let step = step_crow(
                 &mut source.flight,
                 &mut self.steering_rng,
                 None,

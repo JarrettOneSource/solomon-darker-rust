@@ -8,15 +8,12 @@ use solomon_sim::economy::{
     normalize_inventory_sack_name,
 };
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextPlacement, NativeUiTextSpec,
-    layout_native_ui_text,
-};
 use solomon_sim::player_panels::sack_rename::{
     INVENTORY_SACK_RENAME_BUTTON, INVENTORY_SACK_RENAME_BUTTON_SCALE, InventorySackRenameOwner,
     InventorySackRenameSelection, inventory_sack_rename_dialog_layout,
     inventory_sack_rename_target,
 };
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextPlacement, UiTextSpec, layout_ui_text};
 
 pub(super) fn layer_id() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("sack-rename"))
@@ -92,23 +89,23 @@ impl PlayerPanels {
             return Ok(());
         }
         if let Some(item) = self.sack_rename_candidate(s) {
-            let button = c.admitted(!self.inventory_transition_locked()).native_button_art(
+            let button = c.admitted(!self.inventory_transition_locked()).button_art(
                 &self.ui,
                 "rename-sack",
                 &format!("Rename {}", item.name),
                 INVENTORY_SACK_RENAME_BUTTON,
             )?;
-            let label = NativeUiTextSpec {
+            let label = UiTextSpec {
                 tint: 0xd9ba70,
                 scale: INVENTORY_SACK_RENAME_BUTTON_SCALE,
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::Menu,
+                ..UiTextSpec::new(
+                    UiFontName::Menu,
                     "RENAME SACK",
                     INVENTORY_SACK_RENAME_BUTTON.width / 2.0,
                     42.5 * INVENTORY_SACK_RENAME_BUTTON_SCALE,
                 )
             };
-            button.text(&solomon_sim::native_ui_text::buttons::fit_native_ui_button_label(
+            button.text(&solomon_sim::ui_text::buttons::fit_ui_button_label(
                 label,
                 HudRect::new(
                     0.0,
@@ -186,36 +183,36 @@ impl PlayerPanels {
                     false,
                 );
                 for (label, font, baseline) in [
-                    ("Rename Sack".to_owned(), NativeUiFontName::Menu, layout.title_baseline),
+                    ("Rename Sack".to_owned(), UiFontName::Menu, layout.title_baseline),
                     (
                         format!("Up to {INVENTORY_SACK_NAME_MAX_LENGTH} characters"),
-                        NativeUiFontName::Medium,
+                        UiFontName::Medium,
                         layout.limit_baseline,
                     ),
                 ] {
                     native_text(
                         frame,
                         ui.painter(),
-                        &NativeUiTextSpec {
-                            align: NativeUiTextAlign::Left,
-                            ..NativeUiTextSpec::new(font, &label, layout.body.x + 48.0, baseline)
+                        &UiTextSpec {
+                            align: UiTextAlign::Left,
+                            ..UiTextSpec::new(font, &label, layout.body.x + 48.0, baseline)
                         },
                     );
                 }
-                let label = NativeUiTextSpec {
-                    align: NativeUiTextAlign::Left,
-                    placement: NativeUiTextPlacement::Box,
+                let label = UiTextSpec {
+                    align: UiTextAlign::Left,
+                    placement: UiTextPlacement::Box,
                     tint: 0xd9ba70,
-                    ..NativeUiTextSpec::new(NativeUiFontName::Medium, "Sack name", 0.0, 0.0)
+                    ..UiTextSpec::new(UiFontName::Medium, "Sack name", 0.0, 0.0)
                 };
-                let label_size = layout_native_ui_text(&label);
+                let label_size = layout_ui_text(&label);
                 let mut field = layout.field;
                 field.x += 20.0 + label_size.width;
                 field.width -= 30.0 + label_size.width;
                 native_text(
                     frame,
                     ui.painter(),
-                    &NativeUiTextSpec {
+                    &UiTextSpec {
                         x: layout.field.x + 10.0,
                         y: layout.field.y + (44.0 - label_size.height) / 2.0,
                         ..label

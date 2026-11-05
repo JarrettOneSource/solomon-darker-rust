@@ -13,22 +13,22 @@ pub fn point_json(point: Vec2) -> Value {
     json!({"x":point.x,"y":point.y})
 }
 
-pub fn animation_json(sample: &NativeEnemyPresentationInput) -> Value {
+pub fn animation_json(sample: &EnemyPresentationInput) -> Value {
     let state = match sample.state {
-        NativeEnemyAnimationState::Idle => "idle",
-        NativeEnemyAnimationState::Locomotion => "locomotion",
-        NativeEnemyAnimationState::Action => "action",
-        NativeEnemyAnimationState::Death => "death",
+        EnemyAnimationState::Idle => "idle",
+        EnemyAnimationState::Locomotion => "locomotion",
+        EnemyAnimationState::Action => "action",
+        EnemyAnimationState::Death => "death",
     };
     let coffin = match sample.coffin_state {
-        NativeEnemyCoffinState::Hidden => "hidden",
-        NativeEnemyCoffinState::Closed => "closed",
-        NativeEnemyCoffinState::Opening => "opening",
-        NativeEnemyCoffinState::Open => "open",
+        EnemyCoffinState::Hidden => "hidden",
+        EnemyCoffinState::Closed => "closed",
+        EnemyCoffinState::Opening => "opening",
+        EnemyCoffinState::Open => "open",
     };
     let mut animation = serde_json::Map::new();
     animation.insert("state".into(), json!(state));
-    animation.insert("action".into(), json!(sample.action.map(NativeEnemyAction::id)));
+    animation.insert("action".into(), json!(sample.action.map(EnemyAction::id)));
     animation.insert("deathEpoch".into(), json!(sample.death_epoch));
     animation.insert("coffinState".into(), json!(coffin));
     animation.insert("actionProgress".into(), json!(sample.action_progress));
@@ -95,45 +95,45 @@ pub fn animation_json(sample: &NativeEnemyPresentationInput) -> Value {
     Value::Object(animation)
 }
 
-pub fn animation_from_json(value: &Value) -> NativeEnemyPresentationInput {
-    let mut sample = NativeEnemyPresentationInput {
+pub fn animation_from_json(value: &Value) -> EnemyPresentationInput {
+    let mut sample = EnemyPresentationInput {
         state: match value["state"].as_str().unwrap() {
-            "idle" => NativeEnemyAnimationState::Idle,
-            "locomotion" => NativeEnemyAnimationState::Locomotion,
-            "action" => NativeEnemyAnimationState::Action,
-            "death" => NativeEnemyAnimationState::Death,
+            "idle" => EnemyAnimationState::Idle,
+            "locomotion" => EnemyAnimationState::Locomotion,
+            "action" => EnemyAnimationState::Action,
+            "death" => EnemyAnimationState::Death,
             state => panic!("unknown source animation state {state}"),
         },
         death_epoch: value["deathEpoch"].as_u64().unwrap(),
         coffin_state: match value["coffinState"].as_str().unwrap() {
-            "hidden" => NativeEnemyCoffinState::Hidden,
-            "closed" => NativeEnemyCoffinState::Closed,
-            "opening" => NativeEnemyCoffinState::Opening,
-            "open" => NativeEnemyCoffinState::Open,
+            "hidden" => EnemyCoffinState::Hidden,
+            "closed" => EnemyCoffinState::Closed,
+            "opening" => EnemyCoffinState::Opening,
+            "open" => EnemyCoffinState::Open,
             state => panic!("unknown source Coffin state {state}"),
         },
         ..Default::default()
     };
     let actions = [
-        NativeEnemyAction::SkeletonClawA,
-        NativeEnemyAction::SkeletonClawB,
-        NativeEnemyAction::SkeletonWeapon,
-        NativeEnemyAction::SkeletonPike,
-        NativeEnemyAction::ArcherShot,
-        NativeEnemyAction::MageCastShort,
-        NativeEnemyAction::MageCastLong,
-        NativeEnemyAction::ZombieBeat,
-        NativeEnemyAction::WraithDrain,
-        NativeEnemyAction::DemonBomb,
-        NativeEnemyAction::Faculty(FacultyActionKind::Throw),
-        NativeEnemyAction::Faculty(FacultyActionKind::TwoHand),
-        NativeEnemyAction::Faculty(FacultyActionKind::Lightning),
-        NativeEnemyAction::DemonSkullBite,
-        NativeEnemyAction::DemonSkullEyes,
-        NativeEnemyAction::DemonSkullMouth,
-        NativeEnemyAction::DemonSkullSpit,
-        NativeEnemyAction::DemonSkullFlair,
-        NativeEnemyAction::DemonSkullScream,
+        EnemyAction::SkeletonClawA,
+        EnemyAction::SkeletonClawB,
+        EnemyAction::SkeletonWeapon,
+        EnemyAction::SkeletonPike,
+        EnemyAction::ArcherShot,
+        EnemyAction::MageCastShort,
+        EnemyAction::MageCastLong,
+        EnemyAction::ZombieBeat,
+        EnemyAction::WraithDrain,
+        EnemyAction::DemonBomb,
+        EnemyAction::Faculty(FacultyActionKind::Throw),
+        EnemyAction::Faculty(FacultyActionKind::TwoHand),
+        EnemyAction::Faculty(FacultyActionKind::Lightning),
+        EnemyAction::DemonSkullBite,
+        EnemyAction::DemonSkullEyes,
+        EnemyAction::DemonSkullMouth,
+        EnemyAction::DemonSkullSpit,
+        EnemyAction::DemonSkullFlair,
+        EnemyAction::DemonSkullScream,
     ];
     sample.action = value["action"]
         .as_str()
@@ -172,7 +172,7 @@ pub fn animation_from_json(value: &Value) -> NativeEnemyPresentationInput {
     sample.demon_shadow_offset = point(&value["demonShadowOffset"]);
     sample.pike_target_offset =
         value["pikeTargetOffset"].as_object().map(|_| point(&value["pikeTargetOffset"]));
-    sample.spider = value["spider"].as_object().map(|_| NativeEnemySpiderInput {
+    sample.spider = value["spider"].as_object().map(|_| EnemySpiderInput {
         body_heading_deg: value["spider"]["bodyHeadingDeg"].as_f64().unwrap(),
         outline_alpha: value["spider"]["outlineAlpha"].as_f64().unwrap(),
         outline_tint: value["spider"]["outlineTint"].as_u64().unwrap() as u32,
@@ -181,7 +181,7 @@ pub fn animation_from_json(value: &Value) -> NativeEnemyPresentationInput {
         .as_array()
         .unwrap()
         .iter()
-        .map(|effect| NativeEnemyEffectInput {
+        .map(|effect| EnemyEffectInput {
             id: effect["id"].as_u64().unwrap() as usize,
             layer: EnemySpriteLayer {
                 alpha: effect["alpha"].as_f64().unwrap(),

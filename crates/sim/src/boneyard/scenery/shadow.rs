@@ -1,14 +1,12 @@
 //! Native class auxiliaries from `native-scenery-shadow.ts` and
 //! `native-scrub-shadow.ts`: actual glyph masks rather than guessed silhouettes.
 
-use crate::boneyard::{
-    BoneyardScene, shadows::NativeShadowRecord, terrain_surface::NATIVE_GROUND_PI,
-};
+use crate::boneyard::{BoneyardScene, shadows::ShadowRecord, terrain_surface::GROUND_PI};
 use crate::float::{atan2, cos, fround as f, sin};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::fence::{stored_inset, stored_length, stored_unit};
-use super::{NativeSceneryLayer, NativeSceneryPlan, NativeScenerySource};
+use super::{SceneryLayer, SceneryPlan, ScenerySource};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NativeSceneryShadowGlyph {
@@ -19,14 +17,14 @@ pub struct NativeSceneryShadowGlyph {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSceneryShadowTexture {
+pub enum SceneryShadowTexture {
     Glyph(usize),
     FenceGrate,
     White,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSceneryShadowRole {
+pub enum SceneryShadowRole {
     TreeRootMask,
     SceneryFlatShadow,
     FenceFlatShadow,
@@ -35,7 +33,7 @@ pub enum NativeSceneryShadowRole {
     ScrubDirectionalShadow,
     ScrubSurfaceReflection,
 }
-impl NativeSceneryShadowRole {
+impl SceneryShadowRole {
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
@@ -51,10 +49,10 @@ impl NativeSceneryShadowRole {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSceneryShadowQuad {
+pub struct SceneryShadowQuad {
     pub alphas: [f64; 4],
-    pub role: NativeSceneryShadowRole,
-    pub texture: NativeSceneryShadowTexture,
+    pub role: SceneryShadowRole,
+    pub texture: SceneryShadowTexture,
     pub tint: u32,
     pub uvs: [Vec2; 4],
     pub vertices: [Vec2; 4],
@@ -72,7 +70,7 @@ fn glyph_vertices(glyph: NativeSceneryShadowGlyph) -> [Vec2; 4] {
 }
 
 #[must_use]
-pub fn native_flat_glyph_shadow_vertices(glyph: NativeSceneryShadowGlyph) -> [Vec2; 4] {
+pub fn flat_glyph_shadow_vertices(glyph: NativeSceneryShadowGlyph) -> [Vec2; 4] {
     let mut vertices = glyph_vertices(glyph);
     let x = f(glyph.height * 0.25);
     let y = f(x * 1.25);
@@ -87,18 +85,18 @@ fn glyph_quad(
     position: Vec2,
     root_mask: bool,
     glyph: &dyn Fn(usize) -> Option<NativeSceneryShadowGlyph>,
-) -> Option<NativeSceneryShadowQuad> {
+) -> Option<SceneryShadowQuad> {
     let glyph = glyph(entry)?;
     let vertices =
-        if root_mask { glyph_vertices(glyph) } else { native_flat_glyph_shadow_vertices(glyph) };
-    Some(NativeSceneryShadowQuad {
+        if root_mask { glyph_vertices(glyph) } else { flat_glyph_shadow_vertices(glyph) };
+    Some(SceneryShadowQuad {
         alphas: [1.0; 4],
         role: if root_mask {
-            NativeSceneryShadowRole::TreeRootMask
+            SceneryShadowRole::TreeRootMask
         } else {
-            NativeSceneryShadowRole::SceneryFlatShadow
+            SceneryShadowRole::SceneryFlatShadow
         },
-        texture: NativeSceneryShadowTexture::Glyph(entry),
+        texture: SceneryShadowTexture::Glyph(entry),
         tint: if root_mask { 0xffffff } else { 0 },
         uvs: FULL_UVS,
         vertices: vertices.map(|point| Vec2::new(f(point.x + position.x), f(point.y + position.y))),
@@ -108,15 +106,15 @@ fn glyph_quad(
 /// Persistent class auxiliaries have the main owner's slot. Flat Tree art fades
 /// with its material; the independently owned Tree root mask remains full alpha.
 #[must_use]
-pub fn native_scenery_shadow_plan(
+pub fn scenery_shadow_plan(
     scene: &BoneyardScene,
-    plan: &NativeSceneryPlan,
-    layer: &NativeSceneryLayer,
+    plan: &SceneryPlan,
+    layer: &SceneryLayer,
     complex_shadows: bool,
     glyph: &dyn Fn(usize) -> Option<NativeSceneryShadowGlyph>,
-) -> Vec<NativeSceneryShadowQuad> {
+) -> Vec<SceneryShadowQuad> {
     match layer.source {
-        NativeScenerySource::FencePost { index, .. } => {
+        ScenerySource::FencePost { index, .. } => {
             if complex_shadows {
                 return Vec::new();
             }
@@ -135,7 +133,7 @@ pub fn native_scenery_shadow_plan(
             .into_iter()
             .collect()
         }
-        NativeScenerySource::FenceBody { index, .. } => {
+        ScenerySource::FenceBody { index, .. } => {
             if complex_shadows {
                 return Vec::new();
             }
@@ -163,11 +161,11 @@ pub fn native_scenery_shadow_plan(
                     let [start, end] = stored_inset(a, b, 4.0);
                     let delta = Vec2::new(f(end.x - start.x), f(end.y - start.y));
                     let unit = stored_unit(delta);
-                    let mut angle = f(f(atan2(unit.x, -unit.y)) * 180.0 / NATIVE_GROUND_PI);
+                    let mut angle = f(f(atan2(unit.x, -unit.y)) * 180.0 / GROUND_PI);
                     if angle < 0.0 {
                         angle = f(angle + 360.0);
                     }
-                    let radians = f(NATIVE_GROUND_PI * f(angle + 90.0) / 180.0);
+                    let radians = f(GROUND_PI * f(angle + 90.0) / 180.0);
                     let nx = f(f(sin(radians)) * 3.0);
                     let ny = f(-f(cos(radians)) * 3.0);
                     let top = |p: Vec2| Vec2::new(f(p.x - nx), f(f(p.y - 14.0) - ny));
@@ -181,7 +179,7 @@ pub fn native_scenery_shadow_plan(
                 _ => Vec::new(),
             }
         }
-        NativeScenerySource::Object { index, entry } => {
+        ScenerySource::Object { index, entry } => {
             let object = &scene.objects[index];
             if object.type_id == 2001 {
                 let variant = object.variant.map_or_else(
@@ -229,13 +227,13 @@ pub fn native_scenery_shadow_plan(
 }
 
 #[must_use]
-pub fn native_goodie_shadow_plan(
+pub fn goodie_shadow_plan(
     position: Vec2,
     subtype: u32,
     phase: usize,
     complex_shadows: bool,
     glyph: &dyn Fn(usize) -> Option<NativeSceneryShadowGlyph>,
-) -> Vec<NativeSceneryShadowQuad> {
+) -> Vec<SceneryShadowQuad> {
     assert_eq!(subtype, 0, "unsupported native Goodie shadow subtype");
     if complex_shadows {
         Vec::new()
@@ -245,11 +243,11 @@ pub fn native_goodie_shadow_plan(
 }
 
 #[must_use]
-pub fn native_wall_skirt_plan(start: Vec2, end: Vec2) -> NativeSceneryShadowQuad {
-    NativeSceneryShadowQuad {
+pub fn wall_skirt_plan(start: Vec2, end: Vec2) -> SceneryShadowQuad {
+    SceneryShadowQuad {
         alphas: [1.0, 1.0, 0.0, 0.0],
-        role: NativeSceneryShadowRole::WallBaseShadow,
-        texture: NativeSceneryShadowTexture::White,
+        role: SceneryShadowRole::WallBaseShadow,
+        texture: SceneryShadowTexture::White,
         tint: 0,
         uvs: FULL_UVS,
         vertices: [
@@ -261,16 +259,16 @@ pub fn native_wall_skirt_plan(start: Vec2, end: Vec2) -> NativeSceneryShadowQuad
     }
 }
 
-fn fence_quad(vertices: [Vec2; 4], length: f64) -> NativeSceneryShadowQuad {
+fn fence_quad(vertices: [Vec2; 4], length: f64) -> SceneryShadowQuad {
     let span = f(length / 53.33333121405716);
     let mut points = vertices;
     for point in &mut points[..2] {
         *point = Vec2::new(f(point.x + 10.0), f(point.y + 10.0));
     }
-    NativeSceneryShadowQuad {
+    SceneryShadowQuad {
         alphas: [0.5; 4],
-        role: NativeSceneryShadowRole::FenceFlatShadow,
-        texture: NativeSceneryShadowTexture::FenceGrate,
+        role: SceneryShadowRole::FenceFlatShadow,
+        texture: SceneryShadowTexture::FenceGrate,
         tint: 0,
         uvs: [Vec2::ZERO, Vec2::new(span, 0.0), Vec2::new(0.0, 1.0), Vec2::new(span, 1.0)],
         vertices: points,
@@ -278,17 +276,17 @@ fn fence_quad(vertices: [Vec2; 4], length: f64) -> NativeSceneryShadowQuad {
 }
 
 /// Scrub's private native clock is renderer-owned and never enters saved authority.
-pub struct NativeScrubShadowState {
-    rng: NativeRng,
+pub struct ScrubShadowState {
+    rng: Rng,
     last_tick: u64,
     pub phase: i32,
     pub uv_inset: f64,
     pub special_surface: bool,
 }
-impl NativeScrubShadowState {
+impl ScrubShadowState {
     #[must_use]
     pub fn new(seed: usize, initial_tick: u64) -> Self {
-        let mut rng = NativeRng::new(seed as i64);
+        let mut rng = Rng::new(seed as i64);
         let phase = rng.draw_integer(360);
         Self { rng, last_tick: initial_tick, phase, uv_inset: 0.0, special_surface: false }
     }
@@ -302,24 +300,24 @@ impl NativeScrubShadowState {
 
 #[must_use]
 #[allow(clippy::too_many_arguments)] // Source inputs plus borrowed glyph records keep asset I/O outside the kernel.
-pub fn native_scrub_shadow_plan(
+pub fn scrub_shadow_plan(
     entry: usize,
     glyph: NativeSceneryShadowGlyph,
     position: Vec2,
-    state: &mut NativeScrubShadowState,
-    records: &[NativeShadowRecord],
+    state: &mut ScrubShadowState,
+    records: &[ShadowRecord],
     complex_shadows: bool,
     special_surface_at: &dyn Fn(Vec2) -> bool,
     reflection: NativeSceneryShadowGlyph,
-) -> Vec<NativeSceneryShadowQuad> {
+) -> Vec<SceneryShadowQuad> {
     if !complex_shadows {
-        return vec![NativeSceneryShadowQuad {
+        return vec![SceneryShadowQuad {
             alphas: [1.0; 4],
-            role: NativeSceneryShadowRole::ScrubFlatShadow,
-            texture: NativeSceneryShadowTexture::Glyph(entry),
+            role: SceneryShadowRole::ScrubFlatShadow,
+            texture: SceneryShadowTexture::Glyph(entry),
             tint: 0,
             uvs: FULL_UVS,
-            vertices: native_flat_glyph_shadow_vertices(glyph),
+            vertices: flat_glyph_shadow_vertices(glyph),
         }];
     }
     if state.uv_inset == 0.0 {
@@ -337,10 +335,10 @@ pub fn native_scrub_shadow_plan(
         let wave = f(sin(f(f64::from(state.phase) / 3.0))).abs();
         let scale = f(wave * 0.25 + f(0.6));
         let alpha = f(0.35);
-        output.push(NativeSceneryShadowQuad {
+        output.push(SceneryShadowQuad {
             alphas: [alpha; 4],
-            role: NativeSceneryShadowRole::ScrubSurfaceReflection,
-            texture: NativeSceneryShadowTexture::Glyph(21),
+            role: SceneryShadowRole::ScrubSurfaceReflection,
+            texture: SceneryShadowTexture::Glyph(21),
             tint: 0xffffff,
             uvs: FULL_UVS,
             vertices: glyph_vertices(reflection)
@@ -351,11 +349,11 @@ pub fn native_scrub_shadow_plan(
     for record in records {
         let direction = record.direction;
         let radians = f(atan2(direction.x, -direction.y));
-        let mut degrees = f(radians * 180.0 / NATIVE_GROUND_PI);
+        let mut degrees = f(radians * 180.0 / GROUND_PI);
         if degrees < 0.0 {
             degrees = f(degrees + 360.0);
         }
-        let angle = f(-degrees * NATIVE_GROUND_PI / 180.0);
+        let angle = f(-degrees * GROUND_PI / 180.0);
         let cosine = f(cos(angle));
         let sine = -f(sin(angle));
         let scale_x = f(10.0 * record.distance_fraction).min(1.0);
@@ -379,10 +377,10 @@ pub fn native_scrub_shadow_plan(
         let left = near(corners[2]);
         let right = near(corners[3]);
         let bottom = f(1.0 - state.uv_inset);
-        output.push(NativeSceneryShadowQuad {
+        output.push(SceneryShadowQuad {
             alphas: [0.0, 0.0, 1.0, 1.0],
-            role: NativeSceneryShadowRole::ScrubDirectionalShadow,
-            texture: NativeSceneryShadowTexture::Glyph(entry),
+            role: SceneryShadowRole::ScrubDirectionalShadow,
+            texture: SceneryShadowTexture::Glyph(entry),
             tint: 0,
             uvs: [FULL_UVS[0], FULL_UVS[1], Vec2::new(0.0, bottom), Vec2::new(1.0, bottom)],
             vertices: [far(left), far(right), left, right],

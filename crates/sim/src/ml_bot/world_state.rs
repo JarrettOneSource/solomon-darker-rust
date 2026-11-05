@@ -4,7 +4,7 @@ use crate::Vec2;
 use crate::combat::PlayerLifeState;
 use crate::economy::HubItemKind;
 use crate::float::hypot;
-use crate::loot::{NativeLootDropKind, NativeOrbKind};
+use crate::loot::{LootDropKind, OrbKind};
 use crate::profile::{WizardDiscipline, WizardElement};
 use crate::session::GameSession;
 
@@ -218,18 +218,14 @@ fn observe_pickups(session: &GameSession, position: Vec2) -> Vec<f32> {
                 direction.x,
                 direction.y,
                 unsigned(hypot(relative.x, relative.y), scales::RANGE),
-                f64::from(actor.kind == NativeLootDropKind::Gold),
+                f64::from(actor.kind == LootDropKind::Gold),
                 f64::from(
-                    actor.kind == NativeLootDropKind::Orb
-                        && actor.orb_kind == Some(NativeOrbKind::Health),
+                    actor.kind == LootDropKind::Orb && actor.orb_kind == Some(OrbKind::Health),
                 ),
-                f64::from(
-                    actor.kind == NativeLootDropKind::Orb
-                        && actor.orb_kind == Some(NativeOrbKind::Mana),
-                ),
-                f64::from(actor.kind == NativeLootDropKind::Sack),
-                f64::from(actor.kind == NativeLootDropKind::Bonus),
-                f64::from(actor.kind == NativeLootDropKind::Sack && actor.item.is_some()),
+                f64::from(actor.kind == LootDropKind::Orb && actor.orb_kind == Some(OrbKind::Mana)),
+                f64::from(actor.kind == LootDropKind::Sack),
+                f64::from(actor.kind == LootDropKind::Bonus),
+                f64::from(actor.kind == LootDropKind::Sack && actor.item.is_some()),
                 f64::from(kind == Some(HubItemKind::HealthPotion)),
                 f64::from(kind == Some(HubItemKind::ManaPotion)),
                 f64::from(kind == Some(HubItemKind::WizardChug)),

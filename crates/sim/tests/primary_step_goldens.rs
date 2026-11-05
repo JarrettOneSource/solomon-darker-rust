@@ -6,14 +6,14 @@ use solomon_sim::boneyard::world_light::{
 use solomon_sim::enemies::world::EnemyWorld;
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
-use solomon_sim::profile::primary::native_primary_skill_profile;
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
+use solomon_sim::profile::primary::primary_skill_profile;
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::spells::casting::PlayerWeaponKind;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::targeting::*;
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -36,12 +36,12 @@ fn elemental_casts_channels_release_and_terrain_replay_the_website() {
             "fire" => WizardElement::Fire,
             _ => WizardElement::Water,
         };
-        let book = NativeSkillBookState::new(element, WizardDiscipline::Arcane);
-        let profile = native_primary_skill_profile(&book, &NativeOffensiveSpellFactors::default());
+        let book = SkillBookState::new(element, WizardDiscipline::Arcane);
+        let profile = primary_skill_profile(&book, &OffensiveSpellFactors::default());
         let mut wizard = HubWizard::at(Vec2::new(100.0, 200.0));
         wizard.primary_cast.ether_blast_charge = case["charge"].as_f64().unwrap_or(0.0);
         let mut state = SpellState::default();
-        let mut rng = NativeRng::new(7);
+        let mut rng = Rng::new(7);
         let mut mana = case["mana"].as_f64().unwrap();
         let mut order = WorldPainterOrder { next_actor_ordinal: 49, next_transient_ordinal: 3 };
         let blocked = case["blocked"].as_bool().unwrap_or(false);
@@ -56,7 +56,7 @@ fn elemental_casts_channels_release_and_terrain_replay_the_website() {
             grid_position: None,
             id: "enemy:1".into(),
             kind: PrimarySpellTargetKind::Enemy,
-            native_priority: 0,
+            priority: 0,
             pending_remove: false,
             position: Vec2::new(450.0, -150.0),
             query_lane: PrimarySpellQueryLane::Grid,
@@ -79,7 +79,7 @@ fn elemental_casts_channels_release_and_terrain_replay_the_website() {
             let result = state.step_primary(
                 &mut wizard,
                 PrimarySpellCastAuthority {
-                    weapon_kind: Some(NativePlayerWeaponKind::Staff),
+                    weapon_kind: Some(PlayerWeaponKind::Staff),
                     alive: true,
                     available_mana: mana,
                     cast_progress_factor: 1.0,

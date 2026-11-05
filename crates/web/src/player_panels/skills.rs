@@ -6,26 +6,21 @@ pub(super) fn tooltip_layer_id() -> egui::LayerId {
 
 use super::chrome::PanelCanvas;
 use super::{PlayerPanelSnapshot, PlayerPanels, Target};
-use solomon_sim::belt::native_belt_owned_item;
+use solomon_sim::belt::belt_owned_item;
 use solomon_sim::float;
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
-pub(super) use solomon_sim::player_panels::item_text::hub_native_equipment_effect_text as equipment_effect_text;
+pub(super) use solomon_sim::player_panels::item_text::hub_equipment_effect_text as equipment_effect_text;
 use solomon_sim::player_panels::item_text::{
     HagathaTooltipOptions, HubTooltipOptions, economy_recipe_indices, hub_contextual_hover_rect,
     hub_hagatha_tooltip_lines, hub_item_tooltip_lines,
 };
-use solomon_sim::player_panels::native_skill_book_page_placements;
-use solomon_sim::player_panels::skill_hover::{
-    native_skill_book_tooltip_lines, native_skill_hover_box_layout,
-};
+use solomon_sim::player_panels::skill_book_page_placements;
+use solomon_sim::player_panels::skill_hover::{skill_book_tooltip_lines, skill_hover_box_layout};
 use solomon_sim::player_panels::skill_text::{
-    native_skill_page_display_name, native_skill_page_text_height, native_skill_page_tint,
-    native_skill_page_wrapped_lines,
+    skill_page_display_name, skill_page_text_height, skill_page_tint, skill_page_wrapped_lines,
 };
-use solomon_sim::profile::{
-    NATIVE_SKILL_CATALOG, native_skill_category, native_skill_root, native_weld_build,
-};
+use solomon_sim::profile::{SKILL_CATALOG, skill_category, skill_root, weld_build};
+use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 impl PlayerPanels {
     pub(super) fn draw_skills(
         &self,
@@ -64,9 +59,9 @@ impl PlayerPanels {
             c.tiles(&self.ui, 10, HudRect::new(0.0, y, 1600.0, 19.0), 1.0, 0xffffff)?;
         }
         c.frame(&self.ui, 4, HudRect::new(743.0, 34.0, 114.0, 34.0), 5.0, 0xffffff)?;
-        c.shadow_text(&NativeUiTextSpec {
+        c.shadow_text(&UiTextSpec {
             tint: 0x808080,
-            ..NativeUiTextSpec::new(NativeUiFontName::Menu, "SKILLS", 800.0, 60.0)
+            ..UiTextSpec::new(UiFontName::Menu, "SKILLS", 800.0, 60.0)
         });
         if !self.compact {
             c.native_button(
@@ -100,22 +95,19 @@ impl PlayerPanels {
             ("skills with a gold or green border", 701.0),
             ("can be dragged into your belt", 719.0),
         ] {
-            c.shadow_text(&NativeUiTextSpec {
+            c.shadow_text(&UiTextSpec {
                 tint: 0x808080,
                 alpha: 0.75,
-                ..NativeUiTextSpec::new(NativeUiFontName::Menu, line, 800.0, y)
+                ..UiTextSpec::new(UiFontName::Menu, line, 800.0, y)
             });
         }
-        for (page_index, page) in native_skill_book_page_placements(s.book).into_iter().enumerate()
-        {
+        for (page_index, page) in skill_book_page_placements(s.book).into_iter().enumerate() {
             let selection =
                 page.skills.iter().copied().find(|id| {
                     *id == s.book.primary_skill_id || s.concentrations.contains(&Some(*id))
                 });
             let selected = selection.is_some();
-            let tint = native_skill_page_tint(
-                native_skill_root(page.root_skill_id).expect("native page root"),
-            );
+            let tint = skill_page_tint(skill_root(page.root_skill_id).expect("native page root"));
             let r = HudRect::new(page.x, page.y, page.width, 300.0);
             c.fill(
                 HudRect::new(page.x + 12.0, page.y + 12.0, page.width - 24.0, 276.0),
@@ -127,14 +119,9 @@ impl PlayerPanels {
                 c.additive().faded(0.5).frame(&self.skills, 0, r, 30.0, 0xffffff)?;
             }
             for (index, id) in page.skills.iter().copied().enumerate() {
-                let def = &NATIVE_SKILL_CATALOG[id];
+                let def = &SKILL_CATALOG[id];
                 let weld = if id == 52 {
-                    Some(
-                        s.book
-                            .weld_build_id
-                            .and_then(native_weld_build)
-                            .expect("native welding build"),
-                    )
+                    Some(s.book.weld_build_id.and_then(weld_build).expect("native welding build"))
                 } else {
                     None
                 };
@@ -152,8 +139,8 @@ impl PlayerPanels {
                         [x, y],
                         [1.15, 1.15],
                         [
-                            native_skill_page_tint(build.color_roots[0]),
-                            native_skill_page_tint(build.color_roots[1]),
+                            skill_page_tint(build.color_roots[0]),
+                            skill_page_tint(build.color_roots[1]),
                         ],
                     )?;
                 } else {
@@ -163,10 +150,10 @@ impl PlayerPanels {
                         [x, y],
                         [1.15, 1.15],
                         0.0,
-                        native_skill_page_tint(native_skill_root(id).expect("native skill root")),
+                        skill_page_tint(skill_root(id).expect("native skill root")),
                     )?;
                 }
-                let category = native_skill_category(id).expect("native category");
+                let category = skill_category(id).expect("native category");
                 let selected = selection == Some(id);
                 c.art(
                     &self.skills,
@@ -192,10 +179,10 @@ impl PlayerPanels {
                     target,
                 );
                 if selected {
-                    c.shadow_text(&NativeUiTextSpec {
+                    c.shadow_text(&UiTextSpec {
                         tint: 0x97c797,
-                        ..NativeUiTextSpec::new(
-                            NativeUiFontName::Body,
+                        ..UiTextSpec::new(
+                            UiFontName::Body,
                             if id == s.book.primary_skill_id { "casting" } else { "concentrate" },
                             x,
                             y - 45.0,
@@ -203,29 +190,24 @@ impl PlayerPanels {
                     });
                 }
                 let name = weld.map_or(def.name, |build| build.synthetic_name);
-                let title = native_skill_page_display_name(name, s.book.effective_ranks[id]);
-                let names = native_skill_page_wrapped_lines(&title);
+                let title = skill_page_display_name(name, s.book.effective_ranks[id]);
+                let names = skill_page_wrapped_lines(&title);
                 let name_y = page.y + 150.0;
-                c.shadow_text(&NativeUiTextSpec::new(
-                    NativeUiFontName::Medium,
-                    &names.join("\n"),
-                    x,
-                    name_y,
-                ));
-                c.shadow_text(&NativeUiTextSpec::new(
-                    NativeUiFontName::SkillUppercase,
+                c.shadow_text(&UiTextSpec::new(UiFontName::Medium, &names.join("\n"), x, name_y));
+                c.shadow_text(&UiTextSpec::new(
+                    UiFontName::SkillUppercase,
                     &def.family.to_uppercase(),
                     x,
-                    name_y + native_skill_page_text_height(&names),
+                    name_y + skill_page_text_height(&names),
                 ));
-                let description = native_skill_page_wrapped_lines(
+                let description = skill_page_wrapped_lines(
                     weld.map_or(def.quick_description, |build| build.pair_description),
                 );
-                c.text(&NativeUiTextSpec::new(
-                    NativeUiFontName::Medium,
+                c.text(&UiTextSpec::new(
+                    UiFontName::Medium,
                     &description.join("\n"),
                     x,
-                    page.y + 230.0 - native_skill_page_text_height(&description) / 2.0,
+                    page.y + 230.0 - skill_page_text_height(&description) / 2.0,
                 ));
                 let footer = match category {
                     1 => "primary cast",
@@ -233,12 +215,7 @@ impl PlayerPanels {
                     _ => "",
                 };
                 if !footer.is_empty() {
-                    c.shadow_text(&NativeUiTextSpec::new(
-                        NativeUiFontName::Body,
-                        footer,
-                        x,
-                        page.y + 280.0,
-                    ));
+                    c.shadow_text(&UiTextSpec::new(UiFontName::Body, footer, x, page.y + 280.0));
                 }
             }
         }
@@ -271,12 +248,12 @@ impl PlayerPanels {
                     source.center().x as f64 - c.origin.x as f64,
                     source.center().y as f64 - c.origin.y as f64,
                 );
-                let lines = native_skill_book_tooltip_lines(
+                let lines = skill_book_tooltip_lines(
                     id,
                     snapshot.book.permanent_ranks[id],
                     snapshot.book.effective_ranks[id],
                 );
-                let layout = native_skill_hover_box_layout(&lines, source);
+                let layout = skill_hover_box_layout(&lines, source);
                 let (origin, scale, painter) = self.tooltip_placement(c, layout.rect, source, 50.0);
                 crate::ui::skill_hover::paint_skill_hover_box(
                     c.frame, &painter, &layout, id, origin, scale,
@@ -338,7 +315,7 @@ impl PlayerPanels {
             }
             _ => {
                 let item = match target {
-                    Target::Item(id) => native_belt_owned_item(snapshot.economy, id),
+                    Target::Item(id) => belt_owned_item(snapshot.economy, id),
                     Target::Equipment(slot) => snapshot.economy.equipment.at(slot).as_ref(),
                     _ => service_item.as_ref().map(|(item, _)| item),
                 };

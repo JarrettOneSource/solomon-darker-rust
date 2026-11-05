@@ -13,7 +13,7 @@ use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::profile::{WizardDiscipline, WizardElement};
-use crate::rng::NativeRng;
+use crate::rng::Rng;
 
 pub const CREATE_ENTRY_ANIMATION_MS: f64 = 2330.0;
 pub const CREATE_SELECTION_ANIMATION_MS: f64 = 2630.0;
@@ -73,13 +73,13 @@ pub struct TitleState {
     pub cloak_phase: f64,
     pub ticks: u64,
     widths: [f64; 9],
-    random: NativeRng,
+    random: Rng,
 }
 
 impl TitleState {
     #[must_use]
     pub fn new(widths: [f64; 9]) -> Self {
-        let mut random = NativeRng::new(0x5d1f_2a93);
+        let mut random = Rng::new(0x5d1f_2a93);
         let rows = [(552.0, 0.0, 0.3, 0.05), (712.0, 0.5, 0.7, 0.1), (900.0, 1.0, 1.1, 0.2)].map(
             |(baseline, gray, scale, speed_per_tick)| {
                 let mut row = TitleGraveRow {
@@ -110,7 +110,7 @@ impl TitleState {
 fn step_title_grave_row(
     row: &mut TitleGraveRow,
     widths: &[f64; 9],
-    random: &mut NativeRng,
+    random: &mut Rng,
     seed: bool,
 ) -> bool {
     let advance =
@@ -125,7 +125,7 @@ fn step_title_grave_row(
             < 1700.0
     });
     if spawn {
-        // The title helper scales a double directly; NativeRng's float API would add
+        // The title helper scales a double directly; Rng's float API would add
         // single-precision stores that this presentation reference does not perform.
         let magnitude = f64::from(random.draw_integer(100_001)) / 100_000.0 * 10.0;
         let rotation = if random.draw_integer(2) == 1 { -magnitude } else { magnitude };
@@ -159,7 +159,7 @@ pub fn title_backdrop_offsets_at(seconds: f64) -> [f64; 4] {
 }
 
 #[must_use]
-pub fn native_pause_menu_reveal(opening: bool, elapsed_ms: f64) -> f64 {
+pub fn pause_menu_reveal(opening: bool, elapsed_ms: f64) -> f64 {
     let count = (elapsed_ms.max(0.0) / 10.0).floor() as usize;
     let mut reveal = if opening { 0.0 } else { 1.0 };
     for _ in 0..count.min(if opening { 29 } else { 20 }) {
@@ -180,7 +180,7 @@ pub fn native_pause_menu_reveal(opening: bool, elapsed_ms: f64) -> f64 {
 pub fn create_entry_motion_at(elapsed_ms: f64) -> CreateMotion {
     let elapsed = elapsed_ms.max(0.0);
     let (left_impulse, left_offset, left_pose) =
-        native_open_state_at(elapsed, Vec2::new(-50.0, 200.0), 120, 0x12_0e17);
+        open_state_at(elapsed, Vec2::new(-50.0, 200.0), 120, 0x12_0e17);
     CreateMotion {
         disciplines_visible: false,
         elements_visible: elapsed >= 1340.0,
@@ -198,7 +198,7 @@ pub fn create_entry_motion_at(elapsed_ms: f64) -> CreateMotion {
 pub fn create_selection_motion_at(elapsed_ms: f64) -> CreateMotion {
     let elapsed = elapsed_ms.max(0.0);
     let (right_impulse, right_offset, right_pose) =
-        native_open_state_at(elapsed - 980.0, Vec2::new(50.0, 300.0), 51, 0x05_1ec7);
+        open_state_at(elapsed - 980.0, Vec2::new(50.0, 300.0), 51, 0x05_1ec7);
     CreateMotion {
         disciplines_visible: elapsed >= 1640.0,
         elements_visible: false,
@@ -306,7 +306,7 @@ fn shorten_and_damp(offset: Vec2) -> Vec2 {
     )
 }
 
-fn native_open_state_at(
+fn open_state_at(
     elapsed_ms: f64,
     initial_offset: Vec2,
     initial_timer: i32,

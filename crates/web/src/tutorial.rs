@@ -3,7 +3,7 @@
 mod callouts;
 use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
 use callouts::{TutorialTargets, modal_plans};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
+use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 use solomon_sim::{Vec2, hud::HudRect};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TutorialPreludeView {
@@ -321,15 +321,11 @@ impl TutorialUi {
         }
         for plan in text {
             for (tint, offset) in [(0, 2.25 * plan.scale), (0xd9ba70, 0.0)] {
-                let spec = NativeUiTextSpec {
+                let spec = UiTextSpec {
                     scale: plan.scale,
                     tint,
-                    ..NativeUiTextSpec::new(
-                        if plan.heading {
-                            NativeUiFontName::Heading
-                        } else {
-                            NativeUiFontName::Menu
-                        },
+                    ..UiTextSpec::new(
+                        if plan.heading { UiFontName::Heading } else { UiFontName::Menu },
                         &plan.text,
                         plan.center.x + offset,
                         plan.center.y + offset,
@@ -345,8 +341,7 @@ impl TutorialUi {
                             .glyphs
                             .iter()
                             .map(|glyph| {
-                                let ink =
-                                    solomon_sim::native_ui_text::native_ui_glyph_ink_bounds(glyph);
+                                let ink = solomon_sim::ui_text::ui_glyph_ink_bounds(glyph);
                                 egui::Rect::from_min_size(
                                     egui::pos2(ink.left as f32, ink.top as f32),
                                     egui::vec2(ink.width as f32, ink.height as f32),
@@ -372,17 +367,17 @@ impl TutorialUi {
                     (geometry.frame.height * scale) as f32,
                 ),
             );
-            self.atlas.paint_native_frame(frame, &painter, 4, r, true, egui::Color32::WHITE)?;
+            self.atlas.paint_stock_frame(frame, &painter, 4, r, true, egui::Color32::WHITE)?;
             for line in &geometry.lines {
                 native_text(
                     frame,
                     &painter,
-                    &NativeUiTextSpec {
-                        align: solomon_sim::native_ui_text::NativeUiTextAlign::Left,
+                    &UiTextSpec {
+                        align: solomon_sim::ui_text::UiTextAlign::Left,
                         tint: 0xd9ba70,
                         scale,
-                        ..NativeUiTextSpec::new(
-                            NativeUiFontName::Menu,
+                        ..UiTextSpec::new(
+                            UiFontName::Menu,
                             &line.text,
                             line.x * scale,
                             line.y * scale,

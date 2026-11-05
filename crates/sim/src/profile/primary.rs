@@ -7,22 +7,18 @@
 use crate::float::fround;
 
 use super::offensive::{
-    NativeOffensiveSpellFactors, resolve_native_skill_damage_value,
-    resolve_native_skill_mana_cost_value,
+    OffensiveSpellFactors, resolve_skill_damage_value, resolve_skill_mana_cost_value,
 };
-use super::weld::{
-    NativeWeldCastKind, NativeWeldPrimaryVector, native_weld_primary_vector_with_stat_book,
-};
+use super::weld::{WeldCastKind, WeldPrimaryVector, weld_primary_vector_with_stat_book};
 use super::{
-    NATIVE_SKILL_CATALOG, NativeSkillBookState, PlayerStatBookComponent, SPELL_WELDING_SKILL_ID,
-    native_weld_build,
+    PlayerStatBookComponent, SKILL_CATALOG, SPELL_WELDING_SKILL_ID, SkillBookState, weld_build,
 };
 
-pub const NATIVE_PRIMARY_EARTH_INITIAL_CHARGE: f64 = 0.18_f32 as f64;
+pub const PRIMARY_EARTH_INITIAL_CHARGE: f64 = 0.18_f32 as f64;
 
 /// `native-skill-colors.ts`: unrounded source channels. Different consumers apply
 /// their own authored luminance mix or float32 narrowing before making tint bytes.
-pub const NATIVE_SKILL_ROOT_COLORS: [[f64; 3]; 8] = [
+pub const SKILL_ROOT_COLORS: [[f64; 3]; 8] = [
     [1.0, 0.1, 1.0],
     [1.0, 0.35, 0.1],
     [0.1, 1.0, 1.0],
@@ -36,7 +32,7 @@ pub const NATIVE_SKILL_ROOT_COLORS: [[f64; 3]; 8] = [
 /// `native-skill-colors.ts`: Spider's captured wizard outline uses the selected spell
 /// color, independent of clothing dye. Bytes retain the source float32 truncation.
 #[must_use]
-pub fn native_primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) -> u32 {
+pub fn primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) -> u32 {
     const WELD_COLORS: [[f64; 3]; 15] = [
         [1.0, 0.1, 0.5],
         [1.0, 0.5, 1.0],
@@ -54,7 +50,7 @@ pub fn native_primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) ->
         [0.1, 1.0, 1.0],
         [0.1, 1.0, 0.1],
     ];
-    let root = if skill_id < 8 { Some(skill_id) } else { super::native_skill_root(skill_id) };
+    let root = if skill_id < 8 { Some(skill_id) } else { super::skill_root(skill_id) };
     let weld = if skill_id == SPELL_WELDING_SKILL_ID {
         weld_build_id
             .and_then(|build| build.checked_sub(1000))
@@ -62,8 +58,7 @@ pub fn native_primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) ->
     } else {
         None
     };
-    let Some(color) = weld.or_else(|| root.and_then(|root| NATIVE_SKILL_ROOT_COLORS.get(root)))
-    else {
+    let Some(color) = weld.or_else(|| root.and_then(|root| SKILL_ROOT_COLORS.get(root))) else {
         return 0xffffff;
     };
     let channel = |value| (fround(value) * 255.0).trunc() as u32;
@@ -71,7 +66,7 @@ pub fn native_primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) ->
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativePrimarySkillProfileBase {
+pub struct PrimarySkillProfileBase {
     pub damage_maximum: f64,
     pub damage_minimum: f64,
     pub damage_roll_count: f64,
@@ -81,8 +76,8 @@ pub struct NativePrimarySkillProfileBase {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEtherPrimarySkillProfile {
-    pub common: NativePrimarySkillProfileBase,
+pub struct EtherPrimarySkillProfile {
+    pub common: PrimarySkillProfileBase,
     pub blast_charge_capacity: u32,
     pub damage_retention: f64,
     pub pierces: u32,
@@ -94,26 +89,26 @@ pub struct NativeEtherPrimarySkillProfile {
 /// Fire selects Imps before Immolate when both upgrades are present.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeSpentEmber {
+pub enum SpentEmber {
     None,
     Immolate { damage: f64 },
     Imp { damage: f64, lifetime_ticks: u64 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFirePrimarySkillProfile {
-    pub common: NativePrimarySkillProfileBase,
+pub struct FirePrimarySkillProfile {
+    pub common: PrimarySkillProfileBase,
     pub burn_damage: f64,
     pub ember_damage: f64,
     pub ember_fragments: u32,
     pub explode_damage: f64,
     pub explode_radius: f64,
-    pub spent_ember: NativeSpentEmber,
+    pub spent_ember: SpentEmber,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeAirPrimarySkillProfile {
-    pub common: NativePrimarySkillProfileBase,
+pub struct AirPrimarySkillProfile {
+    pub common: PrimarySkillProfileBase,
     pub arc_count: u32,
     pub disintegrate_chance: f64,
     pub hurricane_damage_maximum: f64,
@@ -122,8 +117,8 @@ pub struct NativeAirPrimarySkillProfile {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWaterPrimarySkillProfile {
-    pub common: NativePrimarySkillProfileBase,
+pub struct WaterPrimarySkillProfile {
+    pub common: PrimarySkillProfileBase,
     pub armor_maximum: f64,
     pub armor_per_second: f64,
     pub aura_radius_scale: f64,
@@ -144,8 +139,8 @@ pub struct NativeWaterPrimarySkillProfile {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEarthPrimarySkillProfile {
-    pub common: NativePrimarySkillProfileBase,
+pub struct EarthPrimarySkillProfile {
+    pub common: PrimarySkillProfileBase,
     pub growth_factor: f64,
     pub maximum_charge: f64,
     pub rock_surge_chance: f64,
@@ -154,27 +149,27 @@ pub struct NativeEarthPrimarySkillProfile {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldPrimarySkillProfile {
-    pub common: NativePrimarySkillProfileBase,
+pub struct WeldPrimarySkillProfile {
+    pub common: PrimarySkillProfileBase,
     pub build_id: u32,
-    pub cast_kind: NativeWeldCastKind,
+    pub cast_kind: WeldCastKind,
     pub damage_factor: f64,
-    pub vector: NativeWeldPrimaryVector,
+    pub vector: WeldPrimaryVector,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum NativePrimarySkillProfile {
-    Ether(NativeEtherPrimarySkillProfile),
-    Fire(NativeFirePrimarySkillProfile),
-    Air(NativeAirPrimarySkillProfile),
-    Water(NativeWaterPrimarySkillProfile),
-    Earth(NativeEarthPrimarySkillProfile),
-    Weld(NativeWeldPrimarySkillProfile),
+pub enum PrimarySkillProfile {
+    Ether(EtherPrimarySkillProfile),
+    Fire(FirePrimarySkillProfile),
+    Air(AirPrimarySkillProfile),
+    Water(WaterPrimarySkillProfile),
+    Earth(EarthPrimarySkillProfile),
+    Weld(WeldPrimarySkillProfile),
 }
 
-impl NativePrimarySkillProfile {
+impl PrimarySkillProfile {
     #[must_use]
-    pub fn common(&self) -> &NativePrimarySkillProfileBase {
+    pub fn common(&self) -> &PrimarySkillProfileBase {
         match self {
             Self::Ether(profile) => &profile.common,
             Self::Fire(profile) => &profile.common,
@@ -187,39 +182,39 @@ impl NativePrimarySkillProfile {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativePrimaryCastMode {
+pub enum PrimaryCastMode {
     Continuous,
     OneShot,
 }
 
 #[must_use]
-pub fn native_primary_cast_mode(skill_id: usize) -> NativePrimaryCastMode {
+pub fn primary_cast_mode(skill_id: usize) -> PrimaryCastMode {
     match skill_id {
-        8 | 16 => NativePrimaryCastMode::OneShot,
-        24 | 32 | 40 => NativePrimaryCastMode::Continuous,
+        8 | 16 => PrimaryCastMode::OneShot,
+        24 | 32 | 40 => PrimaryCastMode::Continuous,
         _ => panic!("skill {skill_id} is not an elemental primary"),
     }
 }
 
 /// Resolves the complete immutable payload used by one cast or channel.
 #[must_use]
-pub fn native_primary_skill_profile(
-    book: &NativeSkillBookState,
-    factors: &NativeOffensiveSpellFactors,
-) -> NativePrimarySkillProfile {
-    native_primary_skill_profile_with_stat_book(book, &PlayerStatBookComponent::default(), factors)
+pub fn primary_skill_profile(
+    book: &SkillBookState,
+    factors: &OffensiveSpellFactors,
+) -> PrimarySkillProfile {
+    primary_skill_profile_with_stat_book(book, &PlayerStatBookComponent::default(), factors)
 }
 
 #[must_use]
-pub fn native_primary_skill_profile_with_stat_book(
-    book: &NativeSkillBookState,
+pub fn primary_skill_profile_with_stat_book(
+    book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
-    factors: &NativeOffensiveSpellFactors,
-) -> NativePrimarySkillProfile {
+    factors: &OffensiveSpellFactors,
+) -> PrimarySkillProfile {
     factors.validate();
     let skill_id = book.primary_skill_id;
     if skill_id == SPELL_WELDING_SKILL_ID {
-        return NativePrimarySkillProfile::Weld(weld_profile(book, stat_book, factors));
+        return PrimarySkillProfile::Weld(weld_profile(book, stat_book, factors));
     }
     assert!(
         [8, 16, 24, 32, 40].contains(&skill_id),
@@ -229,11 +224,11 @@ pub fn native_primary_skill_profile_with_stat_book(
     assert!(rank > 0, "primary skill {skill_id} must be learned");
     let raw_minimum = damage_value(stat_book, skill_id, rank, false);
     let raw_maximum = damage_value(stat_book, skill_id, rank, true);
-    let common = NativePrimarySkillProfileBase {
-        damage_minimum: resolve_native_skill_damage_value(skill_id, raw_minimum, factors),
-        damage_maximum: resolve_native_skill_damage_value(skill_id, raw_maximum, factors),
+    let common = PrimarySkillProfileBase {
+        damage_minimum: resolve_skill_damage_value(skill_id, raw_minimum, factors),
+        damage_maximum: resolve_skill_damage_value(skill_id, raw_maximum, factors),
         damage_roll_count: raw_maximum - raw_minimum + 1.0,
-        mana_cost: resolve_native_skill_mana_cost_value(
+        mana_cost: resolve_skill_mana_cost_value(
             skill_id,
             primary_mana_cost(stat_book, book, skill_id),
             factors,
@@ -250,7 +245,7 @@ pub fn native_primary_skill_profile_with_stat_book(
             } else {
                 1.0
             };
-            NativePrimarySkillProfile::Ether(NativeEtherPrimarySkillProfile {
+            PrimarySkillProfile::Ether(EtherPrimarySkillProfile {
                 common,
                 blast_charge_capacity: ranked_or(stat_book, book, 14, "mCharges", 0.0).round()
                     as u32,
@@ -263,20 +258,20 @@ pub fn native_primary_skill_profile_with_stat_book(
         }
         16 => {
             let spent_ember = if book.effective_ranks[19] > 0 {
-                NativeSpentEmber::Imp {
+                SpentEmber::Imp {
                     damage: ranked(stat_book, 19, "mDamage", book.effective_ranks[19])
                         * factors.damage,
                     lifetime_ticks: 300,
                 }
             } else if book.effective_ranks[20] > 0 {
-                NativeSpentEmber::Immolate {
+                SpentEmber::Immolate {
                     damage: ranked(stat_book, 20, "mDamage", book.effective_ranks[20])
                         * factors.damage,
                 }
             } else {
-                NativeSpentEmber::None
+                SpentEmber::None
             };
-            NativePrimarySkillProfile::Fire(NativeFirePrimarySkillProfile {
+            PrimarySkillProfile::Fire(FirePrimarySkillProfile {
                 common,
                 burn_damage: ranked_or(stat_book, book, 22, "mDamage", 0.0) * factors.damage,
                 ember_damage: ranked_or(stat_book, book, 17, "mDamage", 0.0) * factors.damage,
@@ -286,7 +281,7 @@ pub fn native_primary_skill_profile_with_stat_book(
                 spent_ember,
             })
         }
-        24 => NativePrimarySkillProfile::Air(NativeAirPrimarySkillProfile {
+        24 => PrimarySkillProfile::Air(AirPrimarySkillProfile {
             common,
             arc_count: ranked_or(stat_book, book, 25, "mArcs", 0.0).round() as u32,
             disintegrate_chance: ranked_or(stat_book, book, 31, "mChance", 0.0),
@@ -306,11 +301,11 @@ pub fn native_primary_skill_profile_with_stat_book(
             let aura_slow_factor =
                 fround(1.0 - ranked_or(stat_book, book, 37, "mPercent", 0.0) / 100.0);
             let hail_chance = ranked_or(stat_book, book, 38, "mToHit", 0.0);
-            NativePrimarySkillProfile::Water(NativeWaterPrimarySkillProfile {
+            PrimarySkillProfile::Water(WaterPrimarySkillProfile {
                 common,
                 armor_maximum: ranked_or(stat_book, book, 36, "mMaxArmor", 0.0),
                 armor_per_second: ranked_or(stat_book, book, 36, "mArmorPlus", 0.0),
-                aura_radius_scale: crate::cold_aura::native_cold_aura_radius_scale(ranked_or(
+                aura_radius_scale: crate::cold_aura::cold_aura_radius_scale(ranked_or(
                     stat_book, book, 37, "mRadius", 0.0,
                 )),
                 aura_movement_factor: fround(aura_slow_factor / slowdown_scale),
@@ -337,7 +332,7 @@ pub fn native_primary_skill_profile_with_stat_book(
             } else {
                 1.0
             };
-            NativePrimarySkillProfile::Earth(NativeEarthPrimarySkillProfile {
+            PrimarySkillProfile::Earth(EarthPrimarySkillProfile {
                 common,
                 growth_factor: 1.0 + ranked_or(stat_book, book, 42, "mSpeedUp", 0.0) / 100.0,
                 maximum_charge: fround(1.0 + ranked_or(stat_book, book, 47, "mSize", 0.0) / 100.0),
@@ -352,32 +347,32 @@ pub fn native_primary_skill_profile_with_stat_book(
 }
 
 fn weld_profile(
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
-    factors: &NativeOffensiveSpellFactors,
-) -> NativeWeldPrimarySkillProfile {
+    factors: &OffensiveSpellFactors,
+) -> WeldPrimarySkillProfile {
     let build_id = book.weld_build_id.expect("Spell Welding has an active native build");
     let weld_effect = factors.equipment.as_ref().map_or(1.0, |equipment| equipment.weld_effect);
-    let vector = native_weld_primary_vector_with_stat_book(book, stat_book, build_id, weld_effect);
+    let vector = weld_primary_vector_with_stat_book(book, stat_book, build_id, weld_effect);
     let rank = book.effective_ranks[SPELL_WELDING_SKILL_ID];
     assert!(rank > 0, "Spell Welding must be learned");
     let maximum_index = if matches!(build_id, 1000 | 1001 | 1002 | 1007) { 1 } else { 0 };
     let mana_index =
-        if vector.cast_kind == NativeWeldCastKind::OneShot && build_id != 1009 { 2 } else { 1 };
-    NativeWeldPrimarySkillProfile {
-        common: NativePrimarySkillProfileBase {
-            damage_minimum: resolve_native_skill_damage_value(
+        if vector.cast_kind == WeldCastKind::OneShot && build_id != 1009 { 2 } else { 1 };
+    WeldPrimarySkillProfile {
+        common: PrimarySkillProfileBase {
+            damage_minimum: resolve_skill_damage_value(
                 SPELL_WELDING_SKILL_ID,
                 vector.values[0],
                 factors,
             ),
-            damage_maximum: resolve_native_skill_damage_value(
+            damage_maximum: resolve_skill_damage_value(
                 SPELL_WELDING_SKILL_ID,
                 vector.values[maximum_index],
                 factors,
             ),
             damage_roll_count: 1.0,
-            mana_cost: resolve_native_skill_mana_cost_value(
+            mana_cost: resolve_skill_mana_cost_value(
                 SPELL_WELDING_SKILL_ID,
                 vector.values[mana_index],
                 factors,
@@ -393,7 +388,7 @@ fn weld_profile(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativePrimarySpellDamageUnit {
+pub enum PrimarySpellDamageUnit {
     Bolt,
     Boulder,
     Impact,
@@ -402,47 +397,47 @@ pub enum NativePrimarySpellDamageUnit {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativePrimarySpellManaUnit {
+pub enum PrimarySpellManaUnit {
     Cast,
     Second,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativePrimarySpellDescriptor {
+pub struct PrimarySpellDescriptor {
     pub damage_range: bool,
-    pub damage_unit: NativePrimarySpellDamageUnit,
-    pub mana_unit: NativePrimarySpellManaUnit,
+    pub damage_unit: PrimarySpellDamageUnit,
+    pub mana_unit: PrimarySpellManaUnit,
     pub name: &'static str,
 }
 
 /// Inventory's authored spell name and units, including all ten welded builds.
 #[must_use]
-pub fn native_primary_spell_descriptor(
+pub fn primary_spell_descriptor(
     selected_primary_skill_id: usize,
     weld_build_id: Option<u32>,
-) -> NativePrimarySpellDescriptor {
-    use NativePrimarySpellDamageUnit::{Bolt, Boulder, Impact, Rock, Second};
-    use NativePrimarySpellManaUnit::Cast;
+) -> PrimarySpellDescriptor {
+    use PrimarySpellDamageUnit::{Bolt, Boulder, Impact, Rock, Second};
+    use PrimarySpellManaUnit::Cast;
 
     let (name, damage_range, damage_unit, mana_unit) = match selected_primary_skill_id {
-        8 => (NATIVE_SKILL_CATALOG[8].name, true, Bolt, Cast),
-        16 => (NATIVE_SKILL_CATALOG[16].name, false, Bolt, Cast),
+        8 => (SKILL_CATALOG[8].name, true, Bolt, Cast),
+        16 => (SKILL_CATALOG[16].name, false, Bolt, Cast),
         24 | 32 => (
-            NATIVE_SKILL_CATALOG[selected_primary_skill_id].name,
+            SKILL_CATALOG[selected_primary_skill_id].name,
             false,
             Second,
-            NativePrimarySpellManaUnit::Second,
+            PrimarySpellManaUnit::Second,
         ),
-        40 => (NATIVE_SKILL_CATALOG[40].name, true, Boulder, NativePrimarySpellManaUnit::Second),
+        40 => (SKILL_CATALOG[40].name, true, Boulder, PrimarySpellManaUnit::Second),
         SPELL_WELDING_SKILL_ID => {
             let id = weld_build_id.expect("selected Spell Welding has a native build");
-            let build = native_weld_build(id).expect("selected weld build is native");
+            let build = weld_build(id).expect("selected weld build is native");
             let (damage_range, damage_unit, mana_unit) = match id {
                 1000..=1002 => (true, Bolt, Cast),
-                1003..=1005 => (false, Second, NativePrimarySpellManaUnit::Second),
-                1006 => (true, Boulder, NativePrimarySpellManaUnit::Second),
-                1007 => (true, Impact, NativePrimarySpellManaUnit::Second),
-                1008 => (false, Rock, NativePrimarySpellManaUnit::Second),
+                1003..=1005 => (false, Second, PrimarySpellManaUnit::Second),
+                1006 => (true, Boulder, PrimarySpellManaUnit::Second),
+                1007 => (true, Impact, PrimarySpellManaUnit::Second),
+                1008 => (false, Rock, PrimarySpellManaUnit::Second),
                 1009 => (false, Bolt, Cast),
                 _ => unreachable!("weld build was checked above"),
             };
@@ -450,11 +445,11 @@ pub fn native_primary_spell_descriptor(
         }
         _ => panic!("skill {selected_primary_skill_id} is not a native selected primary"),
     };
-    NativePrimarySpellDescriptor { damage_range, damage_unit, mana_unit, name }
+    PrimarySpellDescriptor { damage_range, damage_unit, mana_unit, name }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativePrimarySpellSummary {
+pub struct PrimarySpellSummary {
     pub damage_maximum: f64,
     pub damage_minimum: f64,
     pub mana_cost: f64,
@@ -462,50 +457,46 @@ pub struct NativePrimarySpellSummary {
 
 /// Boulder's lower displayed damage uses its initial charge, not its fully charged payload.
 #[must_use]
-pub fn native_primary_spell_summary(
-    book: &NativeSkillBookState,
-    factors: &NativeOffensiveSpellFactors,
-) -> NativePrimarySpellSummary {
-    native_primary_spell_summary_with_stat_book(book, &PlayerStatBookComponent::default(), factors)
+pub fn primary_spell_summary(
+    book: &SkillBookState,
+    factors: &OffensiveSpellFactors,
+) -> PrimarySpellSummary {
+    primary_spell_summary_with_stat_book(book, &PlayerStatBookComponent::default(), factors)
 }
 
 #[must_use]
-pub fn native_primary_spell_summary_with_stat_book(
-    book: &NativeSkillBookState,
+pub fn primary_spell_summary_with_stat_book(
+    book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
-    factors: &NativeOffensiveSpellFactors,
-) -> NativePrimarySpellSummary {
-    let profile = native_primary_skill_profile_with_stat_book(book, stat_book, factors);
+    factors: &OffensiveSpellFactors,
+) -> PrimarySpellSummary {
+    let profile = primary_skill_profile_with_stat_book(book, stat_book, factors);
     let common = profile.common();
     let damage_minimum = match &profile {
-        NativePrimarySkillProfile::Earth(_) => {
+        PrimarySkillProfile::Earth(_) => {
             boulder_display_minimum(damage_value(stat_book, 40, common.rank, false), 40, factors)
         }
-        NativePrimarySkillProfile::Weld(weld) if weld.build_id == 1006 => {
+        PrimarySkillProfile::Weld(weld) if weld.build_id == 1006 => {
             boulder_display_minimum(weld.vector.values[0], SPELL_WELDING_SKILL_ID, factors)
         }
         _ => common.damage_minimum,
     };
-    NativePrimarySpellSummary {
+    PrimarySpellSummary {
         damage_minimum,
         damage_maximum: common.damage_maximum,
         mana_cost: common.mana_cost,
     }
 }
 
-fn boulder_display_minimum(
-    damage: f64,
-    skill_id: usize,
-    factors: &NativeOffensiveSpellFactors,
-) -> f64 {
-    let charge = NATIVE_PRIMARY_EARTH_INITIAL_CHARGE;
+fn boulder_display_minimum(damage: f64, skill_id: usize, factors: &OffensiveSpellFactors) -> f64 {
+    let charge = PRIMARY_EARTH_INITIAL_CHARGE;
     let initial_damage = fround(damage * charge * charge);
-    resolve_native_skill_damage_value(skill_id, initial_damage, factors).max(1.0)
+    resolve_skill_damage_value(skill_id, initial_damage, factors).max(1.0)
 }
 
 fn primary_mana_cost(
     stat_book: &PlayerStatBookComponent,
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     skill_id: usize,
 ) -> f64 {
     let upgrades: &[usize] = match skill_id {
@@ -543,7 +534,7 @@ fn damage_value(
 
 fn ranked_or(
     stat_book: &PlayerStatBookComponent,
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     skill_id: usize,
     property: &str,
     fallback: f64,

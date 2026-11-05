@@ -1,24 +1,24 @@
 //! Steam channel particles and private detonation fans from `native-weld-steam.ts`.
 
-use super::model::{NativeWeldActorBase, NativeWeldActorBirth};
+use super::model::{WeldActorBase, WeldActorBirth};
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
-use crate::spells::fire::NativeFireExplosionState;
+use crate::spells::fire::FireExplosionState;
 use crate::spells::model::FireExplosionPresentation;
 use crate::spells::targeting::direction_from_heading;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeWeldSteamVariant {
+pub enum WeldSteamVariant {
     Normal,
     Over,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldSteamActorState {
-    pub common: NativeWeldActorBase,
+pub struct WeldSteamActorState {
+    pub common: WeldActorBase,
     pub alpha_multiplier: f64,
     pub blue: f64,
     pub color_rise: f64,
@@ -36,11 +36,11 @@ pub struct NativeWeldSteamActorState {
     pub stretch: f64,
     pub terminal_position: Vec2,
     pub tint_fade: f64,
-    pub variant: NativeWeldSteamVariant,
+    pub variant: WeldSteamVariant,
     pub velocity: Vec2,
 }
 
-struct NativeWeldSteamConstructorProgram {
+struct WeldSteamConstructorProgram {
     color_rise: f64,
     contact_ticks_remaining: i64,
     life: f64,
@@ -50,8 +50,8 @@ struct NativeWeldSteamConstructorProgram {
     tint_fade: f64,
 }
 
-pub struct SpawnNativeWeldSteamInput<'a> {
-    pub birth: NativeWeldActorBirth<'a>,
+pub struct SpawnWeldSteamInput<'a> {
+    pub birth: WeldActorBirth<'a>,
     pub damage: f64,
     pub query_origin: Vec2,
     pub underpowered: bool,
@@ -59,10 +59,10 @@ pub struct SpawnNativeWeldSteamInput<'a> {
 }
 
 #[must_use]
-pub fn spawn_native_weld_steam_actor(
-    input: SpawnNativeWeldSteamInput<'_>,
-    rng: &mut NativeRng,
-) -> Option<NativeWeldSteamActorState> {
+pub fn spawn_weld_steam_actor(
+    input: SpawnWeldSteamInput<'_>,
+    rng: &mut Rng,
+) -> Option<WeldSteamActorState> {
     let birth = input.birth;
     // Retail 0x00542F02 admits particle construction on the even update lane.
     if !birth.tick.is_multiple_of(2) {
@@ -70,9 +70,9 @@ pub fn spawn_native_weld_steam_actor(
     }
     let gate = rng.draw_integer(7);
     let variant = if gate == 1 && !input.underpowered {
-        NativeWeldSteamVariant::Over
+        WeldSteamVariant::Over
     } else {
-        NativeWeldSteamVariant::Normal
+        WeldSteamVariant::Normal
     };
     let constructor = draw_steam_constructor(rng, variant);
     let offset_distance = rng.draw_scaled_float(10.0, false);
@@ -83,8 +83,7 @@ pub fn spawn_native_weld_steam_actor(
     let widen = if input.underpowered { 0.0 } else { birth.vector[2] };
     let movement_factor = fround(1.0 + widen * 0.02_f32 as f64);
     let movement_speed = fround(
-        (if variant == NativeWeldSteamVariant::Over { 6.0 } else { 5.4_f32 as f64 })
-            * movement_factor,
+        (if variant == WeldSteamVariant::Over { 6.0 } else { 5.4_f32 as f64 }) * movement_factor,
     );
     let base_origin = Vec2::new(
         fround(birth.origin.x - birth.direction.x * 15.0),
@@ -112,7 +111,7 @@ pub fn spawn_native_weld_steam_actor(
             remaining_distance = 0.0;
         }
     }
-    Some(NativeWeldSteamActorState {
+    Some(WeldSteamActorState {
         common: birth.actor(),
         alpha_multiplier: if input.underpowered { 0.25 } else { 1.0 },
         blue: 0.75,
@@ -120,7 +119,7 @@ pub fn spawn_native_weld_steam_actor(
         contact_damage: input.damage,
         contact_due: false,
         // Retail 0x00543266 tests caster bank, not the handler's low-mana byte.
-        contact_enabled: variant == NativeWeldSteamVariant::Normal,
+        contact_enabled: variant == WeldSteamVariant::Normal,
         contact_ticks_remaining: constructor.contact_ticks_remaining,
         life: constructor.life,
         life_loss: constructor.life_loss,
@@ -137,7 +136,7 @@ pub fn spawn_native_weld_steam_actor(
     })
 }
 
-pub struct NativeWeldSteamDetonationInput<'a> {
+pub struct WeldSteamDetonationInput<'a> {
     pub explode_damage: f64,
     pub explode_radius: f64,
     pub fragment_count: u32,
@@ -151,22 +150,22 @@ pub struct NativeWeldSteamDetonationInput<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldSteamExplosionState {
-    pub explosion: NativeFireExplosionState,
+pub struct WeldSteamExplosionState {
+    pub explosion: FireExplosionState,
     pub sound_pitch: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldSteamDetonation {
-    pub explosion: Option<NativeWeldSteamExplosionState>,
-    pub fragments: Vec<NativeWeldSteamActorState>,
+pub struct WeldSteamDetonation {
+    pub explosion: Option<WeldSteamExplosionState>,
+    pub fragments: Vec<WeldSteamActorState>,
     pub next_id: u64,
 }
 
-pub fn create_native_weld_steam_detonation(
-    input: NativeWeldSteamDetonationInput<'_>,
-    rng: &mut NativeRng,
-) -> NativeWeldSteamDetonation {
+pub fn create_weld_steam_detonation(
+    input: WeldSteamDetonationInput<'_>,
+    rng: &mut Rng,
+) -> WeldSteamDetonation {
     assert!(input.first_fragment_id > 0, "Steam detonation first fragment id must be positive");
     assert!(
         [input.explode_damage, input.explode_radius, input.fragment_damage]
@@ -175,7 +174,7 @@ pub fn create_native_weld_steam_detonation(
         "Steam detonation damage and radius must be finite and nonnegative",
     );
     if input.explode_radius <= 0.0 {
-        return NativeWeldSteamDetonation {
+        return WeldSteamDetonation {
             explosion: None,
             fragments: Vec::new(),
             next_id: input.first_fragment_id,
@@ -183,7 +182,7 @@ pub fn create_native_weld_steam_detonation(
     }
     let sound_pitch = rng.draw_scaled_float(0.1_f32 as f64, true);
     let visual_scale = fround(fround(input.explode_radius - 10.0) * 0.18_f32 as f64 + 1.0);
-    let explosion = NativeFireExplosionState {
+    let explosion = FireExplosionState {
         burn_damage: 0.0,
         damage: fround(input.explode_damage * 0.5),
         footprint_dimension: fround(visual_scale * 110.0),
@@ -197,14 +196,14 @@ pub fn create_native_weld_steam_detonation(
     if input.fragment_count > 0 {
         // The complete fan consumes a projectile-private stream. Only the sound
         // pitch above advances combat RNG, including when no fragments exist.
-        let mut private_rng = NativeRng::new(i64::from(input.private_seed));
+        let mut private_rng = Rng::new(i64::from(input.private_seed));
         let start_heading = private_rng.draw_scaled_float(360.0, false);
         let heading_step = fround(360.0 / f64::from(input.fragment_count));
         for fragment_index in 0..input.fragment_count {
             let base_heading = fround(start_heading + f64::from(fragment_index) * heading_step);
             for _ in 0..3 {
                 let constructor =
-                    draw_steam_constructor(&mut private_rng, NativeWeldSteamVariant::Normal);
+                    draw_steam_constructor(&mut private_rng, WeldSteamVariant::Normal);
                 let offset_distance = private_rng.draw_scaled_float(10.0, false);
                 let offset_heading = private_rng.draw_scaled_float(25.0, true);
                 let speed_draw = private_rng.draw_scaled_float(0.1_f32 as f64, false);
@@ -220,7 +219,7 @@ pub fn create_native_weld_steam_detonation(
                     velocity.y = fround(velocity.y * factor);
                 }
                 velocity.y = fround(velocity.y * 0.8_f32 as f64);
-                let birth = NativeWeldActorBirth {
+                let birth = WeldActorBirth {
                     build_id: 1005,
                     direction,
                     id: input.first_fragment_id + fragments.len() as u64,
@@ -230,7 +229,7 @@ pub fn create_native_weld_steam_detonation(
                     vector: &[0.0; 8],
                     world_key: input.world_key,
                 };
-                fragments.push(NativeWeldSteamActorState {
+                fragments.push(WeldSteamActorState {
                     common: birth.actor(),
                     alpha_multiplier: 1.0,
                     blue: 0.75,
@@ -249,14 +248,14 @@ pub fn create_native_weld_steam_detonation(
                     stretch: fround(constructor.stretch * 0.6_f32 as f64),
                     terminal_position: Vec2::ZERO,
                     tint_fade: constructor.tint_fade,
-                    variant: NativeWeldSteamVariant::Normal,
+                    variant: WeldSteamVariant::Normal,
                     velocity,
                 });
             }
         }
     }
-    NativeWeldSteamDetonation {
-        explosion: Some(NativeWeldSteamExplosionState {
+    WeldSteamDetonation {
+        explosion: Some(WeldSteamExplosionState {
             explosion,
             sound_pitch: fround(1.0 + sound_pitch),
         }),
@@ -265,7 +264,7 @@ pub fn create_native_weld_steam_detonation(
     }
 }
 
-pub fn step_native_weld_steam_actor(actor: &mut NativeWeldSteamActorState) -> bool {
+pub fn step_weld_steam_actor(actor: &mut WeldSteamActorState) -> bool {
     let speed = hypot(actor.velocity.x, actor.velocity.y);
     actor.remaining_distance = fround(actor.remaining_distance - speed);
     if actor.remaining_distance < 0.0 {
@@ -306,10 +305,7 @@ pub fn step_native_weld_steam_actor(actor: &mut NativeWeldSteamActorState) -> bo
     true
 }
 
-fn draw_steam_constructor(
-    rng: &mut NativeRng,
-    variant: NativeWeldSteamVariant,
-) -> NativeWeldSteamConstructorProgram {
+fn draw_steam_constructor(rng: &mut Rng, variant: WeldSteamVariant) -> WeldSteamConstructorProgram {
     let life_draw = rng.draw_scaled_float(0.05_f32 as f64, false);
     let loss_draw = rng.draw_scaled_float(0.1_f32 as f64, false);
     let scale_draw = rng.draw_scaled_float(0.75, false);
@@ -320,13 +316,13 @@ fn draw_steam_constructor(
     let life_loss = fround(fround(loss_draw + 0.01_f32 as f64) * 0.5);
     let mut color_rise = 0.15_f32 as f64;
     let mut tint_fade = fround(1.0 + blue_draw);
-    if variant == NativeWeldSteamVariant::Over {
+    if variant == WeldSteamVariant::Over {
         life = fround(life * 0.65_f32 as f64);
         color_rise = fround(color_rise * 0.5);
         tint_fade = 0.0;
     }
     let scale = fround(scale_draw + 0.65_f32 as f64);
-    NativeWeldSteamConstructorProgram {
+    WeldSteamConstructorProgram {
         color_rise,
         contact_ticks_remaining: i64::from(contact_clock),
         life,

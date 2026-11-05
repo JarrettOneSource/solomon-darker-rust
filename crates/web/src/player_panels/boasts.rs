@@ -1,10 +1,10 @@
 //! Skills-book view of the accepted Boast selection and progress.
 
 use solomon_sim::economy::{BoastSelection, BoastState};
-use solomon_sim::hub::interaction::NATIVE_BOASTS;
+use solomon_sim::hub::interaction::BOASTS;
 use solomon_sim::hud::HudRect;
 use solomon_sim::modding::projection::ModContentProjection;
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec, layout_native_ui_text};
+use solomon_sim::ui_text::{UiFontName, UiTextSpec, layout_ui_text};
 
 use super::chrome::PanelCanvas;
 use super::{PlayerPanelSnapshot, PlayerPanels};
@@ -46,7 +46,7 @@ fn boast_progress<'a>(
 ) -> Option<BoastProgress<'a>> {
     let (name, statement) = match state.selected.as_ref()? {
         BoastSelection::Native(id) => {
-            let boast = NATIVE_BOASTS.iter().find(|boast| boast.id == *id)?;
+            let boast = BOASTS.iter().find(|boast| boast.id == *id)?;
             (boast.label, boast.statement)
         }
         BoastSelection::Mod(selection) => {
@@ -81,19 +81,19 @@ impl PlayerPanels {
         } else {
             ("No Boast selected", "Choose a Boast from Provokatus in the College.", "", 0x808080)
         };
-        let name_layout = layout_native_ui_text(&NativeUiTextSpec {
+        let name_layout = layout_ui_text(&UiTextSpec {
             tint,
             max_width: Some(560.0),
             line_height: Some(32.0),
-            ..NativeUiTextSpec::new(NativeUiFontName::Menu, name, 800.0, 300.0)
+            ..UiTextSpec::new(UiFontName::Menu, name, 800.0, 300.0)
         });
         let status_y = 300.0 + name_layout.height + 35.0;
         let statement_y = status_y + if status.is_empty() { 0.0 } else { 45.0 };
-        let statement_layout = layout_native_ui_text(&NativeUiTextSpec {
+        let statement_layout = layout_ui_text(&UiTextSpec {
             tint: 0xbfbfbf,
             max_width: Some(560.0),
             line_height: Some(24.0),
-            ..NativeUiTextSpec::new(NativeUiFontName::Body, statement, 800.0, statement_y)
+            ..UiTextSpec::new(UiFontName::Body, statement, 800.0, statement_y)
         });
         let card =
             HudRect::new(490.0, 240.0, 620.0, statement_y - 240.0 + statement_layout.height + 35.0);
@@ -101,9 +101,9 @@ impl PlayerPanels {
         c.stroke(card, tint, 2.0);
         c.layout(&name_layout);
         if !status.is_empty() {
-            c.shadow_text(&NativeUiTextSpec {
+            c.shadow_text(&UiTextSpec {
                 tint,
-                ..NativeUiTextSpec::new(NativeUiFontName::Menu, status, 800.0, status_y)
+                ..UiTextSpec::new(UiFontName::Menu, status, 800.0, status_y)
             });
         }
         c.layout(&statement_layout);
@@ -149,8 +149,8 @@ mod tests {
         for id in 0..=4 {
             let state = BoastState { selected: Some(id.into()), ..Default::default() };
             let progress = boast_progress(&state, None).unwrap();
-            assert_eq!(progress.name, NATIVE_BOASTS[id as usize].label);
-            assert_eq!(progress.statement, NATIVE_BOASTS[id as usize].statement);
+            assert_eq!(progress.name, BOASTS[id as usize].label);
+            assert_eq!(progress.statement, BOASTS[id as usize].statement);
         }
     }
 

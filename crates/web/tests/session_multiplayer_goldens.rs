@@ -20,7 +20,7 @@ use serde_json::Value;
 use solomon_assets::boneyard::BoneyardCatalog;
 use solomon_assets::navigation::decode_navigation;
 use solomon_sim::Vec2;
-use solomon_sim::belt::{NativeBeltCommand, PlayerBeltComponent};
+use solomon_sim::belt::{BeltCommand, PlayerBeltComponent};
 use solomon_sim::enemies::model::EnemyDamageRequest;
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::profile::{NewGameSelection, PlayerSkillChoice, WizardDiscipline, WizardElement};
@@ -132,7 +132,7 @@ fn shared_participants_match_public_game_and_checkpoint_continuation() {
                 .refresh(&mut participant.player.book, &participant.player.economy);
             participant.player.belt = PlayerBeltComponent::new(&participant.player.book);
             assert!(participant.player.belt.apply(
-                NativeBeltCommand::BindSkill { skill_id: Some(72), slot: 2 },
+                BeltCommand::BindSkill { skill_id: Some(72), slot: 2 },
                 &participant.player.book,
                 &participant.player.economy
             ));

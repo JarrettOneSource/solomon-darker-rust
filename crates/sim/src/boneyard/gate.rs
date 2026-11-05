@@ -90,7 +90,7 @@ pub fn create_gate_leaves(fences: &[BoneyardFence], seed: &str) -> Vec<GateLeaf>
         if fence.code() != 2 {
             continue;
         }
-        let roots = native_closed_gate_roots(&fence.points);
+        let roots = closed_gate_roots(&fence.points);
         for (side, (hinge, rest_tip)) in roots.into_iter().enumerate() {
             let magnitude = next_xorshift_random(&mut random_state);
             let sign = if next_xorshift_random(&mut random_state) < 0.5 { -1.0 } else { 1.0 };
@@ -118,7 +118,7 @@ pub fn create_gate_leaves(fences: &[BoneyardFence], seed: &str) -> Vec<GateLeaf>
 
 /// The same closed roots admit both live leaves and static painter registrations.
 #[must_use]
-pub fn native_closed_gate_roots(points: &[Vec2]) -> Vec<(Vec2, Vec2)> {
+pub fn closed_gate_roots(points: &[Vec2]) -> Vec<(Vec2, Vec2)> {
     let [start, end, ..] = points else { return Vec::new() };
     let dx = end.x - start.x;
     let dy = end.y - start.y;

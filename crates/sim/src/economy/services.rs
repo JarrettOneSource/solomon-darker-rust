@@ -1,22 +1,21 @@
 //! Purchases, dowsing, dye and Unforge from Website `core-kernels/hub-economy.ts`.
 
 use crate::float::fround;
-use crate::hub::interaction::{NATIVE_LIBRARIAN_BOOKS, NATIVE_TEACHER_SPELLS};
+use crate::hub::interaction::{LIBRARIAN_BOOKS, TEACHER_SPELLS};
 
 use super::inventory::{
     consume_tree, create_equipment_inventory_item, create_fomentius_inventory_item,
     find_inventory_item, insert, project_inventory_items, remove_tree, replace_tree,
 };
 use super::{
-    DOWSING_EQUIPMENT_RECIPES, DowsingOffer, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS,
+    DOWSING_EQUIPMENT_RECIPES, DowsingOffer, DyeLayer, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS,
     HUB_INVENTORY_SLOT_CAPACITY, HagathaOffer, HubEconomyContext, HubEconomyRejection as Rejection,
     HubEconomyResult, HubEconomyState, HubInventoryAction, HubInventoryItem, HubItemKind,
-    HubShopItem, NativeDyeLayer, NativeInventoryDyeSession, NativeUnforgeOutcome,
-    NativeUnforgeOutcomeKind as UnforgeKind,
+    HubShopItem, InventoryDyeSession, UnforgeOutcome, UnforgeOutcomeKind as UnforgeKind,
 };
 
 /// Native DyeClothing swatches preserve fractional channel values before the final tint.
-pub const NATIVE_DYE_SWATCH_COLORS: [[f64; 3]; 18] = [
+pub const DYE_SWATCH_COLORS: [[f64; 3]; 18] = [
     [1.0, 1.0, 1.0],
     [1.0, 0.0, 0.0],
     [1.0, 0.5, 0.0],
@@ -38,12 +37,12 @@ pub const NATIVE_DYE_SWATCH_COLORS: [[f64; 3]; 18] = [
 ];
 
 #[must_use]
-pub fn native_dye_mixed_tint(rows: &[usize]) -> Option<u32> {
+pub fn dye_mixed_tint(rows: &[usize]) -> Option<u32> {
     mixed_color(rows).map(rgb_tint)
 }
 
 #[must_use]
-pub fn native_dye_committed_tint(rows: &[usize]) -> Option<u32> {
+pub fn dye_committed_tint(rows: &[usize]) -> Option<u32> {
     let mixed = mixed_color(rows)?;
     let luminance = fround(
         fround(mixed[0] * f64::from(0.3086_f32))
@@ -56,9 +55,7 @@ pub fn native_dye_committed_tint(rows: &[usize]) -> Option<u32> {
 }
 
 fn valid_dye_rows(rows: &[usize]) -> bool {
-    !rows.is_empty()
-        && rows.len() <= 256
-        && rows.iter().all(|row| *row < NATIVE_DYE_SWATCH_COLORS.len())
+    !rows.is_empty() && rows.len() <= 256 && rows.iter().all(|row| *row < DYE_SWATCH_COLORS.len())
 }
 
 fn mixed_color(rows: &[usize]) -> Option<[f64; 3]> {
@@ -69,9 +66,9 @@ fn mixed_color(rows: &[usize]) -> Option<[f64; 3]> {
         valid_dye_rows(rows),
         "native dye swatch rows must exist and fit the mixing transaction"
     );
-    let mut mixed = NATIVE_DYE_SWATCH_COLORS[rows[0]].map(fround);
+    let mut mixed = DYE_SWATCH_COLORS[rows[0]].map(fround);
     for row in &rows[1..] {
-        let incoming = NATIVE_DYE_SWATCH_COLORS[*row].map(fround);
+        let incoming = DYE_SWATCH_COLORS[*row].map(fround);
         for index in 0..3 {
             mixed[index] = fround(
                 fround(mixed[index] * fround(0.875)) + fround(incoming[index] * fround(0.125)),
@@ -99,7 +96,7 @@ impl HubInventoryItem {
 
     #[must_use]
     pub fn can_unforge(&self) -> bool {
-        [7002, 7003, 7004, 7005, 7006, 7008, 7011].contains(&self.native_type_id)
+        [7002, 7003, 7004, 7005, 7006, 7008, 7011].contains(&self.type_id)
     }
 }
 
@@ -109,7 +106,7 @@ impl HubEconomyState {
         action: &HubInventoryAction,
         context: &HubEconomyContext,
         extensions: Option<&dyn crate::modding::extensions::GameSimulationExtensions>,
-        dye_session: Option<&NativeInventoryDyeSession>,
+        dye_session: Option<&InventoryDyeSession>,
     ) -> HubEconomyResult {
         let mut result = HubEconomyResult::accepted();
         let operation = match action {
@@ -207,7 +204,7 @@ impl HubEconomyState {
                 }
             }
             HubInventoryAction::ReadLibrarianBook { book_id } => {
-                match NATIVE_LIBRARIAN_BOOKS.iter().find(|book| book.id == *book_id) {
+                match LIBRARIAN_BOOKS.iter().find(|book| book.id == *book_id) {
                     None => Err(Rejection::InvalidOffer),
                     Some(book) if book.one_shot && self.npc.librarian_lace_read => {
                         Err(Rejection::InvalidOffer)
@@ -222,7 +219,7 @@ impl HubEconomyState {
             }
             HubInventoryAction::BuyTeacherSpell { skill_id } => {
                 // Prices follow the authored teacherSpells order, not a numeric-id formula.
-                let price = NATIVE_TEACHER_SPELLS
+                let price = TEACHER_SPELLS
                     .iter()
                     .find(|spell| spell.skill_id == *skill_id)
                     .map(|spell| spell.price);
@@ -376,7 +373,7 @@ impl HubEconomyState {
     }
 
     fn perks_fit_capacity(&self, selectors: &[u32]) -> bool {
-        if !native_hagatha_outcome_state_is_valid(
+        if !hagatha_outcome_state_is_valid(
             &self.owned_perk_selectors,
             self.tonic_purchases,
             self.charm_capacity,
@@ -399,7 +396,7 @@ impl HubEconomyState {
                 outcomes.push(*selector);
             }
         }
-        native_hagatha_outcome_state_is_valid(&outcomes, tonic_purchases, capacity)
+        hagatha_outcome_state_is_valid(&outcomes, tonic_purchases, capacity)
     }
 
     fn dowse(&mut self, reference_item_id: Option<u64>) -> Result<f64, Rejection> {
@@ -414,7 +411,7 @@ impl HubEconomyState {
                     })
                 })
                 .ok_or(Rejection::ItemNotFound)?;
-            Some((item.native_type_id, item.recipe_index))
+            Some((item.type_id, item.recipe_index))
         } else {
             None
         };
@@ -439,7 +436,7 @@ impl HubEconomyState {
         let pitch = self.rng.draw_scaled_float(0.1, false);
         let requested_count = self.rng.draw_integer(2) as usize + 3;
         let mut selected = Vec::new();
-        if let Some((native_type_id, recipe_index)) = reference {
+        if let Some((type_id, recipe_index)) = reference {
             let set_name = recipe_index.and_then(|index| DOWSING_EQUIPMENT_RECIPES[index].set_name);
             for slot in 0..requested_count + 2 {
                 let mut candidates = Vec::new();
@@ -452,7 +449,7 @@ impl HubEconomyState {
                     let matches_reference = if slot < 2 {
                         set_name.is_some() && recipe.set_name == set_name
                     } else {
-                        recipe.native_type_id == native_type_id
+                        recipe.type_id == type_id
                     };
                     if matches_reference {
                         candidates.push(recipe.source_index);
@@ -517,7 +514,7 @@ impl HubEconomyState {
     fn consume_item(&mut self, item_id: u64) -> Result<(), Rejection> {
         self.require_valid_inventory()?;
         let item = find_inventory_item(&self.backpack, item_id).ok_or(Rejection::ItemNotFound)?;
-        if item.native_type_id != 7001 || item.native_subtype.is_none() {
+        if item.type_id != 7001 || item.subtype.is_none() {
             return Err(Rejection::IneligibleItem);
         }
         self.backpack = consume_tree(&self.backpack, item_id).ok_or(Rejection::ItemNotFound)?;
@@ -528,8 +525,8 @@ impl HubEconomyState {
         self.require_valid_inventory()?;
         let item = find_inventory_item(&self.backpack, item_id).ok_or(Rejection::ItemNotFound)?;
         if item.kind != HubItemKind::SkillBook
-            || item.native_type_id != 7012
-            || !matches!(item.native_subtype, Some(2 | 3))
+            || item.type_id != 7012
+            || !matches!(item.subtype, Some(2 | 3))
         {
             return Err(Rejection::IneligibleItem);
         }
@@ -552,9 +549,9 @@ impl HubEconomyState {
     /// `dyeInventoryClothing`: the first committed paint consumes one initiating kit.
     pub fn dye_inventory_clothing(
         &mut self,
-        session: &NativeInventoryDyeSession,
+        session: &InventoryDyeSession,
         target_item_id: u64,
-        layer: NativeDyeLayer,
+        layer: DyeLayer,
         swatch_rows: &[usize],
     ) -> HubEconomyResult {
         self.apply_with_dye_session(
@@ -574,7 +571,7 @@ impl HubEconomyState {
         &self,
         dye_item_id: u64,
         session_id: &str,
-    ) -> Result<NativeInventoryDyeSession, Rejection> {
+    ) -> Result<InventoryDyeSession, Rejection> {
         // Website length is UTF-16 code units, not UTF-8 bytes or Unicode scalars.
         let length = session_id.encode_utf16().count();
         if length == 0 || length > 64 {
@@ -583,20 +580,17 @@ impl HubEconomyState {
         self.require_valid_inventory()?;
         let dye =
             find_inventory_item(&self.backpack, dye_item_id).ok_or(Rejection::ItemNotFound)?;
-        if dye.native_type_id != 7012
-            || dye.native_subtype != Some(0)
-            || dye.kind != HubItemKind::Dye
-        {
+        if dye.type_id != 7012 || dye.subtype != Some(0) || dye.kind != HubItemKind::Dye {
             return Err(Rejection::IneligibleItem);
         }
-        Ok(NativeInventoryDyeSession { id: session_id.into(), dye_item_id, kit_consumed: false })
+        Ok(InventoryDyeSession { id: session_id.into(), dye_item_id, kit_consumed: false })
     }
 
     fn dye_clothing(
         &mut self,
-        session: &NativeInventoryDyeSession,
+        session: &InventoryDyeSession,
         target_item_id: u64,
-        layer: NativeDyeLayer,
+        layer: DyeLayer,
         rows: &[usize],
     ) -> Result<(), Rejection> {
         self.require_valid_inventory()?;
@@ -606,10 +600,7 @@ impl HubEconomyState {
         if !session.kit_consumed {
             let dye = find_inventory_item(&self.backpack, session.dye_item_id)
                 .ok_or(Rejection::ItemNotFound)?;
-            if dye.native_type_id != 7012
-                || dye.native_subtype != Some(0)
-                || dye.kind != HubItemKind::Dye
-            {
+            if dye.type_id != 7012 || dye.subtype != Some(0) || dye.kind != HubItemKind::Dye {
                 return Err(Rejection::IneligibleItem);
             }
         }
@@ -620,8 +611,8 @@ impl HubEconomyState {
             return Err(Rejection::InvalidTarget);
         }
         let mut tints = target.clothing_tints().ok_or(Rejection::InvalidTarget)?;
-        let committed = native_dye_committed_tint(rows).ok_or(Rejection::InvalidTarget)?;
-        tints[if layer == NativeDyeLayer::Cloth { 0 } else { 1 }] = committed;
+        let committed = dye_committed_tint(rows).ok_or(Rejection::InvalidTarget)?;
+        tints[if layer == DyeLayer::Cloth { 0 } else { 1 }] = committed;
         target.icon_tints = Some(tints.map(Some));
         self.backpack =
             replace_tree(&self.backpack, target_item_id, target).ok_or(Rejection::InvalidTarget)?;
@@ -636,18 +627,18 @@ impl HubEconomyState {
         &mut self,
         item_id: u64,
         context: &HubEconomyContext,
-    ) -> Result<NativeUnforgeOutcome, Rejection> {
+    ) -> Result<UnforgeOutcome, Rejection> {
         self.require_valid_inventory()?;
         let item =
             find_inventory_item(&self.backpack, item_id).ok_or(Rejection::ItemNotFound)?.clone();
         if !item.can_unforge()
-            || (item.native_type_id == 7008
+            || (item.type_id == 7008
                 && item.contents.as_ref().is_some_and(|contents| !contents.is_empty()))
         {
             return Err(Rejection::IneligibleItem);
         }
         let recipe_backed = item.recipe_index.is_some() || item.native_effects.is_some();
-        let (kind, amount) = if item.native_type_id == 7008 || !recipe_backed {
+        let (kind, amount) = if item.type_id == 7008 || !recipe_backed {
             let amount = self.rng.draw_integer(4) as u64 + 2;
             self.gold += amount;
             (UnforgeKind::Gold, Some(amount as f64))
@@ -726,13 +717,13 @@ impl HubEconomyState {
         };
         self.backpack =
             remove_tree(&self.backpack, item_id, None).ok_or(Rejection::ItemNotFound)?.items;
-        Ok(NativeUnforgeOutcome { amount, item_name: item.name, kind })
+        Ok(UnforgeOutcome { amount, item_name: item.name, kind })
     }
 }
 
 /// The ordered native perk list, repeated Tonic purchases and capacity must agree.
 #[must_use]
-pub fn native_hagatha_outcome_state_is_valid(
+pub fn hagatha_outcome_state_is_valid(
     outcomes: &[u32],
     tonic_purchases: u32,
     capacity: u32,
@@ -762,11 +753,11 @@ pub fn native_hagatha_outcome_state_is_valid(
 
 /// A disk bundle carries its Tonic count implicitly in its ordered selectors.
 #[must_use]
-pub fn native_hagatha_bundle_state_is_valid(outcomes: &[u32]) -> bool {
+pub fn hagatha_bundle_state_is_valid(outcomes: &[u32]) -> bool {
     let tonics = outcomes.iter().filter(|selector| **selector == 27).count();
     if tonics > 2 {
         return false;
     }
     let tonics = tonics as u32;
-    native_hagatha_outcome_state_is_valid(outcomes, tonics, 3 + tonics * 3)
+    hagatha_outcome_state_is_valid(outcomes, tonics, 3 + tonics * 3)
 }

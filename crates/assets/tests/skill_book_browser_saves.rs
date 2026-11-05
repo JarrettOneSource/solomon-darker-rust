@@ -5,7 +5,7 @@ use solomon_assets::native_save::{
     GameSaveImportSource, GameSaveInputFile, read_game_save_file_selection,
 };
 use solomon_assets::website_save;
-use solomon_sim::economy::{HubItemKind, NativeSkillBookFeedbackCursor};
+use solomon_sim::economy::{HubItemKind, SkillBookFeedbackCursor};
 
 #[test]
 fn source_book_fixtures_import_owned_books_and_seed_their_retained_receipt() {
@@ -43,7 +43,7 @@ fn source_book_fixtures_import_owned_books_and_seed_their_retained_receipt() {
             .economy;
         let retained = economy.action_feedback.as_ref();
         assert_eq!(retained.unwrap().sequence, case["retainedSequence"].as_u64().unwrap());
-        assert!(NativeSkillBookFeedbackCursor::new(retained).consume(retained).is_none());
+        assert!(SkillBookFeedbackCursor::new(retained).consume(retained).is_none());
         if case["world"] == "hub" {
             let mut document: Value = serde_json::from_str(&imported.document).unwrap();
             let clock = &document["continuation"]["simulation"]["world"]["skorcha"]["gestureTicksRemaining"];

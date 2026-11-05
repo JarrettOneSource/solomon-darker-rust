@@ -11,17 +11,15 @@ use solomon_sim::Vec2;
 use solomon_sim::element_vfx::{ElementVfxBlend, ElementVfxDraw};
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHit;
 use solomon_sim::float::{self, fround, hypot};
-use solomon_sim::harden_effects::native_harden_effect_plan;
+use solomon_sim::harden_effects::harden_effect_plan;
 use solomon_sim::hub::painter::PainterLayer;
 use solomon_sim::painter::PainterRegistration;
-use solomon_sim::presentation::multiply_native_tints;
-use solomon_sim::spells::air::{NativeAirLightningInput, build_native_air_lightning_plan};
+use solomon_sim::presentation::multiply_tints;
+use solomon_sim::spells::air::{AirLightningInput, build_air_lightning_plan};
 use solomon_sim::spells::air_water::*;
 use solomon_sim::spells::earth::{EarthImpactSeed, earth_impact_fragments_at_age};
 use solomon_sim::spells::earth_presentation::earth_boulder_sprite_plan_at_age;
-use solomon_sim::spells::ether::{
-    create_native_ether_blast_particle_program, native_ether_blast_particle_frame,
-};
+use solomon_sim::spells::ether::{create_ether_blast_particle_program, ether_blast_particle_frame};
 use solomon_sim::spells::ether_presentation::{
     ether_primary_flight_plan, ether_primary_impact_plan, ether_primary_pierce_streak_plan,
 };
@@ -30,16 +28,13 @@ use solomon_sim::spells::model::*;
 use solomon_sim::spells::presentation::*;
 use solomon_sim::spells::water::*;
 use solomon_sim::spells::weld::{
-    NativeFlameLashBounds, NativeWeldLineDraw, NativeWeldMeshUvSpace,
-    NativeWeldPersistentActorState, NativeWeldPresentationState, NativeWeldSpriteDraw,
-    NativeWeldWorldActor, build_native_flame_lash_split_bands, native_flame_region_clipped_band,
-    native_weld_visual_plan_at_age,
+    FlameLashBounds, WeldLineDraw, WeldMeshUvSpace, WeldPersistentActorState,
+    WeldPresentationState, WeldSpriteDraw, WeldWorldActor, build_flame_lash_split_bands,
+    flame_region_clipped_band, weld_visual_plan_at_age,
 };
 
+use crate::beam_mesh::{MeshVertex, clip_to_bands, clip_to_rect, sprite_texel_rect};
 use crate::courtyard::Camera;
-use crate::native_mesh::{
-    NativeMeshVertex, clip_native_mesh, clip_native_mesh_in_rect, native_sprite_texel_rect,
-};
 use crate::presentation::PresentationClocks;
 use solomon_graphics::assets;
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
@@ -67,18 +62,18 @@ pub struct StockAtlas {
 enum SpellDraw {
     Sprite {
         position: Vec2,
-        draw: NativeWeldSpriteDraw,
+        draw: WeldSpriteDraw,
     },
     Mesh {
         record: usize,
-        triangles: Vec<[NativeMeshVertex; 3]>,
+        triangles: Vec<[MeshVertex; 3]>,
         alpha: f64,
         tint: u32,
-        uv_space: NativeWeldMeshUvSpace,
+        uv_space: WeldMeshUvSpace,
     },
     Line {
         position: Vec2,
-        draw: NativeWeldLineDraw,
+        draw: WeldLineDraw,
     },
     GroundGlow {
         position: Vec2,
@@ -152,7 +147,7 @@ impl SpellView {
         puppet_hits: &[EnemyPuppetHit],
         clocks: Option<&PresentationClocks>,
         enhanced_effects: bool,
-        region_view: Option<NativeFlameLashBounds>,
+        region_view: Option<FlameLashBounds>,
     ) {
         self.fire_explosion_point_gains.retain(|id, _| {
             spells.transients.iter().any(|effect| {
@@ -203,10 +198,10 @@ impl SpellView {
                     plan.world_y = common.position.y;
                     plan
                 }
-                PrimarySpellProjectile::Fire(spell) => native_fireball_plan(
-                    NativeFireballPresentationState {
+                PrimarySpellProjectile::Fire(spell) => fireball_plan(
+                    FireballPresentationState {
                         age_ticks: age,
-                        ..NativeFireballPresentationState::from(spell)
+                        ..FireballPresentationState::from(spell)
                     },
                     presentation_frame,
                 ),
@@ -214,7 +209,7 @@ impl SpellView {
                     let target_id = format!("primary:{}", common.id);
                     let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
                     self.append_weld(
-                        NativeWeldPresentationState::Projectile(spell),
+                        WeldPresentationState::Projectile(spell),
                         presentation_frame,
                         age,
                         common.registration,
@@ -253,9 +248,9 @@ impl SpellView {
                 PrimarySpellTransient::Staff(_) => {}
                 PrimarySpellTransient::AirHurricane(spell) => {
                     let mut plan = plan_at(spell.position);
-                    for draw in native_hurricane_visual_plan(spell) {
-                        let core = draw.role == NativeHurricaneSpriteRole::Core;
-                        plan.draws.push(NativeSpellSprite {
+                    for draw in hurricane_visual_plan(spell) {
+                        let core = draw.role == HurricaneSpriteRole::Core;
+                        plan.draws.push(SpellSprite {
                             alpha: draw.alpha,
                             atlas: if core { SpellAtlas::DeadHawg } else { SpellAtlas::BadGuys },
                             blend: if draw.additive { SpellBlend::Add } else { SpellBlend::Normal },
@@ -263,7 +258,7 @@ impl SpellView {
                             rotation: draw.rotation_radians,
                             scale: draw.scale,
                             tint: draw.tint,
-                            ..NativeSpellSprite::new(if core { 15 } else { 84 }, 1.0)
+                            ..SpellSprite::new(if core { 15 } else { 84 }, 1.0)
                         });
                     }
                     self.append_plan(plan, common.painter_registrations[0]);
@@ -274,25 +269,25 @@ impl SpellView {
                         .overlay_owner_id = Some(common.owner_id.clone());
                 }
                 PrimarySpellTransient::WaterAura(spell) => {
-                    let draw = native_water_aura_visual_plan(spell);
+                    let draw = water_aura_visual_plan(spell);
                     let mut plan = plan_at(spell.origin);
-                    plan.draws.push(NativeSpellSprite {
+                    plan.draws.push(SpellSprite {
                         alpha: draw.alpha,
                         blend: SpellBlend::Add,
                         rotation: draw.rotation_radians,
                         tint: draw.tint,
-                        ..NativeSpellSprite::new(14, draw.scale)
+                        ..SpellSprite::new(14, draw.scale)
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
                 PrimarySpellTransient::WaterHail(spell) => {
-                    let draw = native_hail_visual_plan(spell);
+                    let draw = hail_visual_plan(spell);
                     let mut plan = plan_at(spell.position);
-                    plan.draws.push(NativeSpellSprite {
+                    plan.draws.push(SpellSprite {
                         alpha: draw.alpha,
                         offset: Vec2::new(0.0, draw.offset_y),
                         rotation: draw.rotation_radians,
-                        ..NativeSpellSprite::new(32, draw.scale)
+                        ..SpellSprite::new(32, draw.scale)
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
@@ -303,26 +298,27 @@ impl SpellView {
                     // every Boulder piece, which its strict planner rejects.
                     // Each piece already has its own actual Actor registration.
                     let registration = match spell {
-                        NativeWeldWorldActor::Persistent(
-                            NativeWeldPersistentActorState::EtherealBoulder(_),
-                        ) => common.light_registration.expect("Boulder owns an Actor registration"),
+                        WeldWorldActor::Persistent(WeldPersistentActorState::EtherealBoulder(
+                            _,
+                        )) => {
+                            common.light_registration.expect("Boulder owns an Actor registration")
+                        }
                         _ => common.painter_registrations[0],
                     };
                     self.append_weld(
-                        NativeWeldPresentationState::World(spell),
+                        WeldPresentationState::World(spell),
                         presentation_frame,
                         age,
                         registration,
-                        matches!(spell, NativeWeldWorldActor::Channel(_)),
+                        matches!(spell, WeldWorldActor::Channel(_)),
                         puppet_hit,
                         enhanced_effects,
                         region_view,
                     );
                 }
-                PrimarySpellTransient::Harden(effect) => self.append_plan(
-                    native_harden_effect_plan(effect),
-                    common.painter_registrations[0],
-                ),
+                PrimarySpellTransient::Harden(effect) => {
+                    self.append_plan(harden_effect_plan(effect), common.painter_registrations[0])
+                }
                 PrimarySpellTransient::EarthBoulderBit(spell) => {
                     let debris = &spell.debris.common;
                     let position = Vec2::new(
@@ -333,21 +329,21 @@ impl SpellView {
                     plan.sort_bias = -15.0;
                     plan.region_light_point = Some(position);
                     if spell.debris.enhanced_shadow && debris.height != 0.0 {
-                        plan.draws.push(NativeSpellSprite {
+                        plan.draws.push(SpellSprite {
                             alpha: debris.alpha.min(1.0),
                             offset: Vec2::new(0.0, 2.0),
                             rotation: debris.rotation_degrees * std::f64::consts::PI / 180.0,
                             scale: Vec2::new(debris.scale, debris.scale * 0.75),
                             tint: 0,
-                            ..NativeSpellSprite::new(debris.record, 1.0)
+                            ..SpellSprite::new(debris.record, 1.0)
                         });
                     }
-                    plan.draws.push(NativeSpellSprite {
+                    plan.draws.push(SpellSprite {
                         alpha: debris.alpha.min(1.0),
                         offset: Vec2::new(0.0, debris.height),
                         rotation: debris.rotation_degrees * std::f64::consts::PI / 180.0,
                         tint: 0xff0000 | ((debris.color_green * 255.0).trunc() as u32) << 8,
-                        ..NativeSpellSprite::new(debris.record, debris.scale)
+                        ..SpellSprite::new(debris.record, debris.scale)
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
@@ -365,18 +361,18 @@ impl SpellView {
                             spell.origin.x + fragment.position.x,
                             spell.origin.y + fragment.position.y,
                         );
-                        let mut plan = NativeSpellSpritePlan {
+                        let mut plan = SpellSpritePlan {
                             position,
                             world_y: position.y,
                             sort_bias: -15.0,
                             region_light_point: Some(position),
                             draws: Vec::new(),
                         };
-                        plan.draws.push(NativeSpellSprite {
+                        plan.draws.push(SpellSprite {
                             alpha: fragment.alpha.clamp(0.0, 1.0),
                             offset: Vec2::new(0.0, fragment.height),
                             rotation: fragment.rotation * std::f64::consts::PI / 180.0,
-                            ..NativeSpellSprite::new(fragment.record, fragment.scale)
+                            ..SpellSprite::new(fragment.record, fragment.scale)
                         });
                         self.append_plan(plan, common.painter_registrations[fragment.index]);
                     }
@@ -384,15 +380,15 @@ impl SpellView {
                 PrimarySpellTransient::EarthCalledRock(spell) => {
                     let mut plan = plan_at(spell.position);
                     if spell.height < 0.0 {
-                        plan.draws.push(NativeSpellSprite::new(
+                        plan.draws.push(SpellSprite::new(
                             2008 + spell.variant as usize,
                             spell.scale * 0.75,
                         ));
                     }
-                    plan.draws.push(NativeSpellSprite {
+                    plan.draws.push(SpellSprite {
                         offset: Vec2::new(0.0, spell.height),
                         rotation: spell.rotation * std::f64::consts::PI / 180.0,
-                        ..NativeSpellSprite::new(2008 + spell.variant as usize, spell.scale)
+                        ..SpellSprite::new(2008 + spell.variant as usize, spell.scale)
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
@@ -403,17 +399,16 @@ impl SpellView {
                     common.painter_registrations[0],
                 ),
                 PrimarySpellTransient::EtherBlast(spell) => {
-                    let particles = create_native_ether_blast_particle_program(
-                        &mut spell.presentation_rng.clone(),
-                    );
+                    let particles =
+                        create_ether_blast_particle_program(&mut spell.presentation_rng.clone());
                     for (index, particle) in particles.into_iter().enumerate() {
-                        let frame = native_ether_blast_particle_frame(particle, age);
+                        let frame = ether_blast_particle_frame(particle, age);
                         let position = Vec2::new(
                             fround(spell.origin.x + frame.position.x),
                             fround(spell.origin.y + frame.position.y),
                         );
                         let mut plan = plan_at(position);
-                        plan.draws.push(NativeSpellSprite {
+                        plan.draws.push(SpellSprite {
                             alpha: frame.alpha,
                             blend: SpellBlend::Add,
                             rotation: particle.rotation_degrees * std::f64::consts::PI / 180.0,
@@ -422,17 +417,17 @@ impl SpellView {
                                 fround(particle.scale * 0.8_f32 as f64),
                             ),
                             tint: pack_spell_rgb(particle.red, particle.green, particle.blue),
-                            ..NativeSpellSprite::new(particle.sprite_record, 1.0)
+                            ..SpellSprite::new(particle.sprite_record, 1.0)
                         });
                         self.append_plan(plan, common.painter_registrations[index]);
                     }
                 }
                 PrimarySpellTransient::FireParticle(spell) => self.append_plan(
-                    native_fire_particle_plan_at_age(spell, age),
+                    fire_particle_plan_at_age(spell, age),
                     common.painter_registrations[0],
                 ),
                 PrimarySpellTransient::FireImpact(spell) => self.append_plan(
-                    native_fire_impact_plan_at_age(spell, age),
+                    fire_impact_plan_at_age(spell, age),
                     common.painter_registrations[0],
                 ),
                 PrimarySpellTransient::FireExplosion(spell) => {
@@ -441,7 +436,7 @@ impl SpellView {
                         .entry(common.id)
                         .or_insert_with(|| point_gain(spell.origin));
                     self.append_plan(
-                        native_fire_explosion_plan(
+                        fire_explosion_plan(
                             age,
                             spell.origin,
                             spell.presentation,
@@ -454,7 +449,7 @@ impl SpellView {
                 PrimarySpellTransient::FireEmber(spell) => {
                     let root_index = self.roots.len();
                     self.append_plan(
-                        native_fire_ember_plan(
+                        fire_ember_plan(
                             common.id,
                             spell.height,
                             spell.life,
@@ -475,10 +470,11 @@ impl SpellView {
                         );
                     }
                 }
-                PrimarySpellTransient::FireGoodImp(spell) => self
-                    .append_plan(native_fire_good_imp_plan(spell), common.painter_registrations[0]),
+                PrimarySpellTransient::FireGoodImp(spell) => {
+                    self.append_plan(fire_good_imp_plan(spell), common.painter_registrations[0])
+                }
                 PrimarySpellTransient::FirePatch(spell) => self.append_plan(
-                    native_fire_patch_plan(spell, presentation_frame),
+                    fire_patch_plan(spell, presentation_frame),
                     common.painter_registrations[0],
                 ),
             }
@@ -543,7 +539,7 @@ impl SpellView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        plan: &NativeSpellSpritePlan,
+        plan: &SpellSpritePlan,
     ) {
         for draw in &plan.draws {
             self.draw_sprite(renderer, camera, plan.position, (*draw).into(), [1.0; 3], None);
@@ -558,7 +554,7 @@ impl SpellView {
         plan: &[ElementVfxDraw],
     ) {
         for element in plan {
-            let draw = NativeSpellSprite {
+            let draw = SpellSprite {
                 alpha: element.alpha,
                 blend: if element.blend == ElementVfxBlend::Add {
                     SpellBlend::Add
@@ -568,13 +564,13 @@ impl SpellView {
                 offset: Vec2::new(element.x, element.y),
                 rotation: element.rotation * std::f64::consts::PI / 180.0,
                 tint: pack_spell_rgb(element.color[0], element.color[1], element.color[2]),
-                ..NativeSpellSprite::new(element.sprite.records()[element.frame], element.scale)
+                ..SpellSprite::new(element.sprite.records()[element.frame], element.scale)
             };
             self.draw_sprite(renderer, camera, position, draw.into(), [1.0; 3], element.anchor);
         }
     }
 
-    fn append_plan(&mut self, plan: NativeSpellSpritePlan, registration: PainterRegistration) {
+    fn append_plan(&mut self, plan: SpellSpritePlan, registration: PainterRegistration) {
         let queue_only = !plan.draws.is_empty()
             && plan.draws.iter().all(|draw| draw.queue != SpellDrawQueue::World);
         let mut draws = Vec::new();
@@ -606,20 +602,20 @@ impl SpellView {
     #[allow(clippy::too_many_arguments)] // Retained state plus the live Source compositor inputs.
     fn append_weld(
         &mut self,
-        state: NativeWeldPresentationState<'_>,
+        state: WeldPresentationState<'_>,
         frame: u64,
         age: f64,
         registration: PainterRegistration,
         split: bool,
         puppet_hit: bool,
         enhanced_effects: bool,
-        region_view: Option<NativeFlameLashBounds>,
+        region_view: Option<FlameLashBounds>,
     ) {
         let overlay_owner_id = match &state {
-            NativeWeldPresentationState::Projectile(actor) => actor.common.owner_id.clone(),
-            NativeWeldPresentationState::World(actor) => actor.common().owner.owner_id.clone(),
+            WeldPresentationState::Projectile(actor) => actor.common.owner_id.clone(),
+            WeldPresentationState::World(actor) => actor.common().owner.owner_id.clone(),
         };
-        let plan = native_weld_visual_plan_at_age(state, frame, age, puppet_hit);
+        let plan = weld_visual_plan_at_age(state, frame, age, puppet_hit);
         for draw in plan.underlays {
             self.pre_world.push(SpellDraw::Sprite { position: plan.position, draw });
         }
@@ -640,15 +636,15 @@ impl SpellView {
                 draws: Vec::new(),
             });
             let bands =
-                build_native_flame_lash_split_bands("flame", bounds, enhanced_effects, region_view)
+                build_flame_lash_split_bands("flame", bounds, enhanced_effects, region_view)
                     .expect("retained Flame has finite padded bounds and Region view");
             for band in bands {
-                let clip = native_flame_region_clipped_band(band.clip, region_view);
+                let clip = flame_region_clipped_band(band.clip, region_view);
                 let mut draws = Vec::new();
                 for mesh in &plan.meshes {
                     draws.push(SpellDraw::Mesh {
                         record: mesh.record,
-                        triangles: clip_native_mesh_in_rect(
+                        triangles: clip_to_rect(
                             &mesh.mesh,
                             plan.position,
                             clip,
@@ -699,7 +695,7 @@ impl SpellView {
                         .iter()
                         .map(|mesh| SpellDraw::Mesh {
                             record: mesh.record,
-                            triangles: clip_native_mesh(&mesh.mesh, plan.position, top, bottom),
+                            triangles: clip_to_bands(&mesh.mesh, plan.position, top, bottom),
                             alpha: mesh.alpha,
                             tint: mesh.tint,
                             uv_space: mesh.uv_space,
@@ -716,7 +712,7 @@ impl SpellView {
         for mesh in plan.meshes {
             draws.push(SpellDraw::Mesh {
                 record: mesh.record,
-                triangles: clip_native_mesh(
+                triangles: clip_to_bands(
                     &mesh.mesh,
                     plan.position,
                     f64::NEG_INFINITY,
@@ -761,7 +757,7 @@ impl SpellView {
                 if draw.pass != pass {
                     continue;
                 }
-                plan.draws.push(NativeSpellSprite {
+                plan.draws.push(SpellSprite {
                     alpha: quantize_water_frost_alpha(draw.alpha),
                     blend: if draw.blend == WaterFrostJetBlend::Add {
                         SpellBlend::Add
@@ -775,7 +771,7 @@ impl SpellView {
                     queue,
                     rotation: draw.rotation,
                     tint: pack_water_frost_tint(draw.color),
-                    ..NativeSpellSprite::new(
+                    ..SpellSprite::new(
                         if draw.sprite == WaterFrostJetSprite::Core { 30 } else { 28 },
                         draw.scale,
                     )
@@ -786,7 +782,7 @@ impl SpellView {
     }
 
     fn append_air(&mut self, spell: &PrimarySpellAirTransient, enhanced_effects: bool) {
-        let plan = build_native_air_lightning_plan(NativeAirLightningInput {
+        let plan = build_air_lightning_plan(AirLightningInput {
             chained: spell.chained,
             enhanced_effects: spell.enhanced_effects,
             age_ticks: spell.common.age_ticks,
@@ -847,8 +843,8 @@ impl SpellView {
                 let record = &self.bad_guys.records[*record];
                 let tint = rgba(*tint, *alpha, [1.0; 3]);
                 let texels = match uv_space {
-                    NativeWeldMeshUvSpace::Record => native_sprite_texel_rect(record),
-                    NativeWeldMeshUvSpace::BadGuysAtlas => {
+                    WeldMeshUvSpace::Record => sprite_texel_rect(record),
+                    WeldMeshUvSpace::BadGuysAtlas => {
                         assert_eq!(
                             [self.bad_guys.texture.width, self.bad_guys.texture.height],
                             [2048.0; 2],
@@ -919,7 +915,7 @@ impl SpellView {
                 );
                 renderer.draw_quad(
                     &self.bad_guys.texture,
-                    native_sprite_texel_rect(&self.bad_guys.records[15]),
+                    sprite_texel_rect(&self.bad_guys.records[15]),
                     [[x, y], [x + width, y], [x + width, y + height], [x, y + height]],
                     [rgba(0xff8040, *alpha, [1.0; 3]); 4],
                     BlendMode::Normal,
@@ -933,7 +929,7 @@ impl SpellView {
         renderer: &mut Renderer,
         camera: &Camera,
         position: Vec2,
-        draw: NativeWeldSpriteDraw,
+        draw: WeldSpriteDraw,
         region_tint: [f32; 3],
         anchor: Option<[f64; 2]>,
     ) {
@@ -975,7 +971,7 @@ impl SpellView {
         });
         renderer.draw_quad_with_color_mode(
             &atlas.texture,
-            native_sprite_texel_rect(record),
+            sprite_texel_rect(record),
             corners,
             [rgba(draw.tint, draw.alpha, region_tint); 4],
             if draw.blend == SpellBlend::Add { BlendMode::Add } else { BlendMode::Normal },
@@ -991,8 +987,8 @@ pub(crate) async fn load_atlas(renderer: &Renderer, name: &str) -> Result<StockA
     Ok(StockAtlas { records, texture: renderer.upload(&image)? })
 }
 
-fn plan_at(position: Vec2) -> NativeSpellSpritePlan {
-    NativeSpellSpritePlan {
+fn plan_at(position: Vec2) -> SpellSpritePlan {
+    SpellSpritePlan {
         position,
         world_y: position.y,
         sort_bias: 0.0,
@@ -1003,7 +999,7 @@ fn plan_at(position: Vec2) -> NativeSpellSpritePlan {
 
 fn rgba(tint: u32, alpha: f64, light: [f32; 3]) -> [f32; 4] {
     let light = pack_spell_rgb(f64::from(light[0]), f64::from(light[1]), f64::from(light[2]));
-    let tint = multiply_native_tints(tint, light);
+    let tint = multiply_tints(tint, light);
     [
         ((tint >> 16) & 255) as f32 / 255.0,
         ((tint >> 8) & 255) as f32 / 255.0,

@@ -1,15 +1,15 @@
 //! Settled-Hub conversion from `save/game-save-portability.ts`.
 
 use solomon_sim::belt::PlayerBeltComponent;
-use solomon_sim::economy::native_hagatha_outcome_state_is_valid;
+use solomon_sim::economy::hagatha_outcome_state_is_valid;
 use solomon_sim::float::fround;
 use solomon_sim::modding::LuaObject;
 use solomon_sim::profile::{
-    NativeHagathaRuntimeState, NativeSkillBookState, NewGameSelection, PlayerConcentrationSlot,
-    PlayerProgressionState, PlayerSkillRuntimeState, PlayerStatBookComponent, WizardDiscipline,
-    WizardElement, native_skill_category,
+    HagathaRuntimeState, NewGameSelection, PlayerConcentrationSlot, PlayerProgressionState,
+    PlayerSkillRuntimeState, PlayerStatBookComponent, SkillBookState, WizardDiscipline,
+    WizardElement, skill_category,
 };
-use solomon_sim::secondary::NativeSecondaryPlayerState;
+use solomon_sim::secondary::SecondaryPlayerState;
 use solomon_sim::session::{GameSession, GameSessionOptions, PlayerLevelUpBarrier};
 
 use crate::native_save::PortableGameProfile;
@@ -62,8 +62,8 @@ fn character(profile: &PortableGameProfile) -> Result<NewGameSelection, String> 
     Ok(NewGameSelection { name: profile.wizard.name.clone(), element, discipline })
 }
 
-fn skill_book(profile: &PortableGameProfile, character: &NewGameSelection) -> NativeSkillBookState {
-    let mut book = NativeSkillBookState::new(character.element, character.discipline);
+fn skill_book(profile: &PortableGameProfile, character: &NewGameSelection) -> SkillBookState {
+    let mut book = SkillBookState::new(character.element, character.discipline);
     book.permanent_ranks = profile
         .wizard
         .permanent_ranks
@@ -90,14 +90,12 @@ fn skill_book(profile: &PortableGameProfile, character: &NewGameSelection) -> Na
     book
 }
 
-fn belt(profile: &PortableGameProfile, book: &NativeSkillBookState) -> PlayerBeltComponent {
+fn belt(profile: &PortableGameProfile, book: &SkillBookState) -> PlayerBeltComponent {
     let mut skills = [None; 8];
     for (slot, source) in profile.wizard.skill_quickbar.iter().enumerate() {
         if let Some(skill_id) = source {
             let id = *skill_id as usize;
-            if id != 52
-                && book.permanent_ranks[id] > 0
-                && matches!(native_skill_category(id), Some(1 | 2))
+            if id != 52 && book.permanent_ranks[id] > 0 && matches!(skill_category(id), Some(1 | 2))
             {
                 skills[slot] = Some(id);
             }
@@ -132,7 +130,7 @@ pub fn create_web_game_save_from_portable_profile(
     economy.tonic_purchases =
         economy.owned_perk_selectors.iter().filter(|selector| **selector == 27).count() as u32;
     economy.charm_capacity = profile.wizard.perk_capacity as u32;
-    if !native_hagatha_outcome_state_is_valid(
+    if !hagatha_outcome_state_is_valid(
         &economy.owned_perk_selectors,
         economy.tonic_purchases,
         economy.charm_capacity,
@@ -169,16 +167,16 @@ pub fn create_web_game_save_from_portable_profile(
 
     let mut book = skill_book(profile, &character);
     let stat_book = PlayerStatBookComponent::default();
-    let hagatha = NativeHagathaRuntimeState {
+    let hagatha = HagathaRuntimeState {
         cheat_death_charges: profile.wizard.cheat_death_charges as u32,
-        ..NativeHagathaRuntimeState::default()
+        ..HagathaRuntimeState::default()
     };
     let mut runtime = PlayerSkillRuntimeState::new_with_stat_book(&mut book, &stat_book, economy);
     for (index, selected) in profile.wizard.concentration_skill_ids.iter().enumerate() {
         if let Some(skill_id) = selected {
             let id = *skill_id as usize;
             if book.permanent_ranks[id] > 0
-                && native_skill_category(id) == Some(3)
+                && skill_category(id) == Some(3)
                 && (index == 0 || economy.owned_perk_selectors.contains(&21))
             {
                 let slot = if index == 0 {
@@ -253,10 +251,10 @@ pub fn create_web_game_save_from_portable_profile(
     }
     state.secondary.players.insert(
         player_id.clone(),
-        NativeSecondaryPlayerState {
+        SecondaryPlayerState {
             firewalker: profile.wizard.firewalker_active,
             reserved_mana: if profile.wizard.firewalker_active { 50.0 } else { 0.0 },
-            ..NativeSecondaryPlayerState::default()
+            ..SecondaryPlayerState::default()
         },
     );
     let mut warnings = profile.warnings.clone();

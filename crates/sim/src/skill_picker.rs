@@ -3,8 +3,7 @@
 
 use crate::hud::HudRect;
 use crate::profile::{
-    NATIVE_SKILL_CATALOG, PlayerSkillOfferOption, SPELL_WELDING_SKILL_ID, native_skill_root,
-    native_weld_build,
+    PlayerSkillOfferOption, SKILL_CATALOG, SPELL_WELDING_SKILL_ID, skill_root, weld_build,
 };
 
 pub const SKILL_PICKER_ROOT_TINTS: [u32; 8] =
@@ -74,17 +73,14 @@ pub fn skill_picker_panel(count: usize) -> HudRect {
 
 #[must_use]
 pub fn skill_picker_card(option: &PlayerSkillOfferOption) -> SkillPickerCard {
-    let skill = &NATIVE_SKILL_CATALOG[option.skill_id];
+    let skill = &SKILL_CATALOG[option.skill_id];
     let weld = if option.skill_id == SPELL_WELDING_SKILL_ID {
-        Some(
-            native_weld_build(option.weld_build_id.expect("offered weld build"))
-                .expect("native weld"),
-        )
+        Some(weld_build(option.weld_build_id.expect("offered weld build")).expect("native weld"))
     } else {
         assert!(option.weld_build_id.is_none(), "ordinary choice has no weld build");
         None
     };
-    let root = native_skill_root(option.skill_id).expect("offered skill root");
+    let root = skill_root(option.skill_id).expect("offered skill root");
     let name = if let Some(weld) = weld {
         weld.synthetic_name.to_owned()
     } else if option.target_rank > 1 {

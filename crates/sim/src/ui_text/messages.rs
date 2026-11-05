@@ -4,20 +4,20 @@
 use crate::Vec2;
 use crate::hud::HudRect;
 
-use super::{NativeUiFontName, NativeUiTextSpec, layout_native_ui_text, native_ui_font};
+use super::{UiFontName, UiTextSpec, layout_ui_text, ui_font};
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeUiMessageDataLineSpec<'a> {
-    pub font: NativeUiFontName,
+pub struct UiMessageDataLineSpec<'a> {
+    pub font: UiFontName,
     pub gap_after: f64,
     pub text: &'a str,
     pub tint: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeUiMessageDataLineLayout {
+pub struct UiMessageDataLineLayout {
     pub baseline_y: f64,
-    pub font: NativeUiFontName,
+    pub font: UiFontName,
     pub gap_after: f64,
     pub height: f64,
     pub line_height: f64,
@@ -28,18 +28,18 @@ pub struct NativeUiMessageDataLineLayout {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeUiSingleActionMessageLayout {
+pub struct UiSingleActionMessageLayout {
     pub action_bounds: HudRect,
     pub action_text_baseline_y: f64,
     pub frame_bounds: HudRect,
-    pub lines: Vec<NativeUiMessageDataLineLayout>,
+    pub lines: Vec<UiMessageDataLineLayout>,
     pub panel_bounds: HudRect,
 }
 
-pub fn layout_native_ui_single_action_message(
+pub fn layout_ui_single_action_message(
     anchor: Vec2,
-    source: &[NativeUiMessageDataLineSpec<'_>],
-) -> Result<NativeUiSingleActionMessageLayout, String> {
+    source: &[UiMessageDataLineSpec<'_>],
+) -> Result<UiSingleActionMessageLayout, String> {
     if source.is_empty() {
         return Err("native UI MsgBox requires at least one DataLine".into());
     }
@@ -54,14 +54,14 @@ pub fn layout_native_ui_single_action_message(
             return Err("native UI MsgBox DataLine gap must be finite and nonnegative".into());
         }
         let text = wrap_msgbox_text(line.text, line.font).join("\n");
-        let line_height = native_ui_font(line.font).metrics[0] + 1.0;
-        let layout = layout_native_ui_text(&NativeUiTextSpec {
+        let line_height = ui_font(line.font).metrics[0] + 1.0;
+        let layout = layout_ui_text(&UiTextSpec {
             line_height: Some(line_height),
-            ..NativeUiTextSpec::new(line.font, &text, 0.0, 0.0)
+            ..UiTextSpec::new(line.font, &text, 0.0, 0.0)
         });
         content_width = content_width.max(layout.width);
         content_height += layout.height + line.gap_after;
-        lines.push(NativeUiMessageDataLineLayout {
+        lines.push(UiMessageDataLineLayout {
             baseline_y: 0.0,
             font: line.font,
             gap_after: line.gap_after,
@@ -78,7 +78,7 @@ pub fn layout_native_ui_single_action_message(
     let panel_bounds = HudRect::new(anchor.x - width / 2.0, anchor.y - height / 2.0, width, height);
     let frame_bounds =
         HudRect::new(panel_bounds.x - 49.0, panel_bounds.y - 50.0, width + 98.0, height + 100.0);
-    let mut baseline = panel_bounds.y + 20.0 + native_ui_font(source[0].font).metrics[0];
+    let mut baseline = panel_bounds.y + 20.0 + ui_font(source[0].font).metrics[0];
     for line in &mut lines {
         line.x = panel_bounds.x + 25.0;
         line.baseline_y = baseline;
@@ -90,7 +90,7 @@ pub fn layout_native_ui_single_action_message(
         196.0,
         69.0,
     );
-    Ok(NativeUiSingleActionMessageLayout {
+    Ok(UiSingleActionMessageLayout {
         action_bounds,
         action_text_baseline_y: action_bounds.y + 42.5,
         frame_bounds,
@@ -102,8 +102,8 @@ pub fn layout_native_ui_single_action_message(
 /// The native MsgBox wraps at 400 pixels, carries the overflow glyph's advance,
 /// removes following spaces, and may replace a hyphen. Preserve that scan rather
 /// than substituting the ordinary renderer's greedy word wrapper.
-fn wrap_msgbox_text(text: &str, font_name: NativeUiFontName) -> Vec<String> {
-    let font = native_ui_font(font_name);
+fn wrap_msgbox_text(text: &str, font_name: UiFontName) -> Vec<String> {
+    let font = ui_font(font_name);
     let mut characters: Vec<_> = text.chars().collect();
     let mut index = 0_isize;
     let mut line_start = 0_isize;

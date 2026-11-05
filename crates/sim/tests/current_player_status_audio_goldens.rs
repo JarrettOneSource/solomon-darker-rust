@@ -5,7 +5,7 @@ use solomon_sim::Vec2;
 use solomon_sim::audio::combat::{CombatAudioCursor, CombatAudioFrame};
 use solomon_sim::audio::{AudioCue, AudioEvent};
 use solomon_sim::enemies::model::{EnemyEvent, EnemyEventKind};
-use solomon_sim::secondary::NativeSecondarySimulationState;
+use solomon_sim::secondary::SecondarySimulationState;
 use solomon_sim::spells::model::SpellState;
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -54,7 +54,7 @@ fn owner_charm_stream_and_spatial_rescue_program_replay_current_source() {
     .unwrap();
     assert_eq!(fixture["sourceRevision"], "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     let primary = SpellState::default();
-    let secondary = NativeSecondarySimulationState::new(1);
+    let secondary = SecondarySimulationState::new(1);
     for case in fixture["cases"].as_array().unwrap() {
         let gain = case["gain"].as_f64().unwrap();
         let point_gain = |_: Vec2| gain;

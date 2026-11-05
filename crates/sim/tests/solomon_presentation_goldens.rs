@@ -24,13 +24,13 @@ fn visual_json(visual: SolomonVisualState) -> Value {
     json!({
         "bodyBank": visual.body_bank.id(), "bodyPose": visual.body_pose,
         "clipRectWorld": clip_json(visual.clip_rect_world), "direction": visual.direction,
-        "mouthPose": visual.mouth_pose, "nativeBodyRecord": visual.native_body_record,
-        "nativeMouthRecord": visual.native_mouth_record, "offsetY": visual.offset_y,
+        "mouthPose": visual.mouth_pose, "nativeBodyRecord": visual.body_record,
+        "nativeMouthRecord": visual.mouth_record, "offsetY": visual.offset_y,
         "graveMarkVisible": visual.grave_mark_visible, "visible": visual.visible,
     })
 }
 
-fn dirt_json(state: NativeSolomonDirtState) -> Value {
+fn dirt_json(state: SolomonDirtState) -> Value {
     json!({ "ageTicks": state.age_ticks, "alpha": state.alpha,
         "headingDegrees": state.heading_degrees,
         "position": { "x": state.position.x, "y": state.position.y }, "speed": state.speed })
@@ -95,15 +95,13 @@ fn solomon_body_masks_painters_and_retained_dirt_match_the_website_view() {
     };
     for record in fixture["directions"].as_array().unwrap() {
         assert_eq!(
-            native_solomon_direction(record["heading"].as_f64().unwrap()),
+            solomon_direction(record["heading"].as_f64().unwrap()),
             record["direction"].as_u64().unwrap() as usize
         );
     }
     for record in fixture["dirtStates"].as_array().unwrap() {
-        let state = native_solomon_dirt_state_at(
-            point(&record["position"]),
-            record["age"].as_u64().unwrap(),
-        );
+        let state =
+            solomon_dirt_state_at(point(&record["position"]), record["age"].as_u64().unwrap());
         // These motions narrow every trigonometric component before storing it.
         if record["expected"].is_null() {
             assert!(state.is_none());
@@ -111,7 +109,7 @@ fn solomon_body_masks_painters_and_retained_dirt_match_the_website_view() {
             let expected = &record["expected"];
             assert_eq!(
                 state.unwrap(),
-                NativeSolomonDirtState {
+                SolomonDirtState {
                     age_ticks: expected["ageTicks"].as_u64().unwrap(),
                     alpha: expected["alpha"].as_f64().unwrap(),
                     heading_degrees: expected["headingDegrees"].as_f64().unwrap(),
@@ -123,7 +121,7 @@ fn solomon_body_masks_painters_and_retained_dirt_match_the_website_view() {
     }
     for record in fixture["eventDeltas"].as_array().unwrap() {
         let events: Vec<_> = record["events"].as_array().unwrap().iter().map(event).collect();
-        let (id, delta) = native_solomon_dirt_event_delta(record["last"].as_u64(), &events);
+        let (id, delta) = solomon_dirt_event_delta(record["last"].as_u64(), &events);
         assert_eq!(id, record["expected"]["eventId"].as_u64().unwrap());
         let expected: Vec<_> =
             record["expected"]["events"].as_array().unwrap().iter().map(event).collect();
@@ -131,14 +129,13 @@ fn solomon_body_masks_painters_and_retained_dirt_match_the_website_view() {
     }
     for record in fixture["fallback"].as_array().unwrap() {
         let state = boneyard_solomon_visual_state(None, &dig, record["tick"].as_u64().unwrap());
-        assert_eq!(state.native_body_record as u64, record["frame"].as_u64().unwrap());
+        assert_eq!(state.body_record as u64, record["frame"].as_u64().unwrap());
         assert_eq!(state.offset_y, record["offsetY"].as_f64().unwrap());
         compare(&clip_json(state.clip_rect_world), &record["clip"], "fallback clip");
     }
-    let lighting =
-        native_solomon_set_piece_lighting(dig.position, dig.lantern_position, &|position| {
-            if position == dig.lantern_position { 0x9f9f9f } else { 0x3f3f3f }
-        });
+    let lighting = solomon_set_piece_lighting(dig.position, dig.lantern_position, &|position| {
+        if position == dig.lantern_position { 0x9f9f9f } else { 0x3f3f3f }
+    });
     assert_eq!(
         json!({ "bodyTint": lighting.body_tint, "dirtTint": lighting.dirt_tint,
         "lanternTint": lighting.lantern_tint }),

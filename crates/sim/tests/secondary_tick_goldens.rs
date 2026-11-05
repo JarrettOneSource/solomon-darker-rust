@@ -15,10 +15,10 @@ use current::{result_snapshot, state_snapshot};
 use native_bits::source_value;
 use serde_json::{Value, json};
 use solomon_sim::HubWizard;
-use solomon_sim::belt::{NativeBeltCommand, PlayerBeltComponent};
+use solomon_sim::belt::{BeltCommand, PlayerBeltComponent};
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::profile::WizardElement;
-use solomon_sim::secondary::golem::NativeGolemIncomingDamage;
+use solomon_sim::secondary::golem::GolemIncomingDamage;
 use solomon_sim::secondary::*;
 use std::collections::BTreeMap;
 use support::*;
@@ -46,7 +46,7 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
         let skill_id = case["skillId"].as_u64().unwrap() as usize;
         let mut belt = PlayerBeltComponent::new(&book);
         assert!(belt.apply(
-            NativeBeltCommand::BindSkill { skill_id: Some(skill_id), slot: 0 },
+            BeltCommand::BindSkill { skill_id: Some(skill_id), slot: 0 },
             &book,
             &HubEconomyState::new(77, WizardElement::Ether)
         ));
@@ -89,13 +89,13 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
             }
             if matches!(mode, "shield-break" | "shield-explode") && tick == 2 {
                 state.apply_player_damage(
-                    NativeSecondaryPlayerDamageInput {
+                    SecondaryPlayerDamageInput {
                         player_id: "player",
                         amount: 100000.0,
                         tick,
                         position: solomon_sim::Vec2::ZERO,
                         world_key: authority.world_key,
-                        presentation: NativeSecondaryPlayerDamagePresentation::default(),
+                        presentation: SecondaryPlayerDamagePresentation::default(),
                     },
                     &mut damage_order,
                 );
@@ -104,12 +104,12 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
                 let id = state
                     .actors
                     .iter()
-                    .find(|actor| actor.kind == NativeSecondaryActorKind::Golem)
+                    .find(|actor| actor.kind == SecondaryActorKind::Golem)
                     .unwrap()
                     .id;
                 state.apply_golem_damage(
                     id,
-                    NativeGolemIncomingDamage {
+                    GolemIncomingDamage {
                         primary_damage: 1000000.0,
                         secondary_damage: 0.0,
                         reflectable_physical_source_in_range: true,
@@ -120,24 +120,24 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
                 );
             }
             if mode == "effects" && tick == 2 {
-                state.apply_ether_burn(NativeSecondaryEtherBurnInput {
+                state.apply_ether_burn(SecondaryEtherBurnInput {
                     owner_id: "player".into(),
                     rank: 2,
                     target: world.targets[0].clone(),
                     world_key: authority.world_key.into(),
                 });
-                apply_native_secondary_target_effect(
+                apply_secondary_target_effect(
                     &mut state.target_effects,
                     authority.world_key,
                     7,
-                    NativeSecondaryTargetEffectPatch {
+                    SecondaryTargetEffectPatch {
                         prismatic_ticks: Some(1),
                         frost_burn_ticks: Some(1),
                         frost_burn_damage_per_tick: Some(0.01),
                         frost_burn_owner_id: Some("player".into()),
                         frost_burn_skill_id: Some(35),
                         frost_burn_source_actor_id: Some(1),
-                        electric_burn: Some(Some(NativeSecondaryElectricBurnEffectState {
+                        electric_burn: Some(Some(SecondaryElectricBurnEffectState {
                             arc_count: 2,
                             damage_per_tick: 1.0,
                             owner_id: "player".into(),
@@ -145,7 +145,7 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
                             stun_factor: 0.8,
                             ticks: 1,
                         })),
-                        steamed: Some(Some(NativeSecondarySteamedEffectState {
+                        steamed: Some(Some(SecondarySteamedEffectState {
                             damage_per_tick: 1.0,
                             ember_damage: 2.0,
                             ember_fragments: 3,
@@ -155,14 +155,14 @@ fn every_secondary_family_replays_its_ordered_website_lifetime() {
                             source_actor_id: 1,
                             ticks: 1,
                         })),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }
             let mut players = BTreeMap::new();
             players.insert("player".to_owned(), authority);
             let result = state.step(
-                &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+                &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
                 &mut world,
                 None,
             );
@@ -205,7 +205,7 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
             targets: case["targets"].as_array().unwrap().iter().map(target).collect(),
         };
         let mut order = WorldPainterOrder { next_actor_ordinal: 10, next_transient_ordinal: 20 };
-        let mut state = NativeSecondarySimulationState::new(77);
+        let mut state = SecondarySimulationState::new(77);
         let mode = case["mode"].as_str().unwrap();
         match mode {
             "flash" => {
@@ -222,7 +222,7 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
                     pitch: response["pitch"].as_f64().unwrap(),
                 };
                 state.materialize_player_flash_response(
-                    NativePlayerFlashResponseInput {
+                    PlayerFlashResponseInput {
                         owner_id: "player",
                         position: Vec2::ZERO,
                         response: &response,
@@ -233,7 +233,7 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
                     &mut order,
                 );
                 let mut screen_flash =
-                    NativeSecondaryScreenFlashState::new(1.0, 0.5, 0.25, 0.1, true, 1.0);
+                    SecondaryScreenFlashState::new(1.0, 0.5, 0.25, 0.1, true, 1.0);
                 // emitNativePlayerScreenFlash preserves its supplied payload rather
                 // than applying the private screenFlash factory's float32 stores.
                 screen_flash.decay_per_tick = 0.1;
@@ -250,7 +250,7 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
                     .as_array()
                     .unwrap()
                     .iter()
-                    .map(|value| NativeScriptFire {
+                    .map(|value| ScriptFire {
                         damage: value["damage"].as_f64().unwrap(),
                         lifetime_ticks: value["lifetimeTicks"].as_u64().unwrap(),
                         position: point(&value["position"]),
@@ -274,7 +274,7 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
                     other => panic!("unknown element {other}"),
                 };
                 let result = state.trigger_player_mindblast(
-                    NativePlayerMindblastInput {
+                    PlayerMindblastInput {
                         direct_damage: None,
                         element,
                         level: 7,
@@ -316,7 +316,7 @@ fn flash_mindblast_and_script_fires_keep_source_birth_and_presentation_order() {
                 Value::Null
             } else {
                 result_snapshot(&state.step(
-                    &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+                    &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
                     &mut world,
                     Some(&mut order),
                 ))

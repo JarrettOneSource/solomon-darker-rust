@@ -31,7 +31,7 @@ struct Constraint {
 
 /// Build the same ordered graph for an accepted scene or first-query gate collision.
 #[must_use]
-pub fn build_native_nav_mesh(
+pub fn build_nav_mesh(
     bounds: BoneyardBounds,
     world: &BoneyardCollisionWorld,
     clearance: f64,
@@ -41,18 +41,18 @@ pub fn build_native_nav_mesh(
         world
             .circles()
             .iter()
-            .filter(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0)
+            .filter(|shape| shape.line_mask & COLLISION_EXCLUSION_MASK == 0)
             .cloned()
             .collect(),
         world
             .polygons()
             .iter()
-            .filter(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0)
+            .filter(|shape| shape.line_mask & COLLISION_EXCLUSION_MASK == 0)
             .cloned()
             .collect(),
         world
             .segments()
-            .filter(|shape| shape.native_line_mask & COLLISION_EXCLUSION_MASK == 0)
+            .filter(|shape| shape.line_mask & COLLISION_EXCLUSION_MASK == 0)
             .cloned()
             .collect(),
     );
@@ -63,7 +63,7 @@ pub fn build_native_nav_mesh(
         candidates.push(constraint.end);
     }
     append_constraint_intersections(&mut candidates, &constraints);
-    append_native_lattice(&mut candidates, bounds, clearance);
+    append_lattice(&mut candidates, bounds, clearance);
     let margin = BOUNDARY_MARGIN + clearance;
     let candidate_bounds = BoneyardBounds::new(
         bounds.x - margin,
@@ -197,7 +197,7 @@ fn segment_intersection(left: Constraint, right: Constraint) -> Option<Vec2> {
     )))
 }
 
-fn append_native_lattice(candidates: &mut Vec<Vec2>, bounds: BoneyardBounds, clearance: f64) {
+fn append_lattice(candidates: &mut Vec<Vec2>, bounds: BoneyardBounds, clearance: f64) {
     let horizontal = axis_samples(bounds.x, bounds.x + bounds.width);
     let vertical = axis_samples(bounds.y, bounds.y + bounds.height);
     for &x in &horizontal {

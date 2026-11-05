@@ -4,19 +4,19 @@
 use crate::float::fround;
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use crate::profile::primary::NativeWeldPrimarySkillProfile;
-use crate::profile::weld::NativeWeldCastKind;
+use crate::profile::primary::WeldPrimarySkillProfile;
+use crate::profile::weld::WeldCastKind;
 use crate::spells::model::{PrimarySpellProjectileBase, PrimarySpellProjectilePhase};
 use crate::spells::targeting::{
     ETHER_PRIMARY_INITIAL_TURN, EtherPrimaryTrackingInput, PrimarySpellTarget,
-    advance_ether_primary_tracking, direction_from_heading, native_missile_fan_heading,
-    native_missile_fan_turn_scale, select_ether_primary_target,
+    advance_ether_primary_tracking, direction_from_heading, missile_fan_heading,
+    missile_fan_turn_scale, select_ether_primary_target,
 };
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldFrostPresentationLane {
+pub struct WeldFrostPresentationLane {
     pub aspect: f64,
     pub rotation_degrees: f64,
     pub scale: f64,
@@ -26,7 +26,7 @@ pub struct NativeWeldFrostPresentationLane {
 /// Fields follow the save record's order.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldProjectileState {
+pub struct WeldProjectileState {
     pub common: PrimarySpellProjectileBase,
     pub ball_lightning_acceleration: Option<f64>,
     pub base_presentation_phase_degrees: Option<f64>,
@@ -37,9 +37,10 @@ pub struct NativeWeldProjectileState {
     pub heading_degrees: f64,
     pub hit_target_ids: Vec<String>,
     pub frost_pulse_aspect: Option<f64>,
-    pub frost_presentation_lanes: Option<[NativeWeldFrostPresentationLane; 2]>,
+    pub frost_presentation_lanes: Option<[WeldFrostPresentationLane; 2]>,
     pub frost_turn_degrees: Option<f64>,
-    pub ground_spark_native_age_ticks: Option<u64>,
+    #[cfg_attr(feature = "persistence", serde(rename = "ground_spark_native_age_ticks"))]
+    pub ground_spark_age_ticks: Option<u64>,
     pub ground_spark_turn_ticks_remaining: Option<i64>,
     pub presentation_seed: Option<u32>,
     pub projectile_index: usize,
@@ -53,19 +54,19 @@ pub struct NativeWeldProjectileState {
     pub vector: Vec<f64>,
 }
 
-pub struct SpawnNativeWeldOneShotInput<'a> {
+pub struct SpawnWeldOneShotInput<'a> {
     pub aim_direction: Vec2,
     pub first_id: u64,
     pub origin: Vec2,
     pub owner_id: &'a str,
-    pub primary_skill: &'a NativeWeldPrimarySkillProfile,
+    pub primary_skill: &'a WeldPrimarySkillProfile,
     pub targets: &'a [PrimarySpellTarget],
     pub underpowered: bool,
     pub world_key: &'a str,
 }
 
 /// Weld damage differs from normal Air/Water damage: an equal range draws no word.
-pub fn draw_native_weld_damage(rng: &mut NativeRng, minimum: f64, maximum: f64) -> f64 {
+pub fn draw_weld_damage(rng: &mut Rng, minimum: f64, maximum: f64) -> f64 {
     assert!(
         minimum.is_finite() && maximum.is_finite() && maximum >= minimum,
         "weld damage endpoints must be finite and ordered"
@@ -77,19 +78,19 @@ pub fn draw_native_weld_damage(rng: &mut NativeRng, minimum: f64, maximum: f64) 
     fround(fround(minimum) + draw)
 }
 
-pub fn spawn_native_weld_one_shot(
-    input: SpawnNativeWeldOneShotInput<'_>,
-    rng: &mut NativeRng,
+pub fn spawn_weld_one_shot(
+    input: SpawnWeldOneShotInput<'_>,
+    rng: &mut Rng,
     mut painters: Option<&mut WorldPainterOrder>,
-) -> Vec<NativeWeldProjectileState> {
+) -> Vec<WeldProjectileState> {
     let profile = input.primary_skill;
     let build_id = profile.build_id;
     assert!(
-        profile.cast_kind == NativeWeldCastKind::OneShot && matches!(build_id, 1000..=1002 | 1009),
+        profile.cast_kind == WeldCastKind::OneShot && matches!(build_id, 1000..=1002 | 1009),
         "weld build is not a one-shot actor"
     );
     let damage =
-        draw_native_weld_damage(rng, profile.common.damage_minimum, profile.common.damage_maximum);
+        draw_weld_damage(rng, profile.common.damage_minimum, profile.common.damage_maximum);
     let aim_heading = heading_degrees_from_vector(input.aim_direction.x, input.aim_direction.y);
     let quantity = if input.underpowered {
         1
@@ -138,7 +139,7 @@ pub fn spawn_native_weld_one_shot(
                     },
             )
         } else {
-            native_missile_fan_heading(aim_heading, quantity, index)
+            missile_fan_heading(aim_heading, quantity, index)
         };
         let direction = direction_from_heading(heading);
         let position = Vec2::new(
@@ -169,12 +170,12 @@ pub fn spawn_native_weld_one_shot(
             frost_aspect = Some(fround(0.5 + rng.draw_scaled_float(0.25_f32 as f64, false)));
         }
         let mut private_seed = None;
-        let mut native_age = None;
+        let mut age = None;
         if build_id == 1000 || build_id == 1009 {
             private_seed =
                 Some(rng.draw_integer(if build_id == 1000 { 100_000 } else { 1_000_000 }) as u32);
             if build_id == 1009 {
-                native_age = Some(rng.draw_integer(360) as u64);
+                age = Some(rng.draw_integer(360) as u64);
             }
         }
         let vector = underpowered_vector(build_id, &profile.vector.values, input.underpowered);
@@ -190,7 +191,7 @@ pub fn spawn_native_weld_one_shot(
                 registration_ordinal: id as usize,
             }
         };
-        projectiles.push(NativeWeldProjectileState {
+        projectiles.push(WeldProjectileState {
             common: PrimarySpellProjectileBase {
                 age_ticks: 0,
                 charge: 1.0,
@@ -219,12 +220,8 @@ pub fn spawn_native_weld_one_shot(
             frost_pulse_aspect: frost_aspect,
             frost_presentation_lanes: if build_id == 1001 {
                 Some([
-                    NativeWeldFrostPresentationLane {
-                        aspect: 0.0,
-                        rotation_degrees: 0.0,
-                        scale: 0.0,
-                    },
-                    NativeWeldFrostPresentationLane {
+                    WeldFrostPresentationLane { aspect: 0.0, rotation_degrees: 0.0, scale: 0.0 },
+                    WeldFrostPresentationLane {
                         aspect: frost_aspect.unwrap(),
                         rotation_degrees: secondary_phase.unwrap(),
                         scale: 0.0,
@@ -234,7 +231,7 @@ pub fn spawn_native_weld_one_shot(
                 None
             },
             frost_turn_degrees: (build_id == 1001).then_some(0.0),
-            ground_spark_native_age_ticks: native_age,
+            ground_spark_age_ticks: age,
             ground_spark_turn_ticks_remaining: (build_id == 1009).then_some(0),
             presentation_seed: private_seed,
             projectile_index: index,
@@ -249,7 +246,7 @@ pub fn spawn_native_weld_one_shot(
                 fround(
                     2.0 * speed_factor
                         * if build_id == 1002 { ball_turn_scale } else { 1.0 }
-                        * native_missile_fan_turn_scale(index),
+                        * missile_fan_turn_scale(index),
                 )
             },
             underpowered: input.underpowered,
@@ -259,10 +256,7 @@ pub fn spawn_native_weld_one_shot(
     projectiles
 }
 
-pub fn step_native_weld_projectile_presentation(
-    projectile: &mut NativeWeldProjectileState,
-    rng: &mut NativeRng,
-) {
+pub fn step_weld_projectile_presentation(projectile: &mut WeldProjectileState, rng: &mut Rng) {
     if projectile.build_id != 1001 {
         return;
     }
@@ -280,10 +274,7 @@ pub fn step_native_weld_projectile_presentation(
     }
 }
 
-pub fn step_native_weld_projectile(
-    projectile: &mut NativeWeldProjectileState,
-    targets: &[PrimarySpellTarget],
-) {
+pub fn step_weld_projectile(projectile: &mut WeldProjectileState, targets: &[PrimarySpellTarget]) {
     if projectile.build_id == 1009 {
         projectile.common.position = Vec2::new(
             fround(projectile.common.position.x + projectile.common.velocity.x),
@@ -292,10 +283,9 @@ pub fn step_native_weld_projectile(
         let mut ticks =
             projectile.ground_spark_turn_ticks_remaining.expect("GroundSpark owns turn clock") - 1;
         if ticks < 1 {
-            let magnitude_word =
-                native_ground_spark_private_word(projectile.presentation_seed.unwrap());
-            let sign_word = native_ground_spark_private_word(magnitude_word);
-            let speed_word = native_ground_spark_private_word(sign_word);
+            let magnitude_word = ground_spark_private_word(projectile.presentation_seed.unwrap());
+            let sign_word = ground_spark_private_word(magnitude_word);
+            let speed_word = ground_spark_private_word(sign_word);
             let magnitude =
                 fround(fround(f64::from(magnitude_word % 100_000) / 100_000.0) * 20.0 + 17.0);
             let signed = if sign_word.is_multiple_of(2) { -magnitude } else { magnitude };
@@ -308,7 +298,7 @@ pub fn step_native_weld_projectile(
         }
         projectile.common.age_ticks += 1;
         projectile.common.flight_ticks += 1;
-        *projectile.ground_spark_native_age_ticks.as_mut().unwrap() += 1;
+        *projectile.ground_spark_age_ticks.as_mut().unwrap() += 1;
         projectile.ground_spark_turn_ticks_remaining = Some(ticks);
         projectile.common.velocity = Vec2::new(
             fround(projectile.common.direction.x * projectile.speed),
@@ -365,11 +355,11 @@ pub fn step_native_weld_projectile(
 
 /// Private xorshift/multiply word, including the native signed absolute value.
 #[must_use]
-pub fn native_ground_spark_private_word(source: u32) -> u32 {
-    (native_weld_private_stage(source) as i32).unsigned_abs()
+pub fn ground_spark_private_word(source: u32) -> u32 {
+    (weld_private_stage(source) as i32).unsigned_abs()
 }
 
-pub(super) fn native_weld_private_stage(source: u32) -> u32 {
+pub(super) fn weld_private_stage(source: u32) -> u32 {
     let mut value = source ^ (source << 21);
     value ^= value >> 11;
     (value ^ (value << 4)).wrapping_mul(0x0a67_cfcf)

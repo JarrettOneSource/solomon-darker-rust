@@ -5,15 +5,15 @@ mod graphics;
 
 use solomon_protocol::HubActivity;
 use solomon_sim::Vec2;
-use solomon_sim::native_ui_text::NativeUiGlyphLayout;
 use solomon_sim::profile::WizardElement;
 use solomon_sim::social::{
     GameChatMessage, GameWorldSpeech, append_game_world_speech, sample_game_world_speech_alpha,
 };
+use solomon_sim::ui_text::UiGlyphLayout;
 use solomon_sim::world_labels::*;
 
+use crate::beam_mesh::sprite_frame_texel_rect;
 use crate::courtyard::Camera;
-use crate::native_mesh::native_sprite_frame_texel_rect;
 use graphics::{
     chamfered_plate, circle, circle_stroke, diamond, polygon, rectangle, round_rectangle,
 };
@@ -112,7 +112,7 @@ struct SpeechView {
     id: String,
     text: String,
     sequence: u64,
-    layout: NativeWorldSpeechLayout,
+    layout: WorldSpeechLayout,
     position: Option<Vec2>,
     alpha: f64,
 }
@@ -207,7 +207,7 @@ impl WorldOverlaysView {
                 continue;
             }
             let Some(health_ratio) =
-                native_world_nameplate_health_ratio(player.current_health, player.maximum_health)
+                world_nameplate_health_ratio(player.current_health, player.maximum_health)
             else {
                 continue;
             };
@@ -276,7 +276,7 @@ impl WorldOverlaysView {
             let Some(player) = players.iter().find(|player| player.id == speech.player_id) else {
                 continue;
             };
-            let layout = layout_native_world_speech(&speech.text);
+            let layout = layout_world_speech(&speech.text);
             if layout.glyph_count == 0 {
                 continue;
             }
@@ -369,7 +369,7 @@ impl WorldOverlaysView {
         &self,
         renderer: &mut Renderer,
         position: Vec2,
-        layout: &NativeWorldSpeechLayout,
+        layout: &WorldSpeechLayout,
         alpha: f64,
     ) {
         let left = -layout.width / 2.0;
@@ -432,7 +432,7 @@ impl WorldOverlaysView {
     fn draw_glyph(
         &self,
         renderer: &mut Renderer,
-        layout: &NativeUiGlyphLayout,
+        layout: &UiGlyphLayout,
         origin: Vec2,
         tint: u32,
         alpha: f64,
@@ -442,7 +442,7 @@ impl WorldOverlaysView {
         renderer.draw(
             &self.font_atlas,
             Quad {
-                source: native_sprite_frame_texel_rect(glyph.frame),
+                source: sprite_frame_texel_rect(glyph.frame),
                 destination: [
                     (origin.x
                         + layout.center_x
@@ -466,7 +466,7 @@ fn project_anchor(position: Vec2, offset_y: f64, frame: &WorldOverlayFrame<'_>) 
     if !frame.renderable {
         return None;
     }
-    project_native_world_point(
+    project_world_point(
         Vec2::new(position.x, position.y + offset_y),
         Vec2::new(
             -frame.camera.origin.x * frame.camera.scale,

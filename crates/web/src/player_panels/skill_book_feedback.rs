@@ -5,18 +5,16 @@ use crate::gpu_ui::UiFrame;
 use solomon_sim::Vec2;
 use solomon_sim::audio::{AudioCue, AudioEvent};
 use solomon_sim::economy::{
-    HubActionFeedback, NativeSkillBookFeedbackCursor, NativeSkillBookOutcome,
-    native_skill_book_result_text,
+    HubActionFeedback, SkillBookFeedbackCursor, SkillBookOutcome, skill_book_result_text,
 };
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::messages::{
-    NativeUiMessageDataLineSpec, NativeUiSingleActionMessageLayout,
-    layout_native_ui_single_action_message,
+use solomon_sim::ui_text::messages::{
+    UiMessageDataLineSpec, UiSingleActionMessageLayout, layout_ui_single_action_message,
 };
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec};
 
 pub(super) struct SkillBookFeedback {
-    cursor: NativeSkillBookFeedbackCursor,
+    cursor: SkillBookFeedbackCursor,
     result: Option<SkillBookResult>,
 }
 struct SkillBookResult {
@@ -35,10 +33,10 @@ impl SkillBookFeedback {
         self.result.as_ref().map(|result| super::chrome::modal_layer_id(&result.scope()))
     }
     pub fn new() -> Self {
-        Self { cursor: NativeSkillBookFeedbackCursor::new(None), result: None }
+        Self { cursor: SkillBookFeedbackCursor::new(None), result: None }
     }
     fn reset(&mut self, feedback: Option<&HubActionFeedback>) {
-        self.cursor = NativeSkillBookFeedbackCursor::new(feedback);
+        self.cursor = SkillBookFeedbackCursor::new(feedback);
         self.result = None;
     }
     fn dismiss(&mut self) -> bool {
@@ -51,15 +49,13 @@ impl SkillBookFeedback {
     ) -> Result<bool, String> {
         let Some(receipt) = self.cursor.consume(feedback) else { return Ok(false) };
         self.result = match receipt.outcome {
-            NativeSkillBookOutcome::Rank { skill_id: Some(skill_id) } => Some(SkillBookResult {
+            SkillBookOutcome::Rank { skill_id: Some(skill_id) } => Some(SkillBookResult {
                 sequence: receipt.sequence,
                 skill_id,
-                text: native_skill_book_result_text(skill_id)?,
+                text: skill_book_result_text(skill_id)?,
                 pause_panel,
             }),
-            NativeSkillBookOutcome::Choice | NativeSkillBookOutcome::Rank { skill_id: None } => {
-                None
-            }
+            SkillBookOutcome::Choice | SkillBookOutcome::Rank { skill_id: None } => None,
         };
         Ok(true)
     }
@@ -157,27 +153,26 @@ impl PlayerPanels {
                         } else {
                             "panel:skill-book-result-text"
                         },
-                        &NativeUiTextSpec {
-                            align: NativeUiTextAlign::Left,
+                        &UiTextSpec {
+                            align: UiTextAlign::Left,
                             tint: line.tint,
                             line_height: Some(line.line_height),
-                            ..NativeUiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
+                            ..UiTextSpec::new(line.font, &line.text, line.x, line.baseline_y)
                         },
                     );
                 }
                 let r = layout.action_bounds;
-                let button =
-                    c.native_button_art(&panels.ui, "skill-book-result-okay", "OKAY", r)?;
-                let label = NativeUiTextSpec {
+                let button = c.button_art(&panels.ui, "skill-book-result-okay", "OKAY", r)?;
+                let label = UiTextSpec {
                     tint: 0xd9ba70,
-                    ..NativeUiTextSpec::new(
-                        NativeUiFontName::Menu,
+                    ..UiTextSpec::new(
+                        UiFontName::Menu,
                         "OKAY",
                         r.width / 2.0,
                         layout.action_text_baseline_y - r.y,
                     )
                 };
-                button.text(&solomon_sim::native_ui_text::buttons::fit_native_ui_button_label(
+                button.text(&solomon_sim::ui_text::buttons::fit_ui_button_label(
                     label,
                     HudRect::new(0.0, 0.0, r.width, r.height),
                     r.height / 69.0,
@@ -188,18 +183,18 @@ impl PlayerPanels {
     }
 }
 
-fn result_layout(text: &str) -> Result<NativeUiSingleActionMessageLayout, String> {
-    layout_native_ui_single_action_message(
+fn result_layout(text: &str) -> Result<UiSingleActionMessageLayout, String> {
+    layout_ui_single_action_message(
         Vec2::new(800.0, 450.0),
         &[
-            NativeUiMessageDataLineSpec {
-                font: NativeUiFontName::Menu,
+            UiMessageDataLineSpec {
+                font: UiFontName::Menu,
                 text: "Skill improved",
                 gap_after: 10.0,
                 tint: 0xb2b2ff,
             },
-            NativeUiMessageDataLineSpec {
-                font: NativeUiFontName::Medium,
+            UiMessageDataLineSpec {
+                font: UiFontName::Medium,
                 text,
                 gap_after: 0.0,
                 tint: 0xb2b2ff,
@@ -213,7 +208,7 @@ mod tests {
     use super::*;
     use solomon_sim::economy::HubActionFeedbackAction;
 
-    fn receipt(sequence: u64, outcome: NativeSkillBookOutcome) -> HubActionFeedback {
+    fn receipt(sequence: u64, outcome: SkillBookOutcome) -> HubActionFeedback {
         HubActionFeedback {
             accepted: true,
             action: HubActionFeedbackAction::ReadSkillBook,
@@ -230,11 +225,11 @@ mod tests {
 
     #[test]
     fn result_retains_its_book_pause_until_dismiss_and_does_not_replay() {
-        let restored = receipt(7, NativeSkillBookOutcome::Rank { skill_id: Some(32) });
+        let restored = receipt(7, SkillBookOutcome::Rank { skill_id: Some(32) });
         let mut feedback = SkillBookFeedback::new();
         feedback.reset(Some(&restored));
         assert!(!feedback.observe(Some(&restored), PlayerPanel::Inventory).unwrap());
-        let accepted = receipt(8, NativeSkillBookOutcome::Rank { skill_id: Some(35) });
+        let accepted = receipt(8, SkillBookOutcome::Rank { skill_id: Some(35) });
         assert!(feedback.observe(Some(&accepted), PlayerPanel::Skills).unwrap());
         let result = feedback.result.as_ref().unwrap();
         assert_eq!(result.pause_panel, PlayerPanel::Skills);
@@ -255,10 +250,10 @@ mod tests {
     fn choice_and_exhausted_rank_play_feedback_without_a_result() {
         let mut feedback = SkillBookFeedback::new();
         for (sequence, outcome) in [
-            (1, NativeSkillBookOutcome::Rank { skill_id: Some(32) }),
-            (2, NativeSkillBookOutcome::Choice),
-            (3, NativeSkillBookOutcome::Rank { skill_id: Some(35) }),
-            (4, NativeSkillBookOutcome::Rank { skill_id: None }),
+            (1, SkillBookOutcome::Rank { skill_id: Some(32) }),
+            (2, SkillBookOutcome::Choice),
+            (3, SkillBookOutcome::Rank { skill_id: Some(35) }),
+            (4, SkillBookOutcome::Rank { skill_id: None }),
         ] {
             assert!(
                 feedback
@@ -267,7 +262,7 @@ mod tests {
             );
             assert_eq!(
                 feedback.result.is_some(),
-                matches!(outcome, NativeSkillBookOutcome::Rank { skill_id: Some(_) })
+                matches!(outcome, SkillBookOutcome::Rank { skill_id: Some(_) })
             );
         }
     }
@@ -282,7 +277,7 @@ mod tests {
         assert_eq!(cases.len(), 74);
         for case in cases {
             let skill = case["skillId"].as_u64().unwrap() as usize;
-            let text = native_skill_book_result_text(skill).unwrap();
+            let text = skill_book_result_text(skill).unwrap();
             assert_eq!(text, case["text"].as_str().unwrap());
             let actual = result_layout(&text).unwrap();
             let expected = &case["layout"];

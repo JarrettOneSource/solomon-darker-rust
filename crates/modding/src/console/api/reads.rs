@@ -36,7 +36,7 @@ pub(super) fn invoke(
             for item in web_lua_developer_items() {
                 let mut row =
                     json_value(&item)?.as_object().expect("catalog row is an object").clone();
-                if item.native_subtype.is_none() {
+                if item.subtype.is_none() {
                     row.remove("native_subtype");
                 }
                 if item.recipe_index.is_none() {
@@ -161,7 +161,7 @@ fn frame_read(
                     lua.create_string(&enemy.token).map_err(|error| bounded_error(&error))?,
                 ))
                 .ok_or_else(|| format!("unknown stock enemy: {}", enemy.token))?;
-                let native_id = descriptor.token.native_type_id();
+                let native_id = descriptor.token.type_id();
                 actors.push(json_value(json!({
                     "dead": enemy.life_state != "alive",
                     "enemy_type": native_id,

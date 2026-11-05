@@ -10,14 +10,14 @@ use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
 struct Fixture {
     selection: NewGameSelection,
-    book: NativeSkillBookState,
+    book: SkillBookState,
     stat_book: PlayerStatBookComponent,
     economy: HubEconomyState,
     dye_session_id: Option<String>,
     belt: PlayerBeltComponent,
     progression: PlayerProgressionState,
     resources: PlayerCombatState,
-    offensive: NativeOffensiveSpellFactors,
+    offensive: OffensiveSpellFactors,
 }
 
 fn item(stock: usize, id: u64) -> HubInventoryItem {
@@ -39,7 +39,7 @@ impl Fixture {
             sack(100, vec![sack(101, vec![item(0, 102), sack(104, Vec::new())])]),
             item(3, 103),
         ];
-        let book = NativeSkillBookState::new(element, discipline);
+        let book = SkillBookState::new(element, discipline);
         let belt = PlayerBeltComponent::new(&book);
         Self {
             selection: NewGameSelection { name: "Report 22".into(), element, discipline },
@@ -50,7 +50,7 @@ impl Fixture {
             belt,
             progression: PlayerProgressionState::new(1),
             resources: PlayerCombatState::default(),
-            offensive: NativeOffensiveSpellFactors::default(),
+            offensive: OffensiveSpellFactors::default(),
         }
     }
 

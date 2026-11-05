@@ -11,11 +11,11 @@ use solomon_sim::boneyard::loot::{BoneyardGoodieState, BoneyardLootActor, Boneya
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHit;
 use solomon_sim::hub::painter::hub_painter_order;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::secondary::golem::{NativeGolemPhase, NativeSecondaryGolemState};
-use solomon_sim::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
+use solomon_sim::secondary::golem::{GolemPhase, SecondaryGolemState};
+use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState};
 use solomon_sim::spells::model::PrimarySpellTransientBase;
 use solomon_sim::spells::staff::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 use std::cell::RefCell;
 use wasm_bindgen::{JsCast, prelude::*};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
@@ -90,9 +90,8 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
         let height = input["height"].as_u64().unwrap() as u32;
         view.canvas.set_width(width);
         view.canvas.set_height(height);
-        view.renderer.set_native_world_pixel_centers(
-            input["nativeWorldPixelCenters"].as_bool().unwrap_or(false),
-        );
+        view.renderer
+            .set_world_pixel_centers(input["nativeWorldPixelCenters"].as_bool().unwrap_or(false));
         view.renderer.begin_frame(width as i32, height as i32, [width as f32, height as f32]);
         view.renderer.set_saturation(input["saturation"].as_f64().unwrap() as f32);
         // Source clears the target rather than drawing a background quad. A quad
@@ -159,8 +158,8 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn read_rng(value: &Value) -> NativeRng {
-    let mut rng = NativeRng::new(0);
+fn read_rng(value: &Value) -> Rng {
+    let mut rng = Rng::new(0);
     rng.index_a = value["indexA"].as_u64().unwrap() as usize;
     rng.index_b = value["indexB"].as_u64().unwrap() as usize;
     for (word, value) in rng.words.iter_mut().zip(value["words"].as_array().unwrap()) {
@@ -168,12 +167,12 @@ fn read_rng(value: &Value) -> NativeRng {
     }
     rng
 }
-fn read_actor(value: &Value) -> NativeSecondaryActorState {
-    let kind = NativeSecondaryActorKind::ALL
+fn read_actor(value: &Value) -> SecondaryActorState {
+    let kind = SecondaryActorKind::ALL
         .into_iter()
         .find(|kind| Some(kind.as_str()) == value["kind"].as_str())
         .unwrap();
-    let mut actor = NativeSecondaryActorState::new(
+    let mut actor = SecondaryActorState::new(
         value["id"].as_u64().unwrap(),
         kind,
         value["ownerId"].as_str().unwrap().into(),
@@ -225,7 +224,7 @@ fn registrations(value: &Value) -> Vec<PainterRegistration> {
         .collect()
 }
 
-fn read_staff(value: &Value) -> NativePlayerStaffTransient {
+fn read_staff(value: &Value) -> PlayerStaffTransient {
     let common = PrimarySpellTransientBase {
         age_ticks: value["ageTicks"].as_u64().unwrap(),
         id: value["id"].as_u64().unwrap(),
@@ -236,7 +235,7 @@ fn read_staff(value: &Value) -> NativePlayerStaffTransient {
     };
     let position = point(&value["position"]);
     if value["kind"] == "player-staff-pike-break" {
-        return NativePlayerStaffTransient::PikeBreak(NativePlayerStaffPikeBreakVfx {
+        return PlayerStaffTransient::PikeBreak(PlayerStaffPikeBreakVfx {
             common,
             enhanced_shadow: value["enhancedShadow"].as_bool().unwrap_or(true),
             heading_degrees: value["headingDegrees"].as_f64().unwrap(),
@@ -250,8 +249,8 @@ fn read_staff(value: &Value) -> NativePlayerStaffTransient {
     let entry = value["entry"].as_u64().unwrap() as usize;
     let rotation_degrees = value["rotationDegrees"].as_f64().unwrap();
     let scale = value["scale"].as_f64().unwrap();
-    NativePlayerStaffTransient::Vfx(match value["kind"].as_str().unwrap() {
-        "player-staff-smoke" => NativePlayerStaffVfx::Smoke(NativePlayerStaffSmokeVfx {
+    PlayerStaffTransient::Vfx(match value["kind"].as_str().unwrap() {
+        "player-staff-smoke" => PlayerStaffVfx::Smoke(PlayerStaffSmokeVfx {
             common,
             alpha,
             alpha_loss,
@@ -261,7 +260,7 @@ fn read_staff(value: &Value) -> NativePlayerStaffTransient {
             scale,
             angular_velocity_degrees: value["angularVelocityDegrees"].as_f64().unwrap(),
         }),
-        "player-staff-move-fade" => NativePlayerStaffVfx::MoveFade(NativePlayerStaffMoveFadeVfx {
+        "player-staff-move-fade" => PlayerStaffVfx::MoveFade(PlayerStaffMoveFadeVfx {
             common,
             alpha,
             alpha_loss,
@@ -274,7 +273,7 @@ fn read_staff(value: &Value) -> NativePlayerStaffTransient {
             velocity_factor: value["velocityFactor"].as_f64().unwrap(),
         }),
         "player-staff-perspective-fade" => {
-            NativePlayerStaffVfx::PerspectiveFade(NativePlayerStaffPerspectiveVfx {
+            PlayerStaffVfx::PerspectiveFade(PlayerStaffPerspectiveVfx {
                 common,
                 alpha,
                 alpha_loss,
@@ -289,8 +288,8 @@ fn read_staff(value: &Value) -> NativePlayerStaffTransient {
     })
 }
 
-fn golem(value: &Value) -> NativeSecondaryGolemState {
-    NativeSecondaryGolemState {
+fn golem(value: &Value) -> SecondaryGolemState {
+    SecondaryGolemState {
         action_heading_offset_degrees: value["actionHeadingOffsetDegrees"].as_f64().unwrap(),
         action_duration_ticks: value["actionDurationTicks"].as_u64().unwrap(),
         action_tick: value["actionTick"].as_u64().unwrap(),
@@ -311,10 +310,10 @@ fn golem(value: &Value) -> NativeSecondaryGolemState {
         orbit_direction: value["orbitDirection"].as_f64().unwrap(),
         orbit_heading_radians: value["orbitHeadingRadians"].as_f64(),
         phase: match value["phase"].as_str().unwrap() {
-            "active" => NativeGolemPhase::Active,
-            "assembly" => NativeGolemPhase::Assembly,
-            "attack" => NativeGolemPhase::Attack,
-            "provoke" => NativeGolemPhase::Provoke,
+            "active" => GolemPhase::Active,
+            "assembly" => GolemPhase::Assembly,
+            "attack" => GolemPhase::Attack,
+            "provoke" => GolemPhase::Provoke,
             other => panic!("unknown phase {other}"),
         },
         pose_variant: value["poseVariant"].as_u64().unwrap() as u32,

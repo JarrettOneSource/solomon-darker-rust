@@ -1,21 +1,21 @@
 //! Native per-tick effect retirement. Called rocks wait until the owner's boulder
 //! has been updated; Fire retirements can enroll new actors during this pass.
 
-use super::earth_debris::step_native_weld_boulder_debris_particle;
+use super::earth_debris::step_weld_boulder_debris_particle;
 use super::effects::{fire_explosion, fire_impact_at, transient_lifetime};
 use super::fire::*;
 use super::model::*;
 use super::simulation::PrimarySpellEpochContext;
-use crate::NativeRng;
+use crate::Rng;
 use crate::float::fround;
-use crate::harden_effects::step_native_harden_effect;
+use crate::harden_effects::step_harden_effect;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
 impl SpellState {
     pub(super) fn advance_transients(
         &mut self,
         context: &PrimarySpellEpochContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
         result: &mut PrimarySpellTickResult,
     ) {
@@ -32,14 +32,14 @@ impl SpellState {
         &mut self,
         effect: &mut PrimarySpellTransient,
         context: &PrimarySpellEpochContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
         result: &mut PrimarySpellTickResult,
     ) -> bool {
         match effect {
             PrimarySpellTransient::Harden(actor) => {
                 let owner_id = actor.common().owner_id.clone();
-                step_native_harden_effect(actor, context.tick, rng, |position| {
+                step_harden_effect(actor, context.tick, rng, |position| {
                     (context.can_place)(&owner_id, position, 0.0)
                 })
             }
@@ -49,7 +49,7 @@ impl SpellState {
                 self.advance_weld_world_actor(actor, context, rng, order)
             }
             PrimarySpellTransient::EarthBoulderBit(effect) => {
-                if let Some(debris) = step_native_weld_boulder_debris_particle(
+                if let Some(debris) = step_weld_boulder_debris_particle(
                     effect.debris,
                     effect.birth_tick + effect.common.age_ticks + 1,
                     rng,
@@ -69,9 +69,9 @@ impl SpellState {
                 let collision_radius = actor.collision_radius;
                 let can_occupy =
                     |position| (context.can_place)(&owner_id, position, collision_radius);
-                let step = step_native_fire_good_imp(
+                let step = step_fire_good_imp(
                     actor,
-                    NativeFireGoodImpStepContext {
+                    FireGoodImpStepContext {
                         can_occupy: &can_occupy,
                         navigation: context.navigation,
                         targets: (context.targets_for_owner)(&owner_id),
@@ -96,14 +96,14 @@ impl SpellState {
             }
 
             PrimarySpellTransient::FirePatch(patch) => {
-                let (retained, contact) = step_native_fire_patch(patch, context.tick);
+                let (retained, contact) = step_fire_patch(patch, context.tick);
                 if let Some(contact) = contact {
                     result.fire_actor_contacts.push(FireActorContact::Patch(contact));
                 }
                 retained
             }
             PrimarySpellTransient::FireEmber(ember) => {
-                let step = step_native_fire_ember(ember);
+                let step = step_fire_ember(ember);
                 if step.retained {
                     if (context.can_place)(&ember.common.owner_id, ember.position, 7.0) {
                         return true;
@@ -118,15 +118,15 @@ impl SpellState {
                     self.next_id += 1;
                 } else {
                     match step.retirement {
-                        NativeFireEmberRetirement::None => {}
-                        NativeFireEmberRetirement::Immolate(explosion) => {
+                        FireEmberRetirement::None => {}
+                        FireEmberRetirement::Immolate(explosion) => {
                             let sound_pitch = fround(1.0 + rng.draw_scaled_float(0.1, true));
                             self.transients.push(PrimarySpellTransient::FireExplosion(
                                 fire_explosion(self.next_id, explosion, sound_pitch, order),
                             ));
                             self.next_id += 1;
                         }
-                        NativeFireEmberRetirement::Imp {
+                        FireEmberRetirement::Imp {
                             burn_damage,
                             damage,
                             lifetime_ticks,
@@ -134,8 +134,8 @@ impl SpellState {
                             position,
                             world_key,
                         } => {
-                            let mut actor = spawn_native_fire_good_imp(
-                                SpawnNativeFireGoodImpOptions {
+                            let mut actor = spawn_fire_good_imp(
+                                SpawnFireGoodImpOptions {
                                     burn_damage,
                                     damage,
                                     id: self.next_id,
@@ -184,11 +184,11 @@ impl SpellState {
         owner_id: &str,
         position: crate::Vec2,
         world_key: &str,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
     ) {
         let patch = spawn_native_fire_patch(
-            CreateNativeFirePatchOptions {
+            CreateFirePatchOptions {
                 atlas_phase_step: None,
                 burn_damage,
                 damage,

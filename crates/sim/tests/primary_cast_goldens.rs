@@ -1,7 +1,6 @@
 use serde::Deserialize;
 use solomon_sim::spells::casting::{
-    NativePlayerWeaponKind, primary_cast_pose, primary_spell_aim_direction,
-    primary_spell_emitter_offset,
+    PlayerWeaponKind, primary_cast_pose, primary_spell_aim_direction, primary_spell_emitter_offset,
 };
 use solomon_sim::{Vec2, profile::WizardElement};
 
@@ -32,8 +31,8 @@ fn primary_poses_staff_wand_and_bare_emitters_match_the_website() {
     }
     for (heading, weapon, kind, tick, offset) in fixture.emitters {
         let weapon = weapon.map(|kind| match kind.as_str() {
-            "staff" => NativePlayerWeaponKind::Staff,
-            "wand" => NativePlayerWeaponKind::Wand,
+            "staff" => PlayerWeaponKind::Staff,
+            "wand" => PlayerWeaponKind::Wand,
             other => panic!("unknown weapon {other}"),
         });
         assert_eq!(
@@ -72,19 +71,17 @@ fn primary_poses_staff_wand_and_bare_emitters_match_the_website() {
 
 #[test]
 fn shared_spell_draws_keep_equal_damage_ranges_and_high_tail_percentiles() {
-    use solomon_sim::NativeRng;
-    use solomon_sim::spells::air_water::{
-        draw_native_disintegrate_percentile, draw_native_spell_damage,
-    };
+    use solomon_sim::Rng;
+    use solomon_sim::spells::air_water::{draw_disintegrate_percentile, draw_spell_damage};
 
     // Sequential Website air-water-spell-actors.ts calls with native seed 7.
-    let mut rng = NativeRng::new(7);
-    assert_eq!(draw_native_spell_damage(&mut rng, 3.0, 3.0), 3.0);
-    assert_eq!(draw_native_spell_damage(&mut rng, 1.2, 2.7), 1.953_180_074_691_772_5);
-    assert_eq!(draw_native_spell_damage(&mut rng, 0.0, 0.0), 0.0);
-    assert!(!draw_native_disintegrate_percentile(&mut rng, 0.0));
-    assert!(!draw_native_disintegrate_percentile(&mut rng, 25.0));
-    assert!(draw_native_disintegrate_percentile(&mut rng, 100.0));
+    let mut rng = Rng::new(7);
+    assert_eq!(draw_spell_damage(&mut rng, 3.0, 3.0), 3.0);
+    assert_eq!(draw_spell_damage(&mut rng, 1.2, 2.7), 1.953_180_074_691_772_5);
+    assert_eq!(draw_spell_damage(&mut rng, 0.0, 0.0), 0.0);
+    assert!(!draw_disintegrate_percentile(&mut rng, 0.0));
+    assert!(!draw_disintegrate_percentile(&mut rng, 25.0));
+    assert!(draw_disintegrate_percentile(&mut rng, 100.0));
     assert_eq!((rng.index_a, rng.index_b), (6, 37));
     assert_eq!(
         &rng.words[..6],

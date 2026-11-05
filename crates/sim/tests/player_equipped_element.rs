@@ -3,7 +3,7 @@ use solomon_sim::Vec2;
 use solomon_sim::player_presentation::{
     PlayerAttachmentPoses, PlayerSecondaryCastPresentation, player_equipped_element_plan,
 };
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 
 #[test]
 fn equipped_admission_uses_the_authored_socket_instead_of_body_heading() {
@@ -11,8 +11,8 @@ fn equipped_admission_uses_the_authored_socket_instead_of_body_heading() {
     // Staff keeps virtual XY. The ordinary Wand query reuses X for Y,
     // although its actual helper socket still keeps the authored full XY.
     for (kind, socket, front) in [
-        (NativePlayerWeaponKind::Staff, Vec2::new(-32.5, -66.5), false),
-        (NativePlayerWeaponKind::Wand, Vec2::new(14.5, -50.5), true),
+        (PlayerWeaponKind::Staff, Vec2::new(-32.5, -66.5), false),
+        (PlayerWeaponKind::Wand, Vec2::new(14.5, -50.5), true),
     ] {
         let plan = player_equipped_element_plan(0, poses, kind, None, 0.0, 80.0);
         assert_eq!(plan.socket, socket);
@@ -23,8 +23,7 @@ fn equipped_admission_uses_the_authored_socket_instead_of_body_heading() {
     }
     // At bodyheading6 the Wand socket is below the -20 reference, so its
     // unshifted base survives and the low-phase overlay does not.
-    let plan =
-        player_equipped_element_plan(6, poses, NativePlayerWeaponKind::Wand, None, 0.0, 80.0);
+    let plan = player_equipped_element_plan(6, poses, PlayerWeaponKind::Wand, None, 0.0, 80.0);
     assert_eq!(plan.socket, Vec2::new(39.5, -5.0));
     assert!(plan.passes.front_base);
     assert!(!plan.passes.front_overlay);
@@ -33,10 +32,8 @@ fn equipped_admission_uses_the_authored_socket_instead_of_body_heading() {
 #[test]
 fn wand_and_staff_scale_one_common_element_and_damage_halo_without_early_rounding() {
     let poses = PlayerAttachmentPoses { staff: 0, wand: 2, bare: None };
-    let staff =
-        player_equipped_element_plan(6, poses, NativePlayerWeaponKind::Staff, None, 0.45, 0.0);
-    let wand =
-        player_equipped_element_plan(6, poses, NativePlayerWeaponKind::Wand, None, 0.45, 0.0);
+    let staff = player_equipped_element_plan(6, poses, PlayerWeaponKind::Staff, None, 0.45, 0.0);
+    let wand = player_equipped_element_plan(6, poses, PlayerWeaponKind::Wand, None, 0.45, 0.0);
     assert_eq!(staff.scale, 5.5);
     assert_eq!(wand.scale, 3.3000001907348633);
     assert!(wand.passes.front_overlay && wand.overlay_after_head);
@@ -45,7 +42,7 @@ fn wand_and_staff_scale_one_common_element_and_damage_halo_without_early_roundin
         player_equipped_element_plan(
             6,
             PlayerAttachmentPoses { wand: 0, ..poses },
-            NativePlayerWeaponKind::Wand,
+            PlayerWeaponKind::Wand,
             None,
             0.45,
             0.0
@@ -57,7 +54,7 @@ fn wand_and_staff_scale_one_common_element_and_damage_halo_without_early_roundin
 #[test]
 fn cast_spin_uses_one_late_copy_and_zero_lateral_attachment_bob() {
     let poses = PlayerAttachmentPoses { staff: 9, wand: 0, bare: None };
-    for kind in [NativePlayerWeaponKind::Staff, NativePlayerWeaponKind::Wand] {
+    for kind in [PlayerWeaponKind::Staff, PlayerWeaponKind::Wand] {
         let plan = player_equipped_element_plan(
             6,
             poses,

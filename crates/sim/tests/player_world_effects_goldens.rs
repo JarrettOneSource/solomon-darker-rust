@@ -4,7 +4,7 @@ use solomon_sim::Vec2;
 use solomon_sim::appearance::equipment::PlayerWeaponAppearance;
 use solomon_sim::combat::PlayerCombatState;
 use solomon_sim::player_presentation::*;
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 
 fn number(value: &Value, key: &str) -> f64 {
     value[key].as_f64().unwrap()
@@ -64,9 +64,9 @@ fn player_death_and_level_up_world_effects_replay_the_website() {
             run_id: text(source, "runId").into(),
             weapon: PlayerWeaponAppearance {
                 kind: if text(&source["weapon"], "kind") == "staff" {
-                    NativePlayerWeaponKind::Staff
+                    PlayerWeaponKind::Staff
                 } else {
-                    NativePlayerWeaponKind::Wand
+                    PlayerWeaponKind::Wand
                 },
                 selector: integer(&source["weapon"], "selector") as usize,
             },
@@ -80,7 +80,7 @@ fn player_death_and_level_up_world_effects_replay_the_website() {
         trig_equal(actual.rotation_radians, number(expected, "rotationRadians"));
     }
     for case in fixture["levelUps"].as_array().unwrap() {
-        let actual = native_level_up_presentation_frame(
+        let actual = level_up_presentation_frame(
             integer(case, "presentationId"),
             number(case, "elapsedMs"),
             number(case, "playerScreenY"),
@@ -133,14 +133,14 @@ fn player_death_and_level_up_world_effects_replay_the_website() {
 
 #[test]
 fn level_up_admission_and_wall_clock_replay_the_source_renderer() {
-    use solomon_sim::NativeRng;
+    use solomon_sim::Rng;
     use solomon_sim::player::PlayerState;
     use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/level-up-lifecycle-goldens.json"))
             .unwrap();
-    let mut rng = NativeRng::new(91);
+    let mut rng = Rng::new(91);
     let mut player = PlayerState::new(
         NewGameSelection {
             name: "hero".into(),
@@ -152,7 +152,7 @@ fn level_up_admission_and_wall_clock_replay_the_source_renderer() {
     player.grant_experience(1000.0, &mut rng);
     let offer =
         player.progression.pending_offer.clone().expect("experience created an actual offer");
-    let mut tracker = NativeLevelUpPresentationTracker::default();
+    let mut tracker = LevelUpPresentationTracker::default();
     for case in fixture["cases"].as_array().unwrap() {
         let input = &case["input"];
         player.progression.pending_offer =
@@ -176,7 +176,7 @@ fn level_up_admission_and_wall_clock_replay_the_source_renderer() {
         assert_eq!(frame.emitting, output["emitting"].as_bool().unwrap());
         assert_eq!(frame.particles.len(), integer(output, "particleCount") as usize);
         trig_equal(frame.light_radius, number(output, "lightRadius"));
-        let radius = native_level_up_player_light_radius(number(input, "overlayPhase"), &frame);
+        let radius = level_up_player_light_radius(number(input, "overlayPhase"), &frame);
         match output["playerLightRadius"].as_f64() {
             Some(expected) => trig_equal(radius.expect("active local emitter"), expected),
             None => assert_eq!(radius, None),

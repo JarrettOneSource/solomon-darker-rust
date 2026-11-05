@@ -5,23 +5,19 @@ use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
 use solomon_sim::appearance::StarterEquipmentAppearance;
 use solomon_sim::appearance::equipment::*;
-use solomon_sim::boneyard::ground_glyph::{
-    NativeGroundGlyphPlan, NativeGroundPlayer, native_player_ground_glyph,
-};
+use solomon_sim::boneyard::ground_glyph::{GroundGlyphPlan, GroundPlayer, player_ground_glyph};
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::economy::HubEquipmentState;
-use solomon_sim::element_vfx::{native_element_vfx_plan, native_selected_primary_element_vfx_plan};
+use solomon_sim::element_vfx::{element_vfx_plan, selected_primary_element_vfx_plan};
 use solomon_sim::enemies::model::WebbedState;
 use solomon_sim::float::{fround, hypot};
 use solomon_sim::hub::HubWizard;
 use solomon_sim::player::PlayerState;
 use solomon_sim::player_presentation::*;
-use solomon_sim::presentation::{multiply_native_tints, wizard_draw_plan};
+use solomon_sim::presentation::{multiply_tints, wizard_draw_plan};
 use solomon_sim::profile::WizardElement;
-use solomon_sim::secondary::NativeSecondaryPlayerState;
-use solomon_sim::secondary::presentation::{
-    NativePlayerMagicShieldPlan, native_player_magic_shield_plan,
-};
+use solomon_sim::secondary::SecondaryPlayerState;
+use solomon_sim::secondary::presentation::{PlayerMagicShieldPlan, player_magic_shield_plan};
 use solomon_sim::spells::casting::*;
 
 use crate::courtyard::{Camera, registered_origin};
@@ -67,7 +63,7 @@ struct WeaponFrame<'a> {
 /// The actual participant and source presentation clock, sampled once for this draw.
 pub struct WizardPlayerPresentation<'a> {
     pub player: &'a PlayerState,
-    pub secondary: Option<&'a NativeSecondaryPlayerState>,
+    pub secondary: Option<&'a SecondaryPlayerState>,
     pub stoneskin_warp: Option<&'a [f64]>,
     pub enhanced_effects: bool,
     pub webbed: Option<WebbedState>,
@@ -92,7 +88,7 @@ struct WizardPresentationState {
     webbed: Option<WebbedState>,
     hit_alpha: f64,
     complex_lighting: bool,
-    magic_shield: Option<NativePlayerMagicShieldPlan>,
+    magic_shield: Option<PlayerMagicShieldPlan>,
     damage_x4_ticks_remaining: f64,
     ground_life_state: Option<PlayerLifeState>,
     ground_death_tick: u64,
@@ -234,7 +230,7 @@ impl WizardView {
             },
             hit_alpha: player.combat.hit_overlay_alpha(tick),
             complex_lighting,
-            magic_shield: Some(native_player_magic_shield_plan(secondary, tick)),
+            magic_shield: Some(player_magic_shield_plan(secondary, tick)),
             damage_x4_ticks_remaining,
             ground_life_state: Some(player.combat.life_state),
             ground_death_tick: player.combat.death_tick,
@@ -253,8 +249,8 @@ impl WizardView {
         self.draw_ground(
             renderer,
             camera,
-            native_player_ground_glyph(
-                NativeGroundPlayer {
+            player_ground_glyph(
+                GroundPlayer {
                     position: wizard.position,
                     heading_degrees: wizard.heading_degrees,
                     scale: 1.0,
@@ -289,7 +285,7 @@ impl WizardView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        plan: Option<NativeGroundGlyphPlan>,
+        plan: Option<GroundGlyphPlan>,
     ) {
         let Some(plan) = plan else {
             return;
@@ -369,7 +365,7 @@ impl WizardView {
         } else if appearance
             .weapon
             .as_ref()
-            .is_some_and(|weapon| weapon.kind() == NativePlayerWeaponKind::Wand)
+            .is_some_and(|weapon| weapon.kind() == PlayerWeaponKind::Wand)
         {
             14 + wand_pose
         } else {
@@ -392,7 +388,7 @@ impl WizardView {
         );
         let mut tints = [robe_tints[0], robe_tints[1], hat_tints[0], hat_tints[1]];
         for tint in &mut tints {
-            *tint = multiply_native_tints(*tint, material_tint);
+            *tint = multiply_tints(*tint, material_tint);
             if hit {
                 *tint = self.hit_tint(*tint);
             }
@@ -500,7 +496,7 @@ impl WizardView {
             && appearance
                 .weapon
                 .as_ref()
-                .is_some_and(|weapon| weapon.kind() == NativePlayerWeaponKind::Staff)
+                .is_some_and(|weapon| weapon.kind() == PlayerWeaponKind::Staff)
         {
             let socket = player_staff_attachment_offset(heading, pose);
             let orb = Vec2::new(position.x + socket.x, position.y + socket.y);
@@ -508,7 +504,7 @@ impl WizardView {
                 renderer,
                 camera,
                 orb,
-                &native_element_vfx_plan(self.equipment.element, 0.0, 1.0),
+                &element_vfx_plan(self.equipment.element, 0.0, 1.0),
             );
         }
         if !preview && !hit {
@@ -602,7 +598,7 @@ impl WizardView {
                 );
             }
             Some(PlayerRenderableWeaponAppearance::Native(PlayerWeaponAppearance {
-                kind: NativePlayerWeaponKind::Staff,
+                kind: PlayerWeaponKind::Staff,
                 selector,
             })) => {
                 let index = frame.pose * HEADINGS + frame.heading;
@@ -625,8 +621,8 @@ impl WizardView {
                 let enchant = if !frame.enchant {
                     None
                 } else {
-                    native_enchant_staff_draw_plan(NativeEnchantStaffDrawInput {
-                        attachment: NativeStaffAttachmentFrame {
+                    enchant_staff_draw_plan(EnchantStaffDrawInput {
+                        attachment: StaffAttachmentFrame {
                             start: Vec2::new(
                                 f64::from(hand.points[1][0]),
                                 f64::from(hand.points[1][1]),
@@ -640,7 +636,7 @@ impl WizardView {
                         effective_rank: presentation.enchant_staff_rank,
                         heading_index: frame.heading,
                         living: true,
-                        native_staff: true,
+                        staff: true,
                         pose: frame.pose,
                         selected_primary_skill_id: presentation.enchant_primary_skill_id,
                         selector: *selector,
@@ -689,7 +685,7 @@ impl WizardView {
                 );
             }
             Some(PlayerRenderableWeaponAppearance::Native(PlayerWeaponAppearance {
-                kind: NativePlayerWeaponKind::Wand,
+                kind: PlayerWeaponKind::Wand,
                 ..
             })) => {
                 // The pinned Website installs the same complete wand composite in both
@@ -823,7 +819,7 @@ impl WizardView {
         camera: &Camera,
         position: Vec2,
         offset: Vec2,
-        plan: NativeEnchantStaffDrawPlan,
+        plan: EnchantStaffDrawPlan,
     ) {
         let Some(index) = plan.aura_record else {
             return;

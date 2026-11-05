@@ -8,21 +8,19 @@ mod materialize;
 mod selection;
 
 pub use items::dire_boss_item_recipe_pool;
-pub use materialize::{
-    materialize_native_loot_script_action, resolve_native_loot_placement, roll_native_enemy_loot,
-};
-pub use selection::select_native_loot_candidate;
+pub use materialize::{materialize_loot_script_action, resolve_loot_placement, roll_enemy_loot};
+pub use selection::select_loot_candidate;
 
 use crate::economy::HubInventoryItem;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_LOOT_ACTOR_SEED_BOUND: u32 = 10_000_000;
-pub const NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS: f64 = 15.0;
-pub const NATIVE_LOOT_PLACEMENT_VERTICAL_SCALE: f64 = 0.8_f32 as f64;
+pub const LOOT_ACTOR_SEED_BOUND: u32 = 10_000_000;
+pub const LOOT_CARRIER_PLACEMENT_RADIUS: f64 = 15.0;
+pub const LOOT_PLACEMENT_VERTICAL_SCALE: f64 = 0.8_f32 as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeLootCategory {
+pub enum LootCategory {
     Key,
     Orb,
     Gold,
@@ -32,7 +30,7 @@ pub enum NativeLootCategory {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeLootPolicy {
+pub enum LootPolicy {
     Ordinary,
     Reduced,
     Increased,
@@ -41,7 +39,7 @@ pub enum NativeLootPolicy {
     GoldScatter,
 }
 
-impl NativeLootPolicy {
+impl LootPolicy {
     #[must_use]
     pub fn from_id(id: u32) -> Option<Self> {
         Some(match id {
@@ -58,20 +56,20 @@ impl NativeLootPolicy {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeOrbKind {
+pub enum OrbKind {
     Health,
     Mana,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeBonusKind {
+pub enum BonusKind {
     SkillChoice,
     SkillRank,
     DamageX4,
 }
 
-impl NativeBonusKind {
+impl BonusKind {
     #[must_use]
     pub fn from_id(id: u32) -> Option<Self> {
         match id {
@@ -84,20 +82,20 @@ impl NativeBonusKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeLootAttractionModifiers {
+pub struct LootAttractionModifiers {
     pub gold_amount: f64,
     pub orb_pull: f64,
     pub pickup_factor: f64,
 }
 
-impl Default for NativeLootAttractionModifiers {
+impl Default for LootAttractionModifiers {
     fn default() -> Self {
         Self { gold_amount: 1.0, orb_pull: 1.0, pickup_factor: 1.25 }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeLootModifiers {
+pub struct LootModifiers {
     pub gold_amount: f64,
     pub gold_chance: f64,
     pub item_chance: f64,
@@ -108,7 +106,7 @@ pub struct NativeLootModifiers {
     pub powerup_chance: f64,
 }
 
-impl Default for NativeLootModifiers {
+impl Default for LootModifiers {
     fn default() -> Self {
         Self {
             gold_amount: 1.0,
@@ -124,10 +122,10 @@ impl Default for NativeLootModifiers {
 }
 
 #[must_use]
-pub fn native_loot_modifiers(
+pub fn loot_modifiers(
     owned_perk_selectors: &[u32],
-    attraction: NativeLootAttractionModifiers,
-) -> NativeLootModifiers {
+    attraction: LootAttractionModifiers,
+) -> LootModifiers {
     for value in [attraction.gold_amount, attraction.orb_pull, attraction.pickup_factor] {
         assert!(
             value.is_finite() && value >= 0.0,
@@ -135,7 +133,7 @@ pub fn native_loot_modifiers(
         );
     }
     let owns = |selector| owned_perk_selectors.contains(&selector);
-    NativeLootModifiers {
+    LootModifiers {
         gold_amount: fround(attraction.gold_amount * if owns(4) { 1.25 } else { 1.0 }),
         gold_chance: if owns(4) { 0.75 } else { 1.0 },
         item_chance: if owns(3) { 0.75 } else { 1.0 },
@@ -148,28 +146,28 @@ pub fn native_loot_modifiers(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeLootPolicies {
-    pub gold: NativeLootPolicy,
-    pub item: NativeLootPolicy,
-    pub orb: NativeLootPolicy,
-    pub potion: NativeLootPolicy,
-    pub powerup: NativeLootPolicy,
+pub struct LootPolicies {
+    pub gold: LootPolicy,
+    pub item: LootPolicy,
+    pub orb: LootPolicy,
+    pub potion: LootPolicy,
+    pub powerup: LootPolicy,
     pub specific_item: u32,
 }
 
-impl NativeLootPolicies {
+impl LootPolicies {
     pub const DISABLED: Self = Self {
-        gold: NativeLootPolicy::Disabled,
-        item: NativeLootPolicy::Disabled,
-        orb: NativeLootPolicy::Disabled,
-        potion: NativeLootPolicy::Disabled,
-        powerup: NativeLootPolicy::Disabled,
+        gold: LootPolicy::Disabled,
+        item: LootPolicy::Disabled,
+        orb: LootPolicy::Disabled,
+        potion: LootPolicy::Disabled,
+        powerup: LootPolicy::Disabled,
         specific_item: 0,
     };
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeLootArenaInput {
+pub struct LootArenaInput {
     pub disable_mask: u32,
     pub item_level_maximum: i32,
     pub item_level_minimum: i32,
@@ -180,35 +178,35 @@ pub struct NativeLootArenaInput {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeLootParticipantInput<'a> {
+pub struct LootParticipantInput<'a> {
     pub advanced_unlocks: &'a [bool; 8],
     pub level: u32,
-    pub modifiers: NativeLootModifiers,
+    pub modifiers: LootModifiers,
     pub owned_recipe_indexes: &'a [usize],
     pub slot: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeLootKeyInput {
+pub struct LootKeyInput {
     pub current: u32,
     pub level: u32,
     pub remaining: usize,
 }
 
-pub trait NativeLootPlacement {
+pub trait LootPlacement {
     fn can_place(&self, position: Vec2, radius: f64) -> bool;
 }
 
-impl<F: Fn(Vec2, f64) -> bool> NativeLootPlacement for F {
+impl<F: Fn(Vec2, f64) -> bool> LootPlacement for F {
     fn can_place(&self, position: Vec2, radius: f64) -> bool {
         self(position, radius)
     }
 }
 
 /// Explicitly open geometry for source fixtures and authored scripts that request it.
-pub struct NativeLootOpenPlacement;
+pub struct LootOpenPlacement;
 
-impl NativeLootPlacement for NativeLootOpenPlacement {
+impl LootPlacement for LootOpenPlacement {
     fn can_place(&self, _: Vec2, _: f64) -> bool {
         true
     }
@@ -216,7 +214,7 @@ impl NativeLootPlacement for NativeLootOpenPlacement {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeLootDropKind {
+pub enum LootDropKind {
     Bonus,
     Gold,
     Orb,
@@ -225,44 +223,39 @@ pub enum NativeLootDropKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeLootDropSource {
+pub enum LootDropSource {
     Enemy,
     Goodie,
     Script,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeLootDropSpec {
+pub struct LootDropSpec {
     pub activation_delay_ticks: i64,
     pub amount: Option<u64>,
-    pub bonus_kind: Option<NativeBonusKind>,
+    pub bonus_kind: Option<BonusKind>,
     pub id: u64,
     pub item: Option<HubInventoryItem>,
-    pub kind: NativeLootDropKind,
-    pub native_type_id: u32,
-    pub orb_kind: Option<NativeOrbKind>,
+    pub kind: LootDropKind,
+    pub type_id: u32,
+    pub orb_kind: Option<OrbKind>,
     pub phase: f64,
     pub position: Vec2,
     pub rotation_deg: Option<f64>,
     pub scatter_seed: Option<u32>,
-    pub source: NativeLootDropSource,
+    pub source: LootDropSource,
     pub tier: Option<u32>,
     pub value: Option<f64>,
 }
 
-impl NativeLootDropSpec {
+impl LootDropSpec {
     #[must_use]
-    pub fn new(
-        kind: NativeLootDropKind,
-        id: u64,
-        position: Vec2,
-        source: NativeLootDropSource,
-    ) -> Self {
-        let native_type_id = match kind {
-            NativeLootDropKind::Bonus => 2038,
-            NativeLootDropKind::Gold => 2012,
-            NativeLootDropKind::Orb => 2011,
-            NativeLootDropKind::Sack => 2013,
+    pub fn new(kind: LootDropKind, id: u64, position: Vec2, source: LootDropSource) -> Self {
+        let type_id = match kind {
+            LootDropKind::Bonus => 2038,
+            LootDropKind::Gold => 2012,
+            LootDropKind::Orb => 2011,
+            LootDropKind::Sack => 2013,
         };
         Self {
             activation_delay_ticks: 0,
@@ -271,7 +264,7 @@ impl NativeLootDropSpec {
             id,
             item: None,
             kind,
-            native_type_id,
+            type_id,
             orb_kind: None,
             phase: 0.0,
             position,
@@ -285,20 +278,20 @@ impl NativeLootDropSpec {
 }
 
 #[derive(Clone, Copy)]
-pub struct NativeLootSelectionInput<'a> {
+pub struct LootSelectionInput<'a> {
     pub actor_seed: u32,
     pub ground_recipe_indexes: &'a [usize],
     /// Approved enemy Item identity override; category rolls and scripts remain stock.
     pub item_recipe_pool: Option<&'a [usize]>,
-    pub arena: NativeLootArenaInput,
+    pub arena: LootArenaInput,
     pub explicit_gold_amount: Option<u64>,
     pub drop_delay_context: i64,
     pub inventory_has_health_potion: bool,
-    pub key: NativeLootKeyInput,
+    pub key: LootKeyInput,
     pub nearby_mask_two_count: usize,
-    pub participant: NativeLootParticipantInput<'a>,
-    pub placement: &'a dyn NativeLootPlacement,
-    pub policies: NativeLootPolicies,
+    pub participant: LootParticipantInput<'a>,
+    pub placement: &'a dyn LootPlacement,
+    pub policies: LootPolicies,
     pub scene_forces_health_potion: bool,
     pub source_position: Vec2,
     pub world_badguy_count: usize,
@@ -306,14 +299,14 @@ pub struct NativeLootSelectionInput<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeLootMaterialization {
-    pub drops: Vec<NativeLootDropSpec>,
+pub struct LootMaterialization {
+    pub drops: Vec<LootDropSpec>,
     pub last_successful_item_level: i32,
     pub next_key_drop_level: u32,
 }
 
-impl NativeLootMaterialization {
-    fn empty(input: &NativeLootSelectionInput<'_>) -> Self {
+impl LootMaterialization {
+    fn empty(input: &LootSelectionInput<'_>) -> Self {
         Self {
             drops: Vec::new(),
             last_successful_item_level: input.arena.last_successful_item_level,
@@ -323,14 +316,14 @@ impl NativeLootMaterialization {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeLootSelection {
-    pub materialization: NativeLootMaterialization,
+pub struct LootSelection {
+    pub materialization: LootMaterialization,
     pub emergency_potion_attempted: bool,
-    pub selected_category: Option<NativeLootCategory>,
+    pub selected_category: Option<LootCategory>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeLootScriptAction {
+pub enum LootScriptAction {
     DropGold { amount: i64 },
     DropItem { recipe_index: usize },
     DropKey,
@@ -340,11 +333,11 @@ pub enum NativeLootScriptAction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NativeLootItemIds {
+pub struct LootItemIds {
     pub next_id: u64,
 }
 
-impl NativeLootItemIds {
+impl LootItemIds {
     #[must_use]
     pub fn new(first: u64) -> Self {
         assert!(first > 0, "native loot item ids start at a positive integer");
@@ -358,7 +351,7 @@ impl NativeLootItemIds {
 }
 
 #[must_use]
-pub fn native_gold_tier(amount: u64) -> u32 {
+pub fn gold_tier(amount: u64) -> u32 {
     assert!(amount > 0, "a native Gold actor has a positive amount");
     if amount < 3 {
         0
@@ -371,11 +364,11 @@ pub fn native_gold_tier(amount: u64) -> u32 {
     }
 }
 
-pub fn initial_native_key_drop_level(rng: &mut NativeRng) -> u32 {
+pub fn initial_key_drop_level(rng: &mut Rng) -> u32 {
     rng.draw_integer(8) as u32 + 5
 }
 
-pub fn advance_native_key_drop_level(rng: &mut NativeRng, current_level: u32) -> u32 {
+pub fn advance_key_drop_level(rng: &mut Rng, current_level: u32) -> u32 {
     if current_level < 13 {
         rng.draw_integer(11) as u32 + 15
     } else if current_level < 26 {
@@ -389,37 +382,29 @@ pub fn advance_native_key_drop_level(rng: &mut NativeRng, current_level: u32) ->
 
 /// `enableOperand == 0` clears the supplied disable bits; every other operand sets them.
 #[must_use]
-pub fn native_loot_disable_mask(current: u32, enable_operand: i32, mask: u32) -> u32 {
+pub fn loot_disable_mask(current: u32, enable_operand: i32, mask: u32) -> u32 {
     let disabled = current | mask;
     if enable_operand == 0 { disabled ^ mask } else { disabled }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeLootArenaDropLimits {
+pub struct LootArenaDropLimits {
     pub item_level_maximum: i32,
     pub item_level_minimum: i32,
     pub mode: i32,
 }
 
 #[must_use]
-pub fn native_loot_arena_drop_limits(
+pub fn loot_arena_drop_limits(
     mode: i32,
     range_mode: u32,
     first: i32,
     second: i32,
-) -> NativeLootArenaDropLimits {
+) -> LootArenaDropLimits {
     match range_mode {
-        0 => {
-            NativeLootArenaDropLimits { item_level_maximum: 9999, item_level_minimum: -9999, mode }
-        }
-        1 => {
-            NativeLootArenaDropLimits { item_level_maximum: first, item_level_minimum: first, mode }
-        }
-        2 => NativeLootArenaDropLimits {
-            item_level_maximum: second,
-            item_level_minimum: first,
-            mode,
-        },
+        0 => LootArenaDropLimits { item_level_maximum: 9999, item_level_minimum: -9999, mode },
+        1 => LootArenaDropLimits { item_level_maximum: first, item_level_minimum: first, mode },
+        2 => LootArenaDropLimits { item_level_maximum: second, item_level_minimum: first, mode },
         _ => panic!("native item range mode is in0..3"),
     }
 }
@@ -430,19 +415,18 @@ mod tests {
 
     #[test]
     fn perk_factors_and_arena_masks_preserve_native_meaning() {
-        let modifiers =
-            native_loot_modifiers(&[3, 4, 9, 23], NativeLootAttractionModifiers::default());
+        let modifiers = loot_modifiers(&[3, 4, 9, 23], LootAttractionModifiers::default());
         assert_eq!(modifiers.gold_amount, 1.25);
         assert_eq!(modifiers.item_chance, 0.75);
         assert_eq!(modifiers.orb_chance, 0.5);
         assert_eq!(modifiers.powerup_chance, 0.8_f32 as f64);
         assert!(modifiers.orb_value_bonus);
-        assert_eq!([1, 2, 3, 4, 5, 7, 8, 25].map(native_gold_tier), [0, 0, 1, 1, 2, 2, 3, 3]);
-        assert_eq!(native_loot_disable_mask(0b1010, 0, 0b0110), 0b1000);
-        assert_eq!(native_loot_disable_mask(0b1010, 1, 0b0110), 0b1110);
+        assert_eq!([1, 2, 3, 4, 5, 7, 8, 25].map(gold_tier), [0, 0, 1, 1, 2, 2, 3, 3]);
+        assert_eq!(loot_disable_mask(0b1010, 0, 0b0110), 0b1000);
+        assert_eq!(loot_disable_mask(0b1010, 1, 0b0110), 0b1110);
         assert_eq!(
-            native_loot_arena_drop_limits(1, 2, 5, 12),
-            NativeLootArenaDropLimits { item_level_maximum: 12, item_level_minimum: 5, mode: 1 }
+            loot_arena_drop_limits(1, 2, 5, 12),
+            LootArenaDropLimits { item_level_maximum: 12, item_level_minimum: 5, mode: 1 }
         );
     }
 }

@@ -19,7 +19,7 @@ pub enum EnemyAttackEffectKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemyRawFireBurstSample {
+pub struct EnemyRawFireBurstSample {
     pub frame_entry: usize,
     pub frame_rotation_radians: f64,
     pub glow_alpha: f64,
@@ -28,7 +28,7 @@ pub struct NativeEnemyRawFireBurstSample {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeImpLandingFlareSample {
+pub struct ImpLandingFlareSample {
     pub alpha: f64,
     pub green: f64,
     pub scale_x: f64,
@@ -42,7 +42,7 @@ pub struct EnemyAttackEffectPlan {
 }
 
 #[must_use]
-pub fn native_imp_contact_burst_origin(position: Vec2, heading_deg: f64) -> Vec2 {
+pub fn imp_contact_burst_origin(position: Vec2, heading_deg: f64) -> Vec2 {
     let radians = heading_deg * std::f64::consts::PI / 180.0;
     Vec2::new(
         position.x + float::sin(radians) * 15.0,
@@ -51,18 +51,18 @@ pub fn native_imp_contact_burst_origin(position: Vec2, heading_deg: f64) -> Vec2
 }
 
 #[must_use]
-pub fn native_demon_bomb_bearing(heading_deg: f64) -> f64 {
+pub fn demon_bomb_bearing(heading_deg: f64) -> f64 {
     ((heading_deg + 10.0) / 20.0).round_ties_even().rem_euclid(18.0) * 20.0
 }
 
 #[must_use]
-pub fn native_demon_bomb_muzzle_origin(
+pub fn demon_bomb_muzzle_origin(
     position: Vec2,
     heading_deg: f64,
     controller_point_5: Vec2,
     vertical_offset: f64,
 ) -> Vec2 {
-    let radians = native_demon_bomb_bearing(heading_deg) * std::f64::consts::PI / 180.0;
+    let radians = demon_bomb_bearing(heading_deg) * std::f64::consts::PI / 180.0;
     Vec2::new(
         position.x + controller_point_5.x + float::sin(radians) * 25.0,
         position.y + vertical_offset + controller_point_5.y - float::cos(radians) * 25.0,
@@ -70,20 +70,20 @@ pub fn native_demon_bomb_muzzle_origin(
 }
 
 #[must_use]
-pub fn native_enemy_raw_fire_burst_sample(
+pub fn enemy_raw_fire_burst_sample(
     kind: EnemyRawFireBurstKind,
     event_id: usize,
     age_ticks: u64,
-) -> Option<NativeEnemyRawFireBurstSample> {
-    native_enemy_raw_fire_burst_sample_at_age(kind, event_id, age_ticks as f64)
+) -> Option<EnemyRawFireBurstSample> {
+    enemy_raw_fire_burst_sample_at_age(kind, event_id, age_ticks as f64)
 }
 
 #[must_use]
-pub fn native_enemy_raw_fire_burst_sample_at_age(
+pub fn enemy_raw_fire_burst_sample_at_age(
     kind: EnemyRawFireBurstKind,
     event_id: usize,
     age_ticks: f64,
-) -> Option<NativeEnemyRawFireBurstSample> {
+) -> Option<EnemyRawFireBurstSample> {
     assert!(event_id > 0, "enemy raw fire burst requires a positive event id");
     assert!(
         age_ticks.is_finite() && age_ticks >= 0.0,
@@ -105,7 +105,7 @@ pub fn native_enemy_raw_fire_burst_sample_at_age(
         EnemyRawFireBurstKind::ImpContact => 0.5 + deterministic_unit(event_id, 4) * 0.1,
         EnemyRawFireBurstKind::DemonBombMuzzle => 1.0,
     };
-    Some(NativeEnemyRawFireBurstSample {
+    Some(EnemyRawFireBurstSample {
         frame_entry: 251 + (phase.floor() as usize).min(3),
         frame_rotation_radians: rotation
             + direction * magnitude * std::f64::consts::PI / 180.0 * age_ticks,
@@ -116,18 +116,15 @@ pub fn native_enemy_raw_fire_burst_sample_at_age(
 }
 
 #[must_use]
-pub fn native_imp_landing_flare_sample(
-    event_id: usize,
-    age_ticks: u64,
-) -> Option<NativeImpLandingFlareSample> {
-    native_imp_landing_flare_sample_at_age(event_id, age_ticks as f64)
+pub fn imp_landing_flare_sample(event_id: usize, age_ticks: u64) -> Option<ImpLandingFlareSample> {
+    imp_landing_flare_sample_at_age(event_id, age_ticks as f64)
 }
 
 #[must_use]
-pub fn native_imp_landing_flare_sample_at_age(
+pub fn imp_landing_flare_sample_at_age(
     event_id: usize,
     age_ticks: f64,
-) -> Option<NativeImpLandingFlareSample> {
+) -> Option<ImpLandingFlareSample> {
     assert!(event_id > 0, "Imp landing flare requires a positive event id");
     assert!(
         age_ticks.is_finite() && age_ticks >= 0.0,
@@ -138,7 +135,7 @@ pub fn native_imp_landing_flare_sample_at_age(
     }
     let loss = fround(fround(0.1) * f64::from(0.8_f32));
     let scale_x = 0.5 + deterministic_unit(event_id, 5) * 0.6;
-    Some(NativeImpLandingFlareSample {
+    Some(ImpLandingFlareSample {
         alpha: (1.0 - age_ticks * loss).max(0.0),
         green: 0.25 + deterministic_unit(event_id, 6) * 0.5,
         scale_x,
@@ -147,23 +144,23 @@ pub fn native_imp_landing_flare_sample_at_age(
 }
 
 #[must_use]
-pub fn native_enemy_attack_effect_plan(
+pub fn enemy_attack_effect_plan(
     kind: EnemyAttackEffectKind,
     event_id: usize,
     age_ticks: u64,
 ) -> Option<EnemyAttackEffectPlan> {
-    native_enemy_attack_effect_plan_at_age(kind, event_id, age_ticks as f64)
+    enemy_attack_effect_plan_at_age(kind, event_id, age_ticks as f64)
 }
 
 #[must_use]
-pub fn native_enemy_attack_effect_plan_at_age(
+pub fn enemy_attack_effect_plan_at_age(
     kind: EnemyAttackEffectKind,
     event_id: usize,
     age_ticks: f64,
 ) -> Option<EnemyAttackEffectPlan> {
     match kind {
         EnemyAttackEffectKind::FireBurst(kind) => {
-            let sample = native_enemy_raw_fire_burst_sample_at_age(kind, event_id, age_ticks)?;
+            let sample = enemy_raw_fire_burst_sample_at_age(kind, event_id, age_ticks)?;
             Some(EnemyAttackEffectPlan {
                 offset_y: sample.vertical_offset,
                 layers: vec![
@@ -188,7 +185,7 @@ pub fn native_enemy_attack_effect_plan_at_age(
             })
         }
         EnemyAttackEffectKind::ImpLandingFlare => {
-            let sample = native_imp_landing_flare_sample_at_age(event_id, age_ticks)?;
+            let sample = imp_landing_flare_sample_at_age(event_id, age_ticks)?;
             Some(EnemyAttackEffectPlan {
                 offset_y: 0.0,
                 layers: vec![EnemySpriteLayer {

@@ -4,7 +4,7 @@
 use solomon_sim::Vec2;
 use solomon_sim::actor_physics::{ActorPhysicsBody, ActorPhysicsWorld, resolve_actor_motion};
 use solomon_sim::hub::college_intro::{
-    HubParticipantStepOptions, NativeCollegeIntroPhase, plan_hub_participant_movement,
+    CollegeIntroPhase, HubParticipantStepOptions, plan_hub_participant_movement,
     step_hub_participant_movement,
 };
 use solomon_sim::hub::fixed_actors::{HUB_STORY_OFFICE_POLISHER, HubFixedActorCollider};
@@ -79,7 +79,7 @@ impl LocalHubPrediction {
             let scripted = authoritative
                 .college_intro
                 .as_ref()
-                .is_some_and(|intro| intro.phase != NativeCollegeIntroPhase::ArchDialogue);
+                .is_some_and(|intro| intro.phase != CollegeIntroPhase::ArchDialogue);
             if !scripted && !authoritative.wizard.primary_cast.owns_facing() {
                 next.participant.wizard.set_facing(self.participant.wizard.heading_degrees);
             }
@@ -145,7 +145,7 @@ fn predict_character(
     skorcha_position: Option<Vec2>,
 ) {
     let waiting = participant.college_intro.as_ref().is_some_and(|intro| {
-        intro.phase == NativeCollegeIntroPhase::CourtyardWalk && intro.title_cursor == 0.0
+        intro.phase == CollegeIntroPhase::CourtyardWalk && intro.title_cursor == 0.0
     });
     let movement = plan_hub_participant_movement(
         &participant.wizard,

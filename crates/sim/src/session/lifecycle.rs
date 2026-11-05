@@ -1,17 +1,17 @@
 //! Shared world admission and reset order from the public Game simulation API.
 
 use super::*;
-use crate::NativeRng;
-use crate::boneyard::tutorial::NATIVE_TUTORIAL_FIRES;
-use crate::hub::NATIVE_HUB_COLLISION_RNG_SEED;
+use crate::Rng;
+use crate::boneyard::tutorial::TUTORIAL_FIRES;
+use crate::hub::HUB_COLLISION_RNG_SEED;
 use crate::hub::interaction::HubNpcMarkerEpoch;
 use crate::hub::painter::HUB_FIRST_PLAYER_PAINTER_ORDINAL;
 use crate::painter::WorldManagerLane;
 use crate::player::PlayerState;
 use crate::profile::NewGameSelection;
-use crate::score::NativeHallOfFameRunState;
-use crate::screen_feedback::NativeSecondaryScreenFeedbackPresentation;
-use crate::secondary::NativeScriptFire;
+use crate::score::HallOfFameRunState;
+use crate::screen_feedback::SecondaryScreenFeedbackPresentation;
+use crate::secondary::ScriptFire;
 
 impl GameSession {
     #[must_use]
@@ -34,7 +34,7 @@ impl GameSession {
             next_actor_ordinal: HUB_FIRST_PLAYER_PAINTER_ORDINAL,
             next_transient_ordinal: 0,
         };
-        let mut gameplay_rng = NativeRng::new(options.gameplay_rng_seed);
+        let mut gameplay_rng = Rng::new(options.gameplay_rng_seed);
         let mut participants = BTreeMap::new();
         let mut participant_order = Vec::with_capacity(selections.len());
         let mut next_entity_id = 1;
@@ -58,7 +58,7 @@ impl GameSession {
         let npcs = HubNpcState::new(options.hub_trader_animation_seed, Some(&mut painter_order));
         Ok(Self {
             inventory_dye_sessions: std::collections::BTreeMap::new(),
-            screen_flashes: crate::screen_flash::NativeScreenFlashState::default(),
+            screen_flashes: crate::screen_flash::ScreenFlashState::default(),
             enhanced_effects: options.enhanced_effects,
             participants,
             participant_order,
@@ -68,10 +68,10 @@ impl GameSession {
             dowser_clock: HubCommonTraderClock::new(options.hub_trader_animation_seed ^ 5016),
             hub_trader_animation_seed: options.hub_trader_animation_seed,
             hub_memorial: crate::hub::memorial::create_hub_memorial_state(),
-            collision_rng: NATIVE_HUB_COLLISION_RNG_SEED,
+            collision_rng: HUB_COLLISION_RNG_SEED,
             gameplay_rng,
-            combat_rng: NativeRng::new(options.combat_rng_seed),
-            secondary: NativeSecondarySimulationState::new(0),
+            combat_rng: Rng::new(options.combat_rng_seed),
+            secondary: SecondarySimulationState::new(0),
             spells: SpellState::default(),
             hall_of_fame_clock_started_at_tick: 0,
             painter_order,
@@ -117,8 +117,7 @@ impl GameSession {
         }
         for id in &self.participant_order {
             let participant = self.participants.get_mut(id).unwrap();
-            participant.score =
-                NativeHallOfFameRunState::new(self.hall_of_fame_clock_started_at_tick);
+            participant.score = HallOfFameRunState::new(self.hall_of_fame_clock_started_at_tick);
             participant.tutorial_profile_economy = if world.tutorial.is_some() {
                 let mut baseline = participant.player.economy.clone();
                 if !baseline.college_intro_pending {
@@ -141,7 +140,7 @@ impl GameSession {
         }
         self.secondary.reset_world();
         if world.tutorial.is_some() {
-            let fires = NATIVE_TUTORIAL_FIRES.map(|fire| NativeScriptFire {
+            let fires = TUTORIAL_FIRES.map(|fire| ScriptFire {
                 damage: fire.damage,
                 lifetime_ticks: fire.lifetime_ticks,
                 position: fire.position,
@@ -198,7 +197,7 @@ impl GameSession {
         self.dowser_clock = HubCommonTraderClock::new(seed ^ 5016);
         self.hub_trader_animation_seed = seed;
         self.hub_memorial = crate::hub::memorial::create_hub_memorial_state();
-        self.collision_rng = NATIVE_HUB_COLLISION_RNG_SEED;
+        self.collision_rng = HUB_COLLISION_RNG_SEED;
         self.boneyard = None;
         self.level_up_barrier = None;
         self.mod_effects.clear();
@@ -226,8 +225,8 @@ pub(super) fn new_hub_participant(
         lighting: PlayerLightingState::new(light),
         college_intro: None,
         marker_epoch,
-        score: NativeHallOfFameRunState::new(tick),
-        screen_feedback: NativeSecondaryScreenFeedbackPresentation::new(0, "hub:courtyard".into()),
+        score: HallOfFameRunState::new(tick),
+        screen_feedback: SecondaryScreenFeedbackPresentation::new(0, "hub:courtyard".into()),
         world_aim: None,
         tutorial_profile_economy: None,
     }

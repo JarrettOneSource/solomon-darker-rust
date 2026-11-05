@@ -21,11 +21,11 @@ use serde_json::{Value, json};
 use solomon_assets::boneyard::BoneyardCatalog;
 use solomon_assets::navigation::decode_navigation;
 use solomon_sim::Vec2;
-use solomon_sim::belt::{NativeBeltCommand, PlayerBeltComponent};
+use solomon_sim::belt::{BeltCommand, PlayerBeltComponent};
 use solomon_sim::boneyard::LoadedBoneyard;
 use solomon_sim::boneyard::navigation::NavigationSet;
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
-use solomon_sim::loot::{NativeLootDropKind, NativeLootDropSource, NativeLootDropSpec};
+use solomon_sim::loot::{LootDropKind, LootDropSource, LootDropSpec};
 use solomon_sim::profile::{NewGameSelection, PlayerSkillChoice, WizardDiscipline, WizardElement};
 use solomon_sim::session::{
     GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
@@ -149,18 +149,18 @@ fn complete_session_tick_matches_public_game_and_restored_continuation() {
             }
             if spec["secondary"] == true {
                 assert!(participant.player.belt.apply(
-                    NativeBeltCommand::BindSkill { skill_id: Some(72), slot: 2 },
+                    BeltCommand::BindSkill { skill_id: Some(72), slot: 2 },
                     &participant.player.book,
                     &participant.player.economy
                 ));
             }
         }
         if let Some(amount) = spec["gold"].as_u64() {
-            let mut gold = NativeLootDropSpec::new(
-                NativeLootDropKind::Gold,
+            let mut gold = LootDropSpec::new(
+                LootDropKind::Gold,
                 1,
                 Vec2::new(1000.0, 1000.0),
-                NativeLootDropSource::Script,
+                LootDropSource::Script,
             );
             gold.amount = Some(amount);
             gold.scatter_seed = Some(17);

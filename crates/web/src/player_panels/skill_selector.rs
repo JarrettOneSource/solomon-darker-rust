@@ -2,15 +2,14 @@
 use solomon_sim::audio::AudioCue;
 use solomon_sim::hud::HudRect;
 use solomon_sim::hud::skill_selector::{
-    NativeHudSkillSelectorTarget, native_hud_skill_selector_layout,
-    native_hud_skill_selector_options,
+    HudSkillSelectorTarget, hud_skill_selector_layout, hud_skill_selector_options,
 };
 
 use super::chrome::PanelCanvas;
 use super::{PlayerPanel, PlayerPanelAction, PlayerPanelSnapshot, PlayerPanels};
 impl PlayerPanels {
     pub fn show_skill_selector(&mut self, binding: usize, now: f64) -> Result<(), String> {
-        let target = NativeHudSkillSelectorTarget::from_binding(binding)
+        let target = HudSkillSelectorTarget::from_binding(binding)
             .ok_or("HUD skill selector requires binding 12, 16 or 20")?;
         self.show(PlayerPanel::SkillSelector(target), now)
     }
@@ -23,7 +22,7 @@ impl PlayerPanels {
         let Some(PlayerPanel::SkillSelector(target)) = self.panel else {
             return;
         };
-        if !native_hud_skill_selector_options(snapshot.book, snapshot.concentrations, target)
+        if !hud_skill_selector_options(snapshot.book, snapshot.concentrations, target)
             .iter()
             .any(|option| option.skill_id == skill_id)
         {
@@ -44,10 +43,10 @@ impl PlayerPanels {
     pub(super) fn draw_hud_skill_selector(
         &self,
         c: &PanelCanvas<'_, '_>,
-        target: NativeHudSkillSelectorTarget,
+        target: HudSkillSelectorTarget,
         s: &PlayerPanelSnapshot<'_>,
     ) -> Result<(), String> {
-        let options = native_hud_skill_selector_options(s.book, s.concentrations, target);
+        let options = hud_skill_selector_options(s.book, s.concentrations, target);
         c.button("close", "Close skill selector", HudRect::new(0.0, 0.0, 1600.0, 900.0));
         let width =
             c.ui.painter()
@@ -58,7 +57,7 @@ impl PlayerPanels {
                 )
                 .size()
                 .x as f64;
-        let layout = native_hud_skill_selector_layout(options.len(), width);
+        let layout = hud_skill_selector_layout(options.len(), width);
         let mut panel = layout.panel;
         if self.compact {
             panel.width = panel.width.min(self.viewport_size.0 as f64 - 16.0);

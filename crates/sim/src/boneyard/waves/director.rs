@@ -8,7 +8,7 @@ use crate::enemies::{EnemySpawnIntent, EnemyToken, SpawnLocationPolicy, SpawnPos
 use crate::float;
 use crate::float::fround;
 use crate::rng::seed_from_text;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::programs::{
     BossBirth, BossEncounter, BossKind, SkeletonBossState, SpiderState, SurvivalPrograms,
@@ -17,9 +17,7 @@ use super::timeline::{
     LULL_RELEASE_TO_NEXT_SPAWN_TICKS, PAUSE_NODE_GAP_TICKS, WAVE_LABEL_TO_FIRST_SPAWN_TICKS,
     compile_boneyard_opening, compile_boneyard_wave_section,
 };
-use super::{
-    CompiledSpawnBurst, CompiledWaveSection, RETAIL_WAVES, WaveDef, native_survival_programs,
-};
+use super::{CompiledSpawnBurst, CompiledWaveSection, RETAIL_WAVES, WaveDef, survival_programs};
 use crate::boneyard::BoneyardBounds;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,7 +138,7 @@ pub struct WaveState {
     pub portal_ticks_remaining: u64,
     pub portal_timeline_paused: bool,
     pub population_threshold: usize,
-    pub rng: NativeRng,
+    pub rng: Rng,
     pub schedule_index: usize,
     pub skeleton_bosses: Option<SkeletonBossState>,
     pub slumpgut_phase: SlumpgutPhase,
@@ -207,7 +205,7 @@ impl WaveDirector {
     pub fn with_schedule(seed: &str, schedule: &[WaveDef], source_sha256: Option<&str>) -> Self {
         validate_schedule(schedule);
         let mut compiler_rng =
-            NativeRng::new(i64::from(seed_from_text(&format!("{seed}:wave-compiler"))));
+            Rng::new(i64::from(seed_from_text(&format!("{seed}:wave-compiler"))));
         let opening = compile_boneyard_opening(&mut compiler_rng);
         let mut compiled_schedule = Vec::with_capacity(schedule.len());
         for (index, wave) in schedule.iter().enumerate() {
@@ -218,7 +216,7 @@ impl WaveDirector {
             ));
         }
         let programs = source_sha256.map(|sha| {
-            native_survival_programs(sha)
+            survival_programs(sha)
                 .expect("default Boneyard source has its retained survival programs")
         });
         let boss_encounters = programs.as_ref().map_or_else(Vec::new, |programs| {
@@ -253,7 +251,7 @@ impl WaveDirector {
                 portal_ticks_remaining: 0,
                 portal_timeline_paused: false,
                 population_threshold: 0,
-                rng: NativeRng::new(i64::from(seed_from_text(&format!("{seed}:wave-runtime")))),
+                rng: Rng::new(i64::from(seed_from_text(&format!("{seed}:wave-runtime")))),
                 schedule_index: 0,
                 skeleton_bosses,
                 slumpgut_phase: SlumpgutPhase::Eligible,
@@ -968,7 +966,7 @@ fn count_births<'a>(
 }
 
 fn place_enemy(
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     policy: SpawnLocationPolicy,
     players: &[Vec2],
     bounds: BoneyardBounds,
@@ -1021,7 +1019,7 @@ fn validate_schedule(schedule: &[WaveDef]) {
 /// Old native checkpoints had no retained graphs. This is a one-time migration
 /// using their original compiler, not a fallback for missing Source save fields.
 fn compile_legacy_schedule(seed: &str, schedule: &[WaveDef]) -> Vec<CompiledWaveSection> {
-    let mut rng = NativeRng::new(i64::from(seed_from_text(&format!("{seed}:wave-compiler"))));
+    let mut rng = Rng::new(i64::from(seed_from_text(&format!("{seed}:wave-compiler"))));
     let _ = compile_boneyard_opening(&mut rng);
     let mut compiled = Vec::with_capacity(schedule.len());
     for (index, wave) in schedule.iter().enumerate() {
@@ -1035,6 +1033,6 @@ fn compile_legacy_schedule(seed: &str, schedule: &[WaveDef]) -> Vec<CompiledWave
 }
 
 fn compile_opening_for_seed(seed: &str) -> super::CompiledOpening {
-    let mut rng = NativeRng::new(i64::from(seed_from_text(&format!("{seed}:wave-compiler"))));
+    let mut rng = Rng::new(i64::from(seed_from_text(&format!("{seed}:wave-compiler"))));
     compile_boneyard_opening(&mut rng)
 }

@@ -6,7 +6,7 @@
 
 use crate::Vec2;
 
-pub const NATIVE_ACTOR_SEPARATION_EPSILON: f64 = 0.1;
+pub const ACTOR_SEPARATION_EPSILON: f64 = 0.1;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ActorPhysicsBody {
@@ -182,7 +182,7 @@ fn actor_separation(
         return Vec2::ZERO;
     }
     let distance = squared.sqrt();
-    let overlap = radii + NATIVE_ACTOR_SEPARATION_EPSILON - distance;
+    let overlap = radii + ACTOR_SEPARATION_EPSILON - distance;
     // JavaScript's `ratio ** 4` uses its floating exponent operation. Integer-power
     // multiplication changes the last bit of weighted corrections in dense crowds.
     let weight = if weighted { (squared / radii_squared).powf(4.0) * 0.99 + 0.01 } else { 1.0 };

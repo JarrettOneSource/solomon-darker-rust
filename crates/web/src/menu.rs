@@ -27,15 +27,15 @@ use routing::RoutingView;
 pub use settings::SettingsContext;
 use settings::SettingsView;
 use solomon_graphics::assets;
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::audio::{
     AudioCue, AudioEvent, AudioOptions, MusicScene, create_entry_audio_events,
     create_selection_audio_events,
 };
-use solomon_sim::menu::native_pause_menu_reveal;
+use solomon_sim::menu::pause_menu_reveal;
 use solomon_sim::profile::create::{
-    NATIVE_CREATE_ENTRY_FADE_MS, NATIVE_CREATE_RANDOMIZE_FINALIZE_MS, NativeCreateLoadoutSelection,
-    finalize_native_create_loadout,
+    CREATE_ENTRY_FADE_MS, CREATE_RANDOMIZE_FINALIZE_MS, CreateLoadoutSelection,
+    finalize_create_loadout,
 };
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::settings::GameSettings;
@@ -161,7 +161,7 @@ pub struct MenuUi {
     loadout_locked: bool,
     selected_element: Option<WizardElement>,
     pending_start: Option<PendingCreateCommit>,
-    create_rng: Option<NativeRng>,
+    create_rng: Option<Rng>,
     create_previous_phase_elapsed: f64,
     pending_pause: Option<(f64, PauseChoice)>,
     keyboard: keyboard::MenuKeyboard,
@@ -959,7 +959,7 @@ impl MenuUi {
 
     pub fn set_mobile_editor_secondary(
         &mut self,
-        secondary: Option<&solomon_sim::secondary::NativeSecondaryPlayerState>,
+        secondary: Option<&solomon_sim::secondary::SecondaryPlayerState>,
     ) {
         self.settings_view.set_mobile_editor_secondary(secondary);
     }
@@ -1139,7 +1139,7 @@ impl MenuUi {
             if let Some(pending) = &mut self.pending_start {
                 let duration = match pending.kind {
                     CreateCommitKind::Manual => 880.0,
-                    CreateCommitKind::Randomize => NATIVE_CREATE_RANDOMIZE_FINALIZE_MS as f64,
+                    CreateCommitKind::Randomize => CREATE_RANDOMIZE_FINALIZE_MS as f64,
                 };
                 if !pending.submitted && self.now - pending.started_at >= duration {
                     pending.submitted = true;
@@ -1164,7 +1164,7 @@ impl MenuUi {
                 self.pending_pause.map_or((true, self.now - self.pause_started), |(started, _)| {
                     (false, self.now - started)
                 });
-            let reveal = native_pause_menu_reveal(opening, elapsed);
+            let reveal = pause_menu_reveal(opening, elapsed);
             self.pause.update(reveal)?;
             if !opening && reveal == 0.0 {
                 match self.pending_pause.take().expect("closing pause has an action").1 {
@@ -1490,7 +1490,7 @@ impl MenuUi {
 
     fn randomize_create_loadout(&mut self) -> Result<(), String> {
         if self.screen != Screen::Create
-            || self.now - self.create_started < NATIVE_CREATE_ENTRY_FADE_MS as f64
+            || self.now - self.create_started < CREATE_ENTRY_FADE_MS as f64
         {
             return Ok(());
         }
@@ -1506,15 +1506,11 @@ impl MenuUi {
             // the accepted player's gameplay, appearance or progression RNG.
             let mut bytes = [0_u8; 4];
             crate::platform::random_bytes(&mut bytes)?;
-            self.create_rng = Some(NativeRng::new(i64::from(u32::from_ne_bytes(bytes))));
+            self.create_rng = Some(Rng::new(i64::from(u32::from_ne_bytes(bytes))));
         }
-        let selection = finalize_native_create_loadout(
+        let selection = finalize_create_loadout(
             self.create_rng.as_mut().expect("Create random stream initialized"),
-            &NativeCreateLoadoutSelection {
-                name,
-                element: self.selected_element,
-                discipline: None,
-            },
+            &CreateLoadoutSelection { name, element: self.selected_element, discipline: None },
             &[],
         );
         self.audio_events.push(AudioEvent::Play(AudioCue::Click, AudioOptions::default()));
@@ -1694,7 +1690,7 @@ impl PauseView {
         let spread = solomon_sim::float::fround((1.0 - self.reveal) * 25.0 + 40.0);
         let top = (900.0 - self.body_height()) / 2.0 - spread;
         let bottom = top + self.body_height() + spread * 2.0;
-        self.atlas.paint_native_frame_scaled(
+        self.atlas.paint_stock_frame_scaled(
             frame,
             ui.painter(),
             17,

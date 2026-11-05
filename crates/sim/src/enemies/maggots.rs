@@ -17,7 +17,7 @@ use crate::heading::heading_degrees_from_vector;
 use crate::painter::WorldPainterOrder;
 use std::collections::BTreeMap;
 
-pub(super) fn native_maggot_death_offsets(world: &mut EnemyWorld) -> Vec<Vec2> {
+pub(super) fn maggot_death_offsets(world: &mut EnemyWorld) -> Vec<Vec2> {
     let count = world.draw_integer(3);
     let mut offsets = Vec::with_capacity(count as usize);
     for _ in 0..count {
@@ -87,7 +87,7 @@ impl EnemyWorld {
                 if source.last_attack_tick.is_some() && death_tick < 6 {
                     source.death_tick = death_tick;
                     // Native mark-only bite disposal leaves the grid at t+3.
-                    source.native_tree_query_member &= death_tick < 3;
+                    source.tree_query_member &= death_tick < 3;
                     return true;
                 }
                 self.emit_event(EnemyEvent::new(
@@ -133,8 +133,7 @@ impl EnemyWorld {
                     source.path.clear_route();
                 }
                 source.target_player_id = selected;
-                source.next_target_refresh_tick =
-                    context.tick + native_enemy_target_refresh_ticks(1);
+                source.next_target_refresh_tick = context.tick + enemy_target_refresh_ticks(1);
             }
             let target = target_by_id(source.target_player_id.as_deref(), context.players);
             if source.path.reorientation_ticks_remaining > 0 {
@@ -258,9 +257,9 @@ fn move_maggot(
         target_position: target.map(|target| target.position),
     };
     let mut path = source.path;
-    let mut goal = native_enemy_steering_goal(&path, &request);
+    let mut goal = enemy_steering_goal(&path, &request);
     if !fleeing {
-        let routed = resolve_native_enemy_path_goal(
+        let routed = resolve_enemy_path_goal(
             path,
             EnemyPathGoalRequest {
                 actor_position: source.position,
@@ -269,7 +268,7 @@ fn move_maggot(
                 navigation_clearance: 25.0,
                 raw_goal: goal,
                 target_position: target.map(|target| target.position),
-                target_refresh_ticks: native_enemy_target_refresh_ticks(1),
+                target_refresh_ticks: enemy_target_refresh_ticks(1),
             },
             context.geometry,
         );
@@ -280,7 +279,7 @@ fn move_maggot(
         }
     }
     request.goal_position = Some(goal);
-    let steering = build_native_enemy_steering(path, request);
+    let steering = build_enemy_steering(path, request);
     let delta = steering.delta;
     let position = context.geometry.resolve_movement(EnemyMovementRequest {
         actor_id: source.id,
@@ -315,7 +314,7 @@ fn move_maggot(
     source.path = path;
     source.position = position;
     // Native free movement rebinds even when the resolved displacement is zero.
-    source.native_tree_query_member = true;
+    source.tree_query_member = true;
 }
 
 fn step_emerging_maggot(source: &mut EnemyMaggotActor, context: &EnemyStepContext<'_>) {

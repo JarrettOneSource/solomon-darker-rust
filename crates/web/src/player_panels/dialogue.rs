@@ -17,13 +17,13 @@ use solomon_sim::hub::interaction::{
 use solomon_sim::hud::HudRect;
 use solomon_sim::modding::content::PreparedModBoastIcon;
 use solomon_sim::modding::projection::ModContentProjection;
-use solomon_sim::native_ui_notebox::NativeNoteboxKind;
-use solomon_sim::native_ui_text::{
-    NativeUiFontName as Font, NativeUiTextAlign as Align, NativeUiTextSpec as TextSpec,
-    layout_native_ui_text_runs, wrap_native_ui_text_runs,
-};
 use solomon_sim::player_panels::dialogue::{hub_chat_scroll_frame, hub_chat_text_runs};
-use solomon_sim::profile::NATIVE_SKILL_CATALOG;
+use solomon_sim::profile::SKILL_CATALOG;
+use solomon_sim::ui_notebox::NoteboxKind;
+use solomon_sim::ui_text::{
+    UiFontName as Font, UiTextAlign as Align, UiTextSpec as TextSpec, layout_ui_text_runs,
+    wrap_ui_text_runs,
+};
 
 pub(super) fn navigation_scope(content: &HubNpcChatContent, started_at: f64) -> String {
     let phase = started_at.to_bits();
@@ -302,7 +302,7 @@ impl PlayerPanels {
                 if key.starts_with("ANNAL_") || key.starts_with("MOD_BOAST_"))
         });
         if boast_response && let Some(instruction) = &self.boast_instruction {
-            self.npc_notebox.show(&self.ui, NativeNoteboxKind::Instruction, instruction, now)?;
+            self.npc_notebox.show(&self.ui, NoteboxKind::Instruction, instruction, now)?;
         }
         self.hide()?;
         self.actions.push(PlayerPanelAction::Close);
@@ -410,9 +410,9 @@ impl PlayerPanels {
                 let mut y = 0.0;
                 for line in lines {
                     let runs = hub_chat_text_runs(line);
-                    let wrapped = wrap_native_ui_text_runs(&runs, Font::Menu, 477.0);
+                    let wrapped = wrap_ui_text_runs(&runs, Font::Menu, 477.0);
                     for (index, line) in wrapped.iter().enumerate() {
-                        copy.layout(&layout_native_ui_text_runs(
+                        copy.layout(&layout_ui_text_runs(
                             Font::Menu,
                             line,
                             0.0,
@@ -603,8 +603,8 @@ impl PlayerPanels {
                     let HubNpcSelectorId::Native(id) = &row.id else {
                         unreachable!("native teacher skills")
                     };
-                    let root = solomon_sim::profile::native_skill_root(*id as usize)
-                        .expect("teacher root");
+                    let root =
+                        solomon_sim::profile::skill_root(*id as usize).expect("teacher root");
                     node.art(
                         &self.skills,
                         164,
@@ -616,7 +616,7 @@ impl PlayerPanels {
                     node.art(&self.skills, 5, [43.0, 42.5], [0.75, 0.75], 0.0, 0xffffff)?;
                     node.art(
                         &self.skills,
-                        NATIVE_SKILL_CATALOG[*id as usize].icon_record,
+                        SKILL_CATALOG[*id as usize].icon_record,
                         [43.0, 42.5],
                         [1.0, 1.0],
                         0.0,
@@ -661,8 +661,7 @@ fn chat_content_height(lines: &[String]) -> f64 {
     lines
         .iter()
         .map(|line| {
-            wrap_native_ui_text_runs(&hub_chat_text_runs(line), Font::Menu, 477.0).len() as f64
-                * 27.0
+            wrap_ui_text_runs(&hub_chat_text_runs(line), Font::Menu, 477.0).len() as f64 * 27.0
                 + 22.0
         })
         .sum()

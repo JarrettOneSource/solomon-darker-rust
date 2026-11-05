@@ -2,8 +2,8 @@ use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::spells::presentation::{SpellAtlas, SpellBlend};
 use solomon_sim::spells::weld::{
-    NativeWeldMeshUvSpace, NativeWeldPresentationState, NativeWeldSpriteDraw, NativeWeldVisualPlan,
-    native_weld_visual_plan, native_weld_visual_plan_at_age,
+    WeldMeshUvSpace, WeldPresentationState, WeldSpriteDraw, WeldVisualPlan, weld_visual_plan,
+    weld_visual_plan_at_age,
 };
 
 pub fn sample(case: &Value, tick: u64) -> Option<&Value> {
@@ -18,7 +18,7 @@ fn blend(value: SpellBlend) -> &'static str {
     if value == SpellBlend::Add { "add" } else { "normal" }
 }
 
-fn sprite(draw: NativeWeldSpriteDraw) -> Value {
+fn sprite(draw: WeldSpriteDraw) -> Value {
     let sprite = draw.sprite;
     let matrix = draw.matrix.map(|matrix| {
         json!({"a":matrix.a,"b":matrix.b,"c":matrix.c,"d":matrix.d,"tx":matrix.tx,"ty":matrix.ty})
@@ -30,7 +30,7 @@ fn sprite(draw: NativeWeldSpriteDraw) -> Value {
     })
 }
 
-pub fn plan(plan: NativeWeldVisualPlan) -> Value {
+pub fn plan(plan: WeldVisualPlan) -> Value {
     let lines: Vec<_> = plan
         .lines
         .into_iter()
@@ -46,7 +46,7 @@ pub fn plan(plan: NativeWeldVisualPlan) -> Value {
         if let Some(colors) = mesh.colors {
             row["colors"] = json!(colors);
         }
-        if mesh.uv_space == NativeWeldMeshUvSpace::BadGuysAtlas {
+        if mesh.uv_space == WeldMeshUvSpace::BadGuysAtlas {
             row["uvSpace"] = json!("badguys-atlas");
         }
         row
@@ -63,7 +63,7 @@ pub fn plan(plan: NativeWeldVisualPlan) -> Value {
 }
 
 pub fn compare<'a>(
-    states: impl IntoIterator<Item = NativeWeldPresentationState<'a>>,
+    states: impl IntoIterator<Item = WeldPresentationState<'a>>,
     expected: &Value,
     path: &str,
 ) {
@@ -72,9 +72,9 @@ pub fn compare<'a>(
     let mut actual = Vec::new();
     for state in states {
         let draw = if let Some(age) = expected["age"].as_f64() {
-            native_weld_visual_plan_at_age(state, frame, age, hit)
+            weld_visual_plan_at_age(state, frame, age, hit)
         } else {
-            native_weld_visual_plan(state, frame, hit)
+            weld_visual_plan(state, frame, hit)
         };
         actual.push(plan(draw));
     }

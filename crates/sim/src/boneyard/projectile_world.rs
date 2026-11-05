@@ -7,7 +7,7 @@ use super::BoneyardBounds;
 use super::collision::{
     BoneyardCollisionWorld, boneyard_body_collides, first_boneyard_line_obstruction,
 };
-use super::world_light::{native_primary_view_bounds, native_region_point_gain};
+use super::world_light::{primary_view_bounds, region_point_gain};
 
 #[derive(Clone, Copy, Debug)]
 pub struct BoneyardProjectileViewport {
@@ -34,7 +34,7 @@ impl<'a> BoneyardProjectileWorld<'a> {
         for viewport in viewports {
             // Projectile retention uses the stock height-adaptive scale. Logical lights
             // and native enemy visibility instead use their separate fixed 1.35 scale.
-            views.push(native_primary_view_bounds(
+            views.push(primary_view_bounds(
                 bounds,
                 viewport.position,
                 viewport.viewport,
@@ -48,14 +48,14 @@ impl<'a> BoneyardProjectileWorld<'a> {
     #[must_use]
     pub fn blocked(&self, query: EnemyProjectileWorldQuery) -> bool {
         match query {
-            EnemyProjectileWorldQuery::Line { start, end, native_exclusion_mask, .. } => {
+            EnemyProjectileWorldQuery::Line { start, end, exclusion_mask, .. } => {
                 first_boneyard_line_obstruction(
                     start,
                     end,
                     self.bounds,
                     self.collision,
                     None,
-                    native_exclusion_mask,
+                    exclusion_mask,
                     &[],
                 )
                 .is_some()
@@ -85,14 +85,14 @@ pub fn boneyard_projectile_point_gain(
     viewport: BoneyardProjectileViewport,
     position: Vec2,
 ) -> f64 {
-    let view = native_primary_view_bounds(
+    let view = primary_view_bounds(
         bounds,
         viewport.position,
         viewport.viewport,
         (viewport.viewport.y / 800.0).max(1.0),
         0.0,
     );
-    native_region_point_gain(
+    region_point_gain(
         position,
         Vec2::new(view.x + view.width / 2.0, view.y + view.height / 2.0),
         view.width,

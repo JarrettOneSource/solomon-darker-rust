@@ -5,13 +5,13 @@ use super::*;
 use crate::game_run::GameRunPhase;
 use crate::painter::WorldManagerLane;
 use crate::player::PlayerState;
-use crate::profile::{NativeHagathaRuntimeState, NewGameSelection, SharedPlayerLevelMilestone};
+use crate::profile::{HagathaRuntimeState, NewGameSelection, SharedPlayerLevelMilestone};
 
 /// The durable wizard account state carried across character creation and retirement.
 #[derive(Clone, Debug)]
 pub struct ParticipantProfile {
     pub economy: crate::economy::HubEconomyState,
-    pub hagatha_runtime: NativeHagathaRuntimeState,
+    pub hagatha_runtime: HagathaRuntimeState,
     pub advanced_unlocks: [bool; 8],
 }
 
@@ -452,7 +452,7 @@ pub(super) fn import_detached_character(
 pub(super) fn synchronize_detached_player(
     participant: &mut SessionParticipant,
     milestone: &SharedPlayerLevelMilestone,
-    rng: &mut crate::NativeRng,
+    rng: &mut crate::Rng,
 ) -> Result<(), String> {
     let previous = participant.player.progression.level;
     participant.player.synchronize_level_milestone(milestone, rng)?;
@@ -488,9 +488,9 @@ fn migrate_starter_equipment_appearance(player: &mut PlayerState) {
             && item.mod_affixes.is_none()
             && item.name == name
             && item.native_effects.is_none()
-            && item.native_selector.is_none()
-            && item.native_subtype.is_none()
-            && item.native_type_id == type_id
+            && item.selector.is_none()
+            && item.subtype.is_none()
+            && item.type_id == type_id
             && item.quantity == 1
             && item.rarity.is_none()
             && item.recipe_index.is_none()
@@ -500,8 +500,8 @@ fn migrate_starter_equipment_appearance(player: &mut PlayerState) {
         && player.economy.equipment.hat.as_ref().is_some_and(|item| is_superseded(item, true))
         && player.economy.equipment.robe.as_ref().is_some_and(|item| is_superseded(item, false))
     {
-        let appearance = crate::appearance::roll_native_starter_equipment_appearance(
-            &mut NativeRng::new(i64::from(player.progression.offer_seed)),
+        let appearance = crate::appearance::roll_starter_equipment_appearance(
+            &mut Rng::new(i64::from(player.progression.offer_seed)),
             player.selection.element.into(),
         );
         player.economy.apply_starter_appearance(appearance);

@@ -5,21 +5,18 @@
 mod flashes;
 mod region_camera;
 
-pub use flashes::NativeScreenFlashPresentation;
-pub use region_camera::NativeRegionCameraPresentation;
+pub use flashes::ScreenFlashPresentation;
+pub use region_camera::RegionCameraPresentation;
 
 use crate::Vec2;
 use crate::float::fround;
 use crate::region_feedback::{
-    NativeRegionCameraShake, NativeRegionCameraShakeAttenuation, native_region_hit_point_gain,
-    native_region_point_gain,
+    RegionCameraShake, RegionCameraShakeAttenuation, region_hit_point_gain, region_point_gain,
 };
 use crate::secondary::presentation::draws::{
     pack_normalized_rgb, repeated_float_decay, repeated_float_multiply,
 };
-use crate::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryEventState, NativeSecondaryScreenFlashState,
-};
+use crate::secondary::{SecondaryActorKind, SecondaryEventState, SecondaryScreenFlashState};
 use crate::spells::model::PrimarySpellEtherBlast;
 
 const CAMERA_MAGNITUDE_DECAY: f64 = 0.94_f32 as f64;
@@ -30,13 +27,13 @@ const ETHER_BLAST_FLASH_DECAY: f64 = 0.025_f32 as f64;
 const ETHER_BLAST_SCREEN_GREEN: f64 = 0.25_f32 as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryScreenOverlay {
+pub struct SecondaryScreenOverlay {
     pub alpha: f64,
     pub color: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryScreenFeedbackContext {
+pub struct SecondaryScreenFeedbackContext {
     pub camera_center: Vec2,
     pub local_player_alternate: bool,
     pub visible_world_width: f64,
@@ -44,18 +41,18 @@ pub struct NativeSecondaryScreenFeedbackContext {
 
 /// The presentation fields projected from the host's canonical EnemyEvent.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemyScreenFeedbackInput<'a> {
-    pub camera_shake: Option<NativeRegionCameraShake>,
+pub struct EnemyScreenFeedbackInput<'a> {
+    pub camera_shake: Option<RegionCameraShake>,
     pub event_id: u64,
     pub run_id: &'a str,
-    pub screen_flash: Option<NativeSecondaryScreenFlashState>,
+    pub screen_flash: Option<SecondaryScreenFlashState>,
     pub screen_flash_only_if_clear: bool,
     pub source_position: Option<Vec2>,
     pub tick: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativePrimaryCameraDisplacementInput<'a> {
+pub struct PrimaryCameraDisplacementInput<'a> {
     pub displacement: Vec2,
     pub event_id: u64,
     pub tick: u64,
@@ -63,7 +60,7 @@ pub struct NativePrimaryCameraDisplacementInput<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativePrimaryCameraMagnitudeInput<'a> {
+pub struct PrimaryCameraMagnitudeInput<'a> {
     pub event_id: u64,
     pub magnitude: f64,
     pub tick: u64,
@@ -71,10 +68,10 @@ pub struct NativePrimaryCameraMagnitudeInput<'a> {
 }
 
 #[must_use]
-pub fn present_native_secondary_screen_overlay(
-    overlay: Option<NativeSecondaryScreenOverlay>,
+pub fn present_secondary_screen_overlay(
+    overlay: Option<SecondaryScreenOverlay>,
     reduced_screen_flashes: bool,
-) -> Option<NativeSecondaryScreenOverlay> {
+) -> Option<SecondaryScreenOverlay> {
     overlay.map(|mut overlay| {
         if reduced_screen_flashes {
             overlay.alpha *= 0.2;
@@ -84,15 +81,15 @@ pub fn present_native_secondary_screen_overlay(
 }
 
 #[must_use]
-pub fn native_secondary_world_shake(
-    actors: &[crate::secondary::NativeSecondaryActorState],
+pub fn secondary_world_shake(
+    actors: &[crate::secondary::SecondaryActorState],
     world_key: &str,
     current: Vec2,
 ) -> Vec2 {
     let mut selected = Vec2::new(fround(current.x), fround(current.y));
     let mut magnitude_squared = selected.x * selected.x + selected.y * selected.y;
     for actor in actors {
-        if actor.world_key != world_key || actor.kind != NativeSecondaryActorKind::Earthquake {
+        if actor.world_key != world_key || actor.kind != SecondaryActorKind::Earthquake {
             continue;
         }
         let candidate_squared =
@@ -107,7 +104,7 @@ pub fn native_secondary_world_shake(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryScreenFeedbackPresentation {
+pub struct SecondaryScreenFeedbackPresentation {
     pub alpha: f64,
     pub blue: f64,
     pub camera_displacement_x: f64,
@@ -125,7 +122,7 @@ pub struct NativeSecondaryScreenFeedbackPresentation {
     pub world_key: String,
 }
 
-impl NativeSecondaryScreenFeedbackPresentation {
+impl SecondaryScreenFeedbackPresentation {
     #[must_use]
     pub fn new(initial_tick: u64, world_key: String) -> Self {
         Self {
@@ -149,8 +146,8 @@ impl NativeSecondaryScreenFeedbackPresentation {
 
     pub fn consume(
         &mut self,
-        event: &NativeSecondaryEventState,
-        context: NativeSecondaryScreenFeedbackContext,
+        event: &SecondaryEventState,
+        context: SecondaryScreenFeedbackContext,
     ) {
         if event.event_id <= self.last_event_id {
             return;
@@ -183,8 +180,8 @@ impl NativeSecondaryScreenFeedbackPresentation {
 
     pub fn consume_enemy(
         &mut self,
-        event: NativeEnemyScreenFeedbackInput<'_>,
-        context: NativeSecondaryScreenFeedbackContext,
+        event: EnemyScreenFeedbackInput<'_>,
+        context: SecondaryScreenFeedbackContext,
     ) {
         if event.event_id <= self.last_enemy_event_id {
             return;
@@ -198,17 +195,18 @@ impl NativeSecondaryScreenFeedbackPresentation {
             let source =
                 event.source_position.expect("Boss camera shake requires its world position");
             let gain = match shake.attenuation {
-                NativeRegionCameraShakeAttenuation::Fixed => 1.0,
-                NativeRegionCameraShakeAttenuation::Point => context.point_gain(source),
-                NativeRegionCameraShakeAttenuation::Hit
-                | NativeRegionCameraShakeAttenuation::HitSquared => native_region_hit_point_gain(
-                    source,
-                    context.camera_center,
-                    context.visible_world_width,
-                    context.local_player_alternate,
-                ),
+                RegionCameraShakeAttenuation::Fixed => 1.0,
+                RegionCameraShakeAttenuation::Point => context.point_gain(source),
+                RegionCameraShakeAttenuation::Hit | RegionCameraShakeAttenuation::HitSquared => {
+                    region_hit_point_gain(
+                        source,
+                        context.camera_center,
+                        context.visible_world_width,
+                        context.local_player_alternate,
+                    )
+                }
             };
-            let scale = if shake.attenuation == NativeRegionCameraShakeAttenuation::HitSquared {
+            let scale = if shake.attenuation == RegionCameraShakeAttenuation::HitSquared {
                 fround(gain * gain)
             } else {
                 gain
@@ -241,7 +239,7 @@ impl NativeSecondaryScreenFeedbackPresentation {
 
     pub fn consume_primary_camera_displacement(
         &mut self,
-        input: NativePrimaryCameraDisplacementInput<'_>,
+        input: PrimaryCameraDisplacementInput<'_>,
     ) {
         if input.event_id <= self.last_primary_impact_id {
             return;
@@ -257,7 +255,7 @@ impl NativeSecondaryScreenFeedbackPresentation {
     pub fn consume_primary_ether_blast(
         &mut self,
         effect: &PrimarySpellEtherBlast,
-        context: NativeSecondaryScreenFeedbackContext,
+        context: SecondaryScreenFeedbackContext,
     ) {
         if effect.common.id <= self.last_primary_feedback_id {
             return;
@@ -281,10 +279,7 @@ impl NativeSecondaryScreenFeedbackPresentation {
         }
     }
 
-    pub fn consume_primary_camera_magnitude(
-        &mut self,
-        input: NativePrimaryCameraMagnitudeInput<'_>,
-    ) {
+    pub fn consume_primary_camera_magnitude(&mut self, input: PrimaryCameraMagnitudeInput<'_>) {
         if input.event_id <= self.last_primary_magnitude_id {
             return;
         }
@@ -303,12 +298,12 @@ impl NativeSecondaryScreenFeedbackPresentation {
         }
     }
 
-    pub fn sample(&mut self, tick: u64) -> Option<NativeSecondaryScreenOverlay> {
+    pub fn sample(&mut self, tick: u64) -> Option<SecondaryScreenOverlay> {
         self.advance_to(tick);
         if self.alpha <= 0.0 {
             return None;
         }
-        Some(NativeSecondaryScreenOverlay {
+        Some(SecondaryScreenOverlay {
             alpha: self.alpha,
             color: pack_normalized_rgb(self.red, self.green, self.blue),
         })
@@ -324,12 +319,7 @@ impl NativeSecondaryScreenFeedbackPresentation {
         Vec2::new(self.camera_displacement_x, self.camera_displacement_y)
     }
 
-    fn write_flash(
-        &mut self,
-        flash: NativeSecondaryScreenFlashState,
-        point_gain: f64,
-        event_tick: u64,
-    ) {
+    fn write_flash(&mut self, flash: SecondaryScreenFlashState, point_gain: f64, event_tick: u64) {
         self.alpha = fround(flash.alpha * point_gain);
         self.blue = flash.blue;
         self.decay_per_tick = flash.decay_per_tick;
@@ -386,9 +376,9 @@ impl NativeSecondaryScreenFeedbackPresentation {
     }
 }
 
-impl NativeSecondaryScreenFeedbackContext {
+impl SecondaryScreenFeedbackContext {
     fn point_gain(self, position: Vec2) -> f64 {
-        native_region_point_gain(
+        region_point_gain(
             position,
             self.camera_center,
             self.visible_world_width,

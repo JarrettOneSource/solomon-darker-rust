@@ -1,12 +1,12 @@
 //! Create's missing-choice finalizer from `core-kernels/native-create-loadout.ts`.
 
 use super::{NewGameSelection, WizardDiscipline, WizardElement};
-use crate::NativeRng;
+use crate::Rng;
 
 /// Retail Create fades by float32 0.05 at 100 Hz.
-pub const NATIVE_CREATE_ENTRY_FADE_MS: u64 = 200;
+pub const CREATE_ENTRY_FADE_MS: u64 = 200;
 /// Finalization requires the fade to be strictly greater than float32 1.1.
-pub const NATIVE_CREATE_RANDOMIZE_FINALIZE_MS: u64 = 230;
+pub const CREATE_RANDOMIZE_FINALIZE_MS: u64 = 230;
 
 const PRIMARY_POOL: [WizardElement; 5] = [
     WizardElement::Ether,
@@ -17,7 +17,7 @@ const PRIMARY_POOL: [WizardElement; 5] = [
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NativeCreateLoadoutSelection {
+pub struct CreateLoadoutSelection {
     pub name: String,
     pub element: Option<WizardElement>,
     pub discipline: Option<WizardDiscipline>,
@@ -25,9 +25,9 @@ pub struct NativeCreateLoadoutSelection {
 
 /// `finalizeNativeCreateLoadout`: retain explicit choices and draw only missing ones.
 #[must_use]
-pub fn finalize_native_create_loadout(
-    rng: &mut NativeRng,
-    selection: &NativeCreateLoadoutSelection,
+pub fn finalize_create_loadout(
+    rng: &mut Rng,
+    selection: &CreateLoadoutSelection,
     disabled_primary_skill_ids: &[usize],
 ) -> NewGameSelection {
     let element = if let Some(element) = selection.element {

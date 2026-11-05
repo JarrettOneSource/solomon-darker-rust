@@ -6,17 +6,15 @@ use std::collections::BTreeMap;
 use egui::{LayerId, Order, Rect, pos2, vec2};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::messages::{
-    NativeLootMessagePresentation, NativeLootMessageVisual, NativeWorldNotificationInput,
-    NativeWorldNotificationKey, NativeWorldNotificationSource, native_world_notifications_visible,
+    LootMessagePresentation, LootMessageVisual, WorldNotificationInput, WorldNotificationKey,
+    WorldNotificationSource, world_notifications_visible,
 };
-use solomon_sim::economy::{
-    NativeSkillBookFeedbackCursor, NativeSkillBookOutcome, native_skill_book_result_text,
-};
+use solomon_sim::economy::{SkillBookFeedbackCursor, SkillBookOutcome, skill_book_result_text};
 use solomon_sim::enemies::model::EnemyEventKind;
 use solomon_sim::game_run::GameRunPhase;
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec, native_ui_glyph_ink_bounds};
-use solomon_sim::secondary::NativeSecondaryEventKind;
+use solomon_sim::secondary::SecondaryEventKind;
 use solomon_sim::session::GameSession;
+use solomon_sim::ui_text::{UiFontName, UiTextSpec, ui_glyph_ink_bounds};
 
 use crate::gpu_ui::{UiFrame, native_text};
 
@@ -32,10 +30,10 @@ struct NotificationState {
     last_loot_id: u64,
     last_combat_id: usize,
     next_secondary_id: u64,
-    book: NativeSkillBookFeedbackCursor,
-    presentation: NativeLootMessagePresentation,
-    visuals: Vec<NativeLootMessageVisual>,
-    announced: BTreeMap<NativeWorldNotificationKey, String>,
+    book: SkillBookFeedbackCursor,
+    presentation: LootMessagePresentation,
+    visuals: Vec<LootMessageVisual>,
+    announced: BTreeMap<WorldNotificationKey, String>,
     visible: bool,
 }
 
@@ -63,10 +61,8 @@ impl WorldNotifications {
         };
         let feedback = participant.player.economy.action_feedback.as_ref();
         let run_id = session.boneyard.as_ref().map(|world| world.loaded.run_id.as_str());
-        let visible = native_world_notifications_visible(
-            Some(participant.player.combat.life_state),
-            combat_hud,
-        );
+        let visible =
+            world_notifications_visible(Some(participant.player.combat.life_state), combat_hud);
         let reset = self.state.as_ref().is_none_or(|state| {
             state.player_id != player_id
                 || state.run_id.as_deref() != run_id
@@ -89,8 +85,8 @@ impl WorldNotifications {
                     .and_then(|world| world.enemy_events.iter().map(|event| event.event_id).max())
                     .unwrap_or(0),
                 next_secondary_id: session.secondary.next_event_id,
-                book: NativeSkillBookFeedbackCursor::new(feedback),
-                presentation: NativeLootMessagePresentation::new(session.ticks),
+                book: SkillBookFeedbackCursor::new(feedback),
+                presentation: LootMessagePresentation::new(session.ticks),
                 visuals: Vec::new(),
                 announced: BTreeMap::new(),
                 visible: visible && !terminal,
@@ -109,13 +105,13 @@ impl WorldNotifications {
             }
         }
         if let Some(receipt) = state.book.consume(feedback)
-            && let NativeSkillBookOutcome::Rank { skill_id: Some(skill_id) } = receipt.outcome
+            && let SkillBookOutcome::Rank { skill_id: Some(skill_id) } = receipt.outcome
         {
-            state.presentation.consume_text(&NativeWorldNotificationInput {
-                source: NativeWorldNotificationSource::Book,
+            state.presentation.consume_text(&WorldNotificationInput {
+                source: WorldNotificationSource::Book,
                 event_id: receipt.sequence,
                 tick: session.ticks,
-                text: &native_skill_book_result_text(skill_id)?,
+                text: &skill_book_result_text(skill_id)?,
                 tint: 0x8080ff,
             });
         }
@@ -123,12 +119,12 @@ impl WorldNotifications {
             let world_key = format!("boneyard:{}", world.loaded.run_id);
             for event in &session.secondary.events {
                 if event.event_id >= state.next_secondary_id
-                    && event.kind == NativeSecondaryEventKind::Overload
+                    && event.kind == SecondaryEventKind::Overload
                     && event.owner_id == player_id
                     && event.world_key == world_key
                 {
-                    state.presentation.consume_text(&NativeWorldNotificationInput {
-                        source: NativeWorldNotificationSource::Secondary,
+                    state.presentation.consume_text(&WorldNotificationInput {
+                        source: WorldNotificationSource::Secondary,
                         event_id: event.event_id,
                         tick: event.tick,
                         text: "Overloaded Mana!",
@@ -148,8 +144,8 @@ impl WorldNotifications {
                     };
                     if event.target_player_id.as_ref().and_then(Option::as_deref) == Some(player_id)
                     {
-                        state.presentation.consume_text(&NativeWorldNotificationInput {
-                            source: NativeWorldNotificationSource::Combat,
+                        state.presentation.consume_text(&WorldNotificationInput {
+                            source: WorldNotificationSource::Combat,
                             event_id: event.event_id as u64,
                             tick: event.tick,
                             text,
@@ -189,12 +185,12 @@ impl WorldNotifications {
         {
             let baseline =
                 f64::from(viewport.top()) + (67.0 + visual.message.offset.round()) * scale;
-            let spec = NativeUiTextSpec {
+            let spec = UiTextSpec {
                 scale: visual.scale * scale,
                 alpha: visual.alpha,
                 tint: visual.message.tint,
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::Menu,
+                ..UiTextSpec::new(
+                    UiFontName::Menu,
                     &visual.message.text,
                     f64::from(viewport.center().x),
                     baseline,
@@ -203,14 +199,14 @@ impl WorldNotifications {
             native_text(
                 frame,
                 &painter,
-                &NativeUiTextSpec { y: baseline + 2.0 * scale, tint: 0, ..spec },
+                &UiTextSpec { y: baseline + 2.0 * scale, tint: 0, ..spec },
             );
             let layout = native_text(frame, &painter, &spec);
             let ink = layout
                 .glyphs
                 .iter()
                 .map(|glyph| {
-                    let ink = native_ui_glyph_ink_bounds(glyph);
+                    let ink = ui_glyph_ink_bounds(glyph);
                     Rect::from_min_size(
                         pos2(ink.left as f32, ink.top as f32),
                         vec2(ink.width as f32, ink.height as f32),

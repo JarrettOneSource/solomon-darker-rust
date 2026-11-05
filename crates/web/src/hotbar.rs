@@ -5,7 +5,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::platform::{KeyboardEffect, KeyboardEvent, KeyboardListener, Surface};
-use solomon_sim::belt::{NATIVE_BELT_SLOT_COUNT, PLAYER_HOTBAR_COUNT};
+use solomon_sim::belt::{BELT_SLOT_COUNT, PLAYER_HOTBAR_COUNT};
 use solomon_sim::hud::HudRect;
 use solomon_sim::settings::GameSettings;
 
@@ -101,7 +101,7 @@ impl HotbarSelection {
 
     #[must_use]
     pub fn start(&self) -> usize {
-        self.bank() * NATIVE_BELT_SLOT_COUNT
+        self.bank() * BELT_SLOT_COUNT
     }
 
     #[must_use]

@@ -4,7 +4,7 @@ use solomon_sim::audio::AudioCue;
 use solomon_sim::economy::{
     HubEconomyRejection, HubInventoryAction, HubTraderId, HubTransferGesture, TransferDirection,
 };
-use solomon_sim::hud::{HudRect, native_hud_control_layout};
+use solomon_sim::hud::{HudRect, hud_control_layout};
 use solomon_sim::player_panels::inventory_drop::{
     InventoryDropContext, InventoryDropEffect, InventoryDropSource, drop_inventory_source,
 };
@@ -61,10 +61,7 @@ impl PlayerPanels {
             (Target::Skill(skill_id), Some(Target::Belt(slot))) => {
                 self.sound(AudioCue::PickSkill);
                 self.actions.push(PlayerPanelAction::Belt(
-                    solomon_sim::belt::NativeBeltCommand::BindSkill {
-                        skill_id: Some(skill_id),
-                        slot,
-                    },
+                    solomon_sim::belt::BeltCommand::BindSkill { skill_id: Some(skill_id), slot },
                 ));
             }
             _ => {}
@@ -81,7 +78,7 @@ impl PlayerPanels {
         if self.inventory_transition_locked() {
             return Ok(());
         }
-        let belt_rects = native_hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
+        let belt_rects = hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
         let companion = matches!(self.panel, Some(PlayerPanel::Service(_)));
         // These are the settled companion panels' existing physical drop surfaces,
         // expressed in the same native logical stage as the captured pointer.

@@ -1,19 +1,19 @@
 use serde_json::Value;
 use solomon_sim::profile::primary::{
-    NativePrimarySkillProfile, NativePrimarySkillProfileBase, NativeWeldPrimarySkillProfile,
+    PrimarySkillProfile, PrimarySkillProfileBase, WeldPrimarySkillProfile,
 };
-use solomon_sim::profile::weld::{NativeWeldCastKind, NativeWeldPrimaryVector};
+use solomon_sim::profile::weld::{WeldCastKind, WeldPrimaryVector};
 
-pub fn profile(value: &Value) -> NativePrimarySkillProfile {
+pub fn profile(value: &Value) -> PrimarySkillProfile {
     let number = |key: &str| value[key].as_f64().unwrap();
     let build_id = value["buildId"].as_u64().unwrap() as u32;
     let cast_kind = match value["castKind"].as_str().unwrap() {
-        "channel" => NativeWeldCastKind::Channel,
-        "persistent" => NativeWeldCastKind::Persistent,
-        _ => NativeWeldCastKind::OneShot,
+        "channel" => WeldCastKind::Channel,
+        "persistent" => WeldCastKind::Persistent,
+        _ => WeldCastKind::OneShot,
     };
-    NativePrimarySkillProfile::Weld(NativeWeldPrimarySkillProfile {
-        common: NativePrimarySkillProfileBase {
+    PrimarySkillProfile::Weld(WeldPrimarySkillProfile {
+        common: PrimarySkillProfileBase {
             damage_minimum: number("damageMinimum"),
             damage_maximum: number("damageMaximum"),
             damage_roll_count: number("damageRollCount"),
@@ -24,7 +24,7 @@ pub fn profile(value: &Value) -> NativePrimarySkillProfile {
         build_id,
         cast_kind,
         damage_factor: number("damageFactor"),
-        vector: NativeWeldPrimaryVector {
+        vector: WeldPrimaryVector {
             build_id,
             cast_kind,
             values: value["vector"]["values"]

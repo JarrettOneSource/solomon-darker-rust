@@ -4,7 +4,7 @@ use super::EnemyToken;
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemyArtRecords};
 use super::model::{CoffinPhase, EnemyBrain, SpiderPhase};
 use crate::Vec2;
-use crate::boneyard::shadows::NativeShadowRecord;
+use crate::boneyard::shadows::ShadowRecord;
 use crate::enemies::model::EnemyActor;
 use crate::float;
 use crate::float::fround;
@@ -22,7 +22,7 @@ pub struct EnemyUnderlayLayer {
 }
 
 #[must_use]
-pub fn native_enemy_directional_shadow_family(token: EnemyToken) -> bool {
+pub fn enemy_directional_shadow_family(token: EnemyToken) -> bool {
     matches!(
         token,
         EnemyToken::Skeleton
@@ -36,15 +36,15 @@ pub fn native_enemy_directional_shadow_family(token: EnemyToken) -> bool {
 }
 
 #[must_use]
-pub fn native_enemy_underlay_plan(
+pub fn enemy_underlay_plan(
     actor: &EnemyActor,
     tick: u64,
-    records: &[NativeShadowRecord],
+    records: &[ShadowRecord],
     light_scalar: f64,
     complex_shadows: bool,
     art: &(impl EnemyArtRecords + ?Sized),
 ) -> Vec<EnemyUnderlayLayer> {
-    let sample = super::actor_presentation::native_enemy_presentation_input(
+    let sample = super::actor_presentation::enemy_presentation_input(
         actor,
         super::actor_presentation::EnemyActorAppearanceContext {
             tick,
@@ -55,7 +55,7 @@ pub fn native_enemy_underlay_plan(
             pike_target_position: None,
         },
     );
-    native_enemy_underlay_plan_with_input(
+    enemy_underlay_plan_with_input(
         actor,
         tick,
         records,
@@ -67,14 +67,14 @@ pub fn native_enemy_underlay_plan(
 }
 
 #[must_use]
-pub fn native_enemy_underlay_plan_with_input(
+pub fn enemy_underlay_plan_with_input(
     actor: &EnemyActor,
     tick: u64,
-    records: &[NativeShadowRecord],
+    records: &[ShadowRecord],
     light_scalar: f64,
     complex_shadows: bool,
     art: &(impl EnemyArtRecords + ?Sized),
-    sample: &super::actor_presentation::NativeEnemyPresentationInput,
+    sample: &super::actor_presentation::EnemyPresentationInput,
 ) -> Vec<EnemyUnderlayLayer> {
     let token = actor.config.enemy_token;
     if matches!(token, EnemyToken::Imp | EnemyToken::Cocoon | EnemyToken::Wraith)

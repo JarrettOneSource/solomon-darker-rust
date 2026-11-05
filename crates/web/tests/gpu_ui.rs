@@ -33,7 +33,7 @@ fn quickbar_cooldown_uses_the_stock_square_perimeter_and_svg_formatter() {
         ]
     );
     assert_eq!(
-        solomon_sim::hud::quickbar::native_cooldown_sector_path(1.0, 4.0),
+        solomon_sim::hud::quickbar::cooldown_sector_path(1.0, 4.0),
         "M 26.5 26.5 L 26.5 53 L 53 53 L 53 26.5 Z"
     );
     assert!(solomon_web::gpu_ui::cooldown_sector_points(0.0, 4.0).is_empty());

@@ -9,11 +9,9 @@ use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, Pos2, Rect, Vec2};
 use solomon_sim::economy::HubInventoryItem;
 use solomon_sim::hub::interaction::HubNpcSelectorId;
-use solomon_sim::hud::{
-    HudRect, native_inventory_item_icon_tints, native_inventory_item_icon_transform,
-};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextLayout, NativeUiTextSpec};
+use solomon_sim::hud::{HudRect, inventory_item_icon_tints, inventory_item_icon_transform};
 use solomon_sim::profile::WizardElement;
+use solomon_sim::ui_text::{UiFontName, UiTextLayout, UiTextSpec};
 use std::cell::RefCell;
 
 #[derive(Clone)]
@@ -154,11 +152,11 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             egui::StrokeKind::Inside,
         );
     }
-    pub fn text(&self, spec: &NativeUiTextSpec<'_>) {
+    pub fn text(&self, spec: &UiTextSpec<'_>) {
         crate::gpu_ui::native_text(
             self.frame,
             &self.painter,
-            &NativeUiTextSpec {
+            &UiTextSpec {
                 x: spec.x + self.origin.x as f64,
                 y: spec.y + self.origin.y as f64,
                 alpha: spec.alpha * self.alpha as f64,
@@ -166,11 +164,11 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             },
         );
     }
-    pub fn labeled_text(&self, id: &str, spec: &NativeUiTextSpec<'_>) {
+    pub fn labeled_text(&self, id: &str, spec: &UiTextSpec<'_>) {
         let layout = crate::gpu_ui::native_text(
             self.frame,
             &self.painter,
-            &NativeUiTextSpec {
+            &UiTextSpec {
                 x: spec.x + self.origin.x as f64,
                 y: spec.y + self.origin.y as f64,
                 alpha: spec.alpha * self.alpha as f64,
@@ -178,7 +176,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             },
         );
         let bounds = layout.glyphs.iter().fold(Rect::NOTHING, |bounds, glyph| {
-            let ink = solomon_sim::native_ui_text::native_ui_glyph_ink_bounds(glyph);
+            let ink = solomon_sim::ui_text::ui_glyph_ink_bounds(glyph);
             bounds.union(Rect::from_min_size(
                 egui::pos2(ink.left as f32, ink.top as f32),
                 egui::vec2(ink.width as f32, ink.height as f32),
@@ -195,7 +193,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         );
         self.frame.record_value(id, spec.text, None);
     }
-    pub fn layout(&self, layout: &NativeUiTextLayout) {
+    pub fn layout(&self, layout: &UiTextLayout) {
         let mut layout = layout.clone();
         for glyph in &mut layout.glyphs {
             glyph.center_x += self.origin.x as f64;
@@ -204,8 +202,8 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         }
         crate::gpu_ui::paint_text_layout(self.frame, &self.painter, &layout);
     }
-    pub fn shadow_text(&self, spec: &NativeUiTextSpec<'_>) {
-        self.text(&NativeUiTextSpec { x: spec.x + 1.0, y: spec.y + 1.0, tint: 0, ..*spec });
+    pub fn shadow_text(&self, spec: &UiTextSpec<'_>) {
+        self.text(&UiTextSpec { x: spec.x + 1.0, y: spec.y + 1.0, tint: 0, ..*spec });
         self.text(spec);
     }
     pub fn browser_text(&self, text: &str, x: f64, baseline: f64, size: f32, tint: u32) {
@@ -373,7 +371,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         fill: bool,
         tint: u32,
     ) -> Result<(), String> {
-        atlas.paint_native_frame(
+        atlas.paint_stock_frame(
             &self.frame.with_blend(self.blend),
             &self.painter,
             index,
@@ -474,7 +472,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         self.frame.record(&id, label, "button", &response);
         self.at(r.x, r.y)
     }
-    pub fn native_button_art(
+    pub fn button_art(
         &self,
         _atlas: &StockAtlas,
         action: &str,
@@ -508,7 +506,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         label: &str,
         r: HudRect,
     ) -> Result<Self, String> {
-        let c = self.native_button_art(atlas, action, label, r)?;
+        let c = self.button_art(atlas, action, label, r)?;
         c.text(&crate::menu::widgets::stock_button_label_spec(
             label,
             rect(HudRect::new(0.0, 0.0, r.width, r.height)),
@@ -558,8 +556,8 @@ impl PlayerPanels {
                 1.0,
             );
         } else {
-            let (offset, rotation) = native_inventory_item_icon_transform(item.equipment_type);
-            let tints = native_inventory_item_icon_tints(item, element);
+            let (offset, rotation) = inventory_item_icon_transform(item.equipment_type);
+            let tints = inventory_item_icon_tints(item, element);
             for (layer, record) in item.icon_records.iter().enumerate() {
                 let tint = tints.get(layer).copied().unwrap_or(0xffffff);
                 bounds = bounds.union(c.art(
@@ -573,14 +571,9 @@ impl PlayerPanels {
             }
         }
         if quantity > 1 {
-            c.text(&NativeUiTextSpec {
+            c.text(&UiTextSpec {
                 tint: 0xf4e5b4,
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::Medium,
-                    &quantity.to_string(),
-                    x + 25.0,
-                    y + 18.0,
-                )
+                ..UiTextSpec::new(UiFontName::Medium, &quantity.to_string(), x + 25.0, y + 18.0)
             });
         }
         Ok(bounds)
@@ -615,10 +608,9 @@ impl PlayerPanels {
         snapshot: &PlayerPanelSnapshot<'_>,
     ) -> Result<(), String> {
         use solomon_sim::belt::{
-            NativeBeltEntry, NativeBeltPotionKind, native_belt_entry_item,
-            native_belt_potion_projection,
+            BeltPotionKind, NativeBeltEntry, belt_entry_item, belt_potion_projection,
         };
-        let hud = solomon_sim::hud::native_hud_control_layout(1600.0, 900.0, Some(1.0));
+        let hud = solomon_sim::hud::hud_control_layout(1600.0, 900.0, Some(1.0));
         for (record, r, action, label) in [
             (
                 47,
@@ -656,21 +648,15 @@ impl PlayerPanels {
                     0xffffff,
                 )?;
             } else if let Some(entry) = entry {
-                let item = native_belt_entry_item(entry, snapshot.economy);
+                let item = belt_entry_item(entry, snapshot.economy);
                 let quantity = match entry {
                     NativeBeltEntry::HealthPotion => {
-                        native_belt_potion_projection(
-                            &snapshot.economy.backpack,
-                            NativeBeltPotionKind::Health,
-                        )
-                        .count
+                        belt_potion_projection(&snapshot.economy.backpack, BeltPotionKind::Health)
+                            .count
                     }
                     NativeBeltEntry::ManaPotion => {
-                        native_belt_potion_projection(
-                            &snapshot.economy.backpack,
-                            NativeBeltPotionKind::Mana,
-                        )
-                        .count
+                        belt_potion_projection(&snapshot.economy.backpack, BeltPotionKind::Mana)
+                            .count
                     }
                     _ => item.map_or(0, |item| item.quantity as u64),
                 };
@@ -756,7 +742,7 @@ impl PlayerPanels {
                 0xffffff,
             )?;
         } else if let Some(id) = press.inventory_item_id
-            && let Some(item) = solomon_sim::belt::native_belt_owned_item(snapshot.economy, id)
+            && let Some(item) = solomon_sim::belt::belt_owned_item(snapshot.economy, id)
         {
             bounds = self.draw_item(
                 c,
@@ -912,10 +898,10 @@ pub(crate) fn native_area(
     layer: egui::LayerId,
     transform: egui::emath::TSTransform,
 ) -> egui::Area {
-    native_area_in(ctx, layer, transform, ctx.content_rect())
+    area_in(ctx, layer, transform, ctx.content_rect())
 }
 
-pub(crate) fn native_area_in(
+pub(crate) fn area_in(
     ctx: &egui::Context,
     layer: egui::LayerId,
     transform: egui::emath::TSTransform,
@@ -987,7 +973,7 @@ mod tests {
         let viewport = Rect::from_min_max(egui::pos2(0.0, 48.0), screen.max);
         let body = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("player-panels"));
         let transform = egui::emath::TSTransform::new(egui::vec2(0.0, -195.0), 0.65);
-        let native_book = Rect::from_min_size(Pos2::ZERO, egui::vec2(1675.0, 900.0));
+        let book = Rect::from_min_size(Pos2::ZERO, egui::vec2(1675.0, 900.0));
         let toolbar = Rect::from_min_size(Pos2::ZERO, egui::vec2(844.0, 48.0));
         let equip = Rect::from_min_max(egui::pos2(337.0, 0.0), egui::pos2(498.0, 40.0));
         let mut clicks = 0;
@@ -1019,11 +1005,11 @@ mod tests {
                     ..Default::default()
                 },
                 |ctx| {
-                    native_area_in(ctx, body, transform, viewport).fade_in(false).show(ctx, |ui| {
-                        ui.set_min_size(native_book.size());
-                        ui.painter().rect_filled(native_book, 0.0, Color32::RED);
+                    area_in(ctx, body, transform, viewport).fade_in(false).show(ctx, |ui| {
+                        ui.set_min_size(book.size());
+                        ui.painter().rect_filled(book, 0.0, Color32::RED);
                         let response = ui.interact(
-                            native_book,
+                            book,
                             egui::Id::unique("book-drag"),
                             egui::Sense::click_and_drag(),
                         );
@@ -1087,11 +1073,11 @@ mod tests {
         let screen = Rect::from_min_size(Pos2::ZERO, egui::vec2(844.0, 390.0));
         let scale = 390.0 / 900.0;
         let transform = egui::emath::TSTransform::from_scaling(scale);
-        let native_width = screen.width() / scale;
+        let width = screen.width() / scale;
         let layer = egui::LayerId::new(egui::Order::Middle, egui::Id::unique("native-hud"));
         let controls = [
-            Rect::from_center_size(egui::pos2(native_width / 2.0, 25.5), egui::vec2(40.0, 65.0)),
-            Rect::from_center_size(egui::pos2(native_width / 2.0, 870.0), egui::vec2(53.0, 53.0)),
+            Rect::from_center_size(egui::pos2(width / 2.0, 25.5), egui::vec2(40.0, 65.0)),
+            Rect::from_center_size(egui::pos2(width / 2.0, 870.0), egui::vec2(53.0, 53.0)),
         ];
         let mut clicks = [0, 0];
         for step in 0..6 {
@@ -1119,7 +1105,7 @@ mod tests {
                 },
                 |ctx| {
                     native_area(ctx, layer, transform).show(ctx, |ui| {
-                        ui.set_min_size(egui::vec2(native_width, 900.0));
+                        ui.set_min_size(egui::vec2(width, 900.0));
                         for (index, rect) in controls.into_iter().enumerate() {
                             if step == 0 {
                                 assert!(ui.is_sizing_pass());

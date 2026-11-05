@@ -239,7 +239,8 @@ pub enum EnemyFamilyConfig {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyConfig {
     pub enemy_token: EnemyToken,
-    pub native_type_id: u16,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+    pub type_id: u16,
     pub family: EnemyFamilyConfig,
     pub attack_speed: f64,
     pub base_speed: f64,
@@ -337,7 +338,7 @@ pub fn evaluate_enemy_config(
     let recipe = intent.authored_recipe.as_ref();
     EnemyConfig {
         enemy_token: token,
-        native_type_id: token.native_type_id(),
+        type_id: token.type_id(),
         family,
         attack_speed: mutable.attack_speed,
         base_speed: constructor_base_speed(token, random.base_speed_unit),

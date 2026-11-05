@@ -6,10 +6,10 @@ use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::boneyard::collision::BoneyardCollisionWorld;
 use solomon_sim::boneyard::spawn::{
     SpawnPlacement, SpawnPolicyContext, boneyard_spawn_position_is_offscreen,
-    native_spawn_ring_sample_count,
+    spawn_ring_sample_count,
 };
 use solomon_sim::enemies::SpawnPositionPolicy;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -101,7 +101,7 @@ fn collision_safe_spawns_preserve_source_policies_and_every_native_random_word()
             "edge" => SpawnPositionPolicy::Edge,
             value => panic!("unknown recorded policy {value}"),
         };
-        let original_rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let original_rng = Rng::new(case["seed"].as_i64().unwrap());
         let mut rng = original_rng.clone();
         let actual = request.resolve_native(policy, &mut rng, &context);
         let expected = &case["expected"];
@@ -138,7 +138,7 @@ fn collision_safe_spawns_preserve_source_policies_and_every_native_random_word()
     }
     for case in fixture["samples"].as_array().unwrap() {
         assert_eq!(
-            native_spawn_ring_sample_count(
+            spawn_ring_sample_count(
                 case["radius"].as_f64().unwrap(),
                 case["step"].as_f64().unwrap()
             ),

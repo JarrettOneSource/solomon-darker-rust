@@ -19,14 +19,14 @@ pub use bursts::{
 };
 pub use draws::repeated_float_multiply;
 pub use fields::{
-    magic_circle_ring_draws, native_leviathan_composite_plan, native_player_magic_shield_plan,
-    native_secondary_composite_owner_entries, plane_orb_mesh, prismatic_wave_draws,
+    leviathan_composite_plan, magic_circle_ring_draws, plane_orb_mesh, player_magic_shield_plan,
+    prismatic_wave_draws, secondary_composite_owner_entries,
 };
 pub use golem::{
-    NativeGolemDeathMember, native_golem_death_member_plan, native_golem_death_presentation_plan,
-    native_golem_facing, native_golem_presentation_plan,
+    GolemDeathMember, golem_death_member_plan, golem_death_presentation_plan, golem_facing,
+    golem_presentation_plan,
 };
-pub use plan::{native_secondary_presentation_plan, native_secondary_presentation_plan_at_age};
+pub use plan::{secondary_presentation_plan, secondary_presentation_plan_at_age};
 pub use types::*;
 pub use weather::{
     freeze_wave_visual_draws, raindrop_gradient, storm_auxiliary_draws, storm_cloud_draws,

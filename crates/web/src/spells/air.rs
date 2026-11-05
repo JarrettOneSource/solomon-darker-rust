@@ -1,17 +1,17 @@
 //! Air's immutable born ribbons composed into the live native split queue.
 
-use solomon_sim::spells::air::NativeAirRibbonLayer;
+use solomon_sim::spells::air::AirRibbonLayer;
 use solomon_sim::spells::model::PrimarySpellAirTransient;
-use solomon_sim::spells::weld::NativeWeldMeshUvSpace;
+use solomon_sim::spells::weld::WeldMeshUvSpace;
 
 use super::split::append_split_bands;
 use super::{SpellDraw, SpellRoot};
-use crate::native_mesh::clip_native_mesh;
+use crate::beam_mesh::clip_to_bands;
 
 pub(super) fn append_air_body(
     roots: &mut Vec<SpellRoot>,
     spell: &PrimarySpellAirTransient,
-    layers: &[NativeAirRibbonLayer],
+    layers: &[AirRibbonLayer],
     enhanced_effects: bool,
 ) {
     let mut minimum = f64::INFINITY;
@@ -41,18 +41,18 @@ pub(super) fn append_air_body(
             for layer in layers {
                 draws.push(SpellDraw::Mesh {
                     record: layer.texture_record,
-                    triangles: clip_native_mesh(&layer.mesh, spell.origin, top, bottom),
+                    triangles: clip_to_bands(&layer.mesh, spell.origin, top, bottom),
                     alpha: layer.alpha,
                     tint: layer.tint,
-                    uv_space: NativeWeldMeshUvSpace::Record,
+                    uv_space: WeldMeshUvSpace::Record,
                 });
                 if let Some(branch) = &layer.branch {
                     draws.push(SpellDraw::Mesh {
                         record: branch.texture_record,
-                        triangles: clip_native_mesh(&branch.mesh, spell.origin, top, bottom),
+                        triangles: clip_to_bands(&branch.mesh, spell.origin, top, bottom),
                         alpha: layer.alpha,
                         tint: layer.tint,
-                        uv_space: NativeWeldMeshUvSpace::Record,
+                        uv_space: WeldMeshUvSpace::Record,
                     });
                 }
             }
@@ -67,7 +67,7 @@ mod tests {
     use solomon_sim::boneyard::presentation::{BoneyardPainterEntry, boneyard_painter_order};
     use solomon_sim::hub::painter::{PainterLane, PainterLayer};
     use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-    use solomon_sim::spells::air::{NativeAirLightningInput, build_native_air_lightning_body};
+    use solomon_sim::spells::air::{AirLightningInput, build_air_lightning_body};
     use solomon_sim::spells::model::PrimarySpellTransientBase;
 
     use super::*;
@@ -101,7 +101,7 @@ mod tests {
                     underpowered,
                     variant: 0,
                 };
-                let body = build_native_air_lightning_body(NativeAirLightningInput {
+                let body = build_air_lightning_body(AirLightningInput {
                     chained,
                     enhanced_effects: born_enhanced,
                     age_ticks: 0,
@@ -165,7 +165,7 @@ mod tests {
                                 panic!("Air body mesh")
                             };
                             assert_eq!((*record, *alpha, *tint), source.next().unwrap());
-                            assert_eq!(*uv_space, NativeWeldMeshUvSpace::Record);
+                            assert_eq!(*uv_space, WeldMeshUvSpace::Record);
                             for triangle in triangles {
                                 content.push(
                                     triangle

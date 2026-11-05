@@ -6,7 +6,7 @@ use super::projectile_hazards::{
     step_projectile_knockbacks,
 };
 use super::projectiles::*;
-use super::ranged::native_enemy_projectile_velocity;
+use super::ranged::enemy_projectile_velocity;
 use super::targeting::{target_by_id, target_eligible};
 use super::world::{
     EnemyProjectileWorldQuery, EnemyStepContext, EnemyTargetCellBinding, EnemyWorld,
@@ -15,18 +15,18 @@ use crate::Vec2;
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::WorldPainterOrder;
-use crate::spells::targeting::{native_heading_turn_direction, native_primary_cell_coordinate};
+use crate::spells::targeting::{heading_turn_direction, primary_cell_coordinate};
 
 impl EnemyWorld {
     pub fn bind_enemy_targets(&mut self, players: &[EnemyTarget]) {
         for player in players {
-            self.bind_native_query_target(&player.id, player.position);
+            self.bind_query_target(&player.id, player.position);
         }
     }
 
-    pub fn bind_native_query_target(&mut self, id: &str, position: Vec2) {
-        let cell_x = native_primary_cell_coordinate(position.x);
-        let cell_y = native_primary_cell_coordinate(position.y);
+    pub fn bind_query_target(&mut self, id: &str, position: Vec2) {
+        let cell_x = primary_cell_coordinate(position.x);
+        let cell_y = primary_cell_coordinate(position.y);
         if self
             .target_cell_bindings
             .get(id)
@@ -36,9 +36,9 @@ impl EnemyWorld {
         }
         self.target_cell_bindings.insert(
             id.to_owned(),
-            EnemyTargetCellBinding { cell_x, cell_y, order: self.next_native_cell_binding_order },
+            EnemyTargetCellBinding { cell_x, cell_y, order: self.next_cell_binding_order },
         );
-        self.next_native_cell_binding_order += 1;
+        self.next_cell_binding_order += 1;
     }
 
     pub fn step_projectiles(
@@ -93,7 +93,7 @@ fn step_projectile(
 }
 
 fn move_projectile(state: &mut EnemyProjectileState, tick: u64) {
-    let velocity = native_enemy_projectile_velocity(state.heading_deg, state.speed);
+    let velocity = enemy_projectile_velocity(state.heading_deg, state.speed);
     state.age_ticks += 1;
     state.last_step_tick = tick;
     state.position =
@@ -114,7 +114,7 @@ fn terrain_blocked(
             fround(state.position.x + velocity.x * ticks_ahead),
             fround(state.position.y + velocity.y * ticks_ahead),
         ),
-        native_exclusion_mask: mask,
+        exclusion_mask: mask,
     })
 }
 
@@ -197,7 +197,7 @@ fn step_arrow(
         return true;
     }
     state.vertical_offset = fround(state.vertical_offset + 0.75);
-    let launch = native_enemy_projectile_velocity(state.heading_deg, state.minimum_speed);
+    let launch = enemy_projectile_velocity(state.heading_deg, state.minimum_speed);
     let launch_speed = fround(fround(launch.x * launch.x + launch.y * launch.y).sqrt());
     let vertical_term = fround((-25.0 / state.vertical_offset) * launch_speed * 0.25);
     *velocity =
@@ -215,7 +215,7 @@ fn step_firebolt(
     tick: u64,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    let velocity = native_enemy_projectile_velocity(state.heading_deg, state.speed);
+    let velocity = enemy_projectile_velocity(state.heading_deg, state.speed);
     if (state.age_ticks + 1).is_multiple_of(10)
         && terrain_blocked(state, velocity, context, 10.0, 0x700)
     {
@@ -292,7 +292,7 @@ fn step_guided_missile(
     });
     state.heading_deg = fround(
         (old_heading
-            + state.turn_speed * f64::from(native_heading_turn_direction(old_heading, desired))
+            + state.turn_speed * f64::from(heading_turn_direction(old_heading, desired))
             + 360.0)
             % 360.0,
     );
@@ -318,7 +318,7 @@ fn step_guided_missile(
     let blocked = state.age_ticks.is_multiple_of(5)
         && terrain_blocked(
             state,
-            native_enemy_projectile_velocity(old_heading, old_speed),
+            enemy_projectile_velocity(old_heading, old_speed),
             context,
             5.0,
             0x700,
@@ -362,14 +362,14 @@ pub(super) fn first_guided_missile_contact<'a>(
     {
         return Some(target);
     }
-    let cell_x = native_primary_cell_coordinate(position.x);
-    let cell_y = native_primary_cell_coordinate(position.y);
+    let cell_x = primary_cell_coordinate(position.x);
+    let cell_y = primary_cell_coordinate(position.y);
     let mut selected = None;
     let mut first_order = usize::MAX;
     for player in players {
         if !target_eligible(player)
-            || native_primary_cell_coordinate(player.position.x) != cell_x
-            || native_primary_cell_coordinate(player.position.y) != cell_y
+            || primary_cell_coordinate(player.position.x) != cell_x
+            || primary_cell_coordinate(player.position.y) != cell_y
         {
             continue;
         }
@@ -480,7 +480,7 @@ fn step_poison_pool(
     for player in context.players {
         if !player.summoned
             && target_eligible(player)
-            && native_poison_pool_contact(state.position, player.position)
+            && poison_pool_contact(state.position, player.position)
         {
             let event = world.next_event_id;
             world.next_event_id += 1;
@@ -493,7 +493,7 @@ fn step_poison_pool(
             );
         }
     }
-    if native_poison_pool_alpha(state.age_ticks) == 0.0 {
+    if poison_pool_alpha(state.age_ticks) == 0.0 {
         retire_projectile(
             world,
             EnemyProjectileKind::PoisonPool,

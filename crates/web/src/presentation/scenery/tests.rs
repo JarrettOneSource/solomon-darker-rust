@@ -5,11 +5,10 @@ use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::boneyard::encounter::SolomonPhase;
 use solomon_sim::boneyard::presentation::TreeOcclusion;
 use solomon_sim::boneyard::scenery::{
-    NativeTreeOcclusionFrame, NativeTreeOcclusionPresentation, native_tree_actor_positions,
-    native_tree_secondary_position,
+    TreeOcclusionFrame, TreeOcclusionPresentation, tree_actor_positions, tree_secondary_position,
 };
 use solomon_sim::enemies::EnemyToken;
-use solomon_sim::enemies::actor_presentation::{NativeEnemyAnimationState, NativeEnemyCoffinState};
+use solomon_sim::enemies::actor_presentation::{EnemyAnimationState, EnemyCoffinState};
 
 use super::*;
 
@@ -35,13 +34,13 @@ fn bounds(value: &Value) -> BoneyardBounds {
         number(&value["h"]),
     )
 }
-fn poses(value: &Value) -> NativeTreeActorPoses {
-    NativeTreeActorPoses {
+fn poses(value: &Value) -> TreeActorPoses {
+    TreeActorPoses {
         players: value["players"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|player| NativeTreePlayerPose {
+            .map(|player| TreePlayerPose {
                 id: player["id"].as_str().unwrap().to_owned(),
                 position: point(&player["position"]),
             })
@@ -50,23 +49,23 @@ fn poses(value: &Value) -> NativeTreeActorPoses {
             .as_array()
             .unwrap()
             .iter()
-            .map(|enemy| NativeTreeEnemyPose {
+            .map(|enemy| TreeEnemyPose {
                 id: enemy["id"].as_u64().unwrap() as usize,
                 position: point(&enemy["position"]),
                 enemy_token: EnemyToken::ALL
                     .into_iter()
                     .find(|token| Some(token.id()) == enemy["enemyToken"].as_str())
                     .unwrap(),
-                native_type_id: enemy["nativeTypeId"].as_u64().unwrap() as u16,
+                type_id: enemy["nativeTypeId"].as_u64().unwrap() as u16,
                 animation_state: match enemy["animationState"].as_str().unwrap() {
-                    "idle" => NativeEnemyAnimationState::Idle,
-                    "death" => NativeEnemyAnimationState::Death,
+                    "idle" => EnemyAnimationState::Idle,
+                    "death" => EnemyAnimationState::Death,
                     other => panic!("fixture animation {other}"),
                 },
                 coffin_state: match enemy["coffinState"].as_str() {
-                    None | Some("closed") => NativeEnemyCoffinState::Closed,
-                    Some("hidden") => NativeEnemyCoffinState::Hidden,
-                    Some("opening") => NativeEnemyCoffinState::Opening,
+                    None | Some("closed") => EnemyCoffinState::Closed,
+                    Some("hidden") => EnemyCoffinState::Hidden,
+                    Some("opening") => EnemyCoffinState::Opening,
                     other => panic!("fixture Coffin {other:?}"),
                 },
             })
@@ -75,10 +74,10 @@ fn poses(value: &Value) -> NativeTreeActorPoses {
             .as_array()
             .unwrap()
             .iter()
-            .map(|maggot| NativeTreeMaggotPose {
+            .map(|maggot| TreeMaggotPose {
                 id: maggot["id"].as_u64().unwrap() as usize,
                 position: point(&maggot["position"]),
-                native_tree_query_member: maggot["nativeTreeQueryMember"].as_bool().unwrap(),
+                tree_query_member: maggot["nativeTreeQueryMember"].as_bool().unwrap(),
             })
             .collect(),
         encounter: if value["encounter"].is_null() {
@@ -96,7 +95,7 @@ fn poses(value: &Value) -> NativeTreeActorPoses {
     }
 }
 
-fn endpoint_poses(value: &Value) -> NativeTreeActorPoses {
+fn endpoint_poses(value: &Value) -> TreeActorPoses {
     let mut projected = value["world"].clone();
     projected["players"] = Value::Array(
         value["players"]
@@ -129,7 +128,7 @@ fn delivered_tree_poses_keep_source_membership_and_discrete_category_changes() {
         assert_eq!(actual, poses(&case["expected"]), "poses at {}", case["tick"]);
         let expected: Vec<_> = case["positions"].as_array().unwrap().iter().map(point).collect();
         assert_eq!(
-            native_tree_actor_positions(&actual, "local"),
+            tree_actor_positions(&actual, "local"),
             expected,
             "membership at {}",
             case["tick"]
@@ -137,8 +136,8 @@ fn delivered_tree_poses_keep_source_membership_and_discrete_category_changes() {
     }
 }
 
-fn frame(value: &Value) -> NativeTreeOcclusionFrame {
-    NativeTreeOcclusionFrame {
+fn frame(value: &Value) -> TreeOcclusionFrame {
+    TreeOcclusionFrame {
         actor_positions: value["actorPositions"].as_array().unwrap().iter().map(point).collect(),
         camera_bounds: bounds(&value["cameraBounds"]),
     }
@@ -155,8 +154,7 @@ fn tree_scans_preserve_targets_across_camera_gaps_and_delivered_history() {
         [area.x, area.y, area.width, area.height],
         source["polygon"].as_array().unwrap().iter().map(point).collect(),
     );
-    let mut trees =
-        NativeTreeOcclusionPresentation::new(BTreeMap::from([(id.to_owned(), tree)]), 10);
+    let mut trees = TreeOcclusionPresentation::new(BTreeMap::from([(id.to_owned(), tree)]), 10);
     for case in source["history"].as_array().unwrap() {
         trees.update(
             number(&case["tick"]),
@@ -194,7 +192,7 @@ fn tree_scans_preserve_targets_across_camera_gaps_and_delivered_history() {
     }
     for case in source["secondary"].as_array().unwrap() {
         assert_eq!(
-            native_tree_secondary_position(point(&case["root"]), bounds(&case["camera"])),
+            tree_secondary_position(point(&case["root"]), bounds(&case["camera"])),
             point(&case["expected"])
         );
     }

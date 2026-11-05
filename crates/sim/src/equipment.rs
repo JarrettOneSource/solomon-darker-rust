@@ -3,15 +3,15 @@
 mod catalog;
 pub mod random;
 
-pub use catalog::{NATIVE_EQUIPMENT_RECIPES, NATIVE_EQUIPMENT_SETS};
+pub use catalog::{EQUIPMENT_RECIPES, EQUIPMENT_SETS};
 
 use crate::economy::{HubEquipmentState, HubInventoryItem};
 use crate::float::fround;
-use crate::profile::{NATIVE_SKILL_CATALOG, NATIVE_SKILL_ROW_COUNT, native_skill_root};
+use crate::profile::{SKILL_CATALOG, SKILL_ROW_COUNT, skill_root};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEquipmentEffect {
+pub struct EquipmentEffect {
     pub kind: u32,
     pub magnitude: f64,
     pub operator: u32,
@@ -20,18 +20,18 @@ pub struct NativeEquipmentEffect {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEquipmentScalarTransform {
+pub struct EquipmentScalarTransform {
     pub offset: f64,
     pub scale: f64,
 }
 
-impl Default for NativeEquipmentScalarTransform {
+impl Default for EquipmentScalarTransform {
     fn default() -> Self {
         Self { offset: 0.0, scale: 1.0 }
     }
 }
 
-impl NativeEquipmentScalarTransform {
+impl EquipmentScalarTransform {
     /// `applyNativeEquipmentTransform`: the identity keeps its input bit for bit.
     #[must_use]
     pub fn apply(self, value: f64) -> f64 {
@@ -46,7 +46,7 @@ impl NativeEquipmentScalarTransform {
 /// Independent additive/multiplicative lanes, in native class and skill row order.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEquipmentModifiers {
+pub struct EquipmentModifiers {
     pub cast_speed_flat: f64,
     pub cast_speed_multiplier: f64,
     pub class_cast_speed_flat: [f64; 8],
@@ -55,7 +55,7 @@ pub struct NativeEquipmentModifiers {
     pub class_damage_multiplier: [f64; 8],
     pub class_mana_cost_flat: [f64; 8],
     pub class_mana_cost_multiplier: [f64; 8],
-    pub class_recharge: [NativeEquipmentScalarTransform; 8],
+    pub class_recharge: [EquipmentScalarTransform; 8],
     pub damage_resistance: f64,
     pub feature_bits: u32,
     pub global_damage_flat: f64,
@@ -63,25 +63,25 @@ pub struct NativeEquipmentModifiers {
     pub global_mana_cost_flat: f64,
     pub global_mana_cost_multiplier: f64,
     pub gold_multiplier: f64,
-    pub health_recovery: NativeEquipmentScalarTransform,
+    pub health_recovery: EquipmentScalarTransform,
     pub magic_resistance: f64,
-    pub mana_recovery: NativeEquipmentScalarTransform,
-    pub maximum_health: NativeEquipmentScalarTransform,
-    pub maximum_mana: NativeEquipmentScalarTransform,
+    pub mana_recovery: EquipmentScalarTransform,
+    pub maximum_health: EquipmentScalarTransform,
+    pub maximum_mana: EquipmentScalarTransform,
     pub melee_damage_flat: f64,
     pub melee_damage_multiplier: f64,
     pub orb_pull_multiplier: f64,
     pub poison_resistance: f64,
-    pub recharge: NativeEquipmentScalarTransform,
+    pub recharge: EquipmentScalarTransform,
     #[cfg_attr(feature = "persistence", serde(with = "crate::persistence::fixed_array"))]
-    pub skill_damage_flat: [f64; NATIVE_SKILL_ROW_COUNT],
+    pub skill_damage_flat: [f64; SKILL_ROW_COUNT],
     #[cfg_attr(feature = "persistence", serde(with = "crate::persistence::fixed_array"))]
-    pub skill_damage_multiplier: [f64; NATIVE_SKILL_ROW_COUNT],
-    pub walk_speed: NativeEquipmentScalarTransform,
+    pub skill_damage_multiplier: [f64; SKILL_ROW_COUNT],
+    pub walk_speed: EquipmentScalarTransform,
     pub weld_effect: f64,
 }
 
-impl Default for NativeEquipmentModifiers {
+impl Default for EquipmentModifiers {
     fn default() -> Self {
         Self {
             cast_speed_flat: 0.0,
@@ -92,7 +92,7 @@ impl Default for NativeEquipmentModifiers {
             class_damage_multiplier: [1.0; 8],
             class_mana_cost_flat: [0.0; 8],
             class_mana_cost_multiplier: [1.0; 8],
-            class_recharge: [NativeEquipmentScalarTransform::default(); 8],
+            class_recharge: [EquipmentScalarTransform::default(); 8],
             damage_resistance: 0.0,
             feature_bits: 0,
             global_damage_flat: 0.0,
@@ -100,19 +100,19 @@ impl Default for NativeEquipmentModifiers {
             global_mana_cost_flat: 0.0,
             global_mana_cost_multiplier: 1.0,
             gold_multiplier: 1.0,
-            health_recovery: NativeEquipmentScalarTransform::default(),
+            health_recovery: EquipmentScalarTransform::default(),
             magic_resistance: 0.0,
-            mana_recovery: NativeEquipmentScalarTransform::default(),
-            maximum_health: NativeEquipmentScalarTransform::default(),
-            maximum_mana: NativeEquipmentScalarTransform::default(),
+            mana_recovery: EquipmentScalarTransform::default(),
+            maximum_health: EquipmentScalarTransform::default(),
+            maximum_mana: EquipmentScalarTransform::default(),
             melee_damage_flat: 0.0,
             melee_damage_multiplier: 1.0,
             orb_pull_multiplier: 1.0,
             poison_resistance: 0.0,
-            recharge: NativeEquipmentScalarTransform::default(),
-            skill_damage_flat: [0.0; NATIVE_SKILL_ROW_COUNT],
-            skill_damage_multiplier: [1.0; NATIVE_SKILL_ROW_COUNT],
-            walk_speed: NativeEquipmentScalarTransform::default(),
+            recharge: EquipmentScalarTransform::default(),
+            skill_damage_flat: [0.0; SKILL_ROW_COUNT],
+            skill_damage_multiplier: [1.0; SKILL_ROW_COUNT],
+            walk_speed: EquipmentScalarTransform::default(),
             weld_effect: 1.0,
         }
     }
@@ -122,36 +122,34 @@ impl Default for NativeEquipmentModifiers {
 pub struct NativeEquipmentRecipe {
     pub name: &'static str,
     pub description: &'static str,
-    pub effects: &'static [NativeEquipmentEffect],
+    pub effects: &'static [EquipmentEffect],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEquipmentSet {
+pub struct EquipmentSet {
     pub name: &'static str,
     pub member_recipe_indices: &'static [usize],
-    pub effects: &'static [NativeEquipmentEffect],
+    pub effects: &'static [EquipmentEffect],
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeEquipmentEffectSource {
-    pub effects: Vec<NativeEquipmentEffect>,
+pub struct EquipmentEffectSource {
+    pub effects: Vec<EquipmentEffect>,
     pub recipe_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeEquipmentResolution {
-    pub effective_ranks: [u32; NATIVE_SKILL_ROW_COUNT],
+pub struct EquipmentResolution {
+    pub effective_ranks: [u32; SKILL_ROW_COUNT],
     pub granted_skill_order: Vec<usize>,
-    pub modifiers: NativeEquipmentModifiers,
+    pub modifiers: EquipmentModifiers,
 }
 
 /// `nativeEquipmentCompletedSets`: retain authored catalog order for completed sets.
 #[must_use]
-pub fn native_equipment_completed_sets(
-    equipped_recipe_indices: &[usize],
-) -> Vec<&'static NativeEquipmentSet> {
+pub fn equipment_completed_sets(equipped_recipe_indices: &[usize]) -> Vec<&'static EquipmentSet> {
     let mut completed = Vec::new();
-    for set in &NATIVE_EQUIPMENT_SETS {
+    for set in &EQUIPMENT_SETS {
         if set.member_recipe_indices.iter().all(|index| equipped_recipe_indices.contains(index)) {
             completed.push(set);
         }
@@ -160,21 +158,21 @@ pub fn native_equipment_completed_sets(
 }
 
 #[must_use]
-pub fn native_equipment_recipe_effects(recipe_index: usize) -> &'static [NativeEquipmentEffect] {
-    NATIVE_EQUIPMENT_RECIPES.get(recipe_index).map_or(&[], |recipe| recipe.effects)
+pub fn equipment_recipe_effects(recipe_index: usize) -> &'static [EquipmentEffect] {
+    EQUIPMENT_RECIPES.get(recipe_index).map_or(&[], |recipe| recipe.effects)
 }
 
 #[must_use]
-pub fn native_equipment_recipe_description(recipe_index: usize) -> &'static str {
-    NATIVE_EQUIPMENT_RECIPES.get(recipe_index).map_or("", |recipe| recipe.description)
+pub fn equipment_recipe_description(recipe_index: usize) -> &'static str {
+    EQUIPMENT_RECIPES.get(recipe_index).map_or("", |recipe| recipe.description)
 }
 
 #[must_use]
-pub fn resolve_equipped_native_effects(
-    permanent_ranks: &[u32; NATIVE_SKILL_ROW_COUNT],
+pub fn resolve_equipped_effects(
+    permanent_ranks: &[u32; SKILL_ROW_COUNT],
     equipment: &HubEquipmentState,
     owned_hagatha_selectors: &[u32],
-) -> NativeEquipmentResolution {
+) -> EquipmentResolution {
     let mut sources = Vec::new();
     // Native equipment iteration is hat, robe, rings, amulet, weapon; f32 stores make this order observable.
     for item in [
@@ -191,24 +189,24 @@ pub fn resolve_equipped_native_effects(
     {
         sources.push(effect_source(item));
     }
-    resolve_native_equipment_effects(permanent_ranks, &sources, owned_hagatha_selectors)
+    resolve_equipment_effects(permanent_ranks, &sources, owned_hagatha_selectors)
 }
 
 #[must_use]
-pub fn resolve_native_equipment_effects(
-    permanent_ranks: &[u32; NATIVE_SKILL_ROW_COUNT],
-    sources: &[NativeEquipmentEffectSource],
+pub fn resolve_equipment_effects(
+    permanent_ranks: &[u32; SKILL_ROW_COUNT],
+    sources: &[EquipmentEffectSource],
     owned_hagatha_selectors: &[u32],
-) -> NativeEquipmentResolution {
+) -> EquipmentResolution {
     let mut sources = sources.to_vec();
     let equipped_recipes: Vec<_> =
         sources.iter().filter_map(|source| source.recipe_index).collect();
     let mut set_effects = Vec::new();
-    for set in native_equipment_completed_sets(&equipped_recipes) {
+    for set in equipment_completed_sets(&equipped_recipes) {
         set_effects.extend_from_slice(set.effects);
     }
     if !set_effects.is_empty() {
-        sources.push(NativeEquipmentEffectSource { effects: set_effects, recipe_index: None });
+        sources.push(EquipmentEffectSource { effects: set_effects, recipe_index: None });
     }
     let mut effective_ranks = *permanent_ranks;
     let mut granted_skill_order = Vec::new();
@@ -239,29 +237,29 @@ pub fn resolve_native_equipment_effects(
             }
         }
     }
-    let mut modifiers = NativeEquipmentModifiers::default();
+    let mut modifiers = EquipmentModifiers::default();
     for source in &sources {
         for effect in &source.effects {
             apply_stat_effect(&mut modifiers, *effect);
         }
     }
-    NativeEquipmentResolution { effective_ranks, granted_skill_order, modifiers }
+    EquipmentResolution { effective_ranks, granted_skill_order, modifiers }
 }
 
-fn effect_source(item: &HubInventoryItem) -> NativeEquipmentEffectSource {
+fn effect_source(item: &HubInventoryItem) -> EquipmentEffectSource {
     let effects = match &item.native_effects {
         Some(effects) => effects.clone(),
         None => item
             .recipe_index
-            .map_or_else(Vec::new, |index| native_equipment_recipe_effects(index).to_vec()),
+            .map_or_else(Vec::new, |index| equipment_recipe_effects(index).to_vec()),
     };
-    NativeEquipmentEffectSource { effects, recipe_index: item.recipe_index }
+    EquipmentEffectSource { effects, recipe_index: item.recipe_index }
 }
 
 fn apply_skill_effect(
-    ranks: &mut [u32; NATIVE_SKILL_ROW_COUNT],
-    permanent: &[u32; NATIVE_SKILL_ROW_COUNT],
-    effect: NativeEquipmentEffect,
+    ranks: &mut [u32; SKILL_ROW_COUNT],
+    permanent: &[u32; SKILL_ROW_COUNT],
+    effect: EquipmentEffect,
     owned: &[u32],
 ) {
     if !(4..=8).contains(&effect.kind) {
@@ -274,7 +272,7 @@ fn apply_skill_effect(
         5 => add_learned_rank(ranks, target, magnitude),
         6 => {
             for skill_id in 8..=79 {
-                if native_skill_root(skill_id) == Some(target) {
+                if skill_root(skill_id) == Some(target) {
                     add_learned_rank(ranks, skill_id, magnitude);
                 }
             }
@@ -298,13 +296,13 @@ fn apply_skill_effect(
 }
 
 fn set_granted_rank(
-    ranks: &mut [u32; NATIVE_SKILL_ROW_COUNT],
+    ranks: &mut [u32; SKILL_ROW_COUNT],
     skill_id: usize,
     magnitude: i64,
     owned: &[u32],
 ) {
     let current = ranks[skill_id];
-    let maximum = NATIVE_SKILL_CATALOG[skill_id].maximum_level;
+    let maximum = SKILL_CATALOG[skill_id].maximum_level;
     let granted = i64::from(current).max(magnitude).min(i64::from(maximum));
     assert!(granted >= 0, "an authored skill grant produces a non-negative rank");
     ranks[skill_id] = granted as u32;
@@ -313,17 +311,17 @@ fn set_granted_rank(
     }
 }
 
-fn add_learned_rank(ranks: &mut [u32; NATIVE_SKILL_ROW_COUNT], skill_id: usize, magnitude: i64) {
+fn add_learned_rank(ranks: &mut [u32; SKILL_ROW_COUNT], skill_id: usize, magnitude: i64) {
     let current = ranks[skill_id];
     if current < 1 {
         return;
     }
     let rank = i64::from(current) + magnitude;
     assert!(rank >= 0, "an authored skill modifier produces a non-negative rank");
-    ranks[skill_id] = NATIVE_SKILL_CATALOG[skill_id].maximum_level.min(rank as u32);
+    ranks[skill_id] = SKILL_CATALOG[skill_id].maximum_level.min(rank as u32);
 }
 
-fn apply_stat_effect(target: &mut NativeEquipmentModifiers, effect: NativeEquipmentEffect) {
+fn apply_stat_effect(target: &mut EquipmentModifiers, effect: EquipmentEffect) {
     let magnitude = effect.magnitude;
     let index = effect.target as usize;
     match effect.kind {
@@ -397,7 +395,7 @@ fn apply_stat_effect(target: &mut NativeEquipmentModifiers, effect: NativeEquipm
     }
 }
 
-fn split_effect(multiplier: &mut f64, flat: &mut f64, effect: NativeEquipmentEffect) {
+fn split_effect(multiplier: &mut f64, flat: &mut f64, effect: EquipmentEffect) {
     if effect.operator == 0 {
         *flat = fround(*flat + effect.magnitude);
     } else {
@@ -405,7 +403,7 @@ fn split_effect(multiplier: &mut f64, flat: &mut f64, effect: NativeEquipmentEff
     }
 }
 
-fn append_transform(transform: &mut NativeEquipmentScalarTransform, effect: NativeEquipmentEffect) {
+fn append_transform(transform: &mut EquipmentScalarTransform, effect: EquipmentEffect) {
     if effect.operator == 0 {
         transform.offset = fround(transform.offset + effect.magnitude);
         return;
@@ -415,7 +413,7 @@ fn append_transform(transform: &mut NativeEquipmentScalarTransform, effect: Nati
     transform.scale = fround(transform.scale * multiplier);
 }
 
-fn operator_multiplier(effect: NativeEquipmentEffect) -> f64 {
+fn operator_multiplier(effect: EquipmentEffect) -> f64 {
     if effect.operator == 1 { effect.magnitude } else { percent_multiplier(effect.magnitude) }
 }
 

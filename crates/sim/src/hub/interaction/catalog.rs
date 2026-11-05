@@ -2,9 +2,9 @@
 //! hub-interaction-goldens.json retains every source row.
 
 use super::{
-    BoastFailureProducer, HubDialogueRecord, HubInteractionDefinition, HubInteractionId,
-    HubNpcCommand, HubNpcGeometry, HubNpcMarkerDefinition, HubNpcMarkerSide, HubNpcMarkerStyle,
-    HubNpcSelector, NativeBoastDefinition, NativeLibrarianBook, NativeTeacherSpell,
+    BoastDefinition, BoastFailureProducer, HubDialogueRecord, HubInteractionDefinition,
+    HubInteractionId, HubNpcCommand, HubNpcGeometry, HubNpcMarkerDefinition, HubNpcMarkerSide,
+    HubNpcMarkerStyle, HubNpcSelector, LibrarianBook, TeacherSpell,
 };
 use crate::Vec2;
 use crate::hub::regions::HubRegion;
@@ -14,7 +14,7 @@ pub const HUB_INTERACTIONS: [HubInteractionDefinition; 21] = [
         id: HubInteractionId::Hagatha,
         commands: &[HubNpcCommand {
             label: "Buy Charms and Curses",
-            native_command: "!BUYPERKS",
+            command: "!BUYPERKS",
             selector: HubNpcSelector::Hagatha,
         }],
         dismissals: &[],
@@ -34,7 +34,7 @@ pub const HUB_INTERACTIONS: [HubInteractionDefinition; 21] = [
         id: HubInteractionId::Fomentius,
         commands: &[HubNpcCommand {
             label: "Buy",
-            native_command: "!BUYPOTIONS",
+            command: "!BUYPOTIONS",
             selector: HubNpcSelector::Fomentius,
         }],
         dismissals: &[],
@@ -54,7 +54,7 @@ pub const HUB_INTERACTIONS: [HubInteractionDefinition; 21] = [
         id: HubInteractionId::Annalist,
         commands: &[HubNpcCommand {
             label: "Boast",
-            native_command: "!BOAST",
+            command: "!BOAST",
             selector: HubNpcSelector::Boast,
         }],
         dismissals: &[],
@@ -74,7 +74,7 @@ pub const HUB_INTERACTIONS: [HubInteractionDefinition; 21] = [
         id: HubInteractionId::Luthacus,
         commands: &[HubNpcCommand {
             label: "Examine Items",
-            native_command: "!INVENTORY",
+            command: "!INVENTORY",
             selector: HubNpcSelector::Luthacus,
         }],
         dismissals: &[],
@@ -110,7 +110,7 @@ pub const HUB_INTERACTIONS: [HubInteractionDefinition; 21] = [
         id: HubInteractionId::Teacher,
         commands: &[HubNpcCommand {
             label: "Per$uade",
-            native_command: "!SPELLS",
+            command: "!SPELLS",
             selector: HubNpcSelector::TeacherSpells,
         }],
         dismissals: &[],
@@ -306,7 +306,7 @@ pub const HUB_INTERACTIONS: [HubInteractionDefinition; 21] = [
         id: HubInteractionId::Librarian,
         commands: &[HubNpcCommand {
             label: "Inquire about Books",
-            native_command: "!BOOKS",
+            command: "!BOOKS",
             selector: HubNpcSelector::Books,
         }],
         dismissals: &[],
@@ -326,7 +326,7 @@ pub const HUB_INTERACTIONS: [HubInteractionDefinition; 21] = [
         id: HubInteractionId::Shlorio,
         commands: &[HubNpcCommand {
             label: "Dowse",
-            native_command: "!DOWSE",
+            command: "!DOWSE",
             selector: HubNpcSelector::Shlorio,
         }],
         dismissals: &[],
@@ -733,8 +733,8 @@ pub const HUB_DIALOGUES: [HubDialogueRecord; 35] = [
     },
 ];
 
-pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
-    NativeLibrarianBook {
+pub const LIBRARIAN_BOOKS: [LibrarianBook; 26] = [
+    LibrarianBook {
         id: 0,
         key: "BOOK0",
         lines: &[
@@ -749,7 +749,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Merdalf's Hex Handbook Vol One: Elementus Ether",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 1,
         key: "BOOK1",
         lines: &[
@@ -760,7 +760,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Ethics and Magic: A Moral Philosophy",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 2,
         key: "BOOK2",
         lines: &[
@@ -773,7 +773,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Mythology of Theft: Fire",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 3,
         key: "BOOK3",
         lines: &[
@@ -786,7 +786,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Magenta Man's Burden",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 4,
         key: "BOOK4",
         lines: &[
@@ -796,7 +796,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Book of A Thousand Madnesses",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 5,
         key: "BOOK5",
         lines: &[
@@ -809,7 +809,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Brothers Karagrimm",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 6,
         key: "BOOK6",
         lines: &[
@@ -823,7 +823,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Elementus Air (For Dullards)",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 7,
         key: "BOOK7",
         lines: &[
@@ -835,7 +835,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "A Solstice Story",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 8,
         key: "BOOK8",
         lines: &[
@@ -848,7 +848,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Feeling Chill: Frost Magic",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 9,
         key: "BOOK9",
         lines: &[
@@ -860,7 +860,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "MacBlandish",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 10,
         key: "BOOK10",
         lines: &[
@@ -876,7 +876,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Wizards in History: The Mild Embarrassment",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 11,
         key: "BOOK11",
         lines: &[
@@ -890,7 +890,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Wizards in History: The Great Censure",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 12,
         key: "BOOK12",
         lines: &[
@@ -902,7 +902,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Wizards in History: We Didn't Need Two Moons",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 13,
         key: "BOOK13",
         lines: &[
@@ -914,7 +914,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Rime of Sovereign Sea",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 14,
         key: "BOOK14",
         lines: &[
@@ -926,7 +926,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "How to Win Friends and Immolate People",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 15,
         key: "BOOK15",
         lines: &[
@@ -941,7 +941,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Merdalf's Hex Handbook Vol Five: Elementus Earth",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 16,
         key: "BOOK16",
         lines: &[
@@ -954,7 +954,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "How to Train Your Chosen One",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 17,
         key: "BOOK17",
         lines: &[
@@ -965,7 +965,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Discipline Arcane: Index",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 18,
         key: "BOOK18",
         lines: &[
@@ -975,7 +975,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Vie Spells Forbade",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 19,
         key: "BOOK19",
         lines: &[
@@ -990,7 +990,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Ral Qursia: The Noble Archchancellor (An Autobiography)",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 20,
         key: "BOOK20",
         lines: &[
@@ -1004,7 +1004,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Elemental Welding (For Dullards)",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 21,
         key: "BOOK21",
         lines: &[
@@ -1016,7 +1016,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Meditation: Mastering the Mind",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 22,
         key: "BOOK22",
         lines: &[
@@ -1028,7 +1028,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "Discipline of the Body",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 23,
         key: "BOOK23",
         lines: &[
@@ -1041,7 +1041,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Sorcerer's Supremacy",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 24,
         key: "BOOK24",
         lines: &[
@@ -1052,7 +1052,7 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
         one_shot: false,
         title: "The Economicon",
     },
-    NativeLibrarianBook {
+    LibrarianBook {
         id: 25,
         key: "BOOK25_LACE",
         lines: &[
@@ -1063,8 +1063,8 @@ pub const NATIVE_LIBRARIAN_BOOKS: [NativeLibrarianBook; 26] = [
     },
 ];
 
-pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
-    NativeTeacherSpell {
+pub const TEACHER_SPELLS: [TeacherSpell; 8] = [
+    TeacherSpell {
         explanation_label: "Acid Rain?",
         explanation_lines: &[
             "Ah yes, this is a very interesting modification to Magic Storm.  It was prototyped a long time ago, but recently a young fellow-- I think his name is Sirmin, or Sirmeon?-- took to refining it.",
@@ -1076,7 +1076,7 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
         quick_description: "A modified version of Magic Storm that produces a shower of hot acid.",
         skill_id: 72,
     },
-    NativeTeacherSpell {
+    TeacherSpell {
         explanation_label: "Fire Wall?",
         explanation_lines: &[
             "Now this is truly a classic spell.  It gets certified and decertified every few centuries.",
@@ -1089,7 +1089,7 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
         quick_description: "Calls up a flaming wall that burns enemies as they pass through it.",
         skill_id: 73,
     },
-    NativeTeacherSpell {
+    TeacherSpell {
         explanation_label: "Ether Drain?",
         explanation_lines: &[
             "This one you must be cautious with.",
@@ -1103,7 +1103,7 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
         quick_description: "Opens a hole into a quadrant of the ether that sucks.",
         skill_id: 74,
     },
-    NativeTeacherSpell {
+    TeacherSpell {
         explanation_label: "Iron Golem?",
         explanation_lines: &[
             "Hm, yes, this is a nice variant on raising golems, particularly if you're going up against fighters.",
@@ -1116,7 +1116,7 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
         quick_description: "Upgrades your golem with iron spikes that reflect physical damage.",
         skill_id: 75,
     },
-    NativeTeacherSpell {
+    TeacherSpell {
         explanation_label: "Regenerate?",
         explanation_lines: &[
             "Now, regenerate is one of the class-S spells, where the S is for sissy.",
@@ -1131,7 +1131,7 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
         quick_description: "Magically supplements your visceral recovery node for quicker healing.",
         skill_id: 79,
     },
-    NativeTeacherSpell {
+    TeacherSpell {
         explanation_label: "Mindstar?",
         explanation_lines: &[
             "There are some who say that you shouldn't mess with things you don't understand.  But if you don't, what's the point of being a wizard?",
@@ -1145,7 +1145,7 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
         quick_description: "Supplements your cognitive nexus with magical force.",
         skill_id: 78,
     },
-    NativeTeacherSpell {
+    TeacherSpell {
         explanation_label: "Turn Undead?",
         explanation_lines: &[
             "After travelling with one of those insufferable Brothers of Infinite Light or whatever, Archchancellor Doniner-- may he rest in peace-- commanded that the college put all energy into creating a turn undead spell.",
@@ -1159,7 +1159,7 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
         quick_description: "Weakens nearby undead and causes them to flee the caster.",
         skill_id: 77,
     },
-    NativeTeacherSpell {
+    TeacherSpell {
         explanation_label: "Call Comet?",
         explanation_lines: &[
             "Look here, this spell is a true testament to the perseverence of wizardry.",
@@ -1176,8 +1176,8 @@ pub const NATIVE_TEACHER_SPELLS: [NativeTeacherSpell; 8] = [
     },
 ];
 
-pub const NATIVE_BOASTS: [NativeBoastDefinition; 5] = [
-    NativeBoastDefinition {
+pub const BOASTS: [BoastDefinition; 5] = [
+    BoastDefinition {
         failure_producer: Some(BoastFailureProducer::PotionUse),
         icon_record: 90,
         id: 0,
@@ -1185,7 +1185,7 @@ pub const NATIVE_BOASTS: [NativeBoastDefinition; 5] = [
         response: "ANNAL_POTIONBOAST",
         statement: "\"I can do this entire mission without drinking a single potion of any kind!\"",
     },
-    NativeBoastDefinition {
+    BoastDefinition {
         failure_producer: Some(BoastFailureProducer::MagicalEquipment),
         icon_record: 91,
         id: 1,
@@ -1193,7 +1193,7 @@ pub const NATIVE_BOASTS: [NativeBoastDefinition; 5] = [
         response: "ANNAL_ITEMBOAST",
         statement: "\"A true magician does not wear magical clothing, rings, or other implements!\"",
     },
-    NativeBoastDefinition {
+    BoastDefinition {
         failure_producer: Some(BoastFailureProducer::SecondaryCast),
         icon_record: 92,
         id: 2,
@@ -1201,7 +1201,7 @@ pub const NATIVE_BOASTS: [NativeBoastDefinition; 5] = [
         response: "ANNAL_SECONDARIESBOAST",
         statement: "\"The learned wizard need not cast secondary spells at all!\"",
     },
-    NativeBoastDefinition {
+    BoastDefinition {
         failure_producer: None,
         icon_record: 93,
         id: 3,
@@ -1209,7 +1209,7 @@ pub const NATIVE_BOASTS: [NativeBoastDefinition; 5] = [
         response: "ANNAL_RANDOMBOAST",
         statement: "\"A master sorceror does not choose magic, the magic chooses him!\"",
     },
-    NativeBoastDefinition {
+    BoastDefinition {
         failure_producer: Some(BoastFailureProducer::ManaUnderflow),
         icon_record: 94,
         id: 4,
@@ -1248,7 +1248,7 @@ pub const HUB_INTERRUPTED_EULOGIES: &[&str] = &[
     "Oh, never mind this guy's story, right?  I'm sure he'd want it that way.",
     "Ummm-hmmm",
 ];
-pub const NATIVE_BOAST_INSTRUCTION: &str =
+pub const BOAST_INSTRUCTION: &str =
     "To succeed at your boast, you must\nsurvive until at least Wave 30";
 
 pub const HUB_MARKER_ACTORS: [HubNpcMarkerDefinition; 11] = [

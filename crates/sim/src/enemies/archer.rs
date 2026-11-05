@@ -6,7 +6,7 @@ use super::model::*;
 use super::movement::{move_toward_target, staff_attack_speed, staff_movement_speed};
 use super::path::{RadialDirection, TangentDirection};
 use super::projectile_emission::emit_archer_volley;
-use super::ranged::{RangedAttackRange, restore_native_range_easy_after_volley};
+use super::ranged::{RangedAttackRange, restore_range_easy_after_volley};
 use super::skeleton::body_pose;
 use super::targeting::{
     enemy_target_line_of_sight_is_clear, target_by_id, target_distance, track_enemy_action_heading,
@@ -96,7 +96,7 @@ fn step_archer_action(
                 range: brain.attack_range,
                 range_easy_pending: brain.range_easy_pending,
             };
-            restore_native_range_easy_after_volley(&mut range);
+            restore_range_easy_after_volley(&mut range);
             brain.attack_range = range.range;
             brain.range_easy_pending = range.range_easy_pending;
             emit_archer_volley(world, actor, brain.aim_seed, context, order);

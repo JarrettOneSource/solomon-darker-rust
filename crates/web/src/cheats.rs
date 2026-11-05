@@ -344,7 +344,7 @@ impl CheatUi {
                     Stroke::new(3.0, Color32::from_rgb(159, 133, 71)),
                     egui::StrokeKind::Inside,
                 );
-                paint_native_art(gpu, ui.painter(), bounds);
+                paint_stock_art(gpu, ui.painter(), bounds);
                 let inner = bounds.shrink(20.0);
                 ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
                     ui.horizontal(|ui| {
@@ -478,7 +478,7 @@ fn button(
     gpu.record(&format!("cheats/{id}"), label, "button", &response);
     response
 }
-fn paint_native_art(gpu: &UiFrame<'_>, painter: &egui::Painter, bounds: Rect) {
+fn paint_stock_art(gpu: &UiFrame<'_>, painter: &egui::Painter, bounds: Rect) {
     let source = Rect::from_min_size(pos2(743.0, 588.0), vec2(80.0, 83.0));
     for (point, mirror_x, mirror_y) in [
         (bounds.min - vec2(8.0, 8.0), false, false),

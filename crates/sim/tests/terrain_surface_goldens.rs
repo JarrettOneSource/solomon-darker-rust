@@ -1,13 +1,13 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::compact_masks::NativeCompactGroundSurface;
-use solomon_sim::boneyard::ground_glyph::{NativeGroundPlayer, native_player_ground_glyph};
+use solomon_sim::boneyard::compact_masks::CompactGroundSurface;
+use solomon_sim::boneyard::ground_glyph::{GroundPlayer, player_ground_glyph};
 use solomon_sim::boneyard::terrain_surface::*;
 use solomon_sim::boneyard::{
     BoneyardBounds, BoneyardRoad, BoneyardScene, BoneyardSpawn, BoneyardSprite, BoneyardTerrain,
 };
 use solomon_sim::combat::PlayerLifeState;
-use solomon_sim::enemies::spider_remains::{SpiderDecal, SpiderRemains, create_native_dead_spider};
+use solomon_sim::enemies::spider_remains::{SpiderDecal, SpiderRemains, create_dead_spider};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -61,23 +61,18 @@ fn terrain_inner_strips_and_first_crossing_bridges_match_native_source() {
     let fixture = fixture();
     let roads: Vec<_> = fixture["roads"].as_array().unwrap().iter().map(road).collect();
     for case in fixture["cases"].as_array().unwrap() {
-        let surface = build_native_terrain_surface(&terrain(&case["input"]));
+        let surface = build_terrain_surface(&terrain(&case["input"]));
         let encoded = json!({"cursors":surface.cursors,"quads":surface.quads.iter().map(|quad|quad.map(point_json)).collect::<Vec<_>>()});
         website_rows::compare(&encoded, &case["surface"], case["input"]["eid"].as_str().unwrap());
-        let bridges = build_native_bridge_surfaces(std::slice::from_ref(&surface), &roads);
+        let bridges = build_bridge_surfaces(std::slice::from_ref(&surface), &roads);
         let encoded:Value=bridges.iter().map(|bridge|json!({"quad":bridge.quad.map(point_json),"bounds":{"x":bridge.bounds.x,"y":bridge.bounds.y,"w":bridge.bounds.width,"h":bridge.bounds.height}})).collect();
         website_rows::compare(&encoded, &case["bridges"], "bridges");
         for query in case["queries"].as_array().unwrap() {
             let point = point(&query["point"]);
-            let quads: Vec<_> = surface
-                .quads
-                .iter()
-                .map(|quad| native_surface_quad_contains(quad, point))
-                .collect();
-            let actual: Vec<_> = bridges
-                .iter()
-                .map(|bridge| native_bridge_surface_contains(bridge, point))
-                .collect();
+            let quads: Vec<_> =
+                surface.quads.iter().map(|quad| surface_quad_contains(quad, point)).collect();
+            let actual: Vec<_> =
+                bridges.iter().map(|bridge| bridge_surface_contains(bridge, point)).collect();
             assert_eq!(json!(quads), query["quads"], "{} quad {point:?}", case["input"]["eid"]);
             assert_eq!(
                 json!(actual),
@@ -130,7 +125,7 @@ fn special_surface_queries_and_player_ground_glyphs_use_native_ownership() {
             .unwrap();
         Vec2::new(row["width"].as_f64().unwrap(), row["height"].as_f64().unwrap())
     };
-    let mut state = create_native_dead_spider(Vec2::new(200.0, 200.0), 0.0);
+    let mut state = create_dead_spider(Vec2::new(200.0, 200.0), 0.0);
     state.decal = Some(SpiderDecal {
         entry: 140,
         position: state.position,
@@ -140,7 +135,7 @@ fn special_surface_queries_and_player_ground_glyphs_use_native_ownership() {
     });
     let remains = [SpiderRemains { id: 1, spawn_tick: 0, state }];
     for case in fixture["queries"].as_array().unwrap() {
-        let surface = NativeCompactGroundSurface::new(&scene(&case["scene"]));
+        let surface = CompactGroundSurface::new(&scene(&case["scene"]));
         let point = point(&case["point"]);
         assert_eq!(
             surface.contains(point, &[], &sizes),
@@ -157,7 +152,7 @@ fn special_surface_queries_and_player_ground_glyphs_use_native_ownership() {
     }
     for case in fixture["glyphs"].as_array().unwrap() {
         let player = &case["player"];
-        let player = NativeGroundPlayer {
+        let player = GroundPlayer {
             position: point(&player["position"]),
             heading_degrees: player["headingDegrees"].as_f64().unwrap(),
             scale: player["scale"].as_f64().unwrap(),
@@ -172,7 +167,7 @@ fn special_surface_queries_and_player_ground_glyphs_use_native_ownership() {
             corpse_consumed: player["corpseConsumed"].as_bool().unwrap(),
         };
         for (special, key) in [(false, "ordinary"), (true, "special")] {
-            let actual=native_player_ground_glyph(player,special).map_or(Value::Null,|plan|json!({"position":point_json(plan.position),"scaleX":plan.scale_x,"scaleY":plan.scale_y,"alpha":plan.alpha}));
+            let actual=player_ground_glyph(player,special).map_or(Value::Null,|plan|json!({"position":point_json(plan.position),"scaleX":plan.scale_x,"scaleY":plan.scale_y,"alpha":plan.alpha}));
             website_rows::compare(&actual, &case[key], key);
         }
     }

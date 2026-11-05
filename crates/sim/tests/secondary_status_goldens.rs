@@ -3,8 +3,8 @@
 use serde_json::{Value, json};
 use solomon_sim::secondary::*;
 
-fn electric(value: &Value) -> NativeSecondaryElectricBurnEffectState {
-    NativeSecondaryElectricBurnEffectState {
+fn electric(value: &Value) -> SecondaryElectricBurnEffectState {
+    SecondaryElectricBurnEffectState {
         arc_count: value["arcCount"].as_u64().unwrap() as usize,
         damage_per_tick: value["damagePerTick"].as_f64().unwrap(),
         owner_id: value["ownerId"].as_str().unwrap().to_owned(),
@@ -13,8 +13,8 @@ fn electric(value: &Value) -> NativeSecondaryElectricBurnEffectState {
         ticks: value["ticks"].as_u64().unwrap(),
     }
 }
-fn steamed(value: &Value) -> NativeSecondarySteamedEffectState {
-    NativeSecondarySteamedEffectState {
+fn steamed(value: &Value) -> SecondarySteamedEffectState {
+    SecondarySteamedEffectState {
         damage_per_tick: value["damagePerTick"].as_f64().unwrap(),
         ember_damage: value["emberDamage"].as_f64().unwrap(),
         ember_fragments: value["emberFragments"].as_u64().unwrap() as usize,
@@ -25,8 +25,8 @@ fn steamed(value: &Value) -> NativeSecondarySteamedEffectState {
         ticks: value["ticks"].as_u64().unwrap(),
     }
 }
-fn patch(value: &Value) -> NativeSecondaryTargetEffectPatch {
-    NativeSecondaryTargetEffectPatch {
+fn patch(value: &Value) -> SecondaryTargetEffectPatch {
+    SecondaryTargetEffectPatch {
         circle_slow_factor: value["circleSlowFactor"].as_f64(),
         circle_slow_ticks: value["circleSlowTicks"].as_u64(),
         cold_slow_factor: value["coldSlowFactor"].as_f64(),
@@ -54,7 +54,7 @@ fn patch(value: &Value) -> NativeSecondaryTargetEffectPatch {
         weaken_factor: value["weakenFactor"].as_f64(),
     }
 }
-fn snapshot(effect: &NativeSecondaryTargetEffectState) -> Value {
+fn snapshot(effect: &SecondaryTargetEffectState) -> Value {
     let electric=effect.electric_burn.as_ref().map(|burn|json!({"arcCount":burn.arc_count,"damagePerTick":burn.damage_per_tick,
         "ownerId":burn.owner_id,"sourceActorId":burn.source_actor_id,"stunFactor":burn.stun_factor,"ticks":burn.ticks}));
     let steamed=effect.steamed.as_ref().map(|burn|json!({"damagePerTick":burn.damage_per_tick,"emberDamage":burn.ember_damage,
@@ -63,11 +63,11 @@ fn snapshot(effect: &NativeSecondaryTargetEffectState) -> Value {
     let mut order = Vec::new();
     for kind in &effect.movement_modifier_order {
         order.push(match kind {
-            NativeSecondaryMovementModifierKind::ColdSlow => "cold-slow",
-            NativeSecondaryMovementModifierKind::CircleSlow => "circle-slow",
-            NativeSecondaryMovementModifierKind::Frozen => "frozen",
-            NativeSecondaryMovementModifierKind::Stun => "stun",
-            NativeSecondaryMovementModifierKind::Dazzle => "dazzle",
+            SecondaryMovementModifierKind::ColdSlow => "cold-slow",
+            SecondaryMovementModifierKind::CircleSlow => "circle-slow",
+            SecondaryMovementModifierKind::Frozen => "frozen",
+            SecondaryMovementModifierKind::Stun => "stun",
+            SecondaryMovementModifierKind::Dazzle => "dazzle",
         });
     }
     json!({"circleSlowFactor":effect.circle_slow_factor,"circleSlowTicks":effect.circle_slow_ticks,
@@ -112,13 +112,13 @@ fn every_movement_order_burn_priority_thaw_and_material_tint_replays_the_website
         for (index, record) in journey["records"].as_array().unwrap().iter().enumerate() {
             let action = &record["action"];
             match action["type"].as_str().unwrap() {
-                "apply" => apply_native_secondary_target_effect(
+                "apply" => apply_secondary_target_effect(
                     &mut effects,
                     action["world"].as_str().unwrap_or("boneyard:oracle"),
                     action["target"].as_u64().unwrap_or(7) as usize,
                     patch(&action["patch"]),
                 ),
-                "dazzle" => apply_native_secondary_dazzle(
+                "dazzle" => apply_secondary_dazzle(
                     &mut effects,
                     "boneyard:oracle",
                     7,
@@ -148,18 +148,16 @@ fn every_movement_order_burn_priority_thaw_and_material_tint_replays_the_website
     for case in fixture["tints"].as_array().unwrap() {
         let mut effects = Vec::new();
         if !case["patch"].is_null() {
-            apply_native_secondary_target_effect(
+            apply_secondary_target_effect(
                 &mut effects,
                 "boneyard:oracle",
                 7,
                 patch(&case["patch"]),
             );
         }
-        let effect = native_secondary_target_effect(&effects, "boneyard:oracle", 7);
-        let actual = native_secondary_target_material_tint(
-            case["worldTint"].as_u64().unwrap() as u32,
-            effect,
-        );
+        let effect = secondary_target_effect(&effects, "boneyard:oracle", 7);
+        let actual =
+            secondary_target_material_tint(case["worldTint"].as_u64().unwrap() as u32, effect);
         assert_eq!(u64::from(actual), case["result"].as_u64().unwrap(), "{case}");
     }
 }

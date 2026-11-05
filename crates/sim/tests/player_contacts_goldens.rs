@@ -9,7 +9,7 @@ mod player;
 mod secondary;
 
 use serde_json::{Value, json};
-use solomon_sim::boneyard::tutorial::NativeTutorialState;
+use solomon_sim::boneyard::tutorial::TutorialState;
 use solomon_sim::boneyard::{
     BoneyardBounds, BoneyardScene, BoneyardSpawn, BoneyardWorld, LoadedBoneyard,
 };
@@ -20,7 +20,7 @@ use solomon_sim::enemies::world::{
     EnemyGeometry, EnemyMovementRequest, EnemyProjectileWorldQuery, EnemySpawnContext,
 };
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
-use solomon_sim::harden_effects::NativeHardenShardBody;
+use solomon_sim::harden_effects::HardenShardBody;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use solomon_sim::session::PlayerLightingState;
 use solomon_sim::session::player_contacts::*;
@@ -95,7 +95,7 @@ fn contact_sources_retain_omitted_null_and_explicit_values_across_snapshots() {
         assert_eq!(restored, damage);
     }
 }
-fn shard_snapshot(shard: NativeHardenShardBody) -> Value {
+fn shard_snapshot(shard: HardenShardBody) -> Value {
     json!({ "bounceVelocity": shard.bounce_velocity, "enhancedShadow": shard.enhanced_shadow, "height": shard.height, "life": shard.life,
         "position": secondary::point_snapshot(shard.position), "record": shard.record,
         "rotationDegrees": shard.rotation_degrees, "rotationStepDegrees": shard.rotation_step_degrees,
@@ -240,9 +240,7 @@ fn expected_with_birth_registrations(case: &Value) -> Value {
     expected
 }
 
-fn current_secondary_snapshot(
-    state: &solomon_sim::secondary::NativeSecondarySimulationState,
-) -> Value {
+fn current_secondary_snapshot(state: &solomon_sim::secondary::SecondarySimulationState) -> Value {
     let mut snapshot = secondary::state_snapshot(state);
     snapshot["stoneskinWarp"] = json!(state.stoneskin_warp);
     snapshot["cameraDisplacements"] = json!(
@@ -314,7 +312,7 @@ fn player_contacts_replay_delayed_statuses_reflections_web_births_and_feedback_e
         world.enemies.next_death_effect_id = 71;
         world.player_ouch_deadline_tick = options["deadline"].as_u64().unwrap_or(0);
         if options["protected"].as_bool().unwrap_or(false) {
-            let mut tutorial = NativeTutorialState::new(wizard.position, 0, &world.loaded.seed);
+            let mut tutorial = TutorialState::new(wizard.position, 0, &world.loaded.seed);
             tutorial.damage_protection = true;
             world.tutorial = Some(tutorial);
         }
@@ -322,7 +320,7 @@ fn player_contacts_replay_delayed_statuses_reflections_web_births_and_feedback_e
             world.enemies.boss_narration.pending.push(BossStreamCue::Trap);
         }
         let mut secondary = secondary::read_state(&case["initialSecondary"]);
-        let mut screen_flashes = solomon_sim::screen_flash::NativeScreenFlashState::default();
+        let mut screen_flashes = solomon_sim::screen_flash::ScreenFlashState::default();
         let mut order = WorldPainterOrder { next_actor_ordinal: 300, next_transient_ordinal: 500 };
         let mut lighting = PlayerLightingState::new(PainterRegistration {
             manager_lane: WorldManagerLane::Actor,
@@ -391,7 +389,7 @@ fn interleaved_participant_and_golem_contacts_keep_one_global_source_epoch() {
         world.enemies.next_event_id = 83;
         world.enemies.next_death_effect_id = 71;
         let mut secondary = secondary::read_state(&case["initialSecondary"]);
-        let mut screen_flashes = solomon_sim::screen_flash::NativeScreenFlashState::default();
+        let mut screen_flashes = solomon_sim::screen_flash::ScreenFlashState::default();
         let mut order = WorldPainterOrder { next_actor_ordinal: 300, next_transient_ordinal: 500 };
         let damage = case["damage"].as_array().unwrap().iter().map(read_damage).collect::<Vec<_>>();
         let mut participants = owned

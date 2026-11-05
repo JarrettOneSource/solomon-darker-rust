@@ -5,15 +5,15 @@
 use crate::Vec2;
 use crate::float::{fround, sin};
 
-pub const NATIVE_FLAME_MAXIMUM_PATH_POINTS: usize = 1_024;
-pub const NATIVE_FLAME_MAXIMUM_RIBBON_PAIRS: usize = 4_096;
+pub const FLAME_MAXIMUM_PATH_POINTS: usize = 1_024;
+pub const FLAME_MAXIMUM_RIBBON_PAIRS: usize = 4_096;
 
 // Recovered Math+4 bytes da 0f 49 40, rather than fround(Math.PI).
-const NATIVE_PI: f64 = 3.141592502593994;
+const PI_F32: f64 = 3.141592502593994;
 const NORMAL_DELTA: f64 = 0.001_f32 as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFlameLashFactoryInput {
+pub struct FlameLashFactoryInput {
     pub start: Vec2,
     pub control: Vec2,
     pub end: Vec2,
@@ -21,13 +21,13 @@ pub struct NativeFlameLashFactoryInput {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeFlameLashGeometryKind {
+pub enum FlameLashGeometryKind {
     Short,
     Long,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFlameLashBounds {
+pub struct FlameLashBounds {
     pub x: f64,
     pub y: f64,
     pub width: f64,
@@ -35,19 +35,19 @@ pub struct NativeFlameLashBounds {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFlameLashFactoryGeometry {
-    pub kind: NativeFlameLashGeometryKind,
+pub struct FlameLashFactoryGeometry {
+    pub kind: FlameLashGeometryKind,
     pub start: Vec2,
     pub control: Vec2,
     pub extended_end: Vec2,
     pub body_end: Vec2,
     pub span: f64,
-    pub split_bounds: NativeFlameLashBounds,
+    pub split_bounds: FlameLashBounds,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFlameLashRibbonInput {
-    pub geometry: NativeFlameLashFactoryInput,
+pub struct FlameLashRibbonInput {
+    pub geometry: FlameLashFactoryInput,
     pub width: f64,
     pub weak: bool,
     pub enhanced_effects: bool,
@@ -56,8 +56,8 @@ pub struct NativeFlameLashRibbonInput {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeFlameLashRibbon {
-    pub kind: NativeFlameLashGeometryKind,
+pub struct FlameLashRibbon {
+    pub kind: FlameLashGeometryKind,
     pub vertices: Vec<Vec2>,
     pub indices: Vec<u16>,
     /// Absolute UVs on the original 2048-square BadGuys atlas.
@@ -69,13 +69,13 @@ pub struct NativeFlameLashRibbon {
 
 /// Integer multiplication wraps before the native phase is stored as a float.
 #[must_use]
-pub fn native_flame_lash_birth_phase(birth_tick: u64) -> f64 {
+pub fn flame_lash_birth_phase(birth_tick: u64) -> f64 {
     fround((birth_tick as i32).wrapping_mul(-3) as f64)
 }
 
-pub fn native_flame_lash_factory_geometry(
-    input: NativeFlameLashFactoryInput,
-) -> Result<NativeFlameLashFactoryGeometry, String> {
+pub fn flame_lash_factory_geometry(
+    input: FlameLashFactoryInput,
+) -> Result<FlameLashFactoryGeometry, String> {
     let start = stored_point(input.start)?;
     let control = stored_point(input.control)?;
     let end = stored_point(input.end)?;
@@ -89,18 +89,14 @@ pub fn native_flame_lash_factory_geometry(
     let top = start.y.min(control.y).min(extended_end.y);
     let right = fround(start.x + 1.0).max(control.x).max(extended_end.x);
     let bottom = fround(start.y + 1.0).max(control.y).max(extended_end.y);
-    Ok(NativeFlameLashFactoryGeometry {
-        kind: if span < 75.0 {
-            NativeFlameLashGeometryKind::Short
-        } else {
-            NativeFlameLashGeometryKind::Long
-        },
+    Ok(FlameLashFactoryGeometry {
+        kind: if span < 75.0 { FlameLashGeometryKind::Short } else { FlameLashGeometryKind::Long },
         start,
         control,
         extended_end,
         body_end,
         span,
-        split_bounds: NativeFlameLashBounds {
+        split_bounds: FlameLashBounds {
             x: fround(left - 100.0),
             y: fround(top - 100.0),
             width: fround(fround(right - left) + 200.0),
@@ -111,8 +107,8 @@ pub fn native_flame_lash_factory_geometry(
 
 /// Birth-only membership. Each admitted point consumes its own radius word.
 /// The control point can occur twice; Source deliberately does not deduplicate it.
-pub fn native_flame_lash_path_points(
-    geometry: &NativeFlameLashFactoryGeometry,
+pub fn flame_lash_path_points(
+    geometry: &FlameLashFactoryGeometry,
     maximum_points: usize,
 ) -> Result<Vec<Vec2>, String> {
     require_budget(maximum_points)?;
@@ -152,13 +148,13 @@ pub fn native_flame_lash_path_points(
     Ok(points)
 }
 
-pub fn native_flame_lash_ribbon_pair_count(
-    geometry: &NativeFlameLashFactoryGeometry,
+pub fn flame_lash_ribbon_pair_count(
+    geometry: &FlameLashFactoryGeometry,
     enhanced_effects: bool,
     maximum_pairs: usize,
 ) -> Result<usize, String> {
     require_budget(maximum_pairs)?;
-    if geometry.kind == NativeFlameLashGeometryKind::Short {
+    if geometry.kind == FlameLashGeometryKind::Short {
         if maximum_pairs < 3 {
             return Err("Flame ribbon exceeds its pair budget".into());
         }
@@ -174,17 +170,17 @@ pub fn native_flame_lash_ribbon_pair_count(
 }
 
 #[must_use]
-pub fn native_flame_lash_spline_point(points: [Vec2; 3], parameter: f64) -> Vec2 {
+pub fn flame_lash_spline_point(points: [Vec2; 3], parameter: f64) -> Vec2 {
     spline_point(&spline_axes(points), fround(parameter))
 }
 
 #[must_use]
-pub fn native_flame_lash_spline_normal(points: [Vec2; 3], parameter: f64) -> Vec2 {
+pub fn flame_lash_spline_normal(points: [Vec2; 3], parameter: f64) -> Vec2 {
     spline_normal(&spline_axes(points), fround(parameter))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFlameLashPrivateSample {
+pub struct FlameLashPrivateSample {
     pub angle_degrees: f64,
     pub radius: f64,
     pub next_state: i32,
@@ -192,22 +188,20 @@ pub struct NativeFlameLashPrivateSample {
 
 /// Private builder stream. Signed remainders and INT_MIN survive the abs step.
 #[must_use]
-pub fn native_flame_lash_private_sample(state: i32) -> NativeFlameLashPrivateSample {
+pub fn flame_lash_private_sample(state: i32) -> FlameLashPrivateSample {
     let angle_magnitude = fround((state % 360_000) as f64 / 360_000.0 * 65.0);
     let sign_state = mix32(state).wrapping_abs();
     let radius_state = mix32(sign_state).wrapping_abs();
-    NativeFlameLashPrivateSample {
+    FlameLashPrivateSample {
         angle_degrees: if sign_state % 2 == 1 { fround(-angle_magnitude) } else { angle_magnitude },
         radius: fround((radius_state % 360_000) as f64 / 360_000.0 * 5.0),
         next_state: mix32(radius_state).wrapping_abs(),
     }
 }
 
-pub fn build_native_flame_lash_ribbon(
-    input: NativeFlameLashRibbonInput,
-) -> Result<NativeFlameLashRibbon, String> {
-    let geometry = native_flame_lash_factory_geometry(input.geometry)?;
-    let short = geometry.kind == NativeFlameLashGeometryKind::Short;
+pub fn build_flame_lash_ribbon(input: FlameLashRibbonInput) -> Result<FlameLashRibbon, String> {
+    let geometry = flame_lash_factory_geometry(input.geometry)?;
+    let short = geometry.kind == FlameLashGeometryKind::Short;
     if short && input.short_width_factor.is_none_or(|factor| !factor.is_finite()) {
         return Err("Short Flame geometry requires its retained birth width factor".into());
     }
@@ -218,14 +212,14 @@ pub fn build_native_flame_lash_ribbon(
             geometry.start,
             geometry.control,
             if input.enhanced_effects { 7.0 } else { 30.0 },
-            NATIVE_FLAME_MAXIMUM_RIBBON_PAIRS,
+            FLAME_MAXIMUM_RIBBON_PAIRS,
         )?
     };
     let pair_count = parameters.len();
     if pair_count * 2 > 65_536 {
         return Err("Flame ribbon exceeds native uint16 vertex indices".into());
     }
-    let mut ribbon = NativeFlameLashRibbon {
+    let mut ribbon = FlameLashRibbon {
         kind: geometry.kind,
         vertices: vec![Vec2::ZERO; pair_count * 2],
         indices: Vec::with_capacity((pair_count - 1) * 6),
@@ -275,7 +269,7 @@ pub fn build_native_flame_lash_ribbon(
                 added(center, scaled(scaled(scaled(normal, primary_sine), amplitude), envelope));
             let secondary_sine = sine_degrees(fround(phase * 2.5 - parameter * 90.0));
             center = added(center, scaled(scaled(scaled(normal, secondary_sine), 8.0), envelope));
-            let sample = native_flame_lash_private_sample(private_state);
+            let sample = flame_lash_private_sample(private_state);
             private_state = sample.next_state;
             let jitter =
                 scaled(scaled(direction_degrees(sample.angle_degrees), sample.radius), envelope);
@@ -421,16 +415,16 @@ fn mix32(mut state: i32) -> i32 {
 }
 
 fn sine_degrees(degrees: f64) -> f64 {
-    fround(sin(fround(degrees * NATIVE_PI / 180.0)))
+    fround(sin(fround(degrees * PI_F32 / 180.0)))
 }
 
 fn direction_degrees(degrees: f64) -> Vec2 {
-    let radians = fround(degrees * NATIVE_PI / 180.0);
+    let radians = fround(degrees * PI_F32 / 180.0);
     Vec2::new(fround(sin(radians)), fround(-crate::float::cos(radians)))
 }
 
 fn write_pair(
-    ribbon: &mut NativeFlameLashRibbon,
+    ribbon: &mut FlameLashRibbon,
     pair: usize,
     center: Vec2,
     normal: Vec2,
@@ -444,7 +438,7 @@ fn write_pair(
     ribbon.vertices[pair * 2 + 1] = shift.map_or(right, |shift| added(right, shift));
 }
 
-fn write_style(ribbon: &mut NativeFlameLashRibbon, pair: usize, color: u32, bottom: bool) {
+fn write_style(ribbon: &mut FlameLashRibbon, pair: usize, color: u32, bottom: bool) {
     let vertical = if bottom { 0.73828125 } else { 0.728515625 };
     ribbon.uvs[pair * 2] = Vec2::new(0.859375, vertical);
     ribbon.uvs[pair * 2 + 1] = Vec2::new(0.86865234375, vertical);

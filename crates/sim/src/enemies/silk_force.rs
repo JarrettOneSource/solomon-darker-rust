@@ -1,14 +1,14 @@
 //! Native Silk force handoff into illuminated fade-line segments, from
 //! `native-silk-force.ts` and `enemies/silk-force.ts`.
-use super::silk::NativeSilkState;
+use super::silk::SilkState;
 use super::world::EnemyWorld;
 use crate::float::{atan2, fround, hypot};
 use crate::spells::targeting::direction_from_heading;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeFadeLineState {
+pub struct FadeLineState {
     pub start: Vec2,
     pub middle: Vec2,
     pub end: Vec2,
@@ -18,19 +18,19 @@ pub struct NativeFadeLineState {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeFadeLineActor {
+pub struct FadeLineActor {
     pub id: usize,
     pub spawn_tick: u64,
-    pub state: NativeFadeLineState,
+    pub state: FadeLineState,
 }
 
 #[must_use]
-pub fn create_native_silk_fragments(
-    silk: &NativeSilkState,
+pub fn create_silk_fragments(
+    silk: &SilkState,
     force: Vec2,
     light_at: &dyn Fn(Vec2) -> f64,
-    rng: &mut NativeRng,
-) -> Vec<NativeFadeLineState> {
+    rng: &mut Rng,
+) -> Vec<FadeLineState> {
     let mut fragments = Vec::new();
     let lower = (silk.phase - 16.0).max(0.0);
     let step = fround(4.0 / silk.wave_scale) * 0.4000000059604645;
@@ -52,7 +52,7 @@ pub fn create_native_silk_fragments(
             let opacity = rng.draw_scaled_float(0.55_f32 as f64, false);
             let loss = rng.draw_scaled_float(0.05_f32 as f64, false);
             let magnitude = fround(1.9500000476837158 + speed);
-            fragments.push(NativeFadeLineState {
+            fragments.push(FadeLineState {
                 start,
                 middle,
                 end,
@@ -69,7 +69,7 @@ pub fn create_native_silk_fragments(
     fragments
 }
 
-fn fragment_point(silk: &NativeSilkState, phase: f64) -> Vec2 {
+fn fragment_point(silk: &SilkState, phase: f64) -> Vec2 {
     let center = silk.center.evaluate(phase);
     let wave = silk.wave.evaluate(phase);
     Vec2::new(
@@ -77,7 +77,7 @@ fn fragment_point(silk: &NativeSilkState, phase: f64) -> Vec2 {
         fround(center.y + fround(wave.y * silk.wave_scale) - silk.height),
     )
 }
-pub fn step_native_fade_line(source: &mut NativeFadeLineState) -> bool {
+pub fn step_fade_line(source: &mut FadeLineState) -> bool {
     source.opacity = fround(source.opacity - source.opacity_loss_per_tick);
     if source.opacity <= 0.0 {
         return false;
@@ -96,7 +96,7 @@ impl EnemyWorld {
         amount: f64,
         direction: Vec2,
         tick: u64,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         light_at: &dyn Fn(Vec2) -> f64,
     ) {
         let Some(index) = self.silks.iter().position(|silk| silk.id == id) else {
@@ -107,11 +107,10 @@ impl EnemyWorld {
             self.silks[index].state.force_accumulator = accumulator;
             return;
         }
-        let fragments =
-            create_native_silk_fragments(&self.silks[index].state, direction, light_at, rng);
+        let fragments = create_silk_fragments(&self.silks[index].state, direction, light_at, rng);
         self.silks.remove(index);
         for state in fragments {
-            self.silk_fragments.push(NativeFadeLineActor {
+            self.silk_fragments.push(FadeLineActor {
                 id: self.next_death_effect_id,
                 spawn_tick: tick,
                 state,
@@ -120,6 +119,6 @@ impl EnemyWorld {
         }
     }
     pub fn step_silk_fragments(&mut self) {
-        self.silk_fragments.retain_mut(|actor| step_native_fade_line(&mut actor.state));
+        self.silk_fragments.retain_mut(|actor| step_fade_line(&mut actor.state));
     }
 }

@@ -6,18 +6,18 @@ use std::collections::BTreeMap;
 use solomon_sim::Vec2;
 use solomon_sim::enemies::model::{CameraShakeAttenuation, EnemyEvent};
 use solomon_sim::float::fround;
-use solomon_sim::region_feedback::{native_region_hit_point_gain, native_region_point_gain};
+use solomon_sim::region_feedback::{region_hit_point_gain, region_point_gain};
 use solomon_sim::screen_feedback::{
-    NativeRegionCameraPresentation, NativeScreenFlashPresentation,
-    NativeSecondaryScreenFeedbackContext, NativeSecondaryScreenOverlay,
+    RegionCameraPresentation, ScreenFlashPresentation, SecondaryScreenFeedbackContext,
+    SecondaryScreenOverlay,
 };
-use solomon_sim::screen_flash::NativeScreenFlashState;
+use solomon_sim::screen_flash::ScreenFlashState;
 use solomon_sim::secondary::presentation::repeated_float_multiply;
-use solomon_sim::secondary::{NativeSecondaryEventState, NativeSecondarySimulationState};
+use solomon_sim::secondary::{SecondaryEventState, SecondarySimulationState};
 use solomon_sim::spells::model::{PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState};
 use solomon_sim::spells::weld::{
-    NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS, NativeFlameCameraProposal, NativeWeldMeteorPhase,
-    NativeWeldPersistentActorState, NativeWeldWorldActor,
+    FLAME_CAMERA_MAX_PRESENTATION_TICKS, FlameCameraProposal, WeldMeteorPhase,
+    WeldPersistentActorState, WeldWorldActor,
 };
 
 use crate::presentation::PresentationClocks;
@@ -38,17 +38,17 @@ pub struct WorldScreenFeedbackFrame<'a> {
     pub tick: f64,
     pub stopped_world_tick: f64,
     pub flame_epoch: Option<u64>,
-    pub flame_camera_displacements: &'a [NativeFlameCameraProposal],
-    pub screen_flashes: &'a NativeScreenFlashState,
+    pub flame_camera_displacements: &'a [FlameCameraProposal],
+    pub screen_flashes: &'a ScreenFlashState,
     pub spells: &'a SpellState,
-    pub secondary: &'a NativeSecondarySimulationState,
+    pub secondary: &'a SecondarySimulationState,
     pub clocks: Option<&'a PresentationClocks>,
-    pub context: NativeSecondaryScreenFeedbackContext,
+    pub context: SecondaryScreenFeedbackContext,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WorldScreenFeedbackSample {
-    pub overlay: Option<NativeSecondaryScreenOverlay>,
+    pub overlay: Option<SecondaryScreenOverlay>,
     pub camera_magnitude: f64,
     pub camera_displacement: Vec2,
 }
@@ -107,8 +107,8 @@ impl WorldScreenFeedback {
 }
 
 struct FeedbackLane {
-    camera: NativeRegionCameraPresentation,
-    flashes: NativeScreenFlashPresentation,
+    camera: RegionCameraPresentation,
+    flashes: ScreenFlashPresentation,
     camera_magnitude: f64,
     last_enemy_event_id: usize,
     last_event_id: u64,
@@ -126,8 +126,8 @@ struct FeedbackLane {
 impl FeedbackLane {
     fn new(initial_tick: u64, world_key: String) -> Self {
         Self {
-            camera: NativeRegionCameraPresentation::new(initial_tick),
-            flashes: NativeScreenFlashPresentation::new(initial_tick, world_key.clone()),
+            camera: RegionCameraPresentation::new(initial_tick),
+            flashes: ScreenFlashPresentation::new(initial_tick, world_key.clone()),
             camera_magnitude: 0.0,
             last_enemy_event_id: 0,
             last_event_id: 0,
@@ -165,7 +165,7 @@ impl FeedbackLane {
         self.accepted_world_tick = Some(world_tick);
     }
 
-    fn consume(&mut self, event: &NativeSecondaryEventState) {
+    fn consume(&mut self, event: &SecondaryEventState) {
         if event.event_id <= self.last_event_id {
             return;
         }
@@ -186,7 +186,7 @@ impl FeedbackLane {
         &mut self,
         run_id: &str,
         event: &EnemyEvent,
-        context: NativeSecondaryScreenFeedbackContext,
+        context: SecondaryScreenFeedbackContext,
     ) {
         if event.event_id <= self.last_enemy_event_id {
             return;
@@ -201,14 +201,14 @@ impl FeedbackLane {
             event.source_position.expect("Boss camera shake requires its source position");
         let gain = match shake.attenuation {
             CameraShakeAttenuation::Fixed => 1.0,
-            CameraShakeAttenuation::Point => native_region_point_gain(
+            CameraShakeAttenuation::Point => region_point_gain(
                 position,
                 context.camera_center,
                 context.visible_world_width,
                 context.local_player_alternate,
             ),
             CameraShakeAttenuation::Hit | CameraShakeAttenuation::HitSquared => {
-                native_region_hit_point_gain(
+                region_hit_point_gain(
                     position,
                     context.camera_center,
                     context.visible_world_width,
@@ -227,7 +227,7 @@ impl FeedbackLane {
         );
     }
 
-    fn consume_world_camera_displacements(&mut self, secondary: &NativeSecondarySimulationState) {
+    fn consume_world_camera_displacements(&mut self, secondary: &SecondarySimulationState) {
         for proposal in &secondary.camera_displacements {
             if proposal.world_key != self.world_key
                 || proposal.tick as i64 <= self.last_world_displacement_tick
@@ -240,10 +240,10 @@ impl FeedbackLane {
         }
     }
 
-    fn consume_flame_camera_displacements(&mut self, proposals: &[NativeFlameCameraProposal]) {
+    fn consume_flame_camera_displacements(&mut self, proposals: &[FlameCameraProposal]) {
         self.consumed_flame_births.retain(|_, until| *until > self.last_tick);
         for proposal in proposals {
-            let until = proposal.birth_tick + NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS;
+            let until = proposal.birth_tick + FLAME_CAMERA_MAX_PRESENTATION_TICKS;
             if proposal.world_key != self.world_key || until <= self.last_tick {
                 continue;
             }
@@ -278,8 +278,8 @@ impl FeedbackLane {
                         effect.birth_tick,
                     );
                 }
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(effect)) => {
-                    if effect.phase != NativeWeldMeteorPhase::Impact {
+                PrimarySpellTransient::Weld(WeldWorldActor::Meteor(effect)) => {
+                    if effect.phase != WeldMeteorPhase::Impact {
                         continue;
                     }
                     let Some(displacement) = effect.camera_displacement else { continue };
@@ -290,8 +290,8 @@ impl FeedbackLane {
                         displacement,
                     );
                 }
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                    NativeWeldPersistentActorState::Hailstones(effect),
+                PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+                    WeldPersistentActorState::Hailstones(effect),
                 )) => {
                     if effect.phase != PrimarySpellProjectilePhase::Flight {
                         continue;

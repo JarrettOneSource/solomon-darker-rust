@@ -5,9 +5,9 @@ use crate::float;
 use crate::float::fround;
 use crate::profile::runtime::PlayerStaffAttackOutcome;
 
-pub struct NativeStaffContactPresentationInput<'a> {
+pub struct StaffContactPresentationInput<'a> {
     pub first_id: u64,
-    pub action: &'a NativePlayerStaffAction,
+    pub action: &'a PlayerStaffAction,
     pub target_ids: &'a [String],
     pub target_mean: Vec2,
     pub element_tint: u32,
@@ -16,10 +16,10 @@ pub struct NativeStaffContactPresentationInput<'a> {
 }
 
 #[must_use]
-pub fn create_native_staff_contact_presentation(
-    input: NativeStaffContactPresentationInput<'_>,
-    rng: &mut NativeRng,
-) -> NativeStaffContactPresentation {
+pub fn create_staff_contact_presentation(
+    input: StaffContactPresentationInput<'_>,
+    rng: &mut Rng,
+) -> StaffContactPresentation {
     let action = input.action;
     let mut next_id = input.first_id;
     let mut proc_sound = None;
@@ -31,15 +31,15 @@ pub fn create_native_staff_contact_presentation(
                 let pitch = rng.draw_scaled_float(0.1, true);
                 proc_sound =
                     Some(if action.base().outcome == PlayerStaffAttackOutcome::Knockback {
-                        NativeStaffProcSound::Knockback
+                        StaffProcSound::Knockback
                     } else {
-                        NativeStaffProcSound::CriticalHit
+                        StaffProcSound::CriticalHit
                     });
                 proc_sound_pitches.push(fround(1.0 + pitch));
-                vfx.push(NativePlayerStaffVfx::Smoke(create_smoke(next_id, action, rng)));
+                vfx.push(PlayerStaffVfx::Smoke(create_smoke(next_id, action, rng)));
                 next_id += 1;
                 if action.base().outcome == PlayerStaffAttackOutcome::CriticalHit {
-                    vfx.push(NativePlayerStaffVfx::MoveFade(create_critical_fade(
+                    vfx.push(PlayerStaffVfx::MoveFade(create_critical_fade(
                         next_id,
                         action,
                         input.element_tint,
@@ -48,7 +48,7 @@ pub fn create_native_staff_contact_presentation(
                 }
             }
             PlayerStaffAttackOutcome::DisablingHit => {
-                proc_sound = Some(NativeStaffProcSound::DisableEnemy);
+                proc_sound = Some(StaffProcSound::DisableEnemy);
                 proc_sound_pitches.push(1.0);
                 let particles = create_disable_particles(
                     next_id,
@@ -59,14 +59,14 @@ pub fn create_native_staff_contact_presentation(
                 );
                 next_id += particles.len() as u64;
                 for particle in particles {
-                    vfx.push(NativePlayerStaffVfx::MoveFade(particle));
+                    vfx.push(PlayerStaffVfx::MoveFade(particle));
                 }
             }
             PlayerStaffAttackOutcome::Whirl => {
-                proc_sound = Some(NativeStaffProcSound::SpinAttack);
+                proc_sound = Some(StaffProcSound::SpinAttack);
                 proc_sound_pitches = vec![1.0, fround(0.9), fround(1.1)];
                 let rotation = rng.draw_scaled_float(360.0, false);
-                vfx.push(NativePlayerStaffVfx::PerspectiveFade(NativePlayerStaffPerspectiveVfx {
+                vfx.push(PlayerStaffVfx::PerspectiveFade(PlayerStaffPerspectiveVfx {
                     common: new_common(next_id, action),
                     alpha: fround(1.25),
                     alpha_loss: fround(0.1),
@@ -81,8 +81,8 @@ pub fn create_native_staff_contact_presentation(
             PlayerStaffAttackOutcome::Normal => {}
         }
     }
-    NativeStaffContactPresentation {
-        event: NativePlayerStaffContactEvent {
+    StaffContactPresentation {
+        event: PlayerStaffContactEvent {
             common: new_common(next_id, action),
             impact_sound_pitches: input.impact_sound_pitches.to_vec(),
             origin: action.base().origin,
@@ -99,15 +99,15 @@ pub fn create_native_staff_contact_presentation(
 }
 
 #[must_use]
-pub fn create_native_staff_pike_break_vfx(
+pub fn create_staff_pike_break_vfx(
     id: u64,
-    action: &NativePlayerStaffAction,
-    target: &NativeStaffTarget,
-    presentation_rng: NativeRng,
+    action: &PlayerStaffAction,
+    target: &StaffTarget,
+    presentation_rng: Rng,
     heading_degrees: f64,
     enhanced_shadow: bool,
-) -> NativePlayerStaffPikeBreakVfx {
-    NativePlayerStaffPikeBreakVfx {
+) -> PlayerStaffPikeBreakVfx {
+    PlayerStaffPikeBreakVfx {
         common: new_common(id, action),
         enhanced_shadow,
         heading_degrees: normalized_degrees(heading_degrees),
@@ -118,10 +118,10 @@ pub fn create_native_staff_pike_break_vfx(
 }
 
 #[must_use]
-pub fn step_native_staff_pike_break_vfx(
-    source: &NativePlayerStaffPikeBreakVfx,
-) -> Option<NativePlayerStaffPikeBreakVfx> {
-    if source.common.age_ticks + 1 >= NATIVE_STAFF_PIKE_BREAK_LIFETIME_TICKS {
+pub fn step_staff_pike_break_vfx(
+    source: &PlayerStaffPikeBreakVfx,
+) -> Option<PlayerStaffPikeBreakVfx> {
+    if source.common.age_ticks + 1 >= STAFF_PIKE_BREAK_LIFETIME_TICKS {
         return None;
     }
     let mut actor = source.clone();
@@ -130,10 +130,10 @@ pub fn step_native_staff_pike_break_vfx(
 }
 
 #[must_use]
-pub fn step_native_staff_contact_event(
-    source: &NativePlayerStaffContactEvent,
-) -> Option<NativePlayerStaffContactEvent> {
-    if source.common.age_ticks + 1 >= NATIVE_STAFF_CONTACT_EVENT_TICKS {
+pub fn step_staff_contact_event(
+    source: &PlayerStaffContactEvent,
+) -> Option<PlayerStaffContactEvent> {
+    if source.common.age_ticks + 1 >= STAFF_CONTACT_EVENT_TICKS {
         return None;
     }
     let mut event = source.clone();
@@ -142,10 +142,10 @@ pub fn step_native_staff_contact_event(
 }
 
 #[must_use]
-pub fn step_native_player_staff_vfx(source: &NativePlayerStaffVfx) -> Option<NativePlayerStaffVfx> {
+pub fn step_player_staff_vfx(source: &PlayerStaffVfx) -> Option<PlayerStaffVfx> {
     let mut actor = source.clone();
     match &mut actor {
-        NativePlayerStaffVfx::Smoke(vfx) => {
+        PlayerStaffVfx::Smoke(vfx) => {
             vfx.alpha = fround(vfx.alpha - vfx.alpha_loss);
             if vfx.alpha <= 0.0 {
                 return None;
@@ -153,7 +153,7 @@ pub fn step_native_player_staff_vfx(source: &NativePlayerStaffVfx) -> Option<Nat
             vfx.rotation_degrees =
                 normalized_degrees(vfx.rotation_degrees + vfx.angular_velocity_degrees);
         }
-        NativePlayerStaffVfx::MoveFade(vfx) => {
+        PlayerStaffVfx::MoveFade(vfx) => {
             vfx.alpha = fround(vfx.alpha - vfx.alpha_loss);
             if vfx.alpha <= 0.0 {
                 return None;
@@ -167,7 +167,7 @@ pub fn step_native_player_staff_vfx(source: &NativePlayerStaffVfx) -> Option<Nat
                 fround(vfx.velocity.y * vfx.velocity_factor),
             );
         }
-        NativePlayerStaffVfx::PerspectiveFade(vfx) => {
+        PlayerStaffVfx::PerspectiveFade(vfx) => {
             vfx.alpha = fround(vfx.alpha - vfx.alpha_loss);
             if vfx.alpha <= 0.0 {
                 return None;
@@ -178,17 +178,13 @@ pub fn step_native_player_staff_vfx(source: &NativePlayerStaffVfx) -> Option<Nat
     Some(actor)
 }
 
-fn create_smoke(
-    id: u64,
-    action: &NativePlayerStaffAction,
-    rng: &mut NativeRng,
-) -> NativePlayerStaffSmokeVfx {
+fn create_smoke(id: u64, action: &PlayerStaffAction, rng: &mut Rng) -> PlayerStaffSmokeVfx {
     // The factory draws a loss value, then overwrites it with its authored .05.
     // Retaining this discarded word keeps all later combat/proc draws aligned.
     rng.draw_scaled_float(0.05, false);
     let angular = rng.draw_scaled_float(2.0, false);
     let radians = action.base().heading_degrees * std::f64::consts::PI / 180.0;
-    NativePlayerStaffSmokeVfx {
+    PlayerStaffSmokeVfx {
         common: new_common(id, action),
         alpha: 1.0,
         alpha_loss: fround(0.05),
@@ -205,11 +201,11 @@ fn create_smoke(
 
 fn create_disable_particles(
     first_id: u64,
-    action: &NativePlayerStaffAction,
+    action: &PlayerStaffAction,
     target_mean: Vec2,
     tint: u32,
-    rng: &mut NativeRng,
-) -> Vec<NativePlayerStaffMoveFadeVfx> {
+    rng: &mut Rng,
+) -> Vec<PlayerStaffMoveFadeVfx> {
     let mut angle = rng.draw_scaled_float(360.0, false);
     let mut particles = Vec::with_capacity(50);
     for index in 0..50 {
@@ -222,7 +218,7 @@ fn create_disable_particles(
             fround(float::sin(radians) * (speed + 3.0)),
             fround(-float::cos(radians) * (speed + 3.0)),
         );
-        particles.push(NativePlayerStaffMoveFadeVfx {
+        particles.push(PlayerStaffMoveFadeVfx {
             common: new_common(first_id + index, action),
             alpha: fround(1.5),
             alpha_loss: fround(0.05),
@@ -241,14 +237,10 @@ fn create_disable_particles(
     particles
 }
 
-fn create_critical_fade(
-    id: u64,
-    action: &NativePlayerStaffAction,
-    tint: u32,
-) -> NativePlayerStaffMoveFadeVfx {
+fn create_critical_fade(id: u64, action: &PlayerStaffAction, tint: u32) -> PlayerStaffMoveFadeVfx {
     let base = action.base();
     let radians = base.heading_degrees * std::f64::consts::PI / 180.0;
-    NativePlayerStaffMoveFadeVfx {
+    PlayerStaffMoveFadeVfx {
         common: new_common(id, action),
         alpha: 2.0,
         alpha_loss: fround(0.25),

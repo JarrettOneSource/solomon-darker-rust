@@ -2,10 +2,10 @@
 //! composites of the articulated diffuse body multiplied by Clothes record3.
 
 use solomon_graphics::{TextureColorMode, Vertex};
-use solomon_sim::secondary::motion::NATIVE_STONESKIN_GRID_COMPONENTS;
+use solomon_sim::secondary::motion::STONESKIN_GRID_COMPONENTS;
 
 use super::*;
-use crate::native_mesh::native_sprite_texel_rect;
+use crate::beam_mesh::sprite_texel_rect;
 
 pub(super) struct StoneskinMesh {
     birth_positions: Vec<f64>,
@@ -18,7 +18,7 @@ impl StoneskinMesh {
     pub(super) fn new(positions: &[f64], enhanced_effects: bool) -> Self {
         assert_eq!(
             positions.len(),
-            NATIVE_STONESKIN_GRID_COMPONENTS,
+            STONESKIN_GRID_COMPONENTS,
             "Stoneskin has the complete native 10-by-10 birth grid"
         );
         let (vertices, indices) = if enhanced_effects {
@@ -126,7 +126,7 @@ impl WizardView {
                 renderer,
                 &Camera { origin: Vec2::ZERO, scale: 1.0 },
                 &self.atlas,
-                native_sprite_texel_rect(record),
+                sprite_texel_rect(record),
                 Vec2::new(128.0 + head.x, 128.0 + head.y),
                 Vec2::new(record.width as f64, record.height as f64),
                 wizard.heading_index as f64 * 24.0 * std::f64::consts::PI / 180.0,

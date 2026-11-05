@@ -46,7 +46,7 @@ fn hud_rectangles_meters_and_layers_replay_the_website_exactly() {
     let golden: Value = serde_json::from_str(include_str!("fixtures/website/hud-goldens.json"))
         .expect("HUD fixture");
     for case in golden["layouts"].as_array().expect("layouts") {
-        let actual = hud::native_hud_control_layout(
+        let actual = hud::hud_control_layout(
             number(&case["width"]),
             number(&case["height"]),
             case["progress"].as_f64(),
@@ -59,7 +59,7 @@ fn hud_rectangles_meters_and_layers_replay_the_website_exactly() {
     }
     for case in golden["health"].as_array().expect("health") {
         let args = &case["args"];
-        let actual = hud::native_health_hud_presentation(
+        let actual = hud::health_hud_presentation(
             number(&args[0]),
             number(&args[1]),
             number(&args[2]),
@@ -86,7 +86,7 @@ fn hud_rectangles_meters_and_layers_replay_the_website_exactly() {
             .map(|field| number(&expected[field]))
         );
         for layer_case in case["layers"].as_array().expect("layers") {
-            let layers = hud::native_health_hud_layers(
+            let layers = hud::health_hud_layers(
                 actual.fill_progress,
                 actual.shield_progress,
                 layer_case["poisoned"].as_bool().expect("poisoned"),
@@ -107,7 +107,7 @@ fn hud_rectangles_meters_and_layers_replay_the_website_exactly() {
     for case in golden["mana"].as_array().expect("mana") {
         let args = &case["args"];
         let actual =
-            hud::native_mana_hud_presentation(number(&args[0]), number(&args[1]), number(&args[2]));
+            hud::mana_hud_presentation(number(&args[0]), number(&args[1]), number(&args[2]));
         let expected = &case["presentation"];
         assert_eq!(
             [

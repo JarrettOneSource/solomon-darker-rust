@@ -3,7 +3,7 @@
 use crate::enemies::config::EnemyFamilyConfig;
 use crate::enemies::model::*;
 use crate::enemies::world::EnemyWorld;
-use crate::secondary::{NativeSecondaryActorKind, NativeSecondarySimulationState};
+use crate::secondary::{SecondaryActorKind, SecondarySimulationState};
 
 use super::enemies::{EnemySource, MlBotPolicyEnemyRow, MlBotPolicyEnemySpecies as Species};
 use super::numbers::{heading_vector, ratio, unsigned, write};
@@ -12,7 +12,7 @@ use super::spec::scales;
 pub fn observe_ml_bot_policy_enemy_extensions(
     enemies: &EnemyWorld,
     rows: &[MlBotPolicyEnemyRow],
-    secondary: &NativeSecondarySimulationState,
+    secondary: &SecondarySimulationState,
     self_player_id: &str,
     tick: u64,
     world_key: &str,
@@ -98,9 +98,9 @@ pub fn observe_ml_bot_policy_enemy_extensions(
                 && actor.world_key == world_key
                 && matches!(
                     actor.kind,
-                    NativeSecondaryActorKind::FireBurn
-                        | NativeSecondaryActorKind::EtherBurn
-                        | NativeSecondaryActorKind::ElectricBurn
+                    SecondaryActorKind::FireBurn
+                        | SecondaryActorKind::EtherBurn
+                        | SecondaryActorKind::ElectricBurn
                 )
         });
         write(

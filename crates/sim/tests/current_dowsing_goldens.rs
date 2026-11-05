@@ -3,7 +3,7 @@
 mod support;
 
 use serde_json::{Value, json};
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::economy::{
     DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyContext, HubEconomyState,
     HubInventoryAction, HubInventoryItem, create_equipment_inventory_item,
@@ -19,7 +19,7 @@ fn source_for(mode: &str) -> HubEconomyState {
     let mut economy = HubEconomyState::new(1, WizardElement::Ether);
     economy.gold = 20000;
     if mode != "ordinary" {
-        economy.rng = NativeRng::new(if mode == "missing-37" { 1394 } else { 1 });
+        economy.rng = Rng::new(if mode == "missing-37" { 1394 } else { 1 });
     }
     match mode {
         "hood" => economy.backpack = vec![item(16)],

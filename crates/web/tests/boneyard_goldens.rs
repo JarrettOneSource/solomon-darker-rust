@@ -32,10 +32,7 @@ fn offline_boneyards_replay_the_website_geometry_movement_gates_and_entrance() {
             let expected = &case["world"]["circles"][index];
             assert_eq!(circle.center, point(&expected["center"]), "circle in case {case_index}");
             assert_eq!(circle.radius, expected["radius"].as_f64().unwrap());
-            assert_eq!(
-                circle.native_line_mask,
-                expected["nativeLineMask"].as_u64().unwrap_or(0) as u32
-            );
+            assert_eq!(circle.line_mask, expected["nativeLineMask"].as_u64().unwrap_or(0) as u32);
             assert_eq!(circle.source_id.as_deref(), expected["sourceId"].as_str());
         }
         assert_eq!(world.circles().len(), case["world"]["circles"].as_array().unwrap().len());
@@ -65,10 +62,7 @@ fn offline_boneyards_replay_the_website_geometry_movement_gates_and_entrance() {
             assert_eq!(segment.start, point(&expected["start"]));
             assert_eq!(segment.end, point(&expected["end"]));
             assert_eq!(segment.radius, expected["radius"].as_f64().unwrap());
-            assert_eq!(
-                segment.native_line_mask,
-                expected["nativeLineMask"].as_u64().unwrap_or(0) as u32
-            );
+            assert_eq!(segment.line_mask, expected["nativeLineMask"].as_u64().unwrap_or(0) as u32);
         }
         for line in case["lines"].as_array().unwrap() {
             let actual = first_boneyard_line_obstruction(

@@ -111,11 +111,11 @@ pub fn hub_audio_attenuation(distance: f64) -> f64 {
     (1.0 - (distance - 150.0) / 650.0).max(0.25)
 }
 #[must_use]
-pub fn native_footstep_cue(tick: u32, player_id: &str) -> AudioCue {
+pub fn footstep_cue(tick: u32, player_id: &str) -> AudioCue {
     if stable_hash(player_id, tick) & 1 == 0 { AudioCue::Step1 } else { AudioCue::Step2 }
 }
 #[must_use]
-pub fn new_native_footstep_tick(previous: Option<u32>, current: u32) -> Option<u32> {
+pub fn new_footstep_tick(previous: Option<u32>, current: u32) -> Option<u32> {
     previous.filter(|previous| *previous != current && current != 0).map(|_| current)
 }
 

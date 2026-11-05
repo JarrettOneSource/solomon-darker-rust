@@ -2,15 +2,15 @@
 
 use crate::float::fround;
 use crate::profile::WizardElement;
-use crate::secondary::NativeSecondaryCastAction;
+use crate::secondary::SecondaryCastAction;
 use crate::spells::casting::{
-    NativePlayerWeaponKind, PlayerPrimaryCastState, player_staff_attachment_offset,
+    PlayerPrimaryCastState, PlayerWeaponKind, player_staff_attachment_offset,
     player_wand_attachment_offset, player_wand_primary_pose, primary_cast_presentation_pose,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlayerSecondaryCastPresentation {
-    Action(NativeSecondaryCastAction),
+    Action(SecondaryCastAction),
     Spin,
 }
 
@@ -42,14 +42,14 @@ pub struct PlayerEquippedElementPlan {
 pub fn player_equipped_element_plan(
     heading: usize,
     poses: PlayerAttachmentPoses,
-    weapon_kind: NativePlayerWeaponKind,
+    weapon_kind: PlayerWeaponKind,
     secondary_cast: Option<PlayerSecondaryCastPresentation>,
     phase: f64,
     gait_degrees: f64,
 ) -> PlayerEquippedElementPlan {
-    let wand = weapon_kind == NativePlayerWeaponKind::Wand;
+    let wand = weapon_kind == PlayerWeaponKind::Wand;
     let staff_cast = matches!(secondary_cast, Some(PlayerSecondaryCastPresentation::Action(action))
-        if action.weapon_kind == Some(NativePlayerWeaponKind::Staff));
+        if action.weapon_kind == Some(PlayerWeaponKind::Staff));
     let effect_pose =
         if wand && secondary_cast != Some(PlayerSecondaryCastPresentation::Spin) && !staff_cast {
             14 + poses.wand
@@ -61,7 +61,7 @@ pub fn player_equipped_element_plan(
     } else {
         player_staff_attachment_offset(heading, poses.staff)
     };
-    let angle = native_player_element_call_angle(socket, Some(weapon_kind));
+    let angle = player_element_call_angle(socket, Some(weapon_kind));
     let mut attachment_offset = crate::presentation::front_attachment_offset(gait_degrees);
     if effect_pose == 9 {
         attachment_offset.x = 0.0;
@@ -80,15 +80,14 @@ pub fn player_equipped_element_plan(
 /// no-item/Wand branch reuses the stored scaled X for Y (`0x0053B9DF`).
 /// The selected-effect helper itself retains the authored full XY socket.
 #[must_use]
-pub fn native_player_element_call_angle(
+pub fn player_element_call_angle(
     socket: crate::Vec2,
-    weapon_kind: Option<NativePlayerWeaponKind>,
+    weapon_kind: Option<PlayerWeaponKind>,
 ) -> usize {
-    let query_y =
-        if weapon_kind == Some(NativePlayerWeaponKind::Staff) { socket.y } else { socket.x };
+    let query_y = if weapon_kind == Some(PlayerWeaponKind::Staff) { socket.y } else { socket.x };
     let reference = if weapon_kind.is_some() { 20.0 } else { 10.0 };
     let radians = fround(crate::float::atan2(socket.x, -(query_y + reference)));
-    let mut degrees = fround(radians * 180.0 / crate::boneyard::terrain_surface::NATIVE_GROUND_PI);
+    let mut degrees = fround(radians * 180.0 / crate::boneyard::terrain_surface::GROUND_PI);
     if degrees < 0.0 {
         degrees = fround(degrees + 360.0);
     }
@@ -111,7 +110,7 @@ pub fn player_character_attachment_poses(
     match secondary_cast {
         Some(PlayerSecondaryCastPresentation::Spin) => wand = 0,
         Some(PlayerSecondaryCastPresentation::Action(action)) => {
-            if action.weapon_kind != Some(NativePlayerWeaponKind::Wand) {
+            if action.weapon_kind != Some(PlayerWeaponKind::Wand) {
                 wand = 0;
             } else if action.progress > 0.0 {
                 wand = if action.progress < 1.0 { 1 } else { 2 };
@@ -188,29 +187,25 @@ pub fn player_equipped_element_effect_scale(overlay_effect_phase: f64) -> f64 {
 
 /// The two BadGuys record-7 passes in `renderer/player-damage-x4-vfx-view.ts`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeDamageX4VfxLayer {
+pub struct DamageX4VfxLayer {
     pub alpha: f64,
     pub rotation_degrees: f64,
     pub scale: f64,
 }
 
 #[must_use]
-pub fn native_damage_x4_vfx_plan(
+pub fn damage_x4_vfx_plan(
     remaining_ticks: f64,
     tick: f64,
     emitter_scale: f64,
-) -> Vec<NativeDamageX4VfxLayer> {
+) -> Vec<DamageX4VfxLayer> {
     if remaining_ticks <= 0.0 {
         return Vec::new();
     }
     let alpha = remaining_ticks.min(100.0) / 100.0;
     let fixed_tick = tick.floor();
     vec![
-        NativeDamageX4VfxLayer { alpha, rotation_degrees: fixed_tick, scale: 2.5 * emitter_scale },
-        NativeDamageX4VfxLayer {
-            alpha,
-            rotation_degrees: -0.5 * fixed_tick,
-            scale: 2.0 * emitter_scale,
-        },
+        DamageX4VfxLayer { alpha, rotation_degrees: fixed_tick, scale: 2.5 * emitter_scale },
+        DamageX4VfxLayer { alpha, rotation_degrees: -0.5 * fixed_tick, scale: 2.0 * emitter_scale },
     ]
 }

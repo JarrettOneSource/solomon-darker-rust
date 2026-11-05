@@ -4,8 +4,8 @@
 use solomon_assets::parse_bundle;
 use solomon_graphics::{TextureColorMode, Vertex, assets};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline};
-use solomon_sim::secondary::motion::create_native_stoneskin_warp;
-use solomon_sim::{HubWizard, NativeRng};
+use solomon_sim::secondary::motion::create_stoneskin_warp;
+use solomon_sim::{HubWizard, Rng};
 
 use super::*;
 
@@ -66,19 +66,19 @@ pub async fn run(
             element: WizardElement::Earth,
             discipline: WizardDiscipline::Mind,
         },
-        &mut NativeRng::new(125),
+        &mut Rng::new(125),
     );
     let target = renderer.create_render_target(256)?;
     let reference_capture = renderer.create_render_target(256)?;
-    let warp = create_native_stoneskin_warp(&mut NativeRng::new(125));
+    let warp = create_stoneskin_warp(&mut Rng::new(125));
     let camera = Camera { origin: Vec2::new(-128.0, -153.0), scale: 1.0 };
     let mut cases = Vec::new();
     let bare_rows: BareRows = serde_json::from_str(include_str!("material_probe_bare.json"))
         .map_err(|error| error.to_string())?;
     for (weapon_name, weapon_kind, bare_pose) in [
         ("unselected", None, None),
-        ("staff", Some(NativePlayerWeaponKind::Staff), None),
-        ("wand", Some(NativePlayerWeaponKind::Wand), None),
+        ("staff", Some(PlayerWeaponKind::Staff), None),
+        ("wand", Some(PlayerWeaponKind::Wand), None),
         ("bare-idle", None, Some(0)),
         ("bare-cast2-start", None, Some(1)),
         ("bare-constant", None, Some(2)),
@@ -86,7 +86,7 @@ pub async fn run(
     ] {
         view.equipment.appearance.weapon = bare_pose.is_none().then_some(
             PlayerRenderableWeaponAppearance::Native(PlayerWeaponAppearance {
-                kind: weapon_kind.unwrap_or(NativePlayerWeaponKind::Staff),
+                kind: weapon_kind.unwrap_or(PlayerWeaponKind::Staff),
                 selector: 0,
             }),
         );
@@ -100,17 +100,17 @@ pub async fn run(
                 || bare_pose.is_some())
             .then_some(if bare_pose == Some(2) { 24 } else { 8 });
             for shield in [false, true] {
-                let mut secondary = NativeSecondaryPlayerState {
+                let mut secondary = SecondaryPlayerState {
                     stoneskin_ticks_remaining: 900,
                     magic_shield_absorb: if shield { 80.0 } else { 0.0 },
                     magic_shield_maximum: 80.0,
-                    ..NativeSecondaryPlayerState::default()
+                    ..SecondaryPlayerState::default()
                 };
                 if let Some(pose) = bare_pose {
                     configure_bare_pose(&mut wizard, &mut secondary, pose);
                 }
                 player.skill_runtime.harden.coating = 0.8;
-                view.set_material_tint(solomon_sim::presentation::native_player_material_tint(
+                view.set_material_tint(solomon_sim::presentation::player_material_tint(
                     tint,
                     Some(&secondary),
                     &player.combat,
@@ -171,7 +171,7 @@ pub async fn run(
                                 renderer,
                                 &Camera { origin: Vec2::ZERO, scale: 1.0 },
                                 &view.atlas,
-                                crate::native_mesh::native_sprite_texel_rect(record),
+                                crate::beam_mesh::sprite_texel_rect(record),
                                 Vec2::new(128.0 + head.x, 128.0 + head.y),
                                 Vec2::new(record.width as f64, record.height as f64),
                                 heading as f64 * 24.0 * std::f64::consts::PI / 180.0,
@@ -229,7 +229,7 @@ pub async fn run(
                         if let Some(kind) = weapon_kind {
                             // Independently recovered pose0 sockets, in heading0/6/12/18 order.
                             // DrawSpecial calls the selected helper once, without gait translation.
-                            let (sockets, scale) = if kind == NativePlayerWeaponKind::Staff {
+                            let (sockets, scale) = if kind == PlayerWeaponKind::Staff {
                                 ([[-32.5, -66.5], [38.5, -61.5], [32.5, -1.5], [-38.5, -6.5]], 5.5)
                             } else {
                                 (
@@ -244,7 +244,7 @@ pub async fn run(
                                 renderer,
                                 &camera,
                                 position,
-                                &native_selected_primary_element_vfx_plan(8, 300.0, scale),
+                                &selected_primary_element_vfx_plan(8, 300.0, scale),
                             );
                         }
                         if let Some(pose) = bare_pose {
@@ -263,7 +263,7 @@ pub async fn run(
                                 renderer,
                                 &camera,
                                 &view.atlas,
-                                crate::native_mesh::native_sprite_texel_rect(record),
+                                crate::beam_mesh::sprite_texel_rect(record),
                                 Vec2::new(
                                     record.center_x as f64 * shell.scale,
                                     -35.0 + record.center_y as f64 * shell.scale,
@@ -314,16 +314,12 @@ pub async fn run(
     Ok(cases)
 }
 
-fn configure_bare_pose(
-    wizard: &mut HubWizard,
-    secondary: &mut NativeSecondaryPlayerState,
-    pose: usize,
-) {
+fn configure_bare_pose(wizard: &mut HubWizard, secondary: &mut SecondaryPlayerState, pose: usize) {
     wizard.primary_cast.hand_cast = None;
     wizard.primary_cast.channel_active = pose == 2;
     wizard.primary_cast.action_tick = (pose == 2).then_some(1.0);
     secondary.cast_action = if matches!(pose, 1 | 3) {
-        let mut action = solomon_sim::secondary::NativeSecondaryCastAction::new(None);
+        let mut action = solomon_sim::secondary::SecondaryCastAction::new(None);
         action.progress = if pose == 1 { 0.5 } else { 1.5 };
         action.hand.as_mut().unwrap().pose = pose;
         Some(action)
@@ -358,7 +354,7 @@ fn draw_bare_reference(
         renderer,
         camera,
         position,
-        &native_selected_primary_element_vfx_plan(if row.pose == 2 { 24 } else { 8 }, 300.0, scale),
+        &selected_primary_element_vfx_plan(if row.pose == 2 { 24 } else { 8 }, 300.0, scale),
     );
 }
 
@@ -379,7 +375,7 @@ fn bare_cases(
         let mut wizard = HubWizard::at(Vec2::ZERO);
         wizard.heading_index = row.heading;
         wizard.primary_cast.selected_primary_id = Some(if row.pose == 2 { 24 } else { 8 });
-        let mut secondary = NativeSecondaryPlayerState::default();
+        let mut secondary = SecondaryPlayerState::default();
         configure_bare_pose(&mut wizard, &mut secondary, row.pose);
         view.set_player_presentation(WizardPlayerPresentation {
             player,
@@ -456,12 +452,12 @@ fn bare_cases(
     // A Cast1 terminal K2 without a held channel must suppress all helper output.
     let mut wizard = HubWizard::at(Vec2::ZERO);
     wizard.primary_cast.selected_primary_id = Some(8);
-    wizard.primary_cast.hand_cast = Some(solomon_sim::spells::hand_cast::NativeHandCast1::new(
+    wizard.primary_cast.hand_cast = Some(solomon_sim::spells::hand_cast::HandCast1::new(
         0.095_f32 as f64,
         2,
-        &mut NativeRng::new(125),
+        &mut Rng::new(125),
     ));
-    let secondary = NativeSecondaryPlayerState::default();
+    let secondary = SecondaryPlayerState::default();
     view.set_player_presentation(WizardPlayerPresentation {
         player,
         secondary: Some(&secondary),
@@ -536,7 +532,7 @@ fn enchant_cases(
     for selector in 0..6 {
         for heading in [0, 6, 12, 18] {
             let weapon = PlayerRenderableWeaponAppearance::Native(PlayerWeaponAppearance {
-                kind: NativePlayerWeaponKind::Staff,
+                kind: PlayerWeaponKind::Staff,
                 selector,
             });
             let frame = WeaponFrame {
@@ -577,8 +573,8 @@ fn enchant_cases(
                         frame.material_tint,
                         BlendMode::Normal,
                     );
-                    let plan = native_enchant_staff_draw_plan(NativeEnchantStaffDrawInput {
-                        attachment: NativeStaffAttachmentFrame {
+                    let plan = enchant_staff_draw_plan(EnchantStaffDrawInput {
+                        attachment: StaffAttachmentFrame {
                             start: Vec2::new(hand.points[1][0] as f64, hand.points[1][1] as f64),
                             end: Vec2::new(hand.points[2][0] as f64, hand.points[2][1] as f64),
                             front,
@@ -586,7 +582,7 @@ fn enchant_cases(
                         effective_rank: 1,
                         heading_index: heading,
                         living: true,
-                        native_staff: true,
+                        staff: true,
                         pose: 0,
                         selected_primary_skill_id: Some(8),
                         selector,

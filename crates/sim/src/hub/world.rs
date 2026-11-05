@@ -4,7 +4,7 @@
 use crate::Vec2;
 use crate::actor_physics::{ActorPhysicsBody, ActorPhysicsWorld, resolve_actor_motion};
 use crate::hub::college_intro::{
-    HubParticipantStepOptions, NativeCollegeIntroState,
+    CollegeIntroState, HubParticipantStepOptions,
     hub_participant_onboarding_collision_bypass_active, plan_hub_participant_movement,
     step_hub_participant_movement,
 };
@@ -19,7 +19,7 @@ use crate::painter::WorldPainterOrder;
 pub struct HubParticipantMotion<'a> {
     pub id: &'a str,
     pub wizard: &'a mut HubWizard,
-    pub college_intro: &'a mut Option<NativeCollegeIntroState>,
+    pub college_intro: &'a mut Option<CollegeIntroState>,
     pub college_intro_pending: bool,
     pub renderer_ready: bool,
     pub movement: Vec2,

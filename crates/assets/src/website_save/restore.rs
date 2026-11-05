@@ -156,7 +156,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
         return Err("game save player economy 0 inventory is invalid".into());
     }
     participant.player.book = decode(players["skillBooks"][0].clone())?;
-    let expected_book = solomon_sim::profile::NativeSkillBookState::new(
+    let expected_book = solomon_sim::profile::SkillBookState::new(
         participant.player.selection.element,
         participant.player.selection.discipline,
     );
@@ -296,7 +296,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
         && let Some(world) = &mut session.boneyard
     {
         use solomon_sim::combat::PlayerLifeState;
-        use solomon_sim::death_animations::NativeDeathWeaponActor;
+        use solomon_sim::death_animations::DeathWeaponActor;
         use solomon_sim::player_presentation::{
             PlayerDeathWeaponTrigger, legacy_player_death_weapon_motion,
         };
@@ -330,7 +330,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
                 combat.death_tick,
                 participant.wizard.position,
             );
-            world.death_weapons.push(NativeDeathWeaponActor {
+            world.death_weapons.push(DeathWeaponActor {
                 age_ticks: 0,
                 birth_tick: tick,
                 death_epoch: combat.death_epoch,

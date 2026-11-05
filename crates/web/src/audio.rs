@@ -327,7 +327,7 @@ impl GameAudio {
             {
                 self.stop_stream(cue)?;
             }
-            for cue in solomon_sim::boneyard::tutorial::NativeTutorialCue::ALL {
+            for cue in solomon_sim::boneyard::tutorial::TutorialCue::ALL {
                 self.stop_stream(AudioCue::from_id(cue.id()).expect("stock Tutorial cue"))?;
             }
         }

@@ -4,11 +4,11 @@ mod quickbar;
 
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use crate::hotbar::{HotbarControls, HotbarSelection};
-use solomon_sim::belt::NATIVE_BELT_SLOT_COUNT;
+use solomon_sim::belt::BELT_SLOT_COUNT;
 use solomon_sim::hud::{
-    HudBeltEntry, HudHealthLayerKind, HudRect, HudState, clamp_unit, native_health_hud_layers,
-    native_health_hud_presentation, native_hud_control_layout,
-    native_inventory_item_icon_transform, native_mana_hud_presentation,
+    HudBeltEntry, HudHealthLayerKind, HudRect, HudState, clamp_unit, health_hud_layers,
+    health_hud_presentation, hud_control_layout, inventory_item_icon_transform,
+    mana_hud_presentation,
 };
 use solomon_sim::mobile_ui::{MobileUiElementId, MobileUiLayoutState, default_mobile_ui_geometry};
 use std::cell::{Cell, RefCell};
@@ -207,15 +207,11 @@ impl Hud {
     ) -> Result<(), String> {
         let mut icons = std::array::from_fn(|_| None);
         if let Some((belt, economy)) = player {
-            for (slot, entry) in belt
-                .entries
-                .iter()
-                .skip(self.hotbar.start())
-                .take(NATIVE_BELT_SLOT_COUNT)
-                .enumerate()
+            for (slot, entry) in
+                belt.entries.iter().skip(self.hotbar.start()).take(BELT_SLOT_COUNT).enumerate()
             {
-                if let Some(item) = entry
-                    .and_then(|entry| solomon_sim::belt::native_belt_entry_item(entry, economy))
+                if let Some(item) =
+                    entry.and_then(|entry| solomon_sim::belt::belt_entry_item(entry, economy))
                 {
                     icons[slot] = crate::ui::mod_icon::mod_item_icon_layers(images, item)?;
                 }
@@ -382,7 +378,7 @@ impl Hud {
         coarse: bool,
     ) -> Result<(), String> {
         let p = ui.painter();
-        let layout = native_hud_control_layout(size.x as f64, size.y as f64, None);
+        let layout = hud_control_layout(size.x as f64, size.y as f64, None);
         let white = egui::Color32::WHITE;
         if self.tutorial_access.combat {
             let pause = egui::Rect::from_min_size(egui::pos2(11.0, 7.0), egui::vec2(31.0, 33.0));
@@ -571,17 +567,14 @@ impl Hud {
         _scale: f32,
         coarse: bool,
     ) -> Result<(), String> {
-        let health = native_health_hud_presentation(
+        let health = health_hud_presentation(
             state.current_health,
             state.maximum_health,
             state.shield_current,
             state.shield_maximum,
         );
-        let mana = native_mana_hud_presentation(
-            state.current_mana,
-            state.maximum_mana,
-            state.reserved_mana,
-        );
+        let mana =
+            mana_hud_presentation(state.current_mana, state.maximum_mana, state.reserved_mana);
         let mut center = egui::pos2(size.x / 2.0, 24.5);
         let mut multiplier = 1.0;
         let mut rotation = 0.0;
@@ -612,11 +605,9 @@ impl Hud {
                 egui::vec2(core as f32, 10.0) * multiplier,
             );
             if health_meter {
-                for layer in native_health_hud_layers(
-                    health.fill_progress,
-                    health.shield_progress,
-                    state.poisoned,
-                ) {
+                for layer in
+                    health_hud_layers(health.fill_progress, health.shield_progress, state.poisoned)
+                {
                     let clip = egui::Rect::from_min_size(
                         fill.min,
                         egui::vec2(fill.width() * layer.progress as f32, fill.height()),
@@ -831,7 +822,7 @@ impl Hud {
                     control_scale,
                 );
             } else if let HudBeltEntry::Item { icon, .. } = entry {
-                let ([x, y], rotation) = native_inventory_item_icon_transform(icon.equipment_type);
+                let ([x, y], rotation) = inventory_item_icon_transform(icon.equipment_type);
                 let center = rect.center() + egui::vec2(x as f32, y as f32) * control_scale;
                 for (layer, record) in icon.records.iter().enumerate() {
                     let tint = icon.tints.get(layer).copied().unwrap_or(0xffffff);
@@ -1013,7 +1004,7 @@ impl Hud {
                 |row| row.binding_label.clone(),
             )
             .to_uppercase();
-        let binding = solomon_sim::hud::quickbar::layout_native_quickbar_binding(&label);
+        let binding = solomon_sim::hud::quickbar::layout_quickbar_binding(&label);
         let backing = egui::Rect::from_min_size(
             rect.min + egui::vec2(binding.backing_left as f32, 53.0),
             egui::vec2(binding.backing_width as f32, 15.0),

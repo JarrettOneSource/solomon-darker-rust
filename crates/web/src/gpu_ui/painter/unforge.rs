@@ -33,7 +33,7 @@ impl GpuPainter {
             target
         };
         renderer.draw_sampled(TextureSampling::Texture, |renderer| {
-            renderer.render_native_ui_capture(&target, [CAPTURE_SIDE as f32; 2], |renderer| {
+            renderer.render_ui_capture(&target, [CAPTURE_SIDE as f32; 2], |renderer| {
                 let [left, top, width, height] = paint.frame.clip;
                 renderer.draw_clipped(
                     [left, CAPTURE_SIDE as i32 - top - height, width, height],

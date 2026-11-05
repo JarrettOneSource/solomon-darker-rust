@@ -1,11 +1,11 @@
 //! `GameSettingsDialog` retains one MobileUiEditor draft and requests one durable save.
 use super::{MobileEditorPlayerPreview, MobileUiEditor, Page, SettingsView};
 use solomon_sim::hud::quickbar::{
-    NativeSkillQuickbarCooldownPresentation, native_skill_quickbar_cooldown_presentation,
+    SkillQuickbarCooldownPresentation, skill_quickbar_cooldown_presentation,
 };
 use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState, mobile_ui_editor_page_size};
 use solomon_sim::player::PlayerState;
-use solomon_sim::secondary::NativeSecondaryPlayerState;
+use solomon_sim::secondary::SecondaryPlayerState;
 impl SettingsView {
     pub fn set_mobile_layout_state(&mut self, state: &MobileUiLayoutState) -> Result<(), String> {
         self.mobile_state = state.clone();
@@ -22,10 +22,10 @@ impl SettingsView {
         });
         self.paint_mobile_preview();
     }
-    pub fn set_mobile_editor_secondary(&mut self, secondary: Option<&NativeSecondaryPlayerState>) {
+    pub fn set_mobile_editor_secondary(&mut self, secondary: Option<&SecondaryPlayerState>) {
         self.mobile_cooldowns = std::array::from_fn(|id| {
-            secondary.map_or_else(NativeSkillQuickbarCooldownPresentation::default, |s| {
-                native_skill_quickbar_cooldown_presentation(
+            secondary.map_or_else(SkillQuickbarCooldownPresentation::default, |s| {
+                skill_quickbar_cooldown_presentation(
                     s.cooldown_ticks_by_skill[id],
                     s.cooldown_maximum_ticks_by_skill[id],
                     s.global_cooldown_ticks,

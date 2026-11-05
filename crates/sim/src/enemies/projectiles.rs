@@ -22,7 +22,7 @@ impl EnemyProjectileKind {
         }
     }
     #[must_use]
-    pub const fn native_type_id(self) -> u16 {
+    pub const fn type_id(self) -> u16 {
         match self {
             Self::Arrow => 0x7da,
             Self::DemonBomb => 0x7f7,
@@ -72,7 +72,8 @@ pub struct EnemyProjectileState {
     pub light_registration: Option<EnemyPainterRegistration>,
     pub lifetime_ticks: u64,
     pub minimum_speed: f64,
-    pub native_type_id: u16,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+    pub type_id: u16,
     pub native_cell_binding_order: usize,
     pub native_registration_order: usize,
     pub owner_actor_id: usize,
@@ -233,7 +234,7 @@ pub struct EnemyProjectileKnockback {
 }
 
 #[must_use]
-pub fn native_poison_pool_alpha(age: u64) -> f64 {
+pub fn poison_pool_alpha(age: u64) -> f64 {
     let mut alpha = 1.0_f32;
     for _ in 0..age.saturating_sub(2999).min(201) {
         alpha = (alpha - 0.005_f32).max(0.0);
@@ -241,7 +242,7 @@ pub fn native_poison_pool_alpha(age: u64) -> f64 {
     f64::from(alpha)
 }
 #[must_use]
-pub fn native_poison_pool_contact(origin: Vec2, target: Vec2) -> bool {
+pub fn poison_pool_contact(origin: Vec2, target: Vec2) -> bool {
     let x = crate::float::fround(target.x - origin.x);
     let y = crate::float::fround(crate::float::fround(target.y - origin.y) / (0.8_f32 as f64));
     crate::float::fround(x * x + y * y) < 4900.0

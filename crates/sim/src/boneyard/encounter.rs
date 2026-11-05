@@ -8,7 +8,7 @@ use crate::float;
 use crate::float::fround;
 use crate::heading::heading_degrees_from_vector;
 use crate::rng::seed_from_text;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::{BoneyardBounds, SolomonDig};
 
@@ -192,7 +192,7 @@ pub struct SolomonEncounter {
     pub phase_ticks_remaining: u64,
     pub position: Vec2,
     pub queued_get_him_boys: bool,
-    pub rng: NativeRng,
+    pub rng: Rng,
     pub run_event_id: u64,
     pub target_player_id: Option<String>,
     pub tutorial_dialogue_ticks: u64,
@@ -225,7 +225,7 @@ impl SolomonEncounter {
             !dig.frame_program.is_empty() && dig.ticks_per_frame > 0,
             "Solomon Dig needs an animation program and positive frame timing"
         );
-        let mut rng = NativeRng::new(i64::from(seed_from_text(&format!("{seed}:solomon-dig"))));
+        let mut rng = Rng::new(i64::from(seed_from_text(&format!("{seed}:solomon-dig"))));
         let amplitude = rng.draw_scaled_float(DIG_BODY_BOB_AMPLITUDE_RANGE, false);
         Self {
             acceleration: 0.0,
@@ -318,8 +318,7 @@ impl SolomonEncounter {
         if cursor > self.dig_frame_program.len() as f64 - DIG_TAIL_PROGRAM_SLOTS as f64 {
             cursor = fround(cursor - DIG_TAIL_SLOWDOWN);
         }
-        self.dig_body_offset_y =
-            native_solomon_dig_body_offset_y(cursor, self.dig_body_bob_amplitude);
+        self.dig_body_offset_y = solomon_dig_body_offset_y(cursor, self.dig_body_bob_amplitude);
         self.dig_frame = self.dig_frame_program.get(cursor.floor() as usize).copied().unwrap_or(0);
         self.dig_phase = cursor;
         self.acquire_target(players);
@@ -391,9 +390,9 @@ impl SolomonEncounter {
             target.position.y - self.position.y,
         );
         for _ in 0..=(self.turn_rate.trunc() as usize) {
-            self.heading_degrees += native_turn_direction(self.heading_degrees, desired_heading);
+            self.heading_degrees += turn_direction(self.heading_degrees, desired_heading);
         }
-        self.heading_degrees = normalize_native_turn_heading(self.heading_degrees);
+        self.heading_degrees = normalize_turn_heading(self.heading_degrees);
         self.target_player_id = Some(target.id.into());
         self.transition_offset_y *= 0.9;
         self.turn_rate = (self.turn_rate + 0.5).min(MAX_TURN_RATE);
@@ -447,7 +446,7 @@ impl SolomonEncounter {
             self.phase_ticks_remaining -= 1;
             return;
         }
-        self.heading_degrees = native_retreat_heading(self.heading_degrees);
+        self.heading_degrees = retreat_heading(self.heading_degrees);
         self.acceleration = RETREAT_ACCELERATION;
         self.motion = 0.0;
         self.phase = SolomonPhase::RetreatAccelerating;
@@ -545,7 +544,7 @@ pub fn solomon_contact_contains(solomon: Vec2, player: Vec2) -> bool {
 }
 
 #[must_use]
-pub fn native_solomon_dig_body_offset_y(cursor: f64, amplitude: f64) -> f64 {
+pub fn solomon_dig_body_offset_y(cursor: f64, amplitude: f64) -> f64 {
     if cursor <= DIG_SHOVEL_CURSOR - 1.0 || cursor > DIG_THROW_DIRT_CURSOR {
         return 0.0;
     }
@@ -559,11 +558,7 @@ pub fn native_solomon_dig_body_offset_y(cursor: f64, amplitude: f64) -> f64 {
 }
 
 #[must_use]
-pub fn native_solomon_escape_target(
-    position: Vec2,
-    heading_degrees: f64,
-    bounds: BoneyardBounds,
-) -> Vec2 {
+pub fn solomon_escape_target(position: Vec2, heading_degrees: f64, bounds: BoneyardBounds) -> Vec2 {
     let radians = heading_degrees * std::f64::consts::PI / 180.0;
     let end = Vec2::new(
         fround(position.x + float::sin(radians) * SOLOMON_ESCAPE_TARGET_DISTANCE),
@@ -573,7 +568,7 @@ pub fn native_solomon_escape_target(
 }
 
 #[must_use]
-pub fn native_solomon_escape_path_target(
+pub fn solomon_escape_path_target(
     position: Vec2,
     escape_target: Vec2,
     bounds: BoneyardBounds,
@@ -619,7 +614,7 @@ fn clip_escape_segment(start: Vec2, end: Vec2, bounds: BoneyardBounds, margin: f
     Vec2::new(fround(start.x + dx * progress), fround(start.y + dy * progress))
 }
 
-fn native_retreat_heading(heading: f64) -> f64 {
+fn retreat_heading(heading: f64) -> f64 {
     let mut reversed = heading + 180.0;
     if reversed > 360.0 {
         reversed -= 360.0;
@@ -642,7 +637,7 @@ fn normalize_degrees(value: f64) -> f64 {
     ((value % 360.0) + 360.0) % 360.0
 }
 
-fn normalize_native_turn_heading(value: f64) -> f64 {
+fn normalize_turn_heading(value: f64) -> f64 {
     if value < 0.0 {
         return value + 360.0;
     }
@@ -652,7 +647,7 @@ fn normalize_native_turn_heading(value: f64) -> f64 {
     value
 }
 
-fn native_turn_direction(current: f64, target: f64) -> f64 {
+fn turn_direction(current: f64, target: f64) -> f64 {
     let current = normalize_degrees(current);
     let target = normalize_degrees(target);
     let difference = (current - target).abs();

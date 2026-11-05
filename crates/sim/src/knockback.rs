@@ -5,51 +5,51 @@
 use std::collections::BTreeMap;
 
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub trait NativeKnockbackAreaWorld<T> {
+pub trait KnockbackAreaWorld<T> {
     fn position(&self, id: &T) -> Option<Vec2>;
     /// Source permits the pure no-movement query. Live world owners override it.
     fn move_actor(&mut self, _id: &T, _delta: Vec2) -> Vec<T> {
         Vec::new()
     }
 }
-impl<T: Ord> NativeKnockbackAreaWorld<T> for BTreeMap<T, Vec2> {
+impl<T: Ord> KnockbackAreaWorld<T> for BTreeMap<T, Vec2> {
     fn position(&self, id: &T) -> Option<Vec2> {
         self.get(id).copied()
     }
 }
 
-pub struct NativeKnockbackArea<'a, T> {
+pub struct KnockbackArea<'a, T> {
     pub origin: Vec2,
     pub remaining_distance: f64,
     pub target_ids: &'a [T],
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeKnockbackAreaDisplacement<T> {
+pub struct KnockbackAreaDisplacement<T> {
     pub target_id: T,
     pub delta: Vec2,
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeKnockbackAreaHeading<T> {
+pub struct KnockbackAreaHeading<T> {
     pub target_id: T,
     pub heading_degrees: f64,
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeKnockbackAreaStep<T> {
+pub struct KnockbackAreaStep<T> {
     pub camera_displacement: Vec2,
-    pub displacements: Vec<NativeKnockbackAreaDisplacement<T>>,
-    pub heading_perturbations: Vec<NativeKnockbackAreaHeading<T>>,
+    pub displacements: Vec<KnockbackAreaDisplacement<T>>,
+    pub heading_perturbations: Vec<KnockbackAreaHeading<T>>,
     pub remaining_distance: f64,
     pub target_ids: Vec<T>,
     pub terminal: bool,
 }
 
-pub fn step_native_knockback_area<T: Clone + Eq>(
-    source: NativeKnockbackArea<'_, T>,
-    rng: &mut NativeRng,
-    world: &mut impl NativeKnockbackAreaWorld<T>,
-) -> NativeKnockbackAreaStep<T> {
+pub fn step_knockback_area<T: Clone + Eq>(
+    source: KnockbackArea<'_, T>,
+    rng: &mut Rng,
+    world: &mut impl KnockbackAreaWorld<T>,
+) -> KnockbackAreaStep<T> {
     let vector = rng.draw_unit_vector();
     let camera_displacement = Vec2::new(fround(vector.x * 10.0), fround(vector.y * 10.0));
     let mut target_ids = source.target_ids.to_vec();
@@ -69,7 +69,7 @@ pub fn step_native_knockback_area<T: Clone + Eq>(
         let reciprocal = if magnitude > 0.0 { fround(1.0 / magnitude) } else { 0.0 };
         let delta =
             Vec2::new(fround(distance * reciprocal * dx), fround(distance * reciprocal * dy));
-        displacements.push(NativeKnockbackAreaDisplacement { target_id: id.clone(), delta });
+        displacements.push(KnockbackAreaDisplacement { target_id: id.clone(), delta });
         for collided in world.move_actor(&id, delta) {
             if !seen.contains(&collided) {
                 seen.push(collided.clone());
@@ -84,14 +84,14 @@ pub fn step_native_knockback_area<T: Clone + Eq>(
     if terminal {
         for id in &target_ids {
             if world.position(id).is_some() {
-                heading_perturbations.push(NativeKnockbackAreaHeading {
+                heading_perturbations.push(KnockbackAreaHeading {
                     target_id: id.clone(),
                     heading_degrees: rng.draw_scaled_float(45.0, true),
                 });
             }
         }
     }
-    NativeKnockbackAreaStep {
+    KnockbackAreaStep {
         camera_displacement,
         displacements,
         heading_perturbations,

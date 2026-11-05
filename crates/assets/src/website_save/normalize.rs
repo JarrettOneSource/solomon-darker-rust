@@ -15,7 +15,7 @@ mod visual_state;
 mod world;
 
 use serde_json::{Map, Value, json};
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 
 use super::contract::{integer, only_keys, record};
 use super::value::encode;
@@ -69,7 +69,7 @@ pub(super) fn simulation(
     let normalized = json!({
         "accumulatorSeconds": value["accumulatorSeconds"],
         "combatRng": source.get("combatRng").filter(|value| !value.is_null())
-            .cloned().unwrap_or(encode(&NativeRng::new(0))?),
+            .cloned().unwrap_or(encode(&Rng::new(0))?),
         "enhancedEffects": if version < 46 { true } else { value["enhancedEffects"].as_bool().ok_or("game save simulation enhancedEffects must be boolean")? },
         "gameRng": game_rng,
         "hallOfFameClockStartedAtTick": source.get("hallOfFameClockStartedAtTick")
@@ -86,7 +86,7 @@ pub(super) fn simulation(
         "primarySpells": spells::primary(&value["primarySpells"], version)?,
         "run": run,
         "screenFlashes": if version < 47 {
-            encode(&solomon_sim::screen_flash::NativeScreenFlashState::default())?
+            encode(&solomon_sim::screen_flash::ScreenFlashState::default())?
         } else { visual_state::screen_flashes(&value["screenFlashes"], "game save screenFlashes", tick)? },
         "secondaryAbilities": spells::secondary(&value["secondaryAbilities"], version, tick)?,
         "tick": tick,

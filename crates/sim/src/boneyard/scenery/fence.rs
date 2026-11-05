@@ -3,12 +3,12 @@
 //! generating a scene never consumes the game's accepted random stream.
 
 use crate::float::{fround as f, hypot};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::super::BoneyardFence;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSceneryFencePost {
+pub struct SceneryFencePost {
     pub fence_index: usize,
     pub position: Vec2,
     pub variant: u32,
@@ -16,8 +16,8 @@ pub struct NativeSceneryFencePost {
 }
 
 #[must_use]
-pub fn native_boneyard_fence_posts(fences: &[BoneyardFence]) -> Vec<NativeSceneryFencePost> {
-    let mut posts: Vec<NativeSceneryFencePost> = Vec::new();
+pub fn boneyard_fence_posts(fences: &[BoneyardFence]) -> Vec<SceneryFencePost> {
+    let mut posts: Vec<SceneryFencePost> = Vec::new();
     for (fence_index, fence) in fences.iter().enumerate() {
         if fence.code() == 3 {
             continue;
@@ -26,12 +26,7 @@ pub fn native_boneyard_fence_posts(fences: &[BoneyardFence]) -> Vec<NativeScener
             let index = match posts.iter().position(|post| post.position == position) {
                 Some(index) => index,
                 None => {
-                    posts.push(NativeSceneryFencePost {
-                        fence_index,
-                        position,
-                        variant: 0,
-                        style: 0,
-                    });
+                    posts.push(SceneryFencePost { fence_index, position, variant: 0, style: 0 });
                     posts.len() - 1
                 }
             };
@@ -56,7 +51,7 @@ pub fn native_boneyard_fence_posts(fences: &[BoneyardFence]) -> Vec<NativeScener
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeBrokenFenceHalf {
+pub struct BrokenFenceHalf {
     /// Upper start/end, lower start/end: indices 0,1,2 / 2,1,3.
     pub corners: [Vec2; 4],
     pub root: Vec2,
@@ -68,11 +63,11 @@ pub struct NativeBrokenFenceHalf {
 }
 
 #[must_use]
-pub fn native_broken_fence_halves(
+pub fn broken_fence_halves(
     points: &[Vec2],
     start_variant: u32,
     end_variant: u32,
-) -> Vec<NativeBrokenFenceHalf> {
+) -> Vec<BrokenFenceHalf> {
     if points.len() < 2 {
         return Vec::new();
     }
@@ -97,7 +92,7 @@ pub fn native_broken_fence_halves(
         word ^= word << 21;
         word ^= word >> 11;
         let seed = ((word ^ (word << 4)).wrapping_mul(0x0a67_cfcf) as i32).unsigned_abs();
-        let mut rng = NativeRng::new(i64::from(seed));
+        let mut rng = Rng::new(i64::from(seed));
         let first = rng.draw_scaled_float(20.0, true);
         let second = rng.draw_scaled_float(20.0, true);
         let third = rng.draw_scaled_float(18.0, false);
@@ -122,7 +117,7 @@ pub fn native_broken_fence_halves(
         } else {
             0
         };
-        halves.push(NativeBrokenFenceHalf {
+        halves.push(BrokenFenceHalf {
             corners: [p0, p1, p2, p3],
             root: if shadow_end.y > shadow_start.y { shadow_end } else { shadow_start },
             seed,

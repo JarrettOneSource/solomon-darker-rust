@@ -2,7 +2,7 @@
 //! Movement commits before this step; damage/contact acceptance belongs to the world.
 
 use crate::spells::model::PrimarySpellTransient;
-use crate::spells::weld::NativeWeldWorldActor;
+use crate::spells::weld::WeldWorldActor;
 
 use super::casting::*;
 use super::earth::*;
@@ -19,13 +19,13 @@ use crate::heading::heading_degrees_from_vector;
 use crate::hub::HubWizard;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::profile::WizardElement;
-use crate::profile::primary::{NativeEarthPrimarySkillProfile, NativePrimarySkillProfile};
-use crate::profile::weld::NativeWeldCastKind;
-use crate::{NativeRng, Vec2};
+use crate::profile::primary::{EarthPrimarySkillProfile, PrimarySkillProfile};
+use crate::profile::weld::WeldCastKind;
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy)]
 pub struct PrimarySpellCastAuthority<'a> {
-    pub weapon_kind: Option<NativePlayerWeaponKind>,
+    pub weapon_kind: Option<PlayerWeaponKind>,
     pub alive: bool,
     pub available_mana: f64,
     pub cast_progress_factor: f64,
@@ -33,7 +33,7 @@ pub struct PrimarySpellCastAuthority<'a> {
     pub action_time_factor: f64,
     pub eligible: bool,
     pub plane_active: bool,
-    pub primary_skill: &'a NativePrimarySkillProfile,
+    pub primary_skill: &'a PrimarySkillProfile,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -49,31 +49,31 @@ pub type PrimarySpellObstruction<'a> = dyn Fn(Vec2, Vec2, Option<&str>, u32) -> 
 #[derive(Clone, Copy)]
 pub enum PrimarySpellTraversalActor<'a> {
     Projectile(&'a PrimarySpellProjectile),
-    EtherealBoulder(&'a NativeWeldEtherealBoulderState),
+    EtherealBoulder(&'a WeldEtherealBoulderState),
 }
 
 #[must_use]
-pub fn native_primary_birth_terrain_exclusion_mask(spell: &PrimarySpellProjectile) -> u32 {
+pub fn primary_birth_terrain_exclusion_mask(spell: &PrimarySpellProjectile) -> u32 {
     match spell {
-        PrimarySpellProjectile::Fire(_) => NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
-        PrimarySpellProjectile::Ether(_) => NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+        PrimarySpellProjectile::Fire(_) => PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
+        PrimarySpellProjectile::Ether(_) => PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
         PrimarySpellProjectile::Weld(spell) if matches!(spell.build_id, 1000..=1002) => {
-            NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK
+            PRIMARY_CAST_TERRAIN_EXCLUSION_MASK
         }
         _ => 0,
     }
 }
 
 #[must_use]
-pub fn native_primary_flight_terrain_exclusion_mask(spell: PrimarySpellTraversalActor<'_>) -> u32 {
+pub fn primary_flight_terrain_exclusion_mask(spell: PrimarySpellTraversalActor<'_>) -> u32 {
     match spell {
         PrimarySpellTraversalActor::Projectile(
             PrimarySpellProjectile::Fire(_) | PrimarySpellProjectile::Ether(_),
-        ) => NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
+        ) => PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
         PrimarySpellTraversalActor::Projectile(PrimarySpellProjectile::Weld(spell))
             if matches!(spell.build_id, 1000..=1002) =>
         {
-            NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK
+            PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK
         }
         _ => 0,
     }
@@ -172,7 +172,7 @@ impl SpellState {
         authority: PrimarySpellCastAuthority<'_>,
         input: PrimarySpellInput,
         context: &PrimarySpellWorldContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         painter_order: Option<&mut WorldPainterOrder>,
     ) -> PrimarySpellTickResult {
         self.step_primary_one(wizard, Some(authority), input, context, rng, painter_order)
@@ -183,7 +183,7 @@ impl SpellState {
         wizard: &mut HubWizard,
         input: PrimarySpellInput,
         context: &PrimarySpellWorldContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         painter_order: &mut WorldPainterOrder,
     ) -> PrimarySpellTickResult {
         self.step_primary_one(wizard, None, input, context, rng, Some(painter_order))
@@ -195,7 +195,7 @@ impl SpellState {
         authority: Option<PrimarySpellCastAuthority<'_>>,
         input: PrimarySpellInput,
         context: &PrimarySpellWorldContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         painter_order: Option<&mut WorldPainterOrder>,
     ) -> PrimarySpellTickResult {
         let targets = |_: &str| context.targets;
@@ -221,7 +221,7 @@ impl SpellState {
         &mut self,
         players: &mut [PrimarySpellPlayer<'_>],
         epoch: &PrimarySpellEpochContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         painter_order: Option<&mut WorldPainterOrder>,
     ) -> PrimarySpellBatchTickResult {
         let mut standalone_order = standalone_painter_order(self);
@@ -301,14 +301,14 @@ impl SpellState {
         wizard.primary_cast.one_shot_attack_pose_held = false;
         wizard.primary_cast.selected_primary_age_ticks = previous.selected_primary_age_ticks + 1;
         wizard.primary_cast.weapon_pulse =
-            fround(previous.weapon_pulse * NATIVE_PLAYER_WEAPON_PULSE_DECAY);
+            fround(previous.weapon_pulse * PLAYER_WEAPON_PULSE_DECAY);
         if wizard.primary_cast.owns_facing() {
             wizard.set_facing(heading_degrees_from_vector(aim.x, aim.y));
         }
         wizard.primary_cast.aim_direction = aim;
         if previous.channel_active {
             self.transients.retain(|effect| {
-                !matches!(effect, PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor))
+                !matches!(effect, PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor))
                     if actor.common().owner.owner_id == context.owner_id)
             });
         }
@@ -324,29 +324,27 @@ impl SpellState {
         authority: PrimarySpellCastAuthority<'_>,
         input: PrimarySpellInput,
         context: &PrimarySpellWorldContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
     ) -> PrimarySpellTickResult {
         let element = match authority.primary_skill {
-            NativePrimarySkillProfile::Air(_) => WizardElement::Air,
-            NativePrimarySkillProfile::Earth(_) => WizardElement::Earth,
-            NativePrimarySkillProfile::Ether(_) => WizardElement::Ether,
-            NativePrimarySkillProfile::Fire(_) => WizardElement::Fire,
-            NativePrimarySkillProfile::Water(_) => WizardElement::Water,
+            PrimarySkillProfile::Air(_) => WizardElement::Air,
+            PrimarySkillProfile::Earth(_) => WizardElement::Earth,
+            PrimarySkillProfile::Ether(_) => WizardElement::Ether,
+            PrimarySkillProfile::Fire(_) => WizardElement::Fire,
+            PrimarySkillProfile::Water(_) => WizardElement::Water,
             // Native welded casts use the Fire action clock and weapon emitter.
-            NativePrimarySkillProfile::Weld(_) => WizardElement::Fire,
+            PrimarySkillProfile::Weld(_) => WizardElement::Fire,
         };
         let mut result = PrimarySpellTickResult::default();
         let previous = wizard.primary_cast.clone();
         let one_shot = match authority.primary_skill {
-            NativePrimarySkillProfile::Weld(profile) => {
-                profile.cast_kind == NativeWeldCastKind::OneShot
-            }
+            PrimarySkillProfile::Weld(profile) => profile.cast_kind == WeldCastKind::OneShot,
             _ => matches!(element, WizardElement::Ether | WizardElement::Fire),
         };
         // Steam 0x00542D20 multiplies its per-tick debit by the class cast rate.
         let steam_cast_factor = match authority.primary_skill {
-            NativePrimarySkillProfile::Weld(profile) if profile.build_id == 1005 => {
+            PrimarySkillProfile::Weld(profile) if profile.build_id == 1005 => {
                 authority.cast_progress_factor
             }
             _ => 1.0,
@@ -389,14 +387,14 @@ impl SpellState {
         if !one_shot {
             wizard.primary_cast.one_shot_attack_pose_held = false;
         }
-        let native_selected_primary_age = (previous.selected_primary_id
+        let selected_primary_age = (previous.selected_primary_id
             == Some(authority.primary_skill.common().skill_id))
         .then_some(previous.selected_primary_age_ticks);
         wizard.primary_cast.selected_primary_age_ticks =
-            native_selected_primary_age.map_or(0, |age| age + 1);
+            selected_primary_age.map_or(0, |age| age + 1);
         wizard.primary_cast.selected_primary_id = Some(authority.primary_skill.common().skill_id);
         wizard.primary_cast.weapon_pulse =
-            fround(previous.weapon_pulse * NATIVE_PLAYER_WEAPON_PULSE_DECAY);
+            fround(previous.weapon_pulse * PLAYER_WEAPON_PULSE_DECAY);
         if wizard.primary_cast.owns_facing() {
             wizard.set_facing(heading_degrees_from_vector(aim.x, aim.y));
         }
@@ -413,7 +411,7 @@ impl SpellState {
             if previous.channel_active {
                 self.transients.retain(|effect| {
                     !matches!(effect,
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor))
+                    PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor))
                     if actor.common().owner.owner_id==context.owner_id)
                 });
             }
@@ -429,8 +427,8 @@ impl SpellState {
         let mut earth_accepted_underpowered = false;
         if accepted {
             if one_shot && authority.weapon_kind.is_none() {
-                wizard.primary_cast.hand_cast = Some(super::hand_cast::NativeHandCast1::new(
-                    super::hand_cast::native_hand_cast1_rate(
+                wizard.primary_cast.hand_cast = Some(super::hand_cast::HandCast1::new(
+                    super::hand_cast::hand_cast1_rate(
                         authority.primary_skill,
                         authority.hand_cast_factor,
                     ),
@@ -441,10 +439,10 @@ impl SpellState {
             wizard.primary_cast.last_weld_playback_rate = None;
             wizard.primary_cast.last_weld_sound_variant = None;
             match authority.primary_skill {
-                NativePrimarySkillProfile::Air(_) | NativePrimarySkillProfile::Water(_) => {
+                PrimarySkillProfile::Air(_) | PrimarySkillProfile::Water(_) => {
                     wizard.primary_cast.channel_active = true
                 }
-                NativePrimarySkillProfile::Earth(profile) => {
+                PrimarySkillProfile::Earth(profile) => {
                     earth_accepted_underpowered = mana.debit(mana_cost);
                     let surged = profile.rock_surge_chance > 0.0
                         && f64::from(rng.draw_integer(10_000)) < profile.rock_surge_chance * 100.0
@@ -464,9 +462,9 @@ impl SpellState {
                         order,
                     );
                 }
-                NativePrimarySkillProfile::Ether(_) | NativePrimarySkillProfile::Fire(_) => {}
-                NativePrimarySkillProfile::Weld(profile) => {
-                    if profile.cast_kind != NativeWeldCastKind::OneShot {
+                PrimarySkillProfile::Ether(_) | PrimarySkillProfile::Fire(_) => {}
+                PrimarySkillProfile::Weld(profile) => {
+                    if profile.cast_kind != WeldCastKind::OneShot {
                         wizard.primary_cast.channel_active = true;
                     }
                 }
@@ -484,18 +482,17 @@ impl SpellState {
             },
             |hand| {
                 previous.hand_cast.as_ref().is_some_and(|previous| {
-                    native_forward_action_marker_crossed(previous.progress(), hand.progress(), 1.0)
+                    forward_action_marker_crossed(previous.progress(), hand.progress(), 1.0)
                 })
             },
         );
         if one_shot && crossed_marker {
             if element == WizardElement::Ether && authority.primary_skill.common().skill_id == 8 {
-                let charges =
-                    native_ether_blast_release_charges(wizard.primary_cast.ether_blast_charge);
+                let charges = ether_blast_release_charges(wizard.primary_cast.ether_blast_charge);
                 wizard.primary_cast.ether_blast_charge = 0.0;
                 if charges > 0 {
                     let presentation_rng = rng.clone();
-                    let _particles = create_native_ether_blast_particle_program(rng);
+                    let _particles = create_ether_blast_particle_program(rng);
                     let mut common =
                         transient_base(self.next_id, context.owner_id, context.world_key, None);
                     common.painter_registrations =
@@ -505,7 +502,7 @@ impl SpellState {
                             common,
                             birth_tick: context.tick,
                             charges,
-                            origin: native_ether_blast_pulse_origin(wizard.position, aim),
+                            origin: ether_blast_pulse_origin(wizard.position, aim),
                             presentation_rng,
                         },
                     ));
@@ -536,8 +533,8 @@ impl SpellState {
                 }
             });
             for born in births {
-                let birth_mask = native_primary_birth_terrain_exclusion_mask(&born);
-                let flight_mask = native_primary_flight_terrain_exclusion_mask(
+                let birth_mask = primary_birth_terrain_exclusion_mask(&born);
+                let flight_mask = primary_flight_terrain_exclusion_mask(
                     PrimarySpellTraversalActor::Projectile(&born),
                 );
                 let common = born.common();
@@ -614,20 +611,20 @@ impl SpellState {
             });
         if wizard.primary_cast.channel_active {
             match authority.primary_skill {
-                NativePrimarySkillProfile::Weld(_) if raw_held => {
+                PrimarySkillProfile::Weld(_) if raw_held => {
                     let underpowered = mana.debit(mana_cost);
                     self.step_weld_cast(
                         wizard,
                         authority,
                         underpowered,
-                        native_selected_primary_age,
+                        selected_primary_age,
                         context,
                         rng,
                         order,
                         &mut result,
                     );
                 }
-                NativePrimarySkillProfile::Air(_) if raw_held => {
+                PrimarySkillProfile::Air(_) if raw_held => {
                     let underpowered = mana.debit(mana_cost);
                     let origin = emitter(wizard, element, authority.weapon_kind);
                     let (endpoint, midpoint, target_id) =
@@ -665,7 +662,7 @@ impl SpellState {
                     wizard.primary_cast.underpowered = underpowered;
                     self.next_id += 1;
                 }
-                NativePrimarySkillProfile::Water(profile) if raw_held => {
+                PrimarySkillProfile::Water(profile) if raw_held => {
                     let underpowered = mana.debit(mana_cost);
                     let origin = emitter(wizard, element, authority.weapon_kind);
                     result.channel_emissions.push(channel_emission(
@@ -707,7 +704,7 @@ impl SpellState {
                                     start,
                                     end,
                                     None,
-                                    NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+                                    PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
                                 )
                             },
                             underpowered,
@@ -733,7 +730,7 @@ impl SpellState {
                     self.next_id += u64::from(count);
                     wizard.primary_cast.underpowered = underpowered;
                 }
-                NativePrimarySkillProfile::Earth(profile) => {
+                PrimarySkillProfile::Earth(profile) => {
                     let underpowered =
                         if accepted { earth_accepted_underpowered } else { mana.debit(mana_cost) };
                     let origin = emitter(wizard, element, authority.weapon_kind);
@@ -754,7 +751,7 @@ impl SpellState {
                         {
                             previous_charge
                         } else {
-                            advance_native_earth_boulder_charge(
+                            advance_earth_boulder_charge(
                                 previous_charge,
                                 profile.growth_factor,
                                 spell.maximum_charge,
@@ -826,7 +823,7 @@ impl SpellState {
             wizard.primary_cast.channel_active = false;
             wizard.primary_cast.target_id = None;
             wizard.primary_cast.underpowered = false;
-            if matches!(authority.primary_skill, NativePrimarySkillProfile::Weld(_)) {
+            if matches!(authority.primary_skill, PrimarySkillProfile::Weld(_)) {
                 self.release_owned_weld_persistent_actors(
                     context.owner_id,
                     context.tick,
@@ -845,8 +842,8 @@ impl SpellState {
     fn create_earth_boulder(
         &mut self,
         wizard: &HubWizard,
-        profile: &NativeEarthPrimarySkillProfile,
-        weapon: Option<NativePlayerWeaponKind>,
+        profile: &EarthPrimarySkillProfile,
+        weapon: Option<PlayerWeaponKind>,
         context: &PrimarySpellWorldContext<'_>,
         surged: bool,
         order: &mut WorldPainterOrder,
@@ -856,7 +853,7 @@ impl SpellState {
         let charge = if surged {
             profile.maximum_charge
         } else {
-            advance_native_earth_boulder_charge(
+            advance_earth_boulder_charge(
                 initial,
                 profile.growth_factor,
                 profile.maximum_charge,
@@ -908,7 +905,7 @@ impl SpellState {
                 EARTH_BOULDER_IDENTITY_ORIENTATION
             },
             remaining_damage: if surged {
-                native_earth_boulder_released_damage(profile.common.damage_minimum, charge, 1.0)
+                earth_boulder_released_damage(profile.common.damage_minimum, charge, 1.0)
             } else {
                 profile.common.damage_minimum
             },
@@ -921,7 +918,7 @@ impl SpellState {
     fn advance_projectiles(
         &mut self,
         context: &PrimarySpellEpochContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
         result: &mut PrimarySpellTickResult,
     ) {
@@ -942,9 +939,9 @@ impl SpellState {
                         common.position.y + common.velocity.y * 5.0,
                     ),
                     0.0,
-                    native_primary_flight_terrain_exclusion_mask(
-                        PrimarySpellTraversalActor::Projectile(spell),
-                    ),
+                    primary_flight_terrain_exclusion_mask(PrimarySpellTraversalActor::Projectile(
+                        spell,
+                    )),
                 )
             {
                 self.projectile_terrain_impact(
@@ -993,13 +990,13 @@ impl SpellState {
         spell: &PrimarySpellProjectile,
         tick: u64,
         enhanced_effects: bool,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
         result: &mut PrimarySpellTickResult,
     ) {
         match spell {
             PrimarySpellProjectile::Weld(spell) => {
-                let birth = NativeWeldActorBirth {
+                let birth = WeldActorBirth {
                     build_id: spell.build_id,
                     direction: spell.common.direction,
                     id: self.next_id,
@@ -1026,9 +1023,9 @@ impl SpellState {
                     if spell.build_id == 1001 {
                         result.frost_missile_world_contacts.push(spell.clone());
                     }
-                    self.transients.push(PrimarySpellTransient::Weld(
-                        NativeWeldWorldActor::Impact(create_primary_spell_weld_impact(birth, rng)),
-                    ));
+                    self.transients.push(PrimarySpellTransient::Weld(WeldWorldActor::Impact(
+                        create_primary_spell_weld_impact(birth, rng),
+                    )));
                     self.next_id += 1;
                 }
             }
@@ -1071,7 +1068,7 @@ impl SpellState {
         &mut self,
         aim: Vec2,
         context: &PrimarySpellWorldContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
         result: &mut PrimarySpellTickResult,
     ) {
@@ -1105,11 +1102,8 @@ impl SpellState {
             spell.maximum_charge = spell.common.charge;
             spell.common.phase = PrimarySpellProjectilePhase::Flight;
             spell.common.position = position;
-            spell.remaining_damage = native_earth_boulder_released_damage(
-                spell.remaining_damage,
-                spell.common.charge,
-                1.0,
-            );
+            spell.remaining_damage =
+                earth_boulder_released_damage(spell.remaining_damage, spell.common.charge, 1.0);
             spell.common.velocity = velocity;
             let next_position =
                 Vec2::new(fround(position.x + velocity.x), fround(position.y + velocity.y));
@@ -1169,13 +1163,13 @@ fn finish_ether_blast_tick(
         wizard.primary_cast.ether_blast_charge = 0.0;
         return;
     }
-    let NativePrimarySkillProfile::Ether(profile) = authority.primary_skill else {
+    let PrimarySkillProfile::Ether(profile) = authority.primary_skill else {
         return;
     };
     if !authority.alive || profile.common.skill_id != 8 {
         return;
     }
-    let charge = advance_native_ether_blast_charge(
+    let charge = advance_ether_blast_charge(
         wizard.primary_cast.ether_blast_charge,
         profile.blast_charge_capacity,
         available_mana >= mana_cost,
@@ -1184,7 +1178,7 @@ fn finish_ether_blast_tick(
     wizard.primary_cast.ether_blast_charge = charge.charge;
     if charge.crossed_integer {
         wizard.primary_cast.ether_blast_charge_cue_sequence += 1;
-        wizard.primary_cast.weapon_pulse = NATIVE_ETHER_BLAST_WEAPON_PULSE;
+        wizard.primary_cast.weapon_pulse = ETHER_BLAST_WEAPON_PULSE;
     }
 }
 
@@ -1199,7 +1193,7 @@ pub(super) fn air_geometry(
         wizard.position,
         range_endpoint,
         None,
-        NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+        PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
     )
     .unwrap_or(range_endpoint);
     let has_line_of_sight = |target: &PrimarySpellTarget| {
@@ -1207,7 +1201,7 @@ pub(super) fn air_geometry(
             wizard.position,
             target.position,
             Some(&target.id),
-            NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+            PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
         )
         .is_none()
     };
@@ -1231,7 +1225,7 @@ pub(super) fn air_geometry(
             wizard.position,
             attachment,
             Some(&target.id),
-            NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+            PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
         )
         .unwrap_or(attachment);
         endpoint = Vec2::new(clipped.x, clipped.y + AIR_PRIMARY_TARGET_Y_OFFSET);
@@ -1243,7 +1237,7 @@ pub(super) fn air_geometry(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn channel_emission(
     id: u64,
-    profile: &NativePrimarySkillProfile,
+    profile: &PrimarySkillProfile,
     origin: Vec2,
     endpoint: Option<Vec2>,
     query_origin: Vec2,
@@ -1259,8 +1253,8 @@ pub(super) fn channel_emission(
         endpoint,
         id,
         kind: match profile {
-            NativePrimarySkillProfile::Air(_) => PrimarySpellChannelKind::Air,
-            NativePrimarySkillProfile::Weld(_) => PrimarySpellChannelKind::Weld,
+            PrimarySkillProfile::Air(_) => PrimarySpellChannelKind::Air,
+            PrimarySkillProfile::Weld(_) => PrimarySpellChannelKind::Weld,
             _ => PrimarySpellChannelKind::Water,
         },
         mana_cost,

@@ -10,26 +10,25 @@ mod support;
 use serde_json::{Value, json};
 use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::secondary::golem::NativeGolemIncomingDamage;
+use solomon_sim::secondary::golem::GolemIncomingDamage;
 use solomon_sim::secondary::presentation::{
-    NativeGolemDeathMember, NativeSecondaryBlend, NativeSecondaryPresentationPlan,
-    NativeSecondaryQueueFamily, native_golem_death_member_plan,
-    native_golem_death_presentation_plan,
+    GolemDeathMember, SecondaryBlend, SecondaryPresentationPlan, SecondaryQueueFamily,
+    golem_death_member_plan, golem_death_presentation_plan,
 };
 use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondarySimulationState, NativeSecondaryTarget,
-    NativeSecondaryTickContext, NativeSecondaryWorld,
+    SecondaryActorKind, SecondarySimulationState, SecondaryTarget, SecondaryTickContext,
+    SecondaryWorld,
 };
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 use std::collections::BTreeMap;
 
 struct OpenWorld;
-impl NativeSecondaryWorld for OpenWorld {
+impl SecondaryWorld for OpenWorld {
     fn dampen_candidates(
         &self,
         _: &str,
         _: Vec2,
-    ) -> solomon_sim::secondary::NativeSecondaryDampenCandidates {
+    ) -> solomon_sim::secondary::SecondaryDampenCandidates {
         Default::default()
     }
     fn phasing_destination(&self, _: &str, _: Vec2, _: Vec2) -> Option<Vec2> {
@@ -41,46 +40,38 @@ impl NativeSecondaryWorld for OpenWorld {
     fn golem_movement(&self, _: &str, _: &str, _: Vec2, requested: Vec2, _: f64) -> Vec2 {
         requested
     }
-    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut NativeRng) -> Vec2 {
+    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut Rng) -> Vec2 {
         requested
     }
-    fn teleport_destination(&self, _: &str, _: &mut NativeRng) -> Vec2 {
+    fn teleport_destination(&self, _: &str, _: &mut Rng) -> Vec2 {
         Vec2::ZERO
     }
-    fn target(&self, _: &str, _: usize) -> Option<NativeSecondaryTarget> {
+    fn target(&self, _: &str, _: usize) -> Option<SecondaryTarget> {
         None
     }
-    fn targets(&self, _: &str, _: Vec2, _: f64) -> Vec<NativeSecondaryTarget> {
+    fn targets(&self, _: &str, _: Vec2, _: f64) -> Vec<SecondaryTarget> {
         Vec::new()
     }
 }
-fn snapshot(
-    state: &NativeSecondarySimulationState,
-    order: WorldPainterOrder,
-    received: Value,
-) -> Value {
+fn snapshot(state: &SecondarySimulationState, order: WorldPainterOrder, received: Value) -> Value {
     let mut death_plans = Vec::new();
     for actor in state.actors.iter() {
-        if actor.kind != NativeSecondaryActorKind::GolemDeath {
+        if actor.kind != SecondaryActorKind::GolemDeath {
             continue;
         }
         for (member, plan) in [
-            (json!("all"), native_golem_death_presentation_plan(actor)),
+            (json!("all"), golem_death_presentation_plan(actor)),
             (
                 json!(0),
-                native_golem_death_member_plan(
+                golem_death_member_plan(
                     actor,
                     actor.age_ticks as f64,
-                    NativeGolemDeathMember::Fragment(0),
+                    GolemDeathMember::Fragment(0),
                 ),
             ),
             (
                 json!("star"),
-                native_golem_death_member_plan(
-                    actor,
-                    actor.age_ticks as f64,
-                    NativeGolemDeathMember::Star,
-                ),
+                golem_death_member_plan(actor, actor.age_ticks as f64, GolemDeathMember::Star),
             ),
         ] {
             death_plans
@@ -109,14 +100,14 @@ fn snapshot(
     }))
 }
 
-fn plan_projection(plan: &NativeSecondaryPresentationPlan) -> Value {
+fn plan_projection(plan: &SecondaryPresentationPlan) -> Value {
     let draws: Vec<_> = plan
         .draws
         .iter()
         .map(|draw| {
             json!({
                 "alpha": draw.alpha, "atlas": draw.atlas.as_str(),
-                "blend": if draw.blend == NativeSecondaryBlend::Add { "add" } else { "normal" },
+                "blend": if draw.blend == SecondaryBlend::Add { "add" } else { "normal" },
                 "entry": draw.entry, "offset": draw.offset, "role": draw.role,
                 "rotationRadians": draw.rotation_radians, "scaleX": draw.scale_x,
                 "scaleY": draw.scale_y, "tint": draw.tint,
@@ -125,7 +116,7 @@ fn plan_projection(plan: &NativeSecondaryPresentationPlan) -> Value {
         .collect();
     json!({
         "root": plan.root, "worldY": plan.world_y, "draws": draws,
-        "queueFamily": if plan.queue_family == NativeSecondaryQueueFamily::OrdinaryDynamic {
+        "queueFamily": if plan.queue_family == SecondaryQueueFamily::OrdinaryDynamic {
             "ordinary-dynamic"
         } else { "zanim" },
     })
@@ -143,7 +134,7 @@ fn current_golem_assembly_and_death_keep_real_motion_after_the_owner_leaves() {
         let mut belt = PlayerBeltComponent::new(&book);
         belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 45 });
         let wizard = HubWizard::at(Vec2::ZERO);
-        let mut state = NativeSecondarySimulationState::new(91);
+        let mut state = SecondarySimulationState::new(91);
         let mut order = WorldPainterOrder::default();
         let frames = case["frames"].as_array().unwrap();
         let mut frame_index = 0;
@@ -160,7 +151,7 @@ fn current_golem_assembly_and_death_keep_real_motion_after_the_owner_leaves() {
                 BTreeMap::from([("player".to_owned(), authority)])
             };
             state.step(
-                &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+                &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
                 &mut OpenWorld,
                 Some(&mut order),
             );
@@ -169,12 +160,12 @@ fn current_golem_assembly_and_death_keep_real_motion_after_the_owner_leaves() {
                 let actor_id = state
                     .actors
                     .iter()
-                    .find(|actor| actor.kind == NativeSecondaryActorKind::Golem)
+                    .find(|actor| actor.kind == SecondaryActorKind::Golem)
                     .unwrap()
                     .id;
                 let result = state.apply_golem_damage(
                     actor_id,
-                    NativeGolemIncomingDamage {
+                    GolemIncomingDamage {
                         primary_damage: 0.0,
                         reflectable_physical_source_in_range: false,
                         secondary_damage: 100000.0,

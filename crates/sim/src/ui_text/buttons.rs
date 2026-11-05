@@ -6,10 +6,10 @@
 
 use crate::hud::HudRect;
 
-use super::{NativeUiTextSpec, layout_native_ui_text, native_ui_glyph_ink_bounds};
+use super::{UiTextSpec, layout_ui_text, ui_glyph_ink_bounds};
 
-pub const NATIVE_UI_BUTTON_LABEL_Y_OFFSET: f64 = 9.0;
-pub const NATIVE_UI_BUTTON_PRESSED_OFFSET: f64 = 6.0;
+pub const UI_BUTTON_LABEL_Y_OFFSET: f64 = 9.0;
+pub const UI_BUTTON_PRESSED_OFFSET: f64 = 6.0;
 const SURROUND: f64 = 6.0;
 
 // Nontransparent right edge (exclusive) of every UI.54 row, measured from the
@@ -26,12 +26,12 @@ const SURROUND_INK_RIGHT: [u8; 85] = [
 /// Chrome and text scales remain independent. The caller may retain its explicit
 /// baseline or centre the fitted font's baseline offset before applying a press.
 #[must_use]
-pub fn fit_native_ui_button_label(
-    mut spec: NativeUiTextSpec<'_>,
+pub fn fit_ui_button_label(
+    mut spec: UiTextSpec<'_>,
     bounds: HudRect,
     chrome_scale: f64,
-) -> NativeUiTextSpec<'_> {
-    let layout = layout_native_ui_text(&spec);
+) -> UiTextSpec<'_> {
+    let layout = layout_ui_text(&spec);
     if layout.glyphs.is_empty() {
         return spec;
     }
@@ -44,7 +44,7 @@ pub fn fit_native_ui_button_label(
     let mut top = baseline_offset.min(0.0);
     let mut bottom = baseline_offset.max(0.0);
     for glyph in &layout.glyphs {
-        let ink = native_ui_glyph_ink_bounds(glyph);
+        let ink = ui_glyph_ink_bounds(glyph);
         reach = reach
             .max((center_x - ink.left) / chrome_scale)
             .max((ink.left + ink.width - center_x) / chrome_scale);
@@ -53,14 +53,14 @@ pub fn fit_native_ui_button_label(
     }
     let center = bounds.height / chrome_scale / 2.0 + SURROUND;
     let first_row = (center + top).floor().max(0.0) as usize;
-    let last_row = (center + bottom + NATIVE_UI_BUTTON_PRESSED_OFFSET)
+    let last_row = (center + bottom + UI_BUTTON_PRESSED_OFFSET)
         .ceil()
         .clamp(0.0, SURROUND_INK_RIGHT.len() as f64) as usize;
     let end_ink =
         (first_row..last_row).map(|row| SURROUND_INK_RIGHT[row]).max().map_or(0.0, f64::from);
     let half_width = bounds.width / chrome_scale / 2.0
         - (end_ink - SURROUND).max(0.0)
-        - NATIVE_UI_BUTTON_PRESSED_OFFSET;
+        - UI_BUTTON_PRESSED_OFFSET;
     assert!(half_width > 0.0, "native UI button has no room for label ink");
     spec.scale *= (half_width / reach).min(1.0);
     spec
@@ -69,16 +69,16 @@ pub fn fit_native_ui_button_label(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::native_ui_text::NativeUiFontName;
+    use crate::ui_text::UiFontName;
 
-    fn centered_label(text: &str, bounds: HudRect, text_scale: f64) -> NativeUiTextSpec<'_> {
-        NativeUiTextSpec {
+    fn centered_label(text: &str, bounds: HudRect, text_scale: f64) -> UiTextSpec<'_> {
+        UiTextSpec {
             scale: text_scale,
-            ..NativeUiTextSpec::new(
-                NativeUiFontName::Menu,
+            ..UiTextSpec::new(
+                UiFontName::Menu,
                 text,
                 bounds.x + bounds.width / 2.0,
-                bounds.y + bounds.height / 2.0 + NATIVE_UI_BUTTON_LABEL_Y_OFFSET * text_scale,
+                bounds.y + bounds.height / 2.0 + UI_BUTTON_LABEL_Y_OFFSET * text_scale,
             )
         }
     }
@@ -88,20 +88,19 @@ mod tests {
         for scale in [0.55, 1.0, 1.6] {
             for text in ["LEAVE COLLEGE", "LEAVE PARTY"] {
                 let bounds = HudRect::new(100.0, 200.0, 260.0 * scale, 69.0 * scale);
-                let label =
-                    fit_native_ui_button_label(centered_label(text, bounds, scale), bounds, scale);
+                let label = fit_ui_button_label(centered_label(text, bounds, scale), bounds, scale);
                 for pressed in [false, true] {
-                    let press = if pressed { NATIVE_UI_BUTTON_PRESSED_OFFSET * scale } else { 0.0 };
-                    let layout = layout_native_ui_text(&NativeUiTextSpec {
+                    let press = if pressed { UI_BUTTON_PRESSED_OFFSET * scale } else { 0.0 };
+                    let layout = layout_ui_text(&UiTextSpec {
                         x: label.x + press,
                         y: bounds.y
                             + bounds.height / 2.0
-                            + NATIVE_UI_BUTTON_LABEL_Y_OFFSET * label.scale
+                            + UI_BUTTON_LABEL_Y_OFFSET * label.scale
                             + press,
                         ..label
                     });
                     for glyph in &layout.glyphs {
-                        let ink = native_ui_glyph_ink_bounds(glyph);
+                        let ink = ui_glyph_ink_bounds(glyph);
                         // UI.54's complete label band ends at source x=50; the
                         // cap begins six units outside the button's body.
                         assert!(
@@ -129,7 +128,7 @@ mod tests {
         ] {
             let bounds = HudRect::new(0.0, 0.0, width * scale, 69.0 * scale);
             let label = centered_label(text, bounds, scale);
-            assert_eq!(fit_native_ui_button_label(label, bounds, scale), label, "{text:?}");
+            assert_eq!(fit_ui_button_label(label, bounds, scale), label, "{text:?}");
         }
     }
 
@@ -141,7 +140,7 @@ mod tests {
         let bounds = HudRect::new(0.0, 0.0, 260.0, 69.0);
         for (text, reach) in [("LEAVE COLLEGE", 114.0), ("LEAVE PARTY", 94.0)] {
             assert_eq!(
-                fit_native_ui_button_label(centered_label(text, bounds, 1.0), bounds, 1.0).scale,
+                fit_ui_button_label(centered_label(text, bounds, 1.0), bounds, 1.0).scale,
                 80.0 / reach
             );
         }
@@ -152,27 +151,22 @@ mod tests {
         for (text, width, height) in [("Boasts", 220.0, 50.0), ("CLOTH", 240.0, 44.0)] {
             let bounds = HudRect::new(0.0, 0.0, width, height);
             let label = centered_label(text, bounds, 1.0);
-            assert_eq!(fit_native_ui_button_label(label, bounds, height / 69.0), label, "{text}");
+            assert_eq!(fit_ui_button_label(label, bounds, height / 69.0), label, "{text}");
         }
         let bounds = HudRect::new(0.0, 0.0, 250.0, 44.0);
-        let label = NativeUiTextSpec {
+        let label = UiTextSpec {
             scale: 44.0 / 69.0,
-            ..NativeUiTextSpec::new(
-                NativeUiFontName::Menu,
-                "RENAME SACK",
-                125.0,
-                42.5 * 44.0 / 69.0,
-            )
+            ..UiTextSpec::new(UiFontName::Menu, "RENAME SACK", 125.0, 42.5 * 44.0 / 69.0)
         };
-        assert_eq!(fit_native_ui_button_label(label, bounds, 44.0 / 69.0), label);
+        assert_eq!(fit_ui_button_label(label, bounds, 44.0 / 69.0), label);
     }
 
     #[test]
     fn narrow_notice_actions_fit_while_retaining_their_explicit_native_baseline() {
         let bounds = HudRect::new(0.0, 0.0, 197.0, 69.0);
         for text in ["UNFORGE", "CANCEL", "OKAY"] {
-            let original = NativeUiTextSpec::new(NativeUiFontName::Menu, text, 98.5, 45.0);
-            let fitted = fit_native_ui_button_label(original, bounds, 1.0);
+            let original = UiTextSpec::new(UiFontName::Menu, text, 98.5, 45.0);
+            let fitted = fit_ui_button_label(original, bounds, 1.0);
             assert_eq!(fitted.x, original.x);
             assert_eq!(fitted.y, original.y);
             if text == "OKAY" {
@@ -181,13 +175,13 @@ mod tests {
                 assert!(fitted.scale < 1.0, "{text}");
             }
             for press in [0.0, 6.0] {
-                let layout = layout_native_ui_text(&NativeUiTextSpec {
+                let layout = layout_ui_text(&UiTextSpec {
                     x: fitted.x + press,
                     y: fitted.y + press,
                     ..fitted
                 });
                 for glyph in &layout.glyphs {
-                    let ink = native_ui_glyph_ink_bounds(glyph);
+                    let ink = ui_glyph_ink_bounds(glyph);
                     assert!(ink.left >= 45.0 - 1e-9, "{text} left");
                     assert!(ink.left + ink.width <= 152.0 + 1e-9, "{text} right");
                 }

@@ -4,28 +4,28 @@ use crate::float::fround;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHardenState {
+pub struct HardenState {
     pub armor: f64,
     pub coating: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeHardenChannel {
+pub enum HardenChannel {
     Water,
     WeakWater,
     Other,
     Idle,
 }
 
-impl NativeHardenState {
-    pub fn step(&mut self, channel: NativeHardenChannel, armor_per_tick: f64, maximum_armor: f64) {
-        if matches!(channel, NativeHardenChannel::WeakWater | NativeHardenChannel::Idle) {
+impl HardenState {
+    pub fn step(&mut self, channel: HardenChannel, armor_per_tick: f64, maximum_armor: f64) {
+        if matches!(channel, HardenChannel::WeakWater | HardenChannel::Idle) {
             if self.coating > 0.0 {
                 *self = Self::default();
             }
             return;
         }
-        if channel != NativeHardenChannel::Water || armor_per_tick <= 0.0 {
+        if channel != HardenChannel::Water || armor_per_tick <= 0.0 {
             return;
         }
         self.armor = fround(maximum_armor.min(self.armor + armor_per_tick));
@@ -34,7 +34,7 @@ impl NativeHardenState {
 }
 
 #[must_use]
-pub fn native_harden_break_angle_step(coating: f64) -> Option<f64> {
+pub fn harden_break_angle_step(coating: f64) -> Option<f64> {
     if coating <= 0.1_f32 as f64 {
         None
     } else if coating < 0.2_f32 as f64 {
@@ -51,12 +51,7 @@ pub fn native_harden_break_angle_step(coating: f64) -> Option<f64> {
 }
 
 #[must_use]
-pub fn interpolate_native_harden_coating(
-    older: f64,
-    newer: f64,
-    same_cast: bool,
-    blend: f64,
-) -> f64 {
+pub fn interpolate_harden_coating(older: f64, newer: f64, same_cast: bool, blend: f64) -> f64 {
     if same_cast && newer >= older {
         older + (newer - older) * blend
     } else if blend < 1.0 {

@@ -7,9 +7,9 @@ use solomon_sim::hub::regions::{HubRegion, HubTransition, HubTransitionPhase};
 use solomon_sim::hub::world::{HubParticipantMotion, step_hub_participants};
 use solomon_sim::hub::{PLAYER_CHARACTER_RADIUS, is_traversable_against_segments};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::rng::NativeRng;
+use solomon_sim::rng::Rng;
 use solomon_sim::session::{GameSession, GameSessionInput, GameSessionOptions};
-use solomon_web::presentation::NativePresentationTimeline;
+use solomon_web::presentation::PresentationTimeline;
 
 #[derive(Clone, Copy)]
 struct FixedActor {
@@ -99,7 +99,7 @@ fn skorcha_at(variant: usize) -> HubSkorcha {
         hat_phase_degrees: 0.0,
         hat_rate_degrees_per_tick: 0.0,
         position: HUB_SKORCHA_PLACEMENTS[variant],
-        rng: NativeRng::new(123),
+        rng: Rng::new(123),
         variant,
     }
 }
@@ -126,8 +126,8 @@ fn step_authority(session: &mut GameSession, movement: Vec2) {
     session.ticks += 1;
 }
 
-fn timeline_for(session: &GameSession, movement: Vec2) -> NativePresentationTimeline {
-    let mut timeline = NativePresentationTimeline::new(100, 20);
+fn timeline_for(session: &GameSession, movement: Vec2) -> PresentationTimeline {
+    let mut timeline = PresentationTimeline::new(100, 20);
     let now = session.ticks as f64 * 10.0;
     timeline.push(session, now, "local", None).unwrap();
     timeline
@@ -138,7 +138,7 @@ fn timeline_for(session: &GameSession, movement: Vec2) -> NativePresentationTime
 }
 
 fn assert_predicted_tick(
-    timeline: &mut NativePresentationTimeline,
+    timeline: &mut PresentationTimeline,
     session: &mut GameSession,
     movement: Vec2,
     label: &str,

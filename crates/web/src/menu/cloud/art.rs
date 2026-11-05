@@ -3,7 +3,7 @@
 use super::super::widgets;
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, Rect, Ui, Vec2};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign};
 pub(super) struct CloudArt {
     pub ui: StockAtlas,
     pub controls: StockAtlas,
@@ -167,7 +167,7 @@ impl CloudArt {
             scale,
             Color32::WHITE,
         )?;
-        self.ui.paint_native_frame_scaled(
+        self.ui.paint_stock_frame_scaled(
             frame,
             ui.painter(),
             17,
@@ -220,7 +220,7 @@ impl CloudArt {
     }
     pub fn panel(&self, frame: &UiFrame<'_>, ui: &Ui, rect: Rect) -> Result<(), String> {
         self.ui.paint_tiles(frame, ui.painter(), 49, rect, 1.0, Color32::WHITE)?;
-        self.ui.paint_native_frame(
+        self.ui.paint_stock_frame(
             frame,
             ui.painter(),
             17,
@@ -294,14 +294,14 @@ impl CloudArt {
             frame,
             ui,
             label,
-            NativeUiFontName::Menu,
+            UiFontName::Menu,
             egui::pos2(
                 rect.center().x,
                 rect.top() + chrome + (45.0 + if selected { 0.0 } else { 8.0 }) * scale,
             ),
             scale,
             0xd9ba70,
-            NativeUiTextAlign::Center,
+            UiTextAlign::Center,
         );
         Ok(())
     }
@@ -345,12 +345,12 @@ impl CloudArt {
             crate::gpu_ui::native_text(
                 frame,
                 ui.painter(),
-                &solomon_sim::native_ui_text::NativeUiTextSpec {
+                &solomon_sim::ui_text::UiTextSpec {
                     alpha,
                     scale: f64::from(scale),
                     tint: 0xd9ba70,
-                    ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
-                        NativeUiFontName::Menu,
+                    ..solomon_sim::ui_text::UiTextSpec::new(
+                        UiFontName::Menu,
                         &label.to_lowercase(),
                         f64::from(rect.center().x + press.x),
                         f64::from(rect.center().y + 8.0 * scale + press.y),

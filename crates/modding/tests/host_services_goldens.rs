@@ -37,20 +37,50 @@ struct Case {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", rename_all_fields = "camelCase")]
 enum Input {
-    Purchase { content_id: String, row: usize },
-    Xp { amount: f64 },
-    Step { events: Vec<Event>, tick: u64 },
-    Choose { content_id: String, mod_sequence: u64, native_sequence: u64 },
-    Bind { slot: u32, content_id: Option<String> },
-    Portal { input: Portal },
-    Room { room: usize },
+    Purchase {
+        content_id: String,
+        row: usize,
+    },
+    Xp {
+        amount: f64,
+    },
+    Step {
+        events: Vec<Event>,
+        tick: u64,
+    },
+    Choose {
+        content_id: String,
+        mod_sequence: u64,
+        #[serde(rename = "nativeSequence")]
+        stock_sequence: u64,
+    },
+    Bind {
+        slot: u32,
+        content_id: Option<String>,
+    },
+    Portal {
+        input: Portal,
+    },
+    Room {
+        room: usize,
+    },
     Return,
-    Ui { input: Ui },
+    Ui {
+        input: Ui,
+    },
     Unequip,
-    Reforge { content_id: String, service: usize, item_id: u64 },
+    Reforge {
+        content_id: String,
+        service: usize,
+        item_id: u64,
+    },
     Enter,
-    Activate { content_id: Option<String> },
-    Tick { tick: u64 },
+    Activate {
+        content_id: Option<String>,
+    },
+    Tick {
+        tick: u64,
+    },
     Drain,
 }
 #[derive(Deserialize)]
@@ -181,8 +211,8 @@ fn authored_services_and_complete_client_projections_match_the_source_host() {
                 host.step(&events, tick, "host-game-run", &context, &mut game)
                     .map(|value| json!(value))
             }
-            Input::Choose { content_id, mod_sequence, native_sequence } => host
-                .choose_skill("player-1", &content_id, mod_sequence, native_sequence, &mut game)
+            Input::Choose { content_id, mod_sequence, stock_sequence } => host
+                .choose_skill("player-1", &content_id, mod_sequence, stock_sequence, &mut game)
                 .map(|()| Value::Null),
             Input::Bind { slot, content_id } => host
                 .bind_mod_quickbar("player-1", slot, content_id.as_deref())
@@ -263,7 +293,7 @@ fn authored_services_and_complete_client_projections_match_the_source_host() {
                         "Source host births use anywhere placement"
                     );
                     assert!(spawn.flags.is_empty(), "Source host births carry no native flags");
-                    rows.push(json!({"enemyToken":spawn.enemy_token.id(),"flags":[],"id":spawn.id,"locationPolicy":"anywhere","nativeTypeId":spawn.native_type_id,"position":spawn.position,"spawnTick":spawn.spawn_tick,"waveOrdinal":spawn.wave_ordinal}));
+                    rows.push(json!({"enemyToken":spawn.enemy_token.id(),"flags":[],"id":spawn.id,"locationPolicy":"anywhere","nativeTypeId":spawn.type_id,"position":spawn.position,"spawnTick":spawn.spawn_tick,"waveOrdinal":spawn.wave_ordinal}));
                 }
                 Ok(json!({"spawns":rows,"presentation":host.drain_presentation().unwrap()}))
             }

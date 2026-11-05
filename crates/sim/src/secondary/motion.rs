@@ -1,18 +1,18 @@
 //! Shared secondary motion from `native-expanding-wave.ts` and `native-stoneskin.ts`.
 
 use crate::float::{cos, fround, sin};
-use crate::secondary::NativeSecondaryActorState;
-use crate::{NativeRng, Vec2};
+use crate::secondary::SecondaryActorState;
+use crate::{Rng, Vec2};
 
 /// Both Comet debris and Stoneskin chips retain the same ordinary Bouncer fields.
 /// The Source converts its stored radians to degrees for each shared motion step.
 pub(super) fn step_secondary_bouncer(
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     tick: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> bool {
-    let mut motion = crate::death_animations::NativeBouncerMotion {
+    let mut motion = crate::death_animations::BouncerMotion {
         bounce_velocity: source.endpoint.y,
         height: source.phase,
         position: source.position,
@@ -21,7 +21,7 @@ pub(super) fn step_secondary_bouncer(
         velocity: source.velocity,
         vertical_velocity: source.endpoint.x,
     };
-    let skipped = crate::death_animations::step_native_bouncer_motion(&mut motion, tick, rng);
+    let skipped = crate::death_animations::step_bouncer_motion(&mut motion, tick, rng);
     let life = if skipped { source.alpha } else { fround(source.alpha - (0.015_f32 as f64)) };
     actor.alpha = life.max(0.0);
     actor.endpoint = Vec2::new(motion.vertical_velocity, motion.bounce_velocity);
@@ -33,11 +33,11 @@ pub(super) fn step_secondary_bouncer(
     life > 0.0
 }
 
-pub const NATIVE_STONESKIN_GRID_SIDE: usize = 10;
-pub const NATIVE_STONESKIN_GRID_COMPONENTS: usize = 200;
+pub const STONESKIN_GRID_SIDE: usize = 10;
+pub const STONESKIN_GRID_COMPONENTS: usize = 200;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeExpandingWave {
+pub struct ExpandingWave {
     pub radius: f64,
     pub growth: f64,
     pub scalar: f64,
@@ -46,7 +46,7 @@ pub struct NativeExpandingWave {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeExpandingWaveStep {
+pub struct ExpandingWaveStep {
     pub radius: f64,
     pub scalar: f64,
     pub life: f64,
@@ -56,10 +56,7 @@ pub struct NativeExpandingWaveStep {
 
 /// Camera proposals consume one native unit-vector draw even on the wave's last tick.
 #[must_use]
-pub fn step_native_expanding_wave(
-    source: NativeExpandingWave,
-    rng: &mut NativeRng,
-) -> NativeExpandingWaveStep {
+pub fn step_expanding_wave(source: ExpandingWave, rng: &mut Rng) -> ExpandingWaveStep {
     let radius = fround(source.radius + source.growth);
     let vector = rng.draw_unit_vector();
     let displacement = Vec2::new(
@@ -67,7 +64,7 @@ pub fn step_native_expanding_wave(
         fround(fround(vector.y * 3.0) * source.scalar),
     );
     let life = fround(source.life - (0.01_f32 as f64));
-    NativeExpandingWaveStep {
+    ExpandingWaveStep {
         radius,
         displacement,
         life,
@@ -82,10 +79,10 @@ pub fn step_native_expanding_wave(
 
 /// `Game::MakeStoneCoords`: both quality modes generate the complete grid and grey bank.
 #[must_use]
-pub fn create_native_stoneskin_warp(rng: &mut NativeRng) -> Vec<f64> {
-    let mut positions = Vec::with_capacity(NATIVE_STONESKIN_GRID_COMPONENTS);
-    for x in 0..NATIVE_STONESKIN_GRID_SIDE {
-        for y in 0..NATIVE_STONESKIN_GRID_SIDE {
+pub fn create_stoneskin_warp(rng: &mut Rng) -> Vec<f64> {
+    let mut positions = Vec::with_capacity(STONESKIN_GRID_COMPONENTS);
+    for x in 0..STONESKIN_GRID_SIDE {
+        for y in 0..STONESKIN_GRID_SIDE {
             if rng.draw_integer(3) == 1 {
                 rng.draw_scaled_float(0.5, false);
             }

@@ -2,7 +2,7 @@
 //! `spell-combat/channels.ts` and its native pushback helpers.
 
 use crate::spells::model::PrimarySpellTransient;
-use crate::spells::weld::NativeWeldWorldActor;
+use crate::spells::weld::WeldWorldActor;
 
 use super::*;
 
@@ -12,11 +12,11 @@ fn channel_birth(
     tick: u64,
     origin: Vec2,
     direction: Vec2,
-) -> NativeWeldActorBirth<'_> {
-    let NativePrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
+) -> WeldActorBirth<'_> {
+    let PrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
         unreachable!("Weld channel profile")
     };
-    NativeWeldActorBirth {
+    WeldActorBirth {
         build_id: profile.build_id,
         direction,
         id,
@@ -30,7 +30,7 @@ fn channel_birth(
 
 impl ContactWork<'_, '_> {
     pub(super) fn resolve_weld_channel(&mut self, emission: &PrimarySpellChannelEmission) {
-        let NativePrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
+        let PrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
             panic!("Weld channel requires its own profile")
         };
         match profile.build_id {
@@ -42,18 +42,14 @@ impl ContactWork<'_, '_> {
     }
 
     fn resolve_flame_lash(&mut self, emission: &PrimarySpellChannelEmission) {
-        use crate::spells::special_death::{
-            NativeSpellSpecialDeathKind, NativeSpellSpecialDeathPayload,
-        };
-        let NativePrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
-            unreachable!()
-        };
+        use crate::spells::special_death::{SpellSpecialDeathKind, SpellSpecialDeathPayload};
+        let PrimarySkillProfile::Weld(profile) = &emission.primary_skill else { unreachable!() };
         let main = emission.flame_lash_presentation.as_ref();
         let target_id = if let Some(main) = main {
             main.target_id.clone()
         } else {
             self.source.transients.iter().find_map(|effect| {
-                if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Channel(channel)) = effect
+                if let PrimarySpellTransient::Weld(WeldWorldActor::Channel(channel)) = effect
                     && channel.common.owner.id == emission.id
                     && channel.common.owner.owner_id == emission.owner_id
                     && channel.common.owner.world_key == emission.world_key
@@ -90,7 +86,7 @@ impl ContactWork<'_, '_> {
             else {
                 break;
             };
-            if !native_primary_target_eligible(&row.target, 0x2) {
+            if !primary_target_eligible(&row.target, 0x2) {
                 break;
             }
             contacted.insert(row.target.id.clone());
@@ -103,9 +99,9 @@ impl ContactWork<'_, '_> {
                     main.and_then(|main| main.native_geometry.zip(main.creator_registration))
                 {
                     let root = row.target.position;
-                    let factory = create_native_flame_lash_factory(
-                        NativeFlameLashFactoryBirthInput {
-                            channel: NativeWeldChannelInput {
+                    let factory = create_flame_lash_factory(
+                        FlameLashFactoryBirthInput {
+                            channel: WeldChannelInput {
                                 birth: channel_birth(
                                     emission,
                                     self.next_id + 1,
@@ -122,7 +118,7 @@ impl ContactWork<'_, '_> {
                             },
                             source_fade_id: self.next_id,
                             camera_displacement: None,
-                            geometry: NativeFlameLashFactoryInput {
+                            geometry: FlameLashFactoryInput {
                                 start: Vec2::new(
                                     fround(previous_native_point.x + geometry.offset.x),
                                     fround(previous_native_point.y + geometry.offset.y),
@@ -134,7 +130,7 @@ impl ContactWork<'_, '_> {
                                 end: root,
                                 offset: geometry.offset,
                             },
-                            role: NativeFlameChannelRole::Chain,
+                            role: FlameChannelRole::Chain,
                             width: fround(0.8_f32 as f64 - width),
                             creator_registration,
                             misc_append_ordinal: hop,
@@ -144,20 +140,20 @@ impl ContactWork<'_, '_> {
                     )
                     .expect("valid native chain Flame factory");
                     self.owned_transients.push(PrimarySpellTransient::Weld(
-                        NativeWeldWorldActor::FlameLashFade(factory.source),
+                        WeldWorldActor::FlameLashFade(factory.source),
                     ));
                     self.owned_transients.push(PrimarySpellTransient::Weld(
-                        NativeWeldWorldActor::Channel(factory.channel),
+                        WeldWorldActor::Channel(factory.channel),
                     ));
                     self.next_id += 2;
                 } else {
                     self.publish_flame_fade(
                         emission,
-                        NativeWeldFlameLashFadeVariant::Source,
+                        WeldFlameLashFadeVariant::Source,
                         previous_point,
                         direction,
                     );
-                    let actor = create_native_weld_channel_actor(NativeWeldChannelInput {
+                    let actor = create_weld_channel_actor(WeldChannelInput {
                         birth: channel_birth(
                             emission,
                             self.next_id,
@@ -172,7 +168,7 @@ impl ContactWork<'_, '_> {
                         enhanced_effects: self.context.enhanced_effects,
                         flame_visual: None,
                     });
-                    let actor = self.enroll_weld_combat_actor(NativeWeldWorldActor::Channel(actor));
+                    let actor = self.enroll_weld_combat_actor(WeldWorldActor::Channel(actor));
                     self.owned_transients.push(actor);
                     self.next_id += 1;
                 }
@@ -181,7 +177,7 @@ impl ContactWork<'_, '_> {
                     .map_or(Vec2::new(0.0, -20.0), |geometry| geometry.offset);
                 self.publish_flame_fade(
                     emission,
-                    NativeWeldFlameLashFadeVariant::Chain,
+                    WeldFlameLashFadeVariant::Chain,
                     Vec2::new(
                         fround(row.target.position.x + offset.x),
                         fround(row.target.position.y + offset.y),
@@ -193,18 +189,18 @@ impl ContactWork<'_, '_> {
             if !emission.underpowered && stun < 1.0 {
                 self.target_effect(
                     row.actor_id,
-                    NativeSecondaryTargetEffectPatch {
+                    SecondaryTargetEffectPatch {
                         stun_factor: Some(stun),
                         stun_ticks: Some(25),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }
             // The flash word belongs even to a rejected receiver or no explosion.
             let flash = self.rng.draw_scaled_float(0.5_f32 as f64, false);
             let payload = if profile.vector.values[4] > 0.0 {
-                Some(NativeSpellSpecialDeathPayload {
-                    kind: NativeSpellSpecialDeathKind::Fire,
+                Some(SpellSpecialDeathPayload {
+                    kind: SpellSpecialDeathKind::Fire,
                     explode_damage: profile.vector.values[4],
                     explode_radius: profile.vector.values[5],
                     ember_damage: profile.vector.values[6],
@@ -277,16 +273,14 @@ impl ContactWork<'_, '_> {
     fn publish_flame_fade(
         &mut self,
         emission: &PrimarySpellChannelEmission,
-        variant: NativeWeldFlameLashFadeVariant,
+        variant: WeldFlameLashFadeVariant,
         origin: Vec2,
         direction: Vec2,
     ) {
-        let fade = create_native_weld_flame_lash_fade(
-            NativeWeldFlameLashFadeInput {
+        let fade = create_weld_flame_lash_fade(
+            WeldFlameLashFadeInput {
                 birth: channel_birth(emission, self.next_id, self.context.tick, origin, direction),
-                alpha: if variant == NativeWeldFlameLashFadeVariant::Endpoint
-                    && emission.underpowered
-                {
+                alpha: if variant == WeldFlameLashFadeVariant::Endpoint && emission.underpowered {
                     0.5
                 } else {
                     1.0
@@ -297,7 +291,7 @@ impl ContactWork<'_, '_> {
             self.rng,
             Some(self.order),
         );
-        let actor = self.enroll_weld_combat_actor(NativeWeldWorldActor::FlameLashFade(fade));
+        let actor = self.enroll_weld_combat_actor(WeldWorldActor::FlameLashFade(fade));
         self.owned_transients.push(actor);
         self.next_id += 1;
     }
@@ -310,7 +304,7 @@ impl ContactWork<'_, '_> {
         {
             self.publish_flame_fade(
                 emission,
-                NativeWeldFlameLashFadeVariant::Endpoint,
+                WeldFlameLashFadeVariant::Endpoint,
                 endpoint,
                 emission.direction,
             );
@@ -320,9 +314,9 @@ impl ContactWork<'_, '_> {
             && let Some(creator_registration) = main.creator_registration
             && let Some(camera_displacement) = main.camera_displacement
         {
-            let factory = create_native_flame_lash_factory(
-                NativeFlameLashFactoryBirthInput {
-                    channel: NativeWeldChannelInput {
+            let factory = create_flame_lash_factory(
+                FlameLashFactoryBirthInput {
+                    channel: WeldChannelInput {
                         birth: channel_birth(
                             emission,
                             emission.id,
@@ -339,7 +333,7 @@ impl ContactWork<'_, '_> {
                     },
                     source_fade_id: self.next_id,
                     geometry,
-                    role: NativeFlameChannelRole::Main,
+                    role: FlameChannelRole::Main,
                     width: if emission.underpowered { 0.75 } else { 1.0 },
                     camera_displacement,
                     creator_registration,
@@ -349,22 +343,21 @@ impl ContactWork<'_, '_> {
                 self.order,
             )
             .expect("valid native main Flame factory");
-            self.owned_transients.push(PrimarySpellTransient::Weld(
-                NativeWeldWorldActor::FlameLashFade(factory.source),
-            ));
             self.owned_transients
-                .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::Channel(factory.channel)));
+                .push(PrimarySpellTransient::Weld(WeldWorldActor::FlameLashFade(factory.source)));
+            self.owned_transients
+                .push(PrimarySpellTransient::Weld(WeldWorldActor::Channel(factory.channel)));
             self.next_id += 1;
         } else {
             // Source compatibility inputs have no retained ribbon recipe.
             self.publish_flame_fade(
                 emission,
-                NativeWeldFlameLashFadeVariant::Source,
+                WeldFlameLashFadeVariant::Source,
                 emission.origin,
                 emission.direction,
             );
             if let Some(main) = main {
-                let channel = create_native_weld_channel_actor(NativeWeldChannelInput {
+                let channel = create_weld_channel_actor(WeldChannelInput {
                     birth: channel_birth(
                         emission,
                         emission.id,
@@ -379,16 +372,14 @@ impl ContactWork<'_, '_> {
                     enhanced_effects: self.context.enhanced_effects,
                     flame_visual: None,
                 });
-                let actor = self.enroll_weld_combat_actor(NativeWeldWorldActor::Channel(channel));
+                let actor = self.enroll_weld_combat_actor(WeldWorldActor::Channel(channel));
                 self.owned_transients.push(actor);
             }
         }
     }
 
     fn resolve_blizzard(&mut self, emission: &PrimarySpellChannelEmission) {
-        let NativePrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
-            unreachable!()
-        };
+        let PrimarySkillProfile::Weld(profile) = &emission.primary_skill else { unreachable!() };
         let Some(endpoint) = emission.endpoint else { return };
         let mut rows: Vec<_> = self
             .context
@@ -401,13 +392,13 @@ impl ContactWork<'_, '_> {
             .collect();
         rows.extend(water_target_rows(self.enemies));
         let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
-        let polygon = native_weld_blizzard_contact_polygon(
+        let polygon = weld_blizzard_contact_polygon(
             endpoint,
             emission.origin,
             emission.underpowered,
             profile.vector.values[6],
         );
-        let roots = native_primary_polygon_targets(0x1086, &polygon.points, &targets);
+        let roots = primary_polygon_targets(0x1086, &polygon.points, &targets);
         let mut contacted = BTreeSet::new();
         let mut chain_seeds = Vec::new();
         if emission.terrain_contact {
@@ -422,22 +413,22 @@ impl ContactWork<'_, '_> {
             contacted.insert(root.id.clone());
             self.publish_blizzard_glow(emission, root.position);
             let ChannelTargetKind::Enemy { actor_id } = row.kind else { continue };
-            if !native_primary_target_eligible(root, 0x2) {
+            if !primary_target_eligible(root, 0x2) {
                 continue;
             }
             self.weld_cold(
                 actor_id,
-                if emission.underpowered { 0.75 } else { NATIVE_WELD_FROST_SLOW_FACTOR },
+                if emission.underpowered { 0.75 } else { WELD_FROST_SLOW_FACTOR },
                 25,
             );
             let stun = profile.vector.values[3];
             if !emission.underpowered && stun < 1.0 {
                 self.target_effect(
                     actor_id,
-                    NativeSecondaryTargetEffectPatch {
+                    SecondaryTargetEffectPatch {
                         stun_factor: Some(stun),
                         stun_ticks: Some(25),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }
@@ -489,12 +480,12 @@ impl ContactWork<'_, '_> {
                 else {
                     break;
                 };
-                if !native_primary_target_eligible(&row.target, 0x2) {
+                if !primary_target_eligible(&row.target, 0x2) {
                     break;
                 }
                 contacted.insert(row.target.id.clone());
                 let direction = normalized_difference(source.position, row.target.position);
-                let effects = create_native_weld_blizzard_chain_effects(
+                let effects = create_weld_blizzard_chain_effects(
                     channel_birth(
                         emission,
                         self.next_id,
@@ -507,23 +498,22 @@ impl ContactWork<'_, '_> {
                     self.order,
                 );
                 self.next_id = effects.next_id;
-                let fade =
-                    self.enroll_weld_combat_actor(NativeWeldWorldActor::FrostFade(effects.fade));
+                let fade = self.enroll_weld_combat_actor(WeldWorldActor::FrostFade(effects.fade));
                 self.owned_transients.push(fade);
                 if let Some(chain) = effects.chain_frost {
-                    let effect = self
-                        .enroll_weld_combat_actor(NativeWeldWorldActor::BlizzardChainFrost(chain));
+                    let effect =
+                        self.enroll_weld_combat_actor(WeldWorldActor::BlizzardChainFrost(chain));
                     self.owned_transients.push(effect);
                 }
-                self.weld_cold(row.actor_id, NATIVE_WELD_FROST_SLOW_FACTOR, 25);
+                self.weld_cold(row.actor_id, WELD_FROST_SLOW_FACTOR, 25);
                 let stun = profile.vector.values[3];
                 if stun < 1.0 {
                     self.target_effect(
                         row.actor_id,
-                        NativeSecondaryTargetEffectPatch {
+                        SecondaryTargetEffectPatch {
                             stun_factor: Some(stun),
                             stun_ticks: Some(25),
-                            ..NativeSecondaryTargetEffectPatch::default()
+                            ..SecondaryTargetEffectPatch::default()
                         },
                     )
                 }
@@ -547,20 +537,18 @@ impl ContactWork<'_, '_> {
     }
 
     fn publish_blizzard_glow(&mut self, emission: &PrimarySpellChannelEmission, position: Vec2) {
-        let actor = create_native_weld_blizzard_contact_glow(
+        let actor = create_weld_blizzard_contact_glow(
             channel_birth(emission, self.next_id, self.context.tick, position, emission.direction),
             self.rng,
             self.order,
         );
-        let effect = self.enroll_weld_combat_actor(NativeWeldWorldActor::BlizzardGlow(actor));
+        let effect = self.enroll_weld_combat_actor(WeldWorldActor::BlizzardGlow(actor));
         self.owned_transients.push(effect);
         self.next_id += 1;
     }
 
     fn resolve_steam_pushback(&mut self, emission: &PrimarySpellChannelEmission) {
-        let NativePrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
-            unreachable!()
-        };
+        let PrimarySkillProfile::Weld(profile) = &emission.primary_skill else { unreachable!() };
         let widen = if emission.underpowered { 0.0 } else { profile.vector.values[2] };
         let pushback = if emission.underpowered { 0.0 } else { profile.vector.values[3] };
         if pushback <= 0.0 {
@@ -575,7 +563,7 @@ impl ContactWork<'_, '_> {
             })
         };
         let reach = 205.0 + 4.0 * widen;
-        for target in native_primary_cone_targets(PrimaryConeQuery {
+        for target in primary_cone_targets(PrimaryConeQuery {
             actor_mask: 0x1082,
             aim_direction: emission.direction,
             half_angle_degrees: 15.0 + widen * 0.5,
@@ -626,7 +614,7 @@ impl ContactWork<'_, '_> {
             .into_iter()
             .filter(|target| target.id != row.target.id)
             .collect();
-        if first_native_primary_point_contact(PrimaryPointContactQuery {
+        if first_primary_point_contact(PrimaryPointContactQuery {
             actor_mask: 0x2,
             position: probe,
             query_radius: 25.0 / 3.0,

@@ -2,28 +2,28 @@
 
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
-use solomon_sim::profile::primary::native_primary_skill_profile;
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
+use solomon_sim::profile::primary::primary_skill_profile;
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
 use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellProjectilePhase, SpellState};
 use solomon_sim::spells::{
     PrimarySpellCastAuthority, PrimarySpellEpochContext, PrimarySpellInput,
     PrimarySpellTraversalActor, PrimarySpellWorldContext,
 };
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn cast(
     element: WizardElement,
     weld: bool,
     id: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     order: &mut WorldPainterOrder,
 ) -> PrimarySpellProjectile {
-    let mut book = NativeSkillBookState::new(element, WizardDiscipline::Arcane);
+    let mut book = SkillBookState::new(element, WizardDiscipline::Arcane);
     if weld {
         book.grant_weld_build(1001);
     }
-    let profile = native_primary_skill_profile(&book, &NativeOffensiveSpellFactors::default());
+    let profile = primary_skill_profile(&book, &OffensiveSpellFactors::default());
     let mut wizard = HubWizard::at(Vec2::new(100.0, 200.0));
     let mut spells = SpellState::default();
     for tick in 0..60 {
@@ -74,7 +74,7 @@ fn step(
     spells: &mut SpellState,
     tick: u64,
     retire: Option<u64>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     order: &mut WorldPainterOrder,
 ) {
     spells.step_primary_players(
@@ -98,7 +98,7 @@ fn step(
 
 #[test]
 fn mixed_primary_flight_retirement_birth_and_restore_preserve_order() {
-    let mut rng = NativeRng::new(719);
+    let mut rng = Rng::new(719);
     let mut order = WorldPainterOrder::default();
     let records = [
         cast(WizardElement::Earth, false, 1, &mut rng, &mut order),
@@ -150,16 +150,15 @@ fn mixed_primary_flight_retirement_birth_and_restore_preserve_order() {
 #[test]
 fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
     use solomon_sim::painter::WorldManagerLane;
-    use solomon_sim::spells::fire::NATIVE_FIRE_IMPACT_LIFETIME_TICKS;
+    use solomon_sim::spells::fire::FIRE_IMPACT_LIFETIME_TICKS;
     use solomon_sim::spells::model::{
         PrimarySpellFireImpact, PrimarySpellTransient, PrimarySpellTransientBase,
     };
     use solomon_sim::spells::weld::{
-        NativeWeldActorBirth, NativeWeldMeteorSpawnProgram, NativeWeldWorldActor,
-        create_native_weld_meteor,
+        WeldActorBirth, WeldMeteorSpawnProgram, WeldWorldActor, create_weld_meteor,
     };
 
-    let mut rng = NativeRng::new(913);
+    let mut rng = Rng::new(913);
     let mut order = WorldPainterOrder::default();
     let mut impact = |id, age_ticks| {
         let registration = order.register(WorldManagerLane::Transient);
@@ -176,10 +175,10 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
         })
     };
     let first = impact(1, 0);
-    let retiring = impact(2, NATIVE_FIRE_IMPACT_LIFETIME_TICKS - 1);
+    let retiring = impact(2, FIRE_IMPACT_LIFETIME_TICKS - 1);
     let last = impact(4, 0);
-    let meteor = create_native_weld_meteor(
-        NativeWeldActorBirth {
+    let meteor = create_weld_meteor(
+        WeldActorBirth {
             id: 3,
             tick: 0,
             build_id: 1007,
@@ -189,7 +188,7 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
             direction: Vec2::new(1.0, 0.0),
             vector: &[0.0; 8],
         },
-        NativeWeldMeteorSpawnProgram {
+        WeldMeteorSpawnProgram {
             body_scale: 1.0,
             fall_heading_degrees: 90.0,
             fall_height: 1.0,
@@ -203,7 +202,7 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
         Some(&mut order),
     );
     let records =
-        [first, retiring, PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(meteor)), last];
+        [first, retiring, PrimarySpellTransient::Weld(WeldWorldActor::Meteor(meteor)), last];
     let mut live = SpellState {
         next_id: 20,
         transients: records.clone().into_iter().collect(),
@@ -218,10 +217,7 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
     assert_eq!(effects[0].common().id, 1);
     assert_eq!(effects[0].common().age_ticks, 1);
     assert_eq!(effects[1].common().id, 3);
-    assert!(matches!(
-        effects[2],
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::MeteorFlash(_))
-    ));
+    assert!(matches!(effects[2], PrimarySpellTransient::Weld(WeldWorldActor::MeteorFlash(_))));
     assert_eq!(effects.last().unwrap().common().id, 4);
     assert_eq!(effects.last().unwrap().common().age_ticks, 1);
     assert_eq!(

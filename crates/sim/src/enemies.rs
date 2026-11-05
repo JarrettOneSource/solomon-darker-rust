@@ -121,7 +121,7 @@ impl EnemyToken {
         Self::Zombie,
     ];
     #[must_use]
-    pub const fn native_type_id(self) -> u16 {
+    pub const fn type_id(self) -> u16 {
         match self {
             Self::Coffin => 1013,
             Self::Cocoon => 2058,
@@ -362,7 +362,8 @@ pub struct EnemySpawnIntent {
     pub flags: Vec<EnemyFlag>,
     pub id: usize,
     pub location_policy: SpawnLocationPolicy,
-    pub native_type_id: u16,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+    pub type_id: u16,
     pub position: Vec2,
     pub position_policy: SpawnPositionPolicy,
     pub spawn_tick: u64,
@@ -398,7 +399,7 @@ impl EnemySpawnIntent {
             id,
             spawn_tick,
             wave_ordinal,
-            native_type_id: enemy_token.native_type_id(),
+            type_id: enemy_token.type_id(),
             flags: Vec::new(),
             location_policy: SpawnLocationPolicy::Anywhere,
             position_policy: SpawnPositionPolicy::Direct,

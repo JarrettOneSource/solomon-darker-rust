@@ -3,7 +3,7 @@
 
 use crate::gpu_ui::{FontRunOptions, GroupEffect, ImageShadow, UiFrame, font_run_with_options};
 use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
-use solomon_sim::menu::native_pause_menu_reveal;
+use solomon_sim::menu::pause_menu_reveal;
 use solomon_sim::menu::shared::{
     GameplayPausePresentation, gameplay_pause_presentation, gameplay_resume_grace_progress,
 };
@@ -98,7 +98,7 @@ impl SharedGameplayUi {
                 GameplayPausePresentation::Waiting { label, detail } => Some(PausePresentation {
                     label,
                     detail,
-                    reveal: native_pause_menu_reveal(true, now_ms - self.pause_received_at),
+                    reveal: pause_menu_reveal(true, now_ms - self.pause_received_at),
                 }),
                 _ => None,
             }

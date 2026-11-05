@@ -2,19 +2,19 @@
 
 use serde_json::{Value, json};
 use solomon_sim::secondary::*;
-use solomon_sim::spells::special_death::NativeSpellSpecialDeathKind;
+use solomon_sim::spells::special_death::SpellSpecialDeathKind;
 
 use super::support;
 
 /// The original adapter remains useful to historical fixtures. Current journeys also
 /// observe private death/drain animations and the shared camera/warp state.
-pub fn state_snapshot(state: &NativeSecondarySimulationState) -> Value {
+pub fn state_snapshot(state: &SecondarySimulationState) -> Value {
     let mut value = support::state_snapshot(state);
     for (actor, value) in state.actors.iter().zip(value["actors"].as_array_mut().unwrap()) {
         if let Some(animation) = actor.golem_death.as_ref() {
             value["golemDeath"] = serde_json::to_value(animation).unwrap();
         }
-        if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
+        if actor.kind == SecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
             value["etherDrain"] = serde_json::to_value(actor.ether_drain.as_ref()).unwrap();
         }
     }
@@ -24,16 +24,16 @@ pub fn state_snapshot(state: &NativeSecondarySimulationState) -> Value {
 }
 
 #[allow(dead_code)] // State-only fixtures share this module without tick-result projections.
-fn damage_snapshot(contact: &NativeSecondaryDamageContact) -> Value {
+fn damage_snapshot(contact: &SecondaryDamageContact) -> Value {
     let mut value = json!({
         "amount":contact.amount,
         "kind":match contact.kind {
-            NativeSecondaryDamageKind::Acid=>"acid",
-            NativeSecondaryDamageKind::Fire=>"fire",
-            NativeSecondaryDamageKind::Ice=>"ice",
-            NativeSecondaryDamageKind::Lightning=>"lightning",
-            NativeSecondaryDamageKind::Magic=>"magic",
-            NativeSecondaryDamageKind::Physical=>"physical",
+            SecondaryDamageKind::Acid=>"acid",
+            SecondaryDamageKind::Fire=>"fire",
+            SecondaryDamageKind::Ice=>"ice",
+            SecondaryDamageKind::Lightning=>"lightning",
+            SecondaryDamageKind::Magic=>"magic",
+            SecondaryDamageKind::Physical=>"physical",
         },
         "ownerId":contact.owner_id,"sourceActorId":contact.source_actor_id,
         "targetId":contact.target_id,
@@ -53,8 +53,8 @@ fn damage_snapshot(contact: &NativeSecondaryDamageContact) -> Value {
     if let Some(payload) = contact.special_death_payload {
         value["specialDeathPayload"] = json!({
             "kind":match payload.kind {
-                NativeSpellSpecialDeathKind::Fire=>"fire",
-                NativeSpellSpecialDeathKind::Steam=>"steam",
+                SpellSpecialDeathKind::Fire=>"fire",
+                SpellSpecialDeathKind::Steam=>"steam",
             },
             "emberDamage":payload.ember_damage,"emberFragments":payload.ember_fragments,
             "explodeDamage":payload.explode_damage,"explodeRadius":payload.explode_radius,
@@ -65,7 +65,7 @@ fn damage_snapshot(contact: &NativeSecondaryDamageContact) -> Value {
 }
 
 #[allow(dead_code)] // State-only fixtures share this module without tick-result projections.
-pub fn result_snapshot(result: &NativeSecondaryTickResult) -> Value {
+pub fn result_snapshot(result: &SecondaryTickResult) -> Value {
     let mut value = support::cast_snapshot(result);
     value.as_object_mut().unwrap().remove("facingHeadingIndexes");
     value["facingHeadingDegreesByPlayer"] = json!(result.facing_heading_degrees_by_player);
@@ -84,8 +84,8 @@ pub fn result_snapshot(result: &NativeSecondaryTickResult) -> Value {
             .map(|contact| {
                 json!({
                     "degrees":contact.degrees,"mode":match contact.mode {
-                        NativeSecondaryHeadingMode::Absolute=>"absolute",
-                        NativeSecondaryHeadingMode::Relative=>"relative",
+                        SecondaryHeadingMode::Absolute=>"absolute",
+                        SecondaryHeadingMode::Relative=>"relative",
                     },"targetId":contact.target_id,
                 })
             })

@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use solomon_sim::spells::weld::flame_state::{NativeFlameChannelVisual, NativeFlameFadeVisual};
+use solomon_sim::spells::weld::flame_state::{FlameChannelVisual, FlameFadeVisual};
 use solomon_sim::spells::weld::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -16,7 +16,7 @@ fn point(value: Vec2) -> Value {
 fn vector(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn random(rng: &NativeRng) -> Value {
+fn random(rng: &Rng) -> Value {
     json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":rng.words.as_slice()})
 }
 fn registration(value: PainterRegistration) -> Value {
@@ -24,7 +24,7 @@ fn registration(value: PainterRegistration) -> Value {
         "registrationOrdinal":value.registration_ordinal})
 }
 
-fn row(actor: &NativeWeldWorldActor) -> Value {
+fn row(actor: &WeldWorldActor) -> Value {
     let common = actor.common();
     let mut row = json!({"ageTicks":common.owner.age_ticks,"birthTick":common.birth_tick,"buildId":common.build_id,
         "direction":point(common.direction),"id":common.owner.id,"lightRegistration":common.owner.light_registration.map(registration),"origin":point(common.origin),
@@ -41,24 +41,24 @@ fn row(actor: &NativeWeldWorldActor) -> Value {
         );
     }
     let fields = match actor {
-        NativeWeldWorldActor::Channel(actor) => {
+        WeldWorldActor::Channel(actor) => {
             let mut fields = json!({"kind":"weld-channel","endpoint":actor.endpoint.map(point),
             "enhancedEffects":actor.enhanced_effects,
             "midpoint":actor.midpoint.map(point),"targetId":actor.target_id,"underpowered":actor.underpowered,"variant":actor.variant});
             if let Some(visual) = &actor.flame_visual {
                 assert_eq!(
                     *visual,
-                    NativeFlameChannelVisual::LegacySuppressed,
+                    FlameChannelVisual::LegacySuppressed,
                     "this constructor fixture supplies no native Flame birth sample"
                 );
                 fields["flameVisual"] = json!({"kind":"legacy-suppressed"});
             }
             fields
         }
-        NativeWeldWorldActor::FlameLashFade(actor) => {
+        WeldWorldActor::FlameLashFade(actor) => {
             let visual = match actor.flame_visual {
-                NativeFlameFadeVisual::LegacySuppressed => json!({"kind":"legacy-suppressed"}),
-                NativeFlameFadeVisual::NativeBirth(birth) => {
+                FlameFadeVisual::LegacySuppressed => json!({"kind":"legacy-suppressed"}),
+                FlameFadeVisual::Birth(birth) => {
                     json!({"kind":"native-birth-v1","birthAlpha":birth.birth_alpha})
                 }
             };
@@ -66,18 +66,18 @@ fn row(actor: &NativeWeldWorldActor) -> Value {
             "alphaStep":actor.alpha_step,"baseScale":actor.base_scale,"colorGreen":actor.color_green,
             "flameVisual":visual,
             "position":point(actor.position),"record":actor.record,"rotationDegrees":actor.rotation_degrees,
-            "variant":if actor.variant==NativeWeldFlameLashFadeVariant::Chain {"chain"} else {"endpoint"},"wrapperScalar":actor.wrapper_scalar})
+            "variant":if actor.variant==WeldFlameLashFadeVariant::Chain {"chain"} else {"endpoint"},"wrapperScalar":actor.wrapper_scalar})
         }
-        NativeWeldWorldActor::Impact(actor) => json!({"kind":"weld-impact","alpha":actor.alpha,
+        WeldWorldActor::Impact(actor) => json!({"kind":"weld-impact","alpha":actor.alpha,
             "boulderTerminalCharge":actor.boulder_terminal_charge,"impactSoundPitch":actor.impact_sound_pitch,
             "impactSoundVariant":actor.impact_sound_variant,"position":point(actor.position),
             "presentationRotationDegrees":actor.presentation_rotation_degrees,"presentationScale":actor.presentation_scale}),
-        NativeWeldWorldActor::BlizzardGlow(actor) => {
+        WeldWorldActor::BlizzardGlow(actor) => {
             json!({"kind":"weld-blizzard-glow","rotationDegrees":actor.rotation_degrees,
             "scale":actor.scale,"variant":actor.variant})
         }
-        NativeWeldWorldActor::BlizzardChainFrost(_) => json!({"kind":"weld-blizzard-chain-frost"}),
-        NativeWeldWorldActor::FrostFade(actor) => {
+        WeldWorldActor::BlizzardChainFrost(_) => json!({"kind":"weld-blizzard-chain-frost"}),
+        WeldWorldActor::FrostFade(actor) => {
             json!({"kind":"weld-frost-fade","scale":actor.scale})
         }
         _ => panic!("this fixture records channel and impact epochs"),
@@ -94,7 +94,7 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
         let input = &case["input"];
         let values: Vec<f64> =
             input["vector"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
-        let birth = NativeWeldActorBirth {
+        let birth = WeldActorBirth {
             build_id: match input["family"].as_str().unwrap() {
                 "lash" => 1003,
                 "glows" | "chain" => 1004,
@@ -108,18 +108,18 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
             vector: &values,
             world_key: "boneyard:weld",
         };
-        let mut rng = NativeRng::new(input["seed"].as_i64().unwrap_or(17));
+        let mut rng = Rng::new(input["seed"].as_i64().unwrap_or(17));
         let mut order = WorldPainterOrder { next_actor_ordinal: 500, next_transient_ordinal: 70 };
         let mut actors = match input["family"].as_str().unwrap() {
             "lash" => {
-                vec![NativeWeldWorldActor::FlameLashFade(create_native_weld_flame_lash_fade(
-                    NativeWeldFlameLashFadeInput {
+                vec![WeldWorldActor::FlameLashFade(create_weld_flame_lash_fade(
+                    WeldFlameLashFadeInput {
                         birth,
                         alpha: input["alpha"].as_f64().unwrap(),
                         variant: if input["variant"] == "chain" {
-                            NativeWeldFlameLashFadeVariant::Chain
+                            WeldFlameLashFadeVariant::Chain
                         } else {
-                            NativeWeldFlameLashFadeVariant::Endpoint
+                            WeldFlameLashFadeVariant::Endpoint
                         },
                         enhanced_effects: true,
                     },
@@ -127,37 +127,35 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
                     None,
                 ))]
             }
-            "impact" => vec![NativeWeldWorldActor::Impact(create_primary_spell_weld_impact(
-                birth, &mut rng,
-            ))],
+            "impact" => {
+                vec![WeldWorldActor::Impact(create_primary_spell_weld_impact(birth, &mut rng))]
+            }
             "glows" => {
-                let glows = create_native_weld_blizzard_source_glows(birth, &mut rng);
+                let glows = create_weld_blizzard_source_glows(birth, &mut rng);
                 let mut actors: Vec<_> =
-                    glows.into_iter().map(NativeWeldWorldActor::BlizzardGlow).collect();
-                actors.push(NativeWeldWorldActor::BlizzardGlow(
-                    create_native_weld_blizzard_contact_glow(
-                        NativeWeldActorBirth { id: birth.id + 2, ..birth },
-                        &mut rng,
-                        &mut order,
-                    ),
-                ));
+                    glows.into_iter().map(WeldWorldActor::BlizzardGlow).collect();
+                actors.push(WeldWorldActor::BlizzardGlow(create_weld_blizzard_contact_glow(
+                    WeldActorBirth { id: birth.id + 2, ..birth },
+                    &mut rng,
+                    &mut order,
+                )));
                 actors
             }
             "chain" => {
-                let result = create_native_weld_blizzard_chain_effects(
+                let result = create_weld_blizzard_chain_effects(
                     birth,
                     vector(&input["castDirection"]),
                     &mut rng,
                     &mut order,
                 );
-                let mut actors = vec![NativeWeldWorldActor::FrostFade(result.fade)];
+                let mut actors = vec![WeldWorldActor::FrostFade(result.fade)];
                 if let Some(chain) = result.chain_frost {
-                    actors.push(NativeWeldWorldActor::BlizzardChainFrost(chain));
+                    actors.push(WeldWorldActor::BlizzardChainFrost(chain));
                 }
                 actors
             }
-            "channel" => vec![NativeWeldWorldActor::Channel(create_native_weld_channel_actor(
-                NativeWeldChannelInput {
+            "channel" => {
+                vec![WeldWorldActor::Channel(create_weld_channel_actor(WeldChannelInput {
                     birth,
                     endpoint: Some(vector(&input["endpoint"])),
                     midpoint: Some(vector(&input["midpoint"])),
@@ -165,14 +163,14 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
                     underpowered: input["underpowered"].as_bool().unwrap(),
                     enhanced_effects: true,
                     flame_visual: None,
-                },
-            ))],
+                }))]
+            }
             _ => unreachable!(),
         };
         for tick in 0..=50 {
             if tick > 0 {
                 actors.retain_mut(|actor| {
-                    step_native_weld_world_actor(actor, &mut rng, &|_, _, _| true).alive
+                    step_weld_world_actor(actor, &mut rng, &|_, _, _| true).alive
                 });
             }
             if let Some(expected) =
@@ -182,7 +180,7 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
                 website_rows::compare(&actual, expected, &format!("{} tick{tick}", case["name"]));
                 if let Some(sample) = weld_visual_rows::sample(case, tick) {
                     weld_visual_rows::compare(
-                        actors.iter().map(NativeWeldPresentationState::World),
+                        actors.iter().map(WeldPresentationState::World),
                         sample,
                         "Weld channel and fade compositor",
                     );
@@ -200,14 +198,14 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
         let source = vector(&input["source"]);
         let underpowered = input["underpowered"].as_bool().unwrap();
         let widen = input["widen"].as_f64().unwrap();
-        let beam = native_weld_blizzard_beam_plan(
+        let beam = weld_blizzard_beam_plan(
             input["birthTick"].as_u64().unwrap(),
             endpoint,
             source,
             underpowered,
             widen,
         );
-        let contact = native_weld_blizzard_contact_polygon(endpoint, source, underpowered, widen);
+        let contact = weld_blizzard_contact_polygon(endpoint, source, underpowered, widen);
         let actual = json!({"jitter":point(beam.jitter),"quads":beam.quads.map(|quad|json!({"record":quad.record,"vertices":quad.vertices})),
             "tint":beam.tint,"width":beam.width});
         website_rows::compare(&actual, &case["beam"], "Blizzard beam");

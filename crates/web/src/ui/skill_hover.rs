@@ -1,16 +1,14 @@
 //! Exact native skill card glyphs shared by Skillbook and earned level-up offers.
 use crate::gpu_ui::UiFrame;
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextLayout, layout_native_ui_text_runs,
-};
 use solomon_sim::player_panels::skill_hover::{
-    NATIVE_SKILL_HOVER_CONTENT_MARGIN, NATIVE_SKILL_HOVER_LINE_GAP, NativeSkillHoverBoxLayout,
-    native_skill_exact_text_runs, native_skill_hover_line_tint,
+    SKILL_HOVER_CONTENT_MARGIN, SKILL_HOVER_LINE_GAP, SkillHoverBoxLayout, skill_exact_text_runs,
+    skill_hover_line_tint,
 };
+use solomon_sim::ui_text::{UiFontName, UiTextLayout, layout_ui_text_runs};
 pub(crate) fn paint_scaled_text(
     frame: &UiFrame<'_>,
     painter: &egui::Painter,
-    layout: &NativeUiTextLayout,
+    layout: &UiTextLayout,
     origin: egui::Pos2,
     scale: f32,
 ) {
@@ -25,7 +23,7 @@ pub(crate) fn paint_scaled_text(
 pub(crate) fn paint_skill_hover_box(
     frame: &UiFrame<'_>,
     painter: &egui::Painter,
-    layout: &NativeSkillHoverBoxLayout,
+    layout: &SkillHoverBoxLayout,
     skill_id: usize,
     origin: egui::Pos2,
     scale: f32,
@@ -41,20 +39,20 @@ pub(crate) fn paint_skill_hover_box(
         egui::Stroke::new(1.0, egui::Color32::WHITE),
         egui::StrokeKind::Outside,
     );
-    let mut cursor = NATIVE_SKILL_HOVER_CONTENT_MARGIN;
+    let mut cursor = SKILL_HOVER_CONTENT_MARGIN;
     for line in &layout.rendered {
         for source in &line.sources {
-            let runs = native_skill_exact_text_runs(source);
-            let text = layout_native_ui_text_runs(
-                NativeUiFontName::Body,
+            let runs = skill_exact_text_runs(source);
+            let text = layout_ui_text_runs(
+                UiFontName::Body,
                 &runs,
-                NATIVE_SKILL_HOVER_CONTENT_MARGIN,
+                SKILL_HOVER_CONTENT_MARGIN,
                 cursor,
-                native_skill_hover_line_tint(line.kind, skill_id),
+                skill_hover_line_tint(line.kind, skill_id),
             );
             paint_scaled_text(frame, painter, &text, origin, scale);
             cursor += layout.line_height;
         }
-        cursor += NATIVE_SKILL_HOVER_LINE_GAP;
+        cursor += SKILL_HOVER_LINE_GAP;
     }
 }

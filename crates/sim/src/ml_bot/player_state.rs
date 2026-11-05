@@ -1,12 +1,10 @@
 //! Source `ml-bot-policy/player-state.ts`: vitals, cast occupancy and real belt slots.
 
-use crate::profile::primary::{
-    NativePrimarySkillProfile, native_primary_skill_profile_with_stat_book,
-};
-use crate::profile::{MAX_PLAYER_LEVEL, NATIVE_WELD_BUILDS};
+use crate::profile::primary::{PrimarySkillProfile, primary_skill_profile_with_stat_book};
+use crate::profile::{MAX_PLAYER_LEVEL, WELD_BUILDS};
 use crate::secondary::{
-    NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS, NativeSecondaryAbilityId, NativeSecondaryPlayerState,
-    native_secondary_ability_mana_cost_with_stat_book,
+    SECONDARY_GLOBAL_COOLDOWN_TICKS, SecondaryAbilityId, SecondaryPlayerState,
+    secondary_ability_mana_cost_with_stat_book,
 };
 use crate::session::GameSession;
 
@@ -43,7 +41,7 @@ pub fn observe_ml_bot_policy_player_state(
     let player = &participant.player;
     let character = &participant.wizard;
     let derived = player.derived_stats();
-    let default_secondary = NativeSecondaryPlayerState::default();
+    let default_secondary = SecondaryPlayerState::default();
     let secondary = session.secondary.players.get(player_id).unwrap_or(&default_secondary);
     let cast_active = character.primary_cast.owns_facing()
         || secondary.cast_action.is_some()
@@ -51,11 +49,8 @@ pub fn observe_ml_bot_policy_player_state(
     let cast_ready =
         player.combat.can_cast() && !cast_active && secondary.global_cooldown_ticks == 0.0;
     let offensive_factors = derived.offensive_factors(&player.skill_runtime);
-    let primary_profile = native_primary_skill_profile_with_stat_book(
-        &player.book,
-        &player.stat_book,
-        &offensive_factors,
-    );
+    let primary_profile =
+        primary_skill_profile_with_stat_book(&player.book, &player.stat_book, &offensive_factors);
     // Source passes Reverie's manaCostWaived to both primary and secondary
     // cost resolution. It waives the completed cost, including equipment flats.
     let mana_cost_waived = player.progression.hagatha_runtime.reverie_active;
@@ -63,7 +58,7 @@ pub fn observe_ml_bot_policy_player_state(
     // These are the two Source PRIMARY_SPELL_*_REACH constants, before Water's
     // authored widen modifier; this observer intentionally uses that base reach.
     let primary_range = match &primary_profile {
-        NativePrimarySkillProfile::Air(_) | NativePrimarySkillProfile::Water(_) => 205.0,
+        PrimarySkillProfile::Air(_) | PrimarySkillProfile::Water(_) => 205.0,
         _ => scales::RANGE,
     };
     let primary_affordable = player.combat.current_mana >= primary_mana_cost;
@@ -102,7 +97,7 @@ pub fn observe_ml_bot_policy_player_state(
                 secondary.stoneskin_ticks_remaining as f64 / scales::TICK_RATE,
                 scales::STATUS_DURATION_SECONDS,
             ),
-            unsigned(secondary.global_cooldown_ticks, NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS),
+            unsigned(secondary.global_cooldown_ticks, SECONDARY_GLOBAL_COOLDOWN_TICKS),
             f64::from(
                 session
                     .boneyard
@@ -139,7 +134,7 @@ pub fn observe_ml_bot_policy_player_state(
     let primary_id = player.book.primary_skill_id;
     if primary_id == 52 {
         if let Some(weld) =
-            NATIVE_WELD_BUILDS.iter().find(|weld| Some(weld.id) == player.book.weld_build_id)
+            WELD_BUILDS.iter().find(|weld| Some(weld.id) == player.book.weld_build_id)
         {
             for id in weld.primary_skill_ids {
                 block_b[element_index(id).expect("a native Weld contains elemental primaries")] =
@@ -182,13 +177,13 @@ pub fn observe_ml_bot_policy_player_state(
     let quickbar = player.belt.skill_projection();
     let mut secondary_slots = [MlBotPolicySecondarySlot::default(); 8];
     for (slot, skill_id) in quickbar.into_iter().enumerate() {
-        let ability = skill_id.and_then(NativeSecondaryAbilityId::from_skill_id);
+        let ability = skill_id.and_then(SecondaryAbilityId::from_skill_id);
         let occupied = ability.is_some();
         let mana_cost = if mana_cost_waived {
             0.0
         } else {
             ability.map_or(0.0, |ability| {
-                native_secondary_ability_mana_cost_with_stat_book(
+                secondary_ability_mana_cost_with_stat_book(
                     &player.book,
                     &player.stat_book,
                     ability,

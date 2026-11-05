@@ -4,7 +4,7 @@
 use crate::hud::HudRect;
 
 #[must_use]
-pub fn native_dye_swatch_rect(index: usize) -> HudRect {
+pub fn dye_swatch_rect(index: usize) -> HudRect {
     assert!(index < 18, "native dye swatch index must be within [0,17]");
     let bank = index / 9;
     let bank_index = index % 9;
@@ -17,7 +17,7 @@ pub fn native_dye_swatch_rect(index: usize) -> HudRect {
 }
 
 #[must_use]
-pub fn native_dye_modal_opacity(opened_at: f64, closing_at: Option<f64>, now: f64) -> f64 {
+pub fn dye_modal_opacity(opened_at: f64, closing_at: Option<f64>, now: f64) -> f64 {
     let opened_until = now.min(closing_at.unwrap_or(now));
     let opened_opacity = (elapsed_ticks(opened_at, opened_until) * 0.01).min(1.0);
     let Some(closing_at) = closing_at.filter(|closing_at| now > *closing_at) else {
@@ -27,7 +27,7 @@ pub fn native_dye_modal_opacity(opened_at: f64, closing_at: Option<f64>, now: f6
 }
 
 #[must_use]
-pub fn native_dye_selected_pulse(selected_at: Option<f64>, now: f64) -> f64 {
+pub fn dye_selected_pulse(selected_at: Option<f64>, now: f64) -> f64 {
     selected_at.map_or(0.0, |selected_at| (1.0 - elapsed_ticks(selected_at, now) * 0.05).max(0.0))
 }
 

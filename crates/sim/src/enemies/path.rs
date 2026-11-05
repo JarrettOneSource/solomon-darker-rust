@@ -5,22 +5,22 @@
 
 use crate::float;
 use crate::float::{atan2, fround, hypot};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeEnemyMovementClock {
+pub struct EnemyMovementClock {
     pub due: bool,
     pub cadence: u64,
     pub full: bool,
 }
 #[must_use]
-pub fn native_enemy_movement_clock(
+pub fn enemy_movement_clock(
     actor_id: usize,
     tick: u64,
     visible: bool,
     illuminated: bool,
     enhanced: bool,
-) -> NativeEnemyMovementClock {
+) -> EnemyMovementClock {
     let cadence = if !visible {
         15
     } else if !illuminated {
@@ -30,7 +30,7 @@ pub fn native_enemy_movement_clock(
     } else {
         5
     };
-    NativeEnemyMovementClock {
+    EnemyMovementClock {
         due: actor_id as u64 % cadence == tick % cadence,
         cadence,
         full: visible && illuminated,
@@ -39,7 +39,7 @@ pub fn native_enemy_movement_clock(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEnemyPathState {
+pub struct EnemyPathState {
     pub base_turn_rate: f64,
     pub flank_angle_deg: f64,
     pub flank_radius: f64,
@@ -56,10 +56,10 @@ pub struct NativeEnemyPathState {
     pub wander_heading_deg: f64,
 }
 
-impl NativeEnemyPathState {
+impl EnemyPathState {
     /// `createNativeEnemyPathState`: wander, turn, flank magnitude/sign, flank radius.
     #[must_use]
-    pub fn new(rng: &mut NativeRng) -> Self {
+    pub fn new(rng: &mut Rng) -> Self {
         let wander_heading_deg = rng.draw_scaled_float(360.0, false);
         let turn = rng.draw_scaled_float(0.5_f32 as f64, false);
         let flank_magnitude = rng.draw_scaled_float(90.0, false);
@@ -97,7 +97,7 @@ impl NativeEnemyPathState {
 
     /// `selectNativeEnemyFlank`: always consumes a wander draw; the duration draw only
     /// belongs to an enabled flank.
-    pub fn select_flank(&mut self, rng: &mut NativeRng, flanking_enabled: bool) {
+    pub fn select_flank(&mut self, rng: &mut Rng, flanking_enabled: bool) {
         self.wander_heading_deg = rng.draw_scaled_float(360.0, false);
         if flanking_enabled {
             self.flank_ticks_remaining = 200 + rng.draw_integer(201) as u64;
@@ -126,7 +126,7 @@ impl NativeEnemyPathState {
 
     /// `stepNativeEnemyPathRecovery`: one movement epoch, whose stall counter increments
     /// once even when the epoch spans two simulation ticks.
-    pub fn step_recovery(&mut self, rng: &mut NativeRng, request: PathRecoveryRequest) -> bool {
+    pub fn step_recovery(&mut self, rng: &mut Rng, request: PathRecoveryRequest) -> bool {
         assert!(
             request.status_factor.is_finite() && request.status_factor > 0.0,
             "enemy path recovery status factor must be positive and finite"
@@ -214,7 +214,7 @@ pub struct EnemySteeringRequest {
 pub struct EnemySteering {
     pub delta: Vec2,
     pub heading_deg: f64,
-    pub state: NativeEnemyPathState,
+    pub state: EnemyPathState,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -253,12 +253,12 @@ pub struct EnemyPathGoalRequest {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyPathGoal {
     pub goal: Vec2,
-    pub state: NativeEnemyPathState,
+    pub state: EnemyPathState,
     pub turn_around: bool,
 }
 
 #[must_use]
-pub fn native_enemy_target_refresh_ticks(mode: u8) -> u64 {
+pub fn enemy_target_refresh_ticks(mode: u8) -> u64 {
     match mode {
         0 => 1000,
         1 => 300,
@@ -271,10 +271,7 @@ pub fn native_enemy_target_refresh_ticks(mode: u8) -> u64 {
 /// `nativeEnemySteeringGoal`: radial/tangential range control, target-relative flanking,
 /// a distance-scaled approach offset, or a long wander ray when no target exists.
 #[must_use]
-pub fn native_enemy_steering_goal(
-    state: &NativeEnemyPathState,
-    request: &EnemySteeringRequest,
-) -> Vec2 {
+pub fn enemy_steering_goal(state: &EnemyPathState, request: &EnemySteeringRequest) -> Vec2 {
     if request.radial_direction == RadialDirection::Retreat
         && request.tangent_direction == TangentDirection::Hold
     {
@@ -328,8 +325,8 @@ pub fn native_enemy_steering_goal(
 /// `buildNativeEnemySteering`: turn and move one small step per cadence tick, rather than
 /// turning once and multiplying the resulting displacement.
 #[must_use]
-pub fn build_native_enemy_steering(
-    source: NativeEnemyPathState,
+pub fn build_enemy_steering(
+    source: EnemyPathState,
     request: EnemySteeringRequest,
 ) -> EnemySteering {
     assert!(request.cadence_ticks > 0, "enemy steering cadence must be positive");
@@ -341,7 +338,7 @@ pub fn build_native_enemy_steering(
     for _ in 0..request.cadence_ticks {
         let position =
             Vec2::new(request.actor_position.x + delta.x, request.actor_position.y + delta.y);
-        let goal = native_enemy_steering_goal(
+        let goal = enemy_steering_goal(
             &state,
             &EnemySteeringRequest {
                 actor_heading_deg: heading_deg,
@@ -375,8 +372,8 @@ pub fn build_native_enemy_steering(
 /// `resolveNativeEnemyPathGoal`: reuse two authored route points until passed/expired;
 /// re-path only after the configured refresh delay. A failed route asks the actor to turn.
 #[must_use]
-pub fn resolve_native_enemy_path_goal(
-    mut state: NativeEnemyPathState,
+pub fn resolve_enemy_path_goal(
+    mut state: EnemyPathState,
     request: EnemyPathGoalRequest,
     navigation: &(impl EnemyNavigation + ?Sized),
 ) -> EnemyPathGoal {
@@ -400,7 +397,7 @@ pub fn resolve_native_enemy_path_goal(
             state.route_refresh_ticks_remaining = 0;
             state.route_ticks_remaining = request.target_refresh_ticks;
             state.route_waypoint_index = 1;
-            return resolve_native_enemy_path_goal(state, request, navigation);
+            return resolve_enemy_path_goal(state, request, navigation);
         }
     }
     state.route_refresh_ticks_remaining =

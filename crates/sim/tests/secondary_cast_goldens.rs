@@ -15,7 +15,7 @@ use current::{result_snapshot, state_snapshot};
 use native_bits::source_value;
 use serde_json::Value;
 use solomon_sim::HubWizard;
-use solomon_sim::belt::{NativeBeltCommand, PlayerBeltComponent};
+use solomon_sim::belt::{BeltCommand, PlayerBeltComponent};
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::profile::WizardElement;
 use solomon_sim::secondary::*;
@@ -32,7 +32,7 @@ fn all_twenty_three_secondary_constructors_and_admission_paths_replay_the_websit
         let skill_id = case["skillId"].as_u64().unwrap() as usize;
         let mut belt = PlayerBeltComponent::new(&book);
         assert!(belt.apply(
-            NativeBeltCommand::BindSkill { skill_id: Some(skill_id), slot: 0 },
+            BeltCommand::BindSkill { skill_id: Some(skill_id), slot: 0 },
             &book,
             &HubEconomyState::new(77, WizardElement::Ether)
         ));
@@ -47,7 +47,7 @@ fn all_twenty_three_secondary_constructors_and_admission_paths_replay_the_websit
         };
         let players = std::collections::BTreeMap::from([("player".to_owned(), authority)]);
         let result = state.step(
-            &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick: 1 },
+            &SecondaryTickContext { enhanced_effects: None, players: &players, tick: 1 },
             &mut world,
             None,
         );

@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::social::SocialUiContext;
-use solomon_sim::secondary::NativeSecondaryActorKind;
+use solomon_sim::secondary::SecondaryActorKind;
 use solomon_sim::social::{
     AllyGolemProjection, HubPlayerSelection, PartyRosterPlayer, derive_golem_ally_hud_rows,
     derive_player_ally_hud_rows, nearest_hub_player, select_hub_player_at_point,
@@ -48,7 +48,7 @@ impl Game {
             .secondary
             .actors
             .iter()
-            .filter(|actor| actor.kind == NativeSecondaryActorKind::Golem)
+            .filter(|actor| actor.kind == SecondaryActorKind::Golem)
             .filter_map(|actor| {
                 actor.golem.as_ref().map(|golem| AllyGolemProjection {
                     id: actor.id,

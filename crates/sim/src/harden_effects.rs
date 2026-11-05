@@ -3,16 +3,14 @@
 
 use crate::float;
 use crate::float::fround;
-use crate::profile::native_harden_break_angle_step;
+use crate::profile::harden_break_angle_step;
 use crate::spells::model::PrimarySpellTransientBase;
-use crate::spells::presentation::{
-    NativeSpellSprite, NativeSpellSpritePlan, SpellBlend, SpellDrawQueue,
-};
-use crate::{NativeRng, Vec2};
+use crate::spells::presentation::{SpellBlend, SpellDrawQueue, SpellSprite, SpellSpritePlan};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHardenShardBody {
+pub struct HardenShardBody {
     pub bounce_velocity: f64,
     #[cfg_attr(feature = "persistence", serde(default = "legacy_enhanced_shadow"))]
     pub enhanced_shadow: bool,
@@ -28,12 +26,12 @@ pub struct NativeHardenShardBody {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHardenEffectOwner {
+pub struct HardenEffectOwner {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,
 }
 
-impl NativeHardenEffectOwner {
+impl HardenEffectOwner {
     #[must_use]
     pub fn new(id: u64, owner_id: &str, world_key: &str, birth_tick: u64) -> Self {
         Self {
@@ -52,12 +50,12 @@ impl NativeHardenEffectOwner {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeHardenEffect {
-    Shard { owner: NativeHardenEffectOwner, body: NativeHardenShardBody },
-    Burst { owner: NativeHardenEffectOwner, alpha: f64, position: Vec2 },
+pub enum HardenEffect {
+    Shard { owner: HardenEffectOwner, body: HardenShardBody },
+    Burst { owner: HardenEffectOwner, alpha: f64, position: Vec2 },
 }
 
-impl NativeHardenEffect {
+impl HardenEffect {
     #[must_use]
     pub fn common(&self) -> &PrimarySpellTransientBase {
         match self {
@@ -74,12 +72,12 @@ impl NativeHardenEffect {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHardenChip {
+pub struct HardenChip {
     pub pitch: f64,
-    pub shard: NativeHardenShardBody,
+    pub shard: HardenShardBody,
 }
 
-pub struct NativeHardenBreakupInput<'a> {
+pub struct HardenBreakupInput<'a> {
     pub coating: f64,
     pub position: Vec2,
     pub owner_id: &'a str,
@@ -91,49 +89,45 @@ pub struct NativeHardenBreakupInput<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHardenBreakup {
-    pub effects: Vec<NativeHardenEffect>,
+pub struct HardenBreakup {
+    pub effects: Vec<HardenEffect>,
     pub next_id: u64,
     pub pitch: f64,
 }
 
-pub fn create_native_harden_chip(
+pub fn create_harden_chip(
     position: Vec2,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     enhanced_effects: bool,
-) -> Option<NativeHardenChip> {
+) -> Option<HardenChip> {
     if rng.draw_integer(3) != 1 {
         return None;
     }
     let pitch = rng.draw_scaled_float(0.1_f32 as f64, false);
     let heading = rng.draw_scaled_float(360.0, false);
     let shard = create_shard_body(position, heading, rng, enhanced_effects);
-    Some(NativeHardenChip { pitch: fround(1.0 + pitch), shard })
+    Some(HardenChip { pitch: fround(1.0 + pitch), shard })
 }
 
-pub fn create_native_harden_breakup(
-    input: NativeHardenBreakupInput<'_>,
-    rng: &mut NativeRng,
-) -> NativeHardenBreakup {
+pub fn create_harden_breakup(input: HardenBreakupInput<'_>, rng: &mut Rng) -> HardenBreakup {
     let pitch = rng.draw_scaled_float(0.1_f32 as f64, true);
     let mut next_id = input.first_id;
     let mut effects = Vec::new();
-    if let Some(step) = native_harden_break_angle_step(input.coating) {
+    if let Some(step) = harden_break_angle_step(input.coating) {
         let mut heading = 0.0;
         while heading < 360.0 {
             let body = create_shard_body(input.position, heading, rng, input.enhanced_effects);
             let owner =
-                NativeHardenEffectOwner::new(next_id, input.owner_id, input.world_key, input.tick);
+                HardenEffectOwner::new(next_id, input.owner_id, input.world_key, input.tick);
             next_id += 1;
-            effects.push(NativeHardenEffect::Shard { owner, body });
+            effects.push(HardenEffect::Shard { owner, body });
             heading += step;
         }
-        let owner =
-            NativeHardenEffectOwner::new(next_id, input.owner_id, input.world_key, input.tick);
+        let owner = HardenEffectOwner::new(next_id, input.owner_id, input.world_key, input.tick);
         next_id += 1;
-        effects.push(NativeHardenEffect::Burst { owner, alpha: 1.0, position: input.position });
+        effects.push(HardenEffect::Burst { owner, alpha: 1.0, position: input.position });
     }
-    NativeHardenBreakup { effects, next_id, pitch: fround(1.0 + pitch) }
+    HardenBreakup { effects, next_id, pitch: fround(1.0 + pitch) }
 }
 
 #[cfg(feature = "persistence")]
@@ -144,9 +138,9 @@ const fn legacy_enhanced_shadow() -> bool {
 fn create_shard_body(
     origin: Vec2,
     heading: f64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     enhanced_effects: bool,
-) -> NativeHardenShardBody {
+) -> HardenShardBody {
     let bounce = rng.draw_scaled_float(3.0, false);
     let height = rng.draw_scaled_float(20.0, false);
     let rotation = rng.draw_scaled_float(360.0, false);
@@ -168,7 +162,7 @@ fn create_shard_body(
     // The shipped factory applies its last two-velocity offset only to X.
     position.x = fround(position.x + velocity.x + velocity.x);
     let bounce = fround(-(2.0 + bounce));
-    NativeHardenShardBody {
+    HardenShardBody {
         bounce_velocity: bounce,
         enhanced_shadow: enhanced_effects,
         height: fround(-height),
@@ -184,19 +178,19 @@ fn create_shard_body(
 
 /// Returns whether the effect remains alive. Birth ticks determine age even when
 /// an airborne shard skips its physics update on every third simulation tick.
-pub fn step_native_harden_effect(
-    effect: &mut NativeHardenEffect,
+pub fn step_harden_effect(
+    effect: &mut HardenEffect,
     tick: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     can_land_at: impl Fn(Vec2) -> bool,
 ) -> bool {
     let (owner, body) = match effect {
-        NativeHardenEffect::Burst { owner, alpha, .. } => {
+        HardenEffect::Burst { owner, alpha, .. } => {
             owner.common.age_ticks = tick - owner.birth_tick;
             *alpha = fround(*alpha - (0.05_f32 as f64));
             return *alpha > 0.0;
         }
-        NativeHardenEffect::Shard { owner, body } => (owner, body),
+        HardenEffect::Shard { owner, body } => (owner, body),
     };
     owner.common.age_ticks = tick - owner.birth_tick;
     if body.height != 0.0 && tick.is_multiple_of(3) {
@@ -243,33 +237,31 @@ pub fn step_native_harden_effect(
 
 /// Exact stock sprite and painter queue from `renderer/player-harden-effect-view.ts`.
 #[must_use]
-pub fn native_harden_effect_plan(effect: &NativeHardenEffect) -> NativeSpellSpritePlan {
+pub fn harden_effect_plan(effect: &HardenEffect) -> SpellSpritePlan {
     let (position, sort_bias, draw) = match effect {
-        NativeHardenEffect::Shard { body, .. } => (
+        HardenEffect::Shard { body, .. } => (
             body.position,
             0.0,
-            NativeSpellSprite {
+            SpellSprite {
                 alpha: body.life.min(1.0),
                 blend: SpellBlend::Add,
                 offset: Vec2::new(0.0, body.height),
                 queue: SpellDrawQueue::PostWorld,
                 rotation: body.rotation_degrees * std::f64::consts::PI / 180.0,
-                ..NativeSpellSprite::new(body.record as usize, 1.0)
+                ..SpellSprite::new(body.record as usize, 1.0)
             },
         ),
-        NativeHardenEffect::Burst { alpha, position, .. } => (
-            *position,
-            10.0,
-            NativeSpellSprite { alpha: *alpha, ..NativeSpellSprite::new(15, 3.5) },
-        ),
+        HardenEffect::Burst { alpha, position, .. } => {
+            (*position, 10.0, SpellSprite { alpha: *alpha, ..SpellSprite::new(15, 3.5) })
+        }
     };
     let mut draws = Vec::new();
-    if let NativeHardenEffect::Shard { body, .. } = effect
+    if let HardenEffect::Shard { body, .. } = effect
         && body.enhanced_shadow
     {
         // AdditiveBouncer preserves its Add blend for the black inherited shadow;
         // drawing it as a normal shadow would incorrectly darken the floor.
-        draws.push(NativeSpellSprite {
+        draws.push(SpellSprite {
             offset: Vec2::new(0.0, 2.0),
             scale: Vec2::new(1.0, 0.75),
             tint: 0,
@@ -277,11 +269,5 @@ pub fn native_harden_effect_plan(effect: &NativeHardenEffect) -> NativeSpellSpri
         });
     }
     draws.push(draw);
-    NativeSpellSpritePlan {
-        position,
-        world_y: position.y,
-        sort_bias,
-        region_light_point: None,
-        draws,
-    }
+    SpellSpritePlan { position, world_y: position.y, sort_bias, region_light_point: None, draws }
 }

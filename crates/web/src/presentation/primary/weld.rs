@@ -2,21 +2,21 @@
 
 use solomon_sim::Vec2;
 use solomon_sim::spells::weld::{
-    NativeWeldHailChildActorState, NativeWeldPersistentActorState, NativeWeldWorldActor,
+    WeldHailChildActorState, WeldPersistentActorState, WeldWorldActor,
 };
 
 use crate::presentation::PresentationClocks;
 use crate::presentation::math::{lerp, lerp_degrees, lerp_option, lerp_vec};
 
-pub(super) fn same_kind(first: &NativeWeldWorldActor, next: &NativeWeldWorldActor) -> bool {
+pub(super) fn same_kind(first: &WeldWorldActor, next: &WeldWorldActor) -> bool {
     if std::mem::discriminant(first) != std::mem::discriminant(next) {
         return false;
     }
     match (first, next) {
-        (NativeWeldWorldActor::HailChild(first), NativeWeldWorldActor::HailChild(next)) => {
+        (WeldWorldActor::HailChild(first), WeldWorldActor::HailChild(next)) => {
             std::mem::discriminant(first) == std::mem::discriminant(next)
         }
-        (NativeWeldWorldActor::Persistent(first), NativeWeldWorldActor::Persistent(next)) => {
+        (WeldWorldActor::Persistent(first), WeldWorldActor::Persistent(next)) => {
             std::mem::discriminant(first) == std::mem::discriminant(next)
         }
         _ => true,
@@ -24,9 +24,9 @@ pub(super) fn same_kind(first: &NativeWeldWorldActor, next: &NativeWeldWorldActo
 }
 
 pub(super) fn project(
-    output: &mut NativeWeldWorldActor,
-    first: &NativeWeldWorldActor,
-    next: &NativeWeldWorldActor,
+    output: &mut WeldWorldActor,
+    first: &WeldWorldActor,
+    next: &WeldWorldActor,
     blend: f64,
     clocks: &mut PresentationClocks,
 ) {
@@ -35,69 +35,65 @@ pub(super) fn project(
     output.common_mut().origin = lerp_vec(first.common().origin, next.common().origin, blend);
     match (output, first, next) {
         (
-            NativeWeldWorldActor::MeteorMarker(out),
-            NativeWeldWorldActor::MeteorMarker(first),
-            NativeWeldWorldActor::MeteorMarker(next),
+            WeldWorldActor::MeteorMarker(out),
+            WeldWorldActor::MeteorMarker(first),
+            WeldWorldActor::MeteorMarker(next),
         ) => {
             out.alpha = lerp(first.alpha, next.alpha, blend);
             out.rotation_degrees = lerp(first.rotation_degrees, next.rotation_degrees, blend);
             out.scale = lerp(first.scale, next.scale, blend);
         }
         (
-            NativeWeldWorldActor::Channel(out),
-            NativeWeldWorldActor::Channel(first),
-            NativeWeldWorldActor::Channel(next),
+            WeldWorldActor::Channel(out),
+            WeldWorldActor::Channel(first),
+            WeldWorldActor::Channel(next),
         ) => {
             out.endpoint = nullable_vec(first.endpoint, next.endpoint, blend);
             out.midpoint = nullable_vec(first.midpoint, next.midpoint, blend);
         }
         (
-            NativeWeldWorldActor::Impact(out),
-            NativeWeldWorldActor::Impact(first),
-            NativeWeldWorldActor::Impact(next),
+            WeldWorldActor::Impact(out),
+            WeldWorldActor::Impact(first),
+            WeldWorldActor::Impact(next),
         ) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.alpha = lerp(first.alpha, next.alpha, blend);
         }
         (
-            NativeWeldWorldActor::BoulderDebris(out),
-            NativeWeldWorldActor::BoulderDebris(first),
-            NativeWeldWorldActor::BoulderDebris(next),
+            WeldWorldActor::BoulderDebris(out),
+            WeldWorldActor::BoulderDebris(first),
+            WeldWorldActor::BoulderDebris(next),
         ) => out.position = lerp_vec(first.position, next.position, blend),
         (
-            NativeWeldWorldActor::FlameLashFade(out),
-            NativeWeldWorldActor::FlameLashFade(first),
-            NativeWeldWorldActor::FlameLashFade(next),
+            WeldWorldActor::FlameLashFade(out),
+            WeldWorldActor::FlameLashFade(first),
+            WeldWorldActor::FlameLashFade(next),
         ) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.alpha = lerp(first.alpha, next.alpha, blend);
         }
         (
-            NativeWeldWorldActor::GroundSparkFade(out),
-            NativeWeldWorldActor::GroundSparkFade(first),
-            NativeWeldWorldActor::GroundSparkFade(next),
+            WeldWorldActor::GroundSparkFade(out),
+            WeldWorldActor::GroundSparkFade(first),
+            WeldWorldActor::GroundSparkFade(next),
         ) => {
             out.seed.position = lerp_vec(first.seed.position, next.seed.position, blend);
             out.seed.alpha = lerp(first.seed.alpha, next.seed.alpha, blend);
         }
         (
-            NativeWeldWorldActor::MeteorFlash(out),
-            NativeWeldWorldActor::MeteorFlash(first),
-            NativeWeldWorldActor::MeteorFlash(next),
+            WeldWorldActor::MeteorFlash(out),
+            WeldWorldActor::MeteorFlash(first),
+            WeldWorldActor::MeteorFlash(next),
         ) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.alpha = lerp(first.alpha, next.alpha, blend);
         }
         (
-            NativeWeldWorldActor::HailChild(out),
-            NativeWeldWorldActor::HailChild(first),
-            NativeWeldWorldActor::HailChild(next),
+            WeldWorldActor::HailChild(out),
+            WeldWorldActor::HailChild(first),
+            WeldWorldActor::HailChild(next),
         ) => hail_child(out, first, next, blend),
-        (
-            NativeWeldWorldActor::Steam(out),
-            NativeWeldWorldActor::Steam(first),
-            NativeWeldWorldActor::Steam(next),
-        ) => {
+        (WeldWorldActor::Steam(out), WeldWorldActor::Steam(first), WeldWorldActor::Steam(next)) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.blue = lerp(first.blue, next.blue, blend);
             out.life = lerp(first.life, next.life, blend);
@@ -109,23 +105,23 @@ pub(super) fn project(
             out.velocity = lerp_vec(first.velocity, next.velocity, blend);
         }
         (
-            NativeWeldWorldActor::HailRockFade(out),
-            NativeWeldWorldActor::HailRockFade(first),
-            NativeWeldWorldActor::HailRockFade(next),
+            WeldWorldActor::HailRockFade(out),
+            WeldWorldActor::HailRockFade(first),
+            WeldWorldActor::HailRockFade(next),
         ) => out.position = lerp_vec(first.position, next.position, blend),
         (
-            NativeWeldWorldActor::Meteor(out),
-            NativeWeldWorldActor::Meteor(first),
-            NativeWeldWorldActor::Meteor(next),
+            WeldWorldActor::Meteor(out),
+            WeldWorldActor::Meteor(first),
+            WeldWorldActor::Meteor(next),
         ) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.body_scale = lerp(first.body_scale, next.body_scale, blend);
             out.fall_height = lerp(first.fall_height, next.fall_height, blend);
         }
         (
-            NativeWeldWorldActor::Persistent(out),
-            NativeWeldWorldActor::Persistent(first),
-            NativeWeldWorldActor::Persistent(next),
+            WeldWorldActor::Persistent(out),
+            WeldWorldActor::Persistent(first),
+            WeldWorldActor::Persistent(next),
         ) => persistent(out, first, next, blend, clocks),
         _ => {}
     }
@@ -140,42 +136,42 @@ fn nullable_vec(first: Option<Vec2>, next: Option<Vec2>, blend: f64) -> Option<V
 }
 
 fn hail_child(
-    output: &mut NativeWeldHailChildActorState,
-    first: &NativeWeldHailChildActorState,
-    next: &NativeWeldHailChildActorState,
+    output: &mut WeldHailChildActorState,
+    first: &WeldHailChildActorState,
+    next: &WeldHailChildActorState,
     blend: f64,
 ) {
     match (output, first, next) {
         (
-            NativeWeldHailChildActorState::Flash(out),
-            NativeWeldHailChildActorState::Flash(first),
-            NativeWeldHailChildActorState::Flash(next),
+            WeldHailChildActorState::Flash(out),
+            WeldHailChildActorState::Flash(first),
+            WeldHailChildActorState::Flash(next),
         ) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.alpha = lerp(first.alpha, next.alpha, blend);
         }
         (
-            NativeWeldHailChildActorState::Line(out),
-            NativeWeldHailChildActorState::Line(first),
-            NativeWeldHailChildActorState::Line(next),
+            WeldHailChildActorState::Line(out),
+            WeldHailChildActorState::Line(first),
+            WeldHailChildActorState::Line(next),
         ) => {
             out.alpha = lerp(first.alpha, next.alpha, blend);
             out.end = lerp_vec(first.end, next.end, blend);
             out.start = lerp_vec(first.start, next.start, blend);
         }
         (
-            NativeWeldHailChildActorState::TerrainParticle(out),
-            NativeWeldHailChildActorState::TerrainParticle(first),
-            NativeWeldHailChildActorState::TerrainParticle(next),
+            WeldHailChildActorState::TerrainParticle(out),
+            WeldHailChildActorState::TerrainParticle(first),
+            WeldHailChildActorState::TerrainParticle(next),
         ) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.alpha = lerp(first.alpha, next.alpha, blend);
             out.velocity = lerp_vec(first.velocity, next.velocity, blend);
         }
         (
-            NativeWeldHailChildActorState::TerrainBouncer(out),
-            NativeWeldHailChildActorState::TerrainBouncer(first),
-            NativeWeldHailChildActorState::TerrainBouncer(next),
+            WeldHailChildActorState::TerrainBouncer(out),
+            WeldHailChildActorState::TerrainBouncer(first),
+            WeldHailChildActorState::TerrainBouncer(next),
         ) => {
             out.position = lerp_vec(first.position, next.position, blend);
             out.alpha = lerp(first.alpha, next.alpha, blend);
@@ -189,26 +185,26 @@ fn hail_child(
 }
 
 fn persistent(
-    output: &mut NativeWeldPersistentActorState,
-    first: &NativeWeldPersistentActorState,
-    next: &NativeWeldPersistentActorState,
+    output: &mut WeldPersistentActorState,
+    first: &WeldPersistentActorState,
+    next: &WeldPersistentActorState,
     blend: f64,
     clocks: &mut PresentationClocks,
 ) {
     match (output, first, next) {
         (
-            NativeWeldPersistentActorState::EtherealBoulder(out),
-            NativeWeldPersistentActorState::EtherealBoulder(first),
-            NativeWeldPersistentActorState::EtherealBoulder(next),
+            WeldPersistentActorState::EtherealBoulder(out),
+            WeldPersistentActorState::EtherealBoulder(first),
+            WeldPersistentActorState::EtherealBoulder(next),
         ) => {
             out.scale = lerp(first.scale, next.scale, blend);
             out.shell_scale = lerp(first.shell_scale, next.shell_scale, blend);
             out.velocity = lerp_vec(first.velocity, next.velocity, blend);
         }
         (
-            NativeWeldPersistentActorState::Hailstones(out),
-            NativeWeldPersistentActorState::Hailstones(first),
-            NativeWeldPersistentActorState::Hailstones(next),
+            WeldPersistentActorState::Hailstones(out),
+            WeldPersistentActorState::Hailstones(first),
+            WeldPersistentActorState::Hailstones(next),
         ) => {
             let age = lerp_option(
                 first.release_age_ticks.map(|age| age as f64),

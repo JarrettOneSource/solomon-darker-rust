@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use solomon_sim::profile::runtime::{PlayerStaffAttackOutcome, PlayerStaffDamageLane};
 use solomon_sim::spells::model::PrimarySpellTransientBase;
 use solomon_sim::spells::staff::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 pub fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -18,7 +18,7 @@ pub fn strings(value: &Value) -> Vec<String> {
     value.as_array().unwrap().iter().map(|value| value.as_str().unwrap().into()).collect()
 }
 
-pub fn rng_snapshot(value: &NativeRng) -> Value {
+pub fn rng_snapshot(value: &Rng) -> Value {
     json!({ "indexA": value.index_a, "indexB": value.index_b, "words": &value.words[..] })
 }
 
@@ -82,8 +82,8 @@ pub fn lane(value: &str) -> PlayerStaffDamageLane {
     }
 }
 
-pub fn read_action(value: &Value) -> NativePlayerStaffAction {
-    let base = NativePlayerStaffActionBase {
+pub fn read_action(value: &Value) -> PlayerStaffAction {
+    let base = PlayerStaffActionBase {
         common: PrimarySpellTransientBase {
             age_ticks: value["ageTicks"].as_u64().unwrap(),
             id: value["id"].as_u64().unwrap(),
@@ -99,14 +99,14 @@ pub fn read_action(value: &Value) -> NativePlayerStaffAction {
         swoosh_pitch: value["swooshPitch"].as_f64().unwrap(),
     };
     match value["kind"].as_str().unwrap() {
-        "player-staff-melee" => NativePlayerStaffAction::Melee(NativePlayerStaffMeleeAction {
+        "player-staff-melee" => PlayerStaffAction::Melee(PlayerStaffMeleeAction {
             base,
             action_timing_factor: value["actionTimingFactor"].as_f64().unwrap(),
             base_progress_per_tick: value["baseProgressPerTick"].as_f64().unwrap(),
             lane: lane(value["lane"].as_str().unwrap()),
             progress: value["progress"].as_f64().unwrap(),
         }),
-        "player-staff-spin" => NativePlayerStaffAction::Spin(NativePlayerStaffSpinAction {
+        "player-staff-spin" => PlayerStaffAction::Spin(PlayerStaffSpinAction {
             base,
             countdown: value["countdown"].as_f64().unwrap(),
             turn_sign: value["turnSign"].as_i64().unwrap() as i8,
@@ -115,20 +115,20 @@ pub fn read_action(value: &Value) -> NativePlayerStaffAction {
     }
 }
 
-pub fn action_snapshot(action: &NativePlayerStaffAction) -> Value {
+pub fn action_snapshot(action: &PlayerStaffAction) -> Value {
     let base = action.base();
     let mut fields = json!({ "contactSequence": base.contact_sequence,
         "headingDegrees": base.heading_degrees, "origin": position(base.origin),
         "outcome": outcome_id(base.outcome), "swooshPitch": base.swoosh_pitch });
     let (kind, specific) = match action {
-        NativePlayerStaffAction::Melee(action) => (
+        PlayerStaffAction::Melee(action) => (
             "player-staff-melee",
             json!({
             "actionTimingFactor": action.action_timing_factor,
             "baseProgressPerTick": action.base_progress_per_tick,
             "lane": action.lane.as_str(), "progress": action.progress }),
         ),
-        NativePlayerStaffAction::Spin(action) => (
+        PlayerStaffAction::Spin(action) => (
             "player-staff-spin",
             json!({
             "countdown": action.countdown, "turnSign": action.turn_sign }),
@@ -138,8 +138,8 @@ pub fn action_snapshot(action: &NativePlayerStaffAction) -> Value {
     row(action.common(), kind, fields)
 }
 
-pub fn read_target(value: &Value) -> NativeStaffTarget {
-    NativeStaffTarget {
+pub fn read_target(value: &Value) -> StaffTarget {
+    StaffTarget {
         collision_radius: value["collisionRadius"].as_f64().unwrap(),
         id: value["id"].as_str().unwrap().into(),
         position: point(&value["position"]),
@@ -147,35 +147,35 @@ pub fn read_target(value: &Value) -> NativeStaffTarget {
     }
 }
 
-pub fn impact_snapshot(value: &NativeStaffPhysicalImpact) -> Value {
+pub fn impact_snapshot(value: &StaffPhysicalImpact) -> Value {
     json!({ "contactKnockbackDelta": value.contact_knockback_delta.map(position),
         "pikeBreakPresentationRng": value.pike_break_presentation_rng.as_ref().map(rng_snapshot),
         "soundPitch": value.sound_pitch, "targetId": value.target_id,
         "verticalVelocity": value.vertical_velocity })
 }
 
-pub fn event_snapshot(value: &NativePlayerStaffContactEvent) -> Value {
+pub fn event_snapshot(value: &PlayerStaffContactEvent) -> Value {
     row(
         &value.common,
         "player-staff-contact",
         json!({
         "impactSoundPitches": value.impact_sound_pitches, "origin": position(value.origin),
-        "outcome": outcome_id(value.outcome), "procSound": value.proc_sound.map(NativeStaffProcSound::as_str),
+        "outcome": outcome_id(value.outcome), "procSound": value.proc_sound.map(StaffProcSound::as_str),
         "procSoundPitches": value.proc_sound_pitches, "pikeBreakSoundIndexes": value.pike_break_sound_indexes,
         "swooshPitch": value.swoosh_pitch, "targetIds": value.target_ids }),
     )
 }
 
-pub fn vfx_snapshot(value: &NativePlayerStaffVfx) -> Value {
+pub fn vfx_snapshot(value: &PlayerStaffVfx) -> Value {
     let (kind, fields) = match value {
-        NativePlayerStaffVfx::Smoke(vfx) => (
+        PlayerStaffVfx::Smoke(vfx) => (
             "player-staff-smoke",
             json!({
             "alpha": vfx.alpha, "alphaLoss": vfx.alpha_loss, "angularVelocityDegrees": vfx.angular_velocity_degrees,
             "entry": vfx.entry, "position": position(vfx.position), "rotationDegrees": vfx.rotation_degrees,
             "scale": vfx.scale }),
         ),
-        NativePlayerStaffVfx::MoveFade(vfx) => (
+        PlayerStaffVfx::MoveFade(vfx) => (
             "player-staff-move-fade",
             json!({
             "alpha": vfx.alpha, "alphaLoss": vfx.alpha_loss, "entry": vfx.entry,
@@ -183,7 +183,7 @@ pub fn vfx_snapshot(value: &NativePlayerStaffVfx) -> Value {
             "scale": vfx.scale, "tint": vfx.tint, "velocity": position(vfx.velocity),
             "velocityFactor": vfx.velocity_factor }),
         ),
-        NativePlayerStaffVfx::PerspectiveFade(vfx) => (
+        PlayerStaffVfx::PerspectiveFade(vfx) => (
             "player-staff-perspective-fade",
             json!({
             "alpha": vfx.alpha, "alphaLoss": vfx.alpha_loss, "entry": vfx.entry,
@@ -194,7 +194,7 @@ pub fn vfx_snapshot(value: &NativePlayerStaffVfx) -> Value {
     row(value.common(), kind, fields)
 }
 
-pub fn read_vfx(value: &Value) -> NativePlayerStaffVfx {
+pub fn read_vfx(value: &Value) -> PlayerStaffVfx {
     let common = PrimarySpellTransientBase {
         age_ticks: value["ageTicks"].as_u64().unwrap(),
         id: value["id"].as_u64().unwrap(),
@@ -210,7 +210,7 @@ pub fn read_vfx(value: &Value) -> NativePlayerStaffVfx {
     let rotation_degrees = value["rotationDegrees"].as_f64().unwrap();
     let scale = value["scale"].as_f64().unwrap();
     match value["kind"].as_str().unwrap() {
-        "player-staff-smoke" => NativePlayerStaffVfx::Smoke(NativePlayerStaffSmokeVfx {
+        "player-staff-smoke" => PlayerStaffVfx::Smoke(PlayerStaffSmokeVfx {
             common,
             alpha,
             alpha_loss,
@@ -220,7 +220,7 @@ pub fn read_vfx(value: &Value) -> NativePlayerStaffVfx {
             scale,
             angular_velocity_degrees: value["angularVelocityDegrees"].as_f64().unwrap(),
         }),
-        "player-staff-move-fade" => NativePlayerStaffVfx::MoveFade(NativePlayerStaffMoveFadeVfx {
+        "player-staff-move-fade" => PlayerStaffVfx::MoveFade(PlayerStaffMoveFadeVfx {
             common,
             alpha,
             alpha_loss,
@@ -233,7 +233,7 @@ pub fn read_vfx(value: &Value) -> NativePlayerStaffVfx {
             velocity_factor: value["velocityFactor"].as_f64().unwrap(),
         }),
         "player-staff-perspective-fade" => {
-            NativePlayerStaffVfx::PerspectiveFade(NativePlayerStaffPerspectiveVfx {
+            PlayerStaffVfx::PerspectiveFade(PlayerStaffPerspectiveVfx {
                 common,
                 alpha,
                 alpha_loss,
@@ -248,7 +248,7 @@ pub fn read_vfx(value: &Value) -> NativePlayerStaffVfx {
     }
 }
 
-pub fn knockback_snapshot(value: &NativeStaffKnockbackActor) -> Value {
+pub fn knockback_snapshot(value: &StaffKnockbackActor) -> Value {
     row(
         &value.common,
         "player-staff-knockback",
@@ -258,7 +258,7 @@ pub fn knockback_snapshot(value: &NativeStaffKnockbackActor) -> Value {
     )
 }
 
-pub fn knockback_step_snapshot(value: &NativeStaffKnockbackStep, rng: &NativeRng) -> Value {
+pub fn knockback_step_snapshot(value: &StaffKnockbackStep, rng: &Rng) -> Value {
     let displacements = value
         .displacements
         .iter()
@@ -281,7 +281,7 @@ pub fn knockback_step_snapshot(value: &NativeStaffKnockbackStep, rng: &NativeRng
         "headingPerturbations": headings, "rng": rng_snapshot(rng) })
 }
 
-pub fn contact_knockback_snapshot(value: &NativePlayerStaffContactKnockback) -> Value {
+pub fn contact_knockback_snapshot(value: &PlayerStaffContactKnockback) -> Value {
     row(
         &value.common,
         "player-staff-contact-knockback",
@@ -290,7 +290,7 @@ pub fn contact_knockback_snapshot(value: &NativePlayerStaffContactKnockback) -> 
     )
 }
 
-pub fn pike_snapshot(value: &NativePlayerStaffPikeBreakVfx) -> Value {
+pub fn pike_snapshot(value: &PlayerStaffPikeBreakVfx) -> Value {
     row(
         &value.common,
         "player-staff-pike-break",

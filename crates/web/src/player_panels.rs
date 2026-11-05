@@ -33,8 +33,7 @@ use notices::PlayerPanelNotice;
 use solomon_sim::Vec2;
 use solomon_sim::audio::{AudioCue, AudioEvent, AudioOptions};
 use solomon_sim::belt::{
-    NATIVE_BELT_SLOT_COUNT, NativeBeltCommand, PlayerBeltComponent, native_belt_equipment_slots,
-    native_belt_owned_item,
+    BELT_SLOT_COUNT, BeltCommand, PlayerBeltComponent, belt_equipment_slots, belt_owned_item,
 };
 use solomon_sim::combat::PlayerCombatState;
 use solomon_sim::economy::{
@@ -43,17 +42,17 @@ use solomon_sim::economy::{
 };
 use solomon_sim::hub::interaction::{HubInteractionId, HubNpcChatContent, HubNpcSelectorId};
 use solomon_sim::hub::interaction::{hub_boast_failure_text, hub_boast_instruction};
-use solomon_sim::hud::belt_pull_off::native_belt_pull_off_started;
-use solomon_sim::hud::skill_selector::NativeHudSkillSelectorTarget;
+use solomon_sim::hud::belt_pull_off::belt_pull_off_started;
+use solomon_sim::hud::skill_selector::HudSkillSelectorTarget;
 use solomon_sim::modding::projection::ModContentProjection;
-use solomon_sim::native_ui_notebox::NativeNoteboxKind;
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
 use solomon_sim::profile::{
-    NativeSkillBookState, NewGameSelection, PlayerProgressionState, PlayerStatBookComponent,
-    native_skill_category,
+    NewGameSelection, PlayerProgressionState, PlayerStatBookComponent, SkillBookState,
+    skill_category,
 };
 use solomon_sim::settings::GameControlBindings;
-use solomon_sim::tutorial_surface::NativeTutorialSurfaceAction;
+use solomon_sim::tutorial_surface::TutorialSurfaceAction;
+use solomon_sim::ui_notebox::NoteboxKind;
 use viewport::PanelSection;
 
 /// These are derived by the owning session, alongside the combat and spell snapshots.
@@ -92,7 +91,7 @@ pub struct InventoryPreviewUnderlay {
 
 pub struct PlayerPanelSnapshot<'a> {
     pub selection: &'a NewGameSelection,
-    pub book: &'a NativeSkillBookState,
+    pub book: &'a SkillBookState,
     /// Actual per-player authority, used by the source snapshot's primary summary.
     /// Stock Skills page text intentionally remains the immutable native catalog.
     pub stat_book: &'a PlayerStatBookComponent,
@@ -104,7 +103,7 @@ pub struct PlayerPanelSnapshot<'a> {
     pub dye_session_id: Option<&'a str>,
     pub progression: &'a PlayerProgressionState,
     pub resources: &'a PlayerCombatState,
-    pub offensive: &'a NativeOffensiveSpellFactors,
+    pub offensive: &'a OffensiveSpellFactors,
     pub attributes: InventoryAttributes,
     pub concentrations: &'a [Option<usize>; 2],
     pub mind_chug_active: bool,
@@ -119,10 +118,10 @@ pub enum PlayerPanelAction {
     OpenInventory,
     OpenSkills,
     Close,
-    Surface(NativeTutorialSurfaceAction),
+    Surface(TutorialSurfaceAction),
     AcknowledgeCollegeIntroDialogue,
     Inventory(HubInventoryAction),
-    Belt(NativeBeltCommand),
+    Belt(BeltCommand),
     ActivateBeltSlot { slot: usize, pointer: Option<Vec2> },
     SelectPrimary(usize),
     SelectConcentration(usize),
@@ -133,7 +132,7 @@ pub enum PlayerPanelAction {
 pub enum PlayerPanel {
     Inventory,
     Skills,
-    SkillSelector(NativeHudSkillSelectorTarget),
+    SkillSelector(HudSkillSelectorTarget),
     Dialogue,
     Service(HubTraderId),
 }
@@ -307,7 +306,7 @@ pub struct PlayerPanels {
 
 impl PlayerPanels {
     pub async fn attach(hotbar: HotbarSelection) -> Result<Self, String> {
-        let belt_rects = solomon_sim::hud::native_hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
+        let belt_rects = solomon_sim::hud::hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
         Ok(Self {
             inventory_flybys: Vec::new(),
             model: None,
@@ -455,18 +454,18 @@ impl PlayerPanels {
             return;
         }
         let closed = match previous {
-            Some(PlayerPanel::Inventory) => Some(NativeTutorialSurfaceAction::InventoryClosed),
-            Some(PlayerPanel::Skills) => Some(NativeTutorialSurfaceAction::SkillsClosed),
+            Some(PlayerPanel::Inventory) => Some(TutorialSurfaceAction::InventoryClosed),
+            Some(PlayerPanel::Skills) => Some(TutorialSurfaceAction::SkillsClosed),
             _ => None,
         };
         let opened = match next {
-            Some(PlayerPanel::Inventory) => Some(NativeTutorialSurfaceAction::InventoryOpened),
-            Some(PlayerPanel::Skills) => Some(NativeTutorialSurfaceAction::SkillsOpened),
-            Some(PlayerPanel::SkillSelector(NativeHudSkillSelectorTarget::Primary)) => {
-                Some(NativeTutorialSurfaceAction::PrimarySelectorOpened)
+            Some(PlayerPanel::Inventory) => Some(TutorialSurfaceAction::InventoryOpened),
+            Some(PlayerPanel::Skills) => Some(TutorialSurfaceAction::SkillsOpened),
+            Some(PlayerPanel::SkillSelector(HudSkillSelectorTarget::Primary)) => {
+                Some(TutorialSurfaceAction::PrimarySelectorOpened)
             }
-            Some(PlayerPanel::SkillSelector(NativeHudSkillSelectorTarget::ConcentrationA)) => {
-                Some(NativeTutorialSurfaceAction::ConcentrationASelectorOpened)
+            Some(PlayerPanel::SkillSelector(HudSkillSelectorTarget::ConcentrationA)) => {
+                Some(TutorialSurfaceAction::ConcentrationASelectorOpened)
             }
             _ => None,
         };
@@ -550,8 +549,7 @@ impl PlayerPanels {
         action: &HubInventoryAction,
         reason: solomon_sim::economy::HubEconomyRejection,
     ) -> bool {
-        let Some(notice) =
-            solomon_sim::player_panels::native_inventory_rejection_notice(action, reason)
+        let Some(notice) = solomon_sim::player_panels::inventory_rejection_notice(action, reason)
         else {
             return false;
         };
@@ -617,7 +615,7 @@ impl PlayerPanels {
             HubInventoryAction::Equip { .. } => self.sound(AudioCue::BackpackOpen),
             HubInventoryAction::Unforge { .. } => {
                 let cue = if result.unforge_outcome.as_ref().is_some_and(|outcome| {
-                    outcome.kind == solomon_sim::economy::NativeUnforgeOutcomeKind::Fizzle
+                    outcome.kind == solomon_sim::economy::UnforgeOutcomeKind::Fizzle
                 }) {
                     AudioCue::Fizzle
                 } else {
@@ -840,11 +838,11 @@ impl PlayerPanels {
                     && let Target::Belt(slot) = press.target
                     && snapshot.belt.entries[slot].is_some()
                     && self.dye.is_none()
-                    && native_belt_pull_off_started(press.origin, point)
+                    && belt_pull_off_started(press.origin, point)
                 {
                     self.press = None;
                     self.target_belt = None;
-                    self.actions.push(PlayerPanelAction::Belt(NativeBeltCommand::BindSkill {
+                    self.actions.push(PlayerPanelAction::Belt(BeltCommand::BindSkill {
                         skill_id: None,
                         slot,
                     }));
@@ -1026,15 +1024,13 @@ impl PlayerPanels {
                 self.sound(AudioCue::PickSkill);
                 self.target_belt = Some(slot);
                 if let Some(Target::Skill(skill_id)) = self.selected {
-                    self.actions.push(PlayerPanelAction::Belt(NativeBeltCommand::BindSkill {
+                    self.actions.push(PlayerPanelAction::Belt(BeltCommand::BindSkill {
                         skill_id: Some(skill_id),
                         slot,
                     }));
                 } else if let Some(Target::Item(item_id)) = self.selected {
-                    self.actions.push(PlayerPanelAction::Belt(NativeBeltCommand::BindItem {
-                        item_id,
-                        slot,
-                    }));
+                    self.actions
+                        .push(PlayerPanelAction::Belt(BeltCommand::BindItem { item_id, slot }));
                 }
             }
             Target::Skill(skill_id) => {
@@ -1042,13 +1038,13 @@ impl PlayerPanels {
                 self.selected = Some(target);
                 self.hovered_skill = Some(skill_id);
                 if let Some(slot) = self.target_belt.take() {
-                    self.actions.push(PlayerPanelAction::Belt(NativeBeltCommand::BindSkill {
+                    self.actions.push(PlayerPanelAction::Belt(BeltCommand::BindSkill {
                         skill_id: Some(skill_id),
                         slot,
                     }));
-                } else if native_skill_category(skill_id) == Some(1) {
+                } else if skill_category(skill_id) == Some(1) {
                     self.actions.push(PlayerPanelAction::SelectPrimary(skill_id));
-                } else if native_skill_category(skill_id) == Some(3) {
+                } else if skill_category(skill_id) == Some(3) {
                     self.actions.push(PlayerPanelAction::SelectConcentration(skill_id));
                 }
             }
@@ -1074,7 +1070,7 @@ impl PlayerPanels {
                 self.last_activation = Some((target, now));
                 if double {
                     self.last_activation = None;
-                    if let Some(item) = native_belt_owned_item(snapshot.economy, item_id) {
+                    if let Some(item) = belt_owned_item(snapshot.economy, item_id) {
                         match item.kind {
                             HubItemKind::Sack => {
                                 self.clear_inventory_flybys()?;
@@ -1099,7 +1095,7 @@ impl PlayerPanels {
                             HubItemKind::Equipment => {
                                 // `equipmentSlotsForItem` excludes the third ring until
                                 // Disfiguring Curse unlocks it, even when that slot is empty.
-                                let slots = native_belt_equipment_slots(
+                                let slots = belt_equipment_slots(
                                     item,
                                     snapshot.economy.owned_perk_selectors.contains(&19),
                                 );
@@ -1226,7 +1222,7 @@ impl PlayerPanels {
             // The source remounts belt pointer owners per bank, but retains the
             // selected visible target slot in the surrounding Skillbook.
             if let Some(slot) = self.target_belt {
-                self.target_belt = Some(self.hotbar.slot(slot % NATIVE_BELT_SLOT_COUNT));
+                self.target_belt = Some(self.hotbar.slot(slot % BELT_SLOT_COUNT));
             }
             if self.press.is_some_and(|press| matches!(press.target, Target::Belt(_))) {
                 self.press = None;
@@ -1249,7 +1245,7 @@ impl PlayerPanels {
             // this sequence only once it can actually present the failure.
             self.boast_failure_sequence = Some(sequence);
             self.sound(AudioCue::BoastFailure);
-            self.npc_notebox.show(&self.ui, NativeNoteboxKind::Failure, &text, now)?;
+            self.npc_notebox.show(&self.ui, NoteboxKind::Failure, &text, now)?;
         } else if self.boast_failure_sequence.is_none() {
             self.boast_failure_sequence = Some(sequence);
         }
@@ -1269,7 +1265,7 @@ impl PlayerPanels {
         }
         if self
             .dowsing_reference_item
-            .is_some_and(|id| native_belt_owned_item(snapshot.economy, id).is_none())
+            .is_some_and(|id| belt_owned_item(snapshot.economy, id).is_none())
         {
             self.dowsing_reference_item = None;
         }
@@ -1389,7 +1385,7 @@ impl PlayerPanels {
                     if self.boasts_open {
                         Some("panel:boasts".to_owned())
                     } else {
-                        solomon_sim::player_panels::native_skill_book_page_placements(snapshot.book)
+                        solomon_sim::player_panels::skill_book_page_placements(snapshot.book)
                             .first()
                             .and_then(|page| page.skills.first())
                             .map(|id| format!("panel:skill:{id}"))
@@ -1420,7 +1416,7 @@ impl PlayerPanels {
                     }
                 }
                 PlayerPanel::SkillSelector(target) => {
-                    solomon_sim::hud::skill_selector::native_hud_skill_selector_options(
+                    solomon_sim::hud::skill_selector::hud_skill_selector_options(
                         snapshot.book,
                         snapshot.concentrations,
                         target,
@@ -1452,7 +1448,7 @@ impl PlayerPanels {
         );
         let ctx = frame.ctx.clone();
         let mut error = None;
-        chrome::native_area_in(&ctx, layer, transform, self.body_viewport()).show(&ctx, |ui| {
+        chrome::area_in(&ctx, layer, transform, self.body_viewport()).show(&ctx, |ui| {
             ui.set_min_size(egui::vec2(1675.0, 900.0));
             let canvas = chrome::PanelCanvas::new(
                 frame,
@@ -1501,8 +1497,7 @@ impl PlayerPanels {
                 && self.dye.is_none()
                 && self.rename_sack.is_none()
             {
-                let belt =
-                    solomon_sim::hud::native_hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
+                let belt = solomon_sim::hud::hud_control_layout(1600.0, 900.0, Some(1.0)).belt;
                 self.hotbar_controls.paint(frame, ui, &belt, false, egui::vec2(1600.0, 900.0));
             }
         });

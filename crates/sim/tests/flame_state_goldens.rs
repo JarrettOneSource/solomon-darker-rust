@@ -1,7 +1,7 @@
 //! Current Source birth-owned Flame fade and Region camera clocks, including RNG.
 use serde::Deserialize;
 use solomon_sim::spells::weld::flame_state::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[derive(Clone, Copy, Deserialize)]
 struct Point {
@@ -61,8 +61,8 @@ fn native_flame_birth_fade_and_camera_clocks_match_current_source() {
     let fixture: Fixture =
         serde_json::from_str(include_str!("fixtures/website/flame-state-goldens.json")).unwrap();
     for expected in fixture.cameras {
-        let mut rng = NativeRng::new(expected.seed);
-        let actual = draw_native_flame_camera_displacement(&mut rng, expected.underpowered);
+        let mut rng = Rng::new(expected.seed);
+        let actual = draw_flame_camera_displacement(&mut rng, expected.underpowered);
         assert_eq!(actual, expected.displacement.map(Point::vector));
         assert_eq!(rng.index_a, expected.rng.index_a);
         assert_eq!(rng.index_b, expected.rng.index_b);
@@ -70,18 +70,18 @@ fn native_flame_birth_fade_and_camera_clocks_match_current_source() {
     }
     for expected in fixture.fades {
         assert_eq!(
-            native_flame_fade_alpha(expected.birth_alpha, expected.alpha_step, expected.age),
+            flame_fade_alpha(expected.birth_alpha, expected.alpha_step, expected.age),
             expected.alpha
         );
         assert_eq!(
-            native_flame_fade_wrapper_intensity(expected.birth_alpha, expected.age),
+            flame_fade_wrapper_intensity(expected.birth_alpha, expected.age),
             expected.wrapper_intensity
         );
     }
     for expected in fixture.decays {
-        assert_eq!(native_camera_magnitude_squared(expected.value.vector()), expected.squared);
+        assert_eq!(camera_magnitude_squared(expected.value.vector()), expected.squared);
         assert_eq!(
-            decay_native_region_camera_displacement(expected.value.vector(), expected.updates),
+            decay_region_camera_displacement(expected.value.vector(), expected.updates),
             expected.result.vector()
         );
     }

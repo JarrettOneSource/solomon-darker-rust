@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use super::{BoundsDocument, NativeBoundsDocument, PointDocument};
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::scenery::native_scenery_art_corners;
+use solomon_sim::boneyard::scenery::scenery_art_corners;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,7 +52,7 @@ impl SceneryRecord {
     }
 
     pub fn corners(&self, position: Vec2, rotation: f64, scale: Vec2) -> [Vec2; 4] {
-        native_scenery_art_corners(
+        scenery_art_corners(
             position,
             Vec2::new(self.w, self.h),
             Vec2::new(self.anchor_x, self.anchor_y),

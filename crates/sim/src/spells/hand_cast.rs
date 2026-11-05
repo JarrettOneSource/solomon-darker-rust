@@ -1,17 +1,17 @@
 //! Born no-item Cast1 action (`0x0044B400`) and its retained terminal frame.
 
-use crate::profile::primary::NativePrimarySkillProfile;
-use crate::{NativeRng, float::fround};
+use crate::profile::primary::PrimarySkillProfile;
+use crate::{Rng, float::fround};
 
 /// Admission `0x0052DA80` modifies the constructed rate, before the live
 /// Puppet time scale is sampled by the action on each later update.
 #[must_use]
-pub fn native_hand_cast1_rate(profile: &NativePrimarySkillProfile, cast_factor: f64) -> f64 {
+pub fn hand_cast1_rate(profile: &PrimarySkillProfile, cast_factor: f64) -> f64 {
     let rate = fround(0.095_f32 as f64 * fround(cast_factor));
     match profile {
-        NativePrimarySkillProfile::Ether(_) => rate,
-        NativePrimarySkillProfile::Fire(_) => fround(rate * 0.75),
-        NativePrimarySkillProfile::Weld(profile) => match profile.build_id {
+        PrimarySkillProfile::Ether(_) => rate,
+        PrimarySkillProfile::Fire(_) => fround(rate * 0.75),
+        PrimarySkillProfile::Weld(profile) => match profile.build_id {
             1000 => fround(rate * 0.87_f32 as f64),
             1001 => rate,
             1002 => fround(rate * 1.3_f32 as f64),
@@ -25,7 +25,7 @@ pub fn native_hand_cast1_rate(profile: &NativePrimarySkillProfile, cast_factor: 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(try_from = "saved::HandCast1Document"))]
-pub struct NativeHandCast1 {
+pub struct HandCast1 {
     progress: f64,
     rate: f64,
     first_pose: usize,
@@ -33,8 +33,8 @@ pub struct NativeHandCast1 {
     done: bool,
 }
 
-impl NativeHandCast1 {
-    pub fn new(rate: f64, pose: usize, rng: &mut NativeRng) -> Self {
+impl HandCast1 {
+    pub fn new(rate: f64, pose: usize, rng: &mut Rng) -> Self {
         assert!(rate.is_finite() && rate >= 0.0);
         assert!(pose < 4);
         Self {
@@ -77,7 +77,7 @@ impl NativeHandCast1 {
 
 #[cfg(feature = "persistence")]
 mod saved {
-    use super::NativeHandCast1;
+    use super::HandCast1;
 
     #[derive(serde::Deserialize)]
     pub(super) struct HandCast1Document {
@@ -88,7 +88,7 @@ mod saved {
         done: bool,
     }
 
-    impl TryFrom<HandCast1Document> for NativeHandCast1 {
+    impl TryFrom<HandCast1Document> for HandCast1 {
         type Error = &'static str;
 
         fn try_from(value: HandCast1Document) -> Result<Self, Self::Error> {

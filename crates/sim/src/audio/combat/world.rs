@@ -16,7 +16,7 @@ use super::{
 use crate::audio::{AudioCue, AudioEvent, AudioOptions};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemyEventSoundRequest {
+pub struct EnemyEventSoundRequest {
     pub cue: AudioCue,
     pub playback_rate: f64,
     pub source_position: Option<Vec2>,
@@ -24,11 +24,9 @@ pub struct NativeEnemyEventSoundRequest {
 }
 
 #[must_use]
-pub fn native_enemy_event_sound_request(
-    event: &EnemyEvent,
-) -> Option<NativeEnemyEventSoundRequest> {
+pub fn enemy_event_sound_request(event: &EnemyEvent) -> Option<EnemyEventSoundRequest> {
     if let Some(pitch) = event.deflect_pitch {
-        return Some(NativeEnemyEventSoundRequest {
+        return Some(EnemyEventSoundRequest {
             cue: AudioCue::Swipe,
             playback_rate: pitch,
             source_position: None,
@@ -46,7 +44,7 @@ pub fn native_enemy_event_sound_request(
         return None;
     }
     let sound = event.sound.expect("accepted enemy sound event carries its native cue");
-    Some(NativeEnemyEventSoundRequest {
+    Some(EnemyEventSoundRequest {
         cue: cue(sound.id()),
         playback_rate: event.pitch.expect("accepted enemy sound event carries its native pitch"),
         source_position: if sound == EnemySound::Poisoned
@@ -62,10 +60,8 @@ pub fn native_enemy_event_sound_request(
 }
 
 #[must_use]
-pub fn native_loot_event_sound_request(
-    event: &BoneyardLootEvent,
-) -> Option<NativeEnemyEventSoundRequest> {
-    Some(NativeEnemyEventSoundRequest {
+pub fn loot_event_sound_request(event: &BoneyardLootEvent) -> Option<EnemyEventSoundRequest> {
+    Some(EnemyEventSoundRequest {
         cue: cue(event.sound?.as_str()),
         playback_rate: event.playback_rate?,
         source_position: Some(event.position),
@@ -74,8 +70,8 @@ pub fn native_loot_event_sound_request(
 }
 
 #[must_use]
-pub fn native_solomon_dig_sound_request(event: SolomonDigEvent) -> NativeEnemyEventSoundRequest {
-    NativeEnemyEventSoundRequest {
+pub fn solomon_dig_sound_request(event: SolomonDigEvent) -> EnemyEventSoundRequest {
+    EnemyEventSoundRequest {
         cue: cue(event.cue.id()),
         playback_rate: 1.0,
         source_position: None,
@@ -107,7 +103,7 @@ pub struct BoneyardEnemyAmbientRequest {
 }
 
 #[must_use]
-pub fn native_boneyard_enemy_ambient_requests(
+pub fn boneyard_enemy_ambient_requests(
     world: &EnemyWorld,
     tick: u64,
     point_gain: &dyn Fn(Vec2) -> f64,
@@ -301,7 +297,7 @@ impl CombatAudioCursor {
             if event.kind == EnemyEventKind::EnemyDialogueStop {
                 output.stop_encounter_dialogue = true;
             }
-            let sound = native_enemy_event_sound_request(event);
+            let sound = enemy_event_sound_request(event);
             let position = sound.and_then(|sound| sound.source_position).or(event.source_position);
             let gain = position.map_or(1.0, frame.point_gain);
             if let Some(stream) = &event.stream {
@@ -315,7 +311,7 @@ impl CombatAudioCursor {
                 continue;
             }
             self.loot_event_id = event.event_id;
-            if let Some(sound) = native_loot_event_sound_request(event) {
+            if let Some(sound) = loot_event_sound_request(event) {
                 let gain = sound.source_position.map_or(1.0, frame.point_gain);
                 play(output, sound.cue, sound.playback_rate, sound.volume * gain);
             }
@@ -326,7 +322,7 @@ impl CombatAudioCursor {
                     if event.id <= previous_id {
                         continue;
                     }
-                    let sound = native_solomon_dig_sound_request(*event);
+                    let sound = solomon_dig_sound_request(*event);
                     play(
                         output,
                         sound.cue,
@@ -350,12 +346,7 @@ impl CombatAudioCursor {
         output: &mut CombatAudioOutput,
     ) {
         let requests = frame.enemies.map(|world| {
-            native_boneyard_enemy_ambient_requests(
-                world,
-                frame.tick,
-                frame.point_gain,
-                frame.hit_gain,
-            )
+            boneyard_enemy_ambient_requests(world, frame.tick, frame.point_gain, frame.hit_gain)
         });
         let mut active = Vec::new();
         for cue in BONEYARD_ENEMY_AMBIENT_CUES {

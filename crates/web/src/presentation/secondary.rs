@@ -1,15 +1,15 @@
 //! Secondary actor and articulated Golem projection from
 //! `client/native-secondary-presentation.ts`.
 
-use solomon_sim::secondary::NativeSecondarySimulationState;
+use solomon_sim::secondary::SecondarySimulationState;
 
 use super::PresentationClocks;
 use super::math::{interpolate_members, lerp, lerp_vec};
 
 pub(super) fn project(
-    output: &mut NativeSecondarySimulationState,
-    older: &NativeSecondarySimulationState,
-    newer: &NativeSecondarySimulationState,
+    output: &mut SecondarySimulationState,
+    older: &SecondarySimulationState,
+    newer: &SecondarySimulationState,
     blend: f64,
     clocks: &mut PresentationClocks,
 ) {

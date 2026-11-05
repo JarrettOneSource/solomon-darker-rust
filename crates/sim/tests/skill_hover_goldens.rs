@@ -1,9 +1,8 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::player_panels::skill_hover::{
-    NativeSkillHoverLine, NativeSkillHoverLineKind, measure_native_skill_exact_text,
-    native_skill_book_tooltip_lines, native_skill_exact_text_runs, native_skill_hover_box_layout,
-    skill_picker_detail_lines,
+    SkillHoverLine, SkillHoverLineKind, measure_skill_exact_text, skill_book_tooltip_lines,
+    skill_exact_text_runs, skill_hover_box_layout, skill_picker_detail_lines,
 };
 use solomon_sim::profile::PlayerSkillOfferOption;
 
@@ -12,7 +11,7 @@ fn native_skill_hover_lines_wraps_and_picker_details_match_current_website() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/skill-hover-goldens.json")).unwrap();
     for case in fixture["rows"].as_array().unwrap() {
-        let actual = native_skill_book_tooltip_lines(
+        let actual = skill_book_tooltip_lines(
             case["skillId"].as_u64().unwrap() as usize,
             case["permanentRank"].as_u64().unwrap() as u32,
             case["effectiveRank"].as_u64().unwrap() as u32,
@@ -31,7 +30,7 @@ fn native_skill_hover_lines_wraps_and_picker_details_match_current_website() {
     }
     for case in fixture["layouts"].as_array().unwrap() {
         let lines: Vec<_> = case["lines"].as_array().unwrap().iter().map(read_line).collect();
-        let actual = native_skill_hover_box_layout(
+        let actual = skill_hover_box_layout(
             &lines,
             Vec2::new(case["source"]["x"].as_f64().unwrap(), case["source"]["y"].as_f64().unwrap()),
         );
@@ -55,7 +54,7 @@ fn native_skill_hover_lines_wraps_and_picker_details_match_current_website() {
     }
     for case in fixture["runs"].as_array().unwrap() {
         let source = case["source"].as_str().unwrap();
-        let runs = native_skill_exact_text_runs(source);
+        let runs = skill_exact_text_runs(source);
         let expected = case["expected"].as_array().unwrap();
         assert_eq!(runs.len(), expected.len(), "runs {source}");
         for (run, expected) in runs.iter().zip(expected) {
@@ -65,11 +64,11 @@ fn native_skill_hover_lines_wraps_and_picker_details_match_current_website() {
             assert_eq!(run.offset_y, expected["offsetY"].as_f64().unwrap());
             assert_eq!(run.italic, expected["italic"].as_bool().unwrap());
         }
-        assert_eq!(measure_native_skill_exact_text(source), case["width"].as_f64().unwrap());
+        assert_eq!(measure_skill_exact_text(source), case["width"].as_f64().unwrap());
     }
 }
 
-fn lines_json(lines: &[NativeSkillHoverLine]) -> Value {
+fn lines_json(lines: &[SkillHoverLine]) -> Value {
     let rows: Vec<_> = lines
         .iter()
         .map(|line| serde_json::json!({"kind": line.kind.as_str(), "text": line.text}))
@@ -77,8 +76,8 @@ fn lines_json(lines: &[NativeSkillHoverLine]) -> Value {
     serde_json::json!(rows)
 }
 
-fn read_line(value: &Value) -> NativeSkillHoverLine {
-    use NativeSkillHoverLineKind as Kind;
+fn read_line(value: &Value) -> SkillHoverLine {
+    use SkillHoverLineKind as Kind;
     let kind = match value["kind"].as_str().unwrap() {
         "bonus" => Kind::Bonus,
         "boost" => Kind::Boost,
@@ -90,5 +89,5 @@ fn read_line(value: &Value) -> NativeSkillHoverLine {
         "title" => Kind::Title,
         _ => panic!("unknown source skill line"),
     };
-    NativeSkillHoverLine { kind, text: value["text"].as_str().unwrap().to_owned() }
+    SkillHoverLine { kind, text: value["text"].as_str().unwrap().to_owned() }
 }

@@ -3,9 +3,9 @@
 
 use super::program::*;
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryAudioCue as Cue,
-    NativeSecondaryEventKind as Event, NativeSecondaryEventState, NativeSecondaryScreenFlashState,
-    NativeSecondarySimulationState, apply_native_secondary_dazzle,
+    SecondaryActorKind as Kind, SecondaryAudioCue as Cue, SecondaryEventKind as Event,
+    SecondaryEventState, SecondaryScreenFlashState, SecondarySimulationState,
+    apply_secondary_dazzle,
 };
 use crate::Vec2;
 use crate::float::fround;
@@ -13,7 +13,7 @@ use crate::harmful::PlayerFlashResponse;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::profile::WizardElement;
 
-pub struct NativePlayerFlashResponseInput<'a> {
+pub struct PlayerFlashResponseInput<'a> {
     pub owner_id: &'a str,
     pub position: Vec2,
     pub response: &'a PlayerFlashResponse,
@@ -22,7 +22,7 @@ pub struct NativePlayerFlashResponseInput<'a> {
     pub world_key: &'a str,
 }
 
-pub struct NativePlayerMindblastInput<'a> {
+pub struct PlayerMindblastInput<'a> {
     pub direct_damage: Option<f64>,
     pub element: WizardElement,
     pub level: u32,
@@ -33,7 +33,7 @@ pub struct NativePlayerMindblastInput<'a> {
     pub world_key: &'a str,
 }
 
-pub struct NativePlayerRescueInput<'a> {
+pub struct PlayerRescueInput<'a> {
     pub light_registration: PainterRegistration,
     pub owner_id: &'a str,
     pub position: Vec2,
@@ -41,25 +41,25 @@ pub struct NativePlayerRescueInput<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativePlayerMindblastTriggerResult {
+pub struct PlayerMindblastTriggerResult {
     pub direct_damage: f64,
     pub direct_radius: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeScriptFire {
+pub struct ScriptFire {
     pub damage: f64,
     pub lifetime_ticks: u64,
     pub position: Vec2,
     pub radius: f64,
 }
 
-impl NativeSecondarySimulationState {
+impl SecondarySimulationState {
     /// An admitted rescue owns its zero-damage gameplay wave. Replaying feedback
     /// does not recreate the wave or allocate another painter.
     pub fn spawn_player_rescue_shockwave(
         &mut self,
-        input: NativePlayerRescueInput<'_>,
+        input: PlayerRescueInput<'_>,
         order: &mut WorldPainterOrder,
     ) {
         let mut wave =
@@ -78,7 +78,7 @@ impl NativeSecondarySimulationState {
 
     pub fn materialize_player_flash_response(
         &mut self,
-        input: NativePlayerFlashResponseInput<'_>,
+        input: PlayerFlashResponseInput<'_>,
         order: &mut WorldPainterOrder,
     ) {
         let mut targets = input.target_ids.to_vec();
@@ -86,7 +86,7 @@ impl NativeSecondarySimulationState {
         targets.dedup();
         assert_eq!(targets.len(), input.target_ids.len(), "Flash response target IDs are unique");
         for id in input.target_ids {
-            apply_native_secondary_dazzle(
+            apply_secondary_dazzle(
                 &mut self.target_effects,
                 input.world_key,
                 *id,
@@ -125,7 +125,7 @@ impl NativeSecondarySimulationState {
             child.painter_registrations.push(order.register(WorldManagerLane::Transient));
             self.spawn_actor(child);
         }
-        let mut event = NativeSecondaryEventState::new(
+        let mut event = SecondaryEventState::new(
             Event::Impact,
             input.owner_id.into(),
             input.world_key.into(),
@@ -145,11 +145,11 @@ impl NativeSecondarySimulationState {
         owner_id: &str,
         world_key: &str,
         position: Vec2,
-        screen_flash: NativeSecondaryScreenFlashState,
+        screen_flash: SecondaryScreenFlashState,
         tick: u64,
     ) {
         let mut event =
-            NativeSecondaryEventState::new(Event::Impact, owner_id.into(), world_key.into(), tick);
+            SecondaryEventState::new(Event::Impact, owner_id.into(), world_key.into(), tick);
         event.position = position;
         event.screen_flash = Some(screen_flash);
         self.emit_event(event);
@@ -157,9 +157,9 @@ impl NativeSecondarySimulationState {
 
     pub fn trigger_player_mindblast(
         &mut self,
-        input: NativePlayerMindblastInput<'_>,
+        input: PlayerMindblastInput<'_>,
         mut order: Option<&mut WorldPainterOrder>,
-    ) -> NativePlayerMindblastTriggerResult {
+    ) -> PlayerMindblastTriggerResult {
         assert!(input.level > 0, "Mindblast level is positive");
         let scale = input.presentation_scale.unwrap_or(9.0);
         let damage = input.direct_damage.unwrap_or(if input.element == WizardElement::Ether {
@@ -228,7 +228,7 @@ impl NativeSecondarySimulationState {
         wave.slow_factor = 0.0375_f32 as f64;
         wave.variant = variant;
         self.spawn_actor(wave);
-        NativePlayerMindblastTriggerResult {
+        PlayerMindblastTriggerResult {
             direct_damage: damage,
             direct_radius: fround(495.0 * scale / 9.0),
         }
@@ -238,7 +238,7 @@ impl NativeSecondarySimulationState {
         &mut self,
         owner_id: &str,
         world_key: &str,
-        fires: &[NativeScriptFire],
+        fires: &[ScriptFire],
         order: &mut WorldPainterOrder,
     ) {
         for fire in fires {

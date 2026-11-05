@@ -1,7 +1,7 @@
 //! Unchanged current Source mixed-family camera and shared-flash journeys.
 use serde_json::{Value, json};
-use solomon_sim::screen_flash::NativeScreenFlashWrite;
-use solomon_sim::secondary::NativeSecondaryScreenFlashState;
+use solomon_sim::screen_flash::ScreenFlashWrite;
+use solomon_sim::secondary::SecondaryScreenFlashState;
 
 use super::*;
 
@@ -11,15 +11,15 @@ mod website_rows;
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn context(value: &Value) -> NativeSecondaryScreenFeedbackContext {
-    NativeSecondaryScreenFeedbackContext {
+fn context(value: &Value) -> SecondaryScreenFeedbackContext {
+    SecondaryScreenFeedbackContext {
         camera_center: point(&value["cameraCenter"]),
         local_player_alternate: value["localPlayerAlternate"].as_bool().unwrap(),
         visible_world_width: value["visibleWorldWidth"].as_f64().unwrap(),
     }
 }
-fn state(value: &Value) -> NativeScreenFlashState {
-    NativeScreenFlashState {
+fn state(value: &Value) -> ScreenFlashState {
+    ScreenFlashState {
         epoch: value["epoch"].as_u64().unwrap(),
         next_order: value["nextOrder"].as_u64().unwrap(),
         writes: value["writes"]
@@ -28,13 +28,13 @@ fn state(value: &Value) -> NativeScreenFlashState {
             .iter()
             .map(|row| {
                 let flash = &row["flash"];
-                NativeScreenFlashWrite {
+                ScreenFlashWrite {
                     order: row["order"].as_u64().unwrap(),
                     tick: row["tick"].as_u64().unwrap(),
                     world_key: row["worldKey"].as_str().unwrap().into(),
                     position: point(&row["position"]),
                     only_if_clear: row["onlyIfClear"].as_bool().unwrap(),
-                    flash: NativeSecondaryScreenFlashState {
+                    flash: SecondaryScreenFlashState {
                         alpha: flash["alpha"].as_f64().unwrap(),
                         red: flash["red"].as_f64().unwrap(),
                         green: flash["green"].as_f64().unwrap(),
@@ -64,7 +64,7 @@ fn current_feedback_replays_late_birth_ties_flash_admission_and_epoch_resets() {
                         .as_array()
                         .unwrap()
                         .iter()
-                        .map(|proposal| NativeFlameCameraProposal {
+                        .map(|proposal| FlameCameraProposal {
                             id: proposal["id"].as_u64().unwrap(),
                             birth_tick: proposal["birthTick"].as_u64().unwrap(),
                             world_key: proposal["worldKey"].as_str().unwrap().into(),

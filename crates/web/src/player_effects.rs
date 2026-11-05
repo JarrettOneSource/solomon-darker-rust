@@ -8,14 +8,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use solomon_sim::Vec2;
 use solomon_sim::appearance::equipment::*;
-use solomon_sim::death_animations::NativeDeathWeaponActor;
+use solomon_sim::death_animations::DeathWeaponActor;
 use solomon_sim::hub::{HubWizard, painter::PainterLayer};
 use solomon_sim::player::PlayerState;
 use solomon_sim::player_presentation::*;
-use solomon_sim::presentation::multiply_native_tints;
+use solomon_sim::presentation::multiply_tints;
 use solomon_sim::profile::WizardElement;
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
-use solomon_sim::spells::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
+use solomon_sim::spells::casting::PlayerWeaponKind;
+use solomon_sim::spells::presentation::{SpellBlend, SpellSprite, SpellSpritePlan};
 
 use crate::courtyard::Camera;
 use crate::spells::SpellView;
@@ -27,7 +27,7 @@ pub struct PlayerEffectPlayer<'a> {
     pub player: &'a PlayerState,
     pub wizard: &'a HubWizard,
     pub material_tint: u32,
-    pub level_up: Option<&'a NativeLevelUpPresentationFrame>,
+    pub level_up: Option<&'a LevelUpPresentationFrame>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,7 +70,7 @@ enum PlayerEffectDraw {
         alpha: f64,
         weapon: PlayerWeaponAppearance,
     },
-    Sprites(NativeSpellSpritePlan),
+    Sprites(SpellSpritePlan),
 }
 
 pub struct PlayerEffectsView {
@@ -144,7 +144,7 @@ impl PlayerEffectsView {
         run_id: &str,
         tick: f64,
         players: &[PlayerEffectPlayer<'_>],
-        weapons: &[NativeDeathWeaponActor],
+        weapons: &[DeathWeaponActor],
     ) {
         if self.run_id.as_deref() != Some(run_id) {
             self.reset();
@@ -196,12 +196,12 @@ impl PlayerEffectsView {
             if let Some(frame) = row.level_up {
                 let mut plan = empty_sprite_plan(row.wizard.position);
                 for particle in &frame.particles {
-                    plan.draws.push(NativeSpellSprite {
+                    plan.draws.push(SpellSprite {
                         alpha: particle.alpha,
                         blend: SpellBlend::Add,
                         offset: Vec2::new(particle.offset_x, particle.offset_y),
                         rotation: particle.rotation_radians,
-                        ..NativeSpellSprite::new(73, particle.scale)
+                        ..SpellSprite::new(73, particle.scale)
                     });
                 }
                 self.painters.push(PlayerEffectPainter {
@@ -236,13 +236,13 @@ impl PlayerEffectsView {
         for burst in &self.bursts {
             let mut plan = empty_sprite_plan(burst.trigger.position);
             for layer in player_death_burst_layers(&burst.trigger, tick - burst.started_tick) {
-                plan.draws.push(NativeSpellSprite {
+                plan.draws.push(SpellSprite {
                     alpha: layer.alpha,
                     blend: SpellBlend::Add,
                     offset: layer.offset,
                     scale: layer.scale,
                     tint: 0x808080,
-                    ..NativeSpellSprite::new(10, 1.0)
+                    ..SpellSprite::new(10, 1.0)
                 });
             }
             self.painters.push(PlayerEffectPainter {
@@ -290,10 +290,10 @@ impl PlayerEffectsView {
                 weapon,
             } => {
                 let name = match weapon.kind {
-                    NativePlayerWeaponKind::Staff => {
+                    PlayerWeaponKind::Staff => {
                         format!("player-character-death-staff-{}", weapon.selector)
                     }
-                    NativePlayerWeaponKind::Wand => "player-character-death-wand".to_owned(),
+                    PlayerWeaponKind::Wand => "player-character-death-wand".to_owned(),
                 };
                 let texture = &self.textures[&name];
                 let width = f64::from(texture.width);
@@ -374,8 +374,7 @@ impl PlayerEffectsView {
             }
             for (name, column, row, offset, tint) in &layers {
                 let texture = &self.textures[&format!("player-character-death-{name}")];
-                let tint =
-                    if shadow { 0 } else { multiply_native_tints(*tint, body.material_tint) };
+                let tint = if shadow { 0 } else { multiply_tints(*tint, body.material_tint) };
                 renderer.draw(
                     texture,
                     Quad {
@@ -395,8 +394,8 @@ impl PlayerEffectsView {
     }
 }
 
-fn empty_sprite_plan(position: Vec2) -> NativeSpellSpritePlan {
-    NativeSpellSpritePlan {
+fn empty_sprite_plan(position: Vec2) -> SpellSpritePlan {
+    SpellSpritePlan {
         position,
         world_y: position.y,
         sort_bias: 0.0,

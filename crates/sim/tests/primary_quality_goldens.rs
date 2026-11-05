@@ -2,10 +2,8 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::spells::air::*;
-use solomon_sim::spells::fire::{
-    native_fire_particle_fade_step, native_fire_particle_lifetime_ticks,
-};
-use solomon_sim::spells::fire_presentation::native_fire_particle_plan;
+use solomon_sim::spells::fire::{fire_particle_fade_step, fire_particle_lifetime_ticks};
+use solomon_sim::spells::fire_presentation::fire_particle_plan;
 use solomon_sim::spells::model::{PrimarySpellFireParticle, PrimarySpellTransientBase};
 
 #[path = "support/website_rows.rs"]
@@ -14,11 +12,11 @@ mod website_rows;
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn light_row(light: NativeAirLightPlan) -> Value {
+fn light_row(light: AirLightPlan) -> Value {
     json!({"castsDirectionalShadow":light.casts_directional_shadow,"intensity":light.intensity,
         "position":{"x":light.position.x,"y":light.position.y},"radius":light.radius})
 }
-fn mesh_row(layer: NativeAirRibbonLayer) -> Value {
+fn mesh_row(layer: AirRibbonLayer) -> Value {
     let flat = |points: Vec<Vec2>| {
         let mut result = Vec::with_capacity(points.len() * 2);
         for point in points {
@@ -42,12 +40,12 @@ fn current_air_and_fire_quality_selects_native_lifetimes_meshes_and_lights() {
         let chained = input["chained"].as_bool().unwrap();
         let enhanced_effects = input["enhancedEffects"].as_bool().unwrap();
         assert_eq!(
-            native_air_contact_lifetime_ticks(underpowered, chained, enhanced_effects),
+            air_contact_lifetime_ticks(underpowered, chained, enhanced_effects),
             case["lifetime"].as_u64().unwrap()
         );
         for contact in case["contacts"].as_array().unwrap() {
             let age = contact["age"].as_u64().unwrap();
-            let plan = build_native_air_lightning_plan(NativeAirLightningInput {
+            let plan = build_air_lightning_plan(AirLightningInput {
                 chained,
                 enhanced_effects,
                 age_ticks: age,
@@ -71,7 +69,7 @@ fn current_air_and_fire_quality_selects_native_lifetimes_meshes_and_lights() {
     }
     for case in fixture["paths"].as_array().unwrap() {
         let input = &case["input"];
-        let lights: Vec<_> = build_native_air_path_light_sources(
+        let lights: Vec<_> = build_air_path_light_sources(
             7,
             17,
             point(&input["origin"]),
@@ -89,15 +87,12 @@ fn current_air_and_fire_quality_selects_native_lifetimes_meshes_and_lights() {
         let input = &case["state"];
         let id = input["id"].as_u64().unwrap();
         let enhanced_effects = input["enhancedEffects"].as_bool().unwrap();
+        assert_eq!(fire_particle_fade_step(id, enhanced_effects), case["fade"].as_f64().unwrap());
         assert_eq!(
-            native_fire_particle_fade_step(id, enhanced_effects),
-            case["fade"].as_f64().unwrap()
-        );
-        assert_eq!(
-            native_fire_particle_lifetime_ticks(id, enhanced_effects),
+            fire_particle_lifetime_ticks(id, enhanced_effects),
             case["lifetime"].as_u64().unwrap()
         );
-        let plan = native_fire_particle_plan(&PrimarySpellFireParticle {
+        let plan = fire_particle_plan(&PrimarySpellFireParticle {
             common: PrimarySpellTransientBase {
                 age_ticks: input["ageTicks"].as_u64().unwrap(),
                 id,
@@ -112,7 +107,7 @@ fn current_air_and_fire_quality_selects_native_lifetimes_meshes_and_lights() {
             variant: 3,
         });
         let draw = &plan.draws[0];
-        let actual = json!({"alpha":draw.alpha,"fadeStep":native_fire_particle_fade_step(id, enhanced_effects),
+        let actual = json!({"alpha":draw.alpha,"fadeStep":fire_particle_fade_step(id, enhanced_effects),
             "frame":draw.record,"position":{"x":plan.position.x,"y":plan.position.y},
             "regionLightPoint":Value::Null,"rotation":draw.rotation,"scale":draw.scale.x,"tint":draw.tint,"worldY":plan.world_y});
         website_rows::compare(&actual, &case["plan"], "Fire quality fade and sprite");

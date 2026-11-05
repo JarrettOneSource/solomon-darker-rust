@@ -7,7 +7,7 @@ use serde_json::Value;
 use solomon_assets::boneyard::{BoneyardCatalog, decode_bounds};
 use solomon_assets::navigation::decode_navigation;
 use solomon_sim::boneyard::collision::BoneyardCollisionWorld;
-use solomon_sim::boneyard::feedback::NativeEnemyWorldFeedback;
+use solomon_sim::boneyard::feedback::EnemyWorldFeedback;
 use solomon_sim::boneyard::gate::create_gate_leaves;
 use solomon_sim::boneyard::projectile_world::BoneyardProjectileViewport;
 use solomon_sim::boneyard::world_geometry::{BoneyardEnemyGeometry, BoneyardGeometryInput};
@@ -19,7 +19,7 @@ use solomon_sim::enemies::model::{EnemyTarget, EnemyTerminalOutput};
 use solomon_sim::enemies::world::{EnemyGeometry, EnemySpawnContext, EnemyWorld};
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken, SpawnPositionPolicy};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -84,7 +84,7 @@ fn actual_world_births_use_reachable_native_policy_placement_and_current_world_l
             viewport: Vec2::new(1600.0, 900.0),
             alternate_player: false,
         }];
-        let mut initial_feedback = NativeEnemyWorldFeedback::default();
+        let mut initial_feedback = EnemyWorldFeedback::default();
         initial_feedback.step(1);
         let feedback = Cell::new(initial_feedback);
         let geometry = BoneyardEnemyGeometry::new(
@@ -132,7 +132,7 @@ fn actual_world_births_use_reachable_native_policy_placement_and_current_world_l
         let mut painters = WorldPainterOrder { next_actor_ordinal: 10, next_transient_ordinal: 0 };
         let input_rng = &case["sharedRngState"];
         let words: Vec<u32> = serde_json::from_value(input_rng["words"].clone()).unwrap();
-        let mut shared_rng = NativeRng {
+        let mut shared_rng = Rng {
             index_a: input_rng["indexA"].as_u64().unwrap() as usize,
             index_b: input_rng["indexB"].as_u64().unwrap() as usize,
             words: words.try_into().unwrap(),
@@ -187,7 +187,7 @@ fn actual_world_births_use_reachable_native_policy_placement_and_current_world_l
             expected["painterOrder"]["nextRegistrationOrdinal"]["transient"].as_u64().unwrap()
                 as usize
         );
-        let native_bounds = geometry.native_view_bounds().unwrap();
+        let native_bounds = geometry.view_bounds().unwrap();
         assert_eq!(native_bounds, decode_bounds(&case["nativeViewBounds"].to_string()).unwrap());
         for record in case["visibilityQueries"].as_array().unwrap() {
             let position = point(&record["position"]);

@@ -4,9 +4,8 @@
 #![cfg(target_arch = "wasm32")]
 
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture, TextureColorMode, assets};
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextSpec, layout_native_ui_text, measure_native_ui_text,
-    native_ui_font, native_ui_glyph_ink_bounds,
+use solomon_sim::ui_text::{
+    UiFontName, UiTextSpec, layout_ui_text, measure_ui_text, ui_font, ui_glyph_ink_bounds,
 };
 use std::cell::{Cell, RefCell};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
@@ -434,23 +433,19 @@ impl Loader {
         tint: u32,
         max_width: Option<f32>,
     ) {
-        let font_name = NativeUiFontName::Body;
-        let mut spec = NativeUiTextSpec::new(
-            font_name,
-            text,
-            f64::from(self.logical[0] / 2.0),
-            f64::from(baseline),
-        );
-        spec.scale = f64::from(size) / native_ui_font(font_name).metrics[0];
+        let font_name = UiFontName::Body;
+        let mut spec =
+            UiTextSpec::new(font_name, text, f64::from(self.logical[0] / 2.0), f64::from(baseline));
+        spec.scale = f64::from(size) / ui_font(font_name).metrics[0];
         spec.tint = tint;
         spec.max_width = max_width.map(f64::from);
-        let layout = layout_native_ui_text(&spec);
+        let layout = layout_ui_text(&spec);
         let Some(texture) = self.font.as_ref() else {
             return;
         };
         let mut bounds = [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY];
         for glyph in &layout.glyphs {
-            let ink = native_ui_glyph_ink_bounds(glyph);
+            let ink = ui_glyph_ink_bounds(glyph);
             let [x, y, w, h] = glyph.glyph.frame;
             let left = ink.left as f32;
             let top = ink.top as f32;
@@ -507,14 +502,13 @@ impl Loader {
 }
 
 fn fit_text(text: &str, size: f32, width: f32) -> String {
-    let scale = f64::from(size) / native_ui_font(NativeUiFontName::Body).metrics[0];
-    if measure_native_ui_text(text, NativeUiFontName::Body, scale) <= f64::from(width) {
+    let scale = f64::from(size) / ui_font(UiFontName::Body).metrics[0];
+    if measure_ui_text(text, UiFontName::Body, scale) <= f64::from(width) {
         return text.to_owned();
     }
     let mut shortened = text.to_owned();
     while !shortened.is_empty()
-        && measure_native_ui_text(&format!("{shortened}..."), NativeUiFontName::Body, scale)
-            > f64::from(width)
+        && measure_ui_text(&format!("{shortened}..."), UiFontName::Body, scale) > f64::from(width)
     {
         shortened.pop();
     }

@@ -1,7 +1,7 @@
 //! Exact native wave compilation, including retained/dead RNG draws and ordered flags.
 
 use serde_json::Value;
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::boneyard::waves::{
     CompiledSpawnBurst, RETAIL_WAVES, WaveDef, WaveGroup, WaveGroupEntry, timeline,
 };
@@ -9,7 +9,7 @@ use solomon_sim::enemies::{EnemyFlag, EnemyToken};
 use solomon_sim::enemies::{SpawnLocationPolicy, SpawnPositionPolicy};
 use solomon_sim::rng::seed_from_text;
 
-fn compare_rng(actual: &NativeRng, expected: &Value) {
+fn compare_rng(actual: &Rng, expected: &Value) {
     assert_eq!(actual.index_a, expected["indexA"].as_u64().unwrap() as usize);
     assert_eq!(actual.index_b, expected["indexB"].as_u64().unwrap() as usize);
     let words: Vec<u32> = serde_json::from_value(expected["words"].clone()).unwrap();
@@ -65,7 +65,7 @@ fn all_retained_wave_rows_compile_exactly_like_the_website() {
     assert_eq!(RETAIL_WAVES.iter().map(|wave| wave.groups.len()).sum::<usize>(), 205);
     for case in fixture["cases"].as_array().unwrap() {
         let seed = format!("{}:wave-compiler", case["seed"].as_str().unwrap());
-        let mut rng = NativeRng::new(i64::from(seed_from_text(&seed)));
+        let mut rng = Rng::new(i64::from(seed_from_text(&seed)));
         let opening = timeline::compile_boneyard_opening(&mut rng);
         assert_eq!(
             opening.release_threshold,
@@ -138,7 +138,7 @@ fn current_group_budgets_draw_order_and_proven_nontermination_match_source() {
     assert_eq!(fixture["scenarios"].as_array().unwrap().len(), 49);
     for case in fixture["scenarios"].as_array().unwrap() {
         let wave = authored_wave(&case["wave"]);
-        let mut rng = NativeRng::new(1);
+        let mut rng = Rng::new(1);
         rng.index_a = case["rng"]["indexA"].as_u64().unwrap() as usize;
         rng.index_b = case["rng"]["indexB"].as_u64().unwrap() as usize;
         rng.words = serde_json::from_value::<Vec<u32>>(case["rng"]["words"].clone())

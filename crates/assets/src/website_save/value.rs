@@ -318,7 +318,7 @@ fn source_variant(name: &str, variant: &str) -> String {
         return flag.id().into();
     }
     if name == "NativeTutorialCue" {
-        let cue: solomon_sim::boneyard::tutorial::NativeTutorialCue =
+        let cue: solomon_sim::boneyard::tutorial::TutorialCue =
             serde_json::from_value(Value::String(variant.into()))
                 .expect("Serde supplies a declared Tutorial cue variant");
         return cue.id().into();

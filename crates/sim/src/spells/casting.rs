@@ -9,19 +9,19 @@ use crate::float::hypot;
 use crate::profile::WizardElement;
 
 /// The Website's stored single is 0.8999999761581421.
-pub const NATIVE_PLAYER_WEAPON_PULSE_DECAY: f64 = 0.9_f32 as f64;
-pub const NATIVE_ETHER_BLAST_WEAPON_PULSE: f64 = 0.25_f32 as f64;
+pub const PLAYER_WEAPON_PULSE_DECAY: f64 = 0.9_f32 as f64;
+pub const ETHER_BLAST_WEAPON_PULSE: f64 = 0.25_f32 as f64;
 
 /// `0x00410E40` for nondecreasing action progress. Both endpoints are
 /// inclusive; an exact landing may deliver again on the next positive step.
 #[must_use]
-pub fn native_forward_action_marker_crossed(previous: f64, current: f64, marker: f64) -> bool {
+pub fn forward_action_marker_crossed(previous: f64, current: f64, marker: f64) -> bool {
     previous <= marker && marker <= current && current > previous
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativePlayerWeaponKind {
+pub enum PlayerWeaponKind {
     Staff,
     Wand,
 }
@@ -31,7 +31,7 @@ pub enum NativePlayerWeaponKind {
 pub struct PlayerPrimaryCastState {
     pub action_tick: Option<f64>,
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
-    pub hand_cast: Option<super::hand_cast::NativeHandCast1>,
+    pub hand_cast: Option<super::hand_cast::HandCast1>,
     pub aim_direction: Vec2,
     pub cast_sequence: u64,
     pub channel_active: bool,
@@ -211,16 +211,16 @@ pub fn primary_spell_emitter_offset(
     action_tick: Option<f64>,
     channel_active: bool,
     element: WizardElement,
-    weapon_kind: Option<NativePlayerWeaponKind>,
+    weapon_kind: Option<PlayerWeaponKind>,
 ) -> Vec2 {
     let heading = heading % 24;
     match weapon_kind {
         None => BARE_OFFSETS[heading],
-        Some(NativePlayerWeaponKind::Staff) => player_staff_attachment_offset(
+        Some(PlayerWeaponKind::Staff) => player_staff_attachment_offset(
             heading,
             primary_cast_pose(action_tick, channel_active, element),
         ),
-        Some(NativePlayerWeaponKind::Wand) => {
+        Some(PlayerWeaponKind::Wand) => {
             let pose = player_wand_primary_pose(action_tick, channel_active, element);
             player_wand_attachment_offset(heading, pose)
         }

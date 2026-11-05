@@ -4,19 +4,17 @@
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::boneyard::weather::{
-    NATIVE_BONEYARD_WEATHER_SPLASH_ENTRY, NATIVE_BONEYARD_WEATHER_STREAK_RAMP_HEIGHT,
-    NativeBoneyardWeather, native_boneyard_weather_streak_ramp,
+    BONEYARD_WEATHER_SPLASH_ENTRY, BONEYARD_WEATHER_STREAK_RAMP_HEIGHT, BoneyardWeather,
+    boneyard_weather_streak_ramp,
 };
-use solomon_sim::spells::presentation::{
-    NativeSpellSprite, NativeSpellSpritePlan, SpellAtlas, SpellBlend,
-};
+use solomon_sim::spells::presentation::{SpellAtlas, SpellBlend, SpellSprite, SpellSpritePlan};
 
 use crate::courtyard::Camera;
 use crate::spells::SpellView;
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 pub struct BoneyardWeatherView {
-    weather: NativeBoneyardWeather,
+    weather: BoneyardWeather,
     streak_ramp: Texture,
 }
 
@@ -28,11 +26,11 @@ impl BoneyardWeatherView {
         enhanced_effects: bool,
     ) -> Result<Self, String> {
         Ok(Self {
-            weather: NativeBoneyardWeather::new(initial_tick, environment_mode, enhanced_effects),
+            weather: BoneyardWeather::new(initial_tick, environment_mode, enhanced_effects),
             streak_ramp: renderer.upload_rgba(
                 1,
-                NATIVE_BONEYARD_WEATHER_STREAK_RAMP_HEIGHT as u32,
-                &native_boneyard_weather_streak_ramp(),
+                BONEYARD_WEATHER_STREAK_RAMP_HEIGHT as u32,
+                &boneyard_weather_streak_ramp(),
             )?,
         })
     }
@@ -53,10 +51,10 @@ impl BoneyardWeatherView {
 
     /// Source depth 0.25: ground splashes precede the region-light composite.
     pub fn draw_splashes(&self, renderer: &mut Renderer, camera: &Camera, spells: &SpellView) {
-        let mut draw = NativeSpellSprite::new(NATIVE_BONEYARD_WEATHER_SPLASH_ENTRY, 1.0);
+        let mut draw = SpellSprite::new(BONEYARD_WEATHER_SPLASH_ENTRY, 1.0);
         draw.atlas = SpellAtlas::DeadHawg;
         draw.blend = SpellBlend::Add;
-        let mut plan = NativeSpellSpritePlan {
+        let mut plan = SpellSpritePlan {
             position: Vec2::ZERO,
             world_y: 0.0,
             sort_bias: 0.0,
@@ -81,7 +79,7 @@ impl BoneyardWeatherView {
             renderer.draw(
                 &self.streak_ramp,
                 Quad {
-                    source: [0.0, 0.0, 1.0, NATIVE_BONEYARD_WEATHER_STREAK_RAMP_HEIGHT as f32],
+                    source: [0.0, 0.0, 1.0, BONEYARD_WEATHER_STREAK_RAMP_HEIGHT as f32],
                     destination: camera.project(
                         drop.position.x - 0.5,
                         center_y - drop.length / 2.0,

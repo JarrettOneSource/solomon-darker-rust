@@ -65,7 +65,7 @@ fn footer_paints(
         element: WizardElement::Fire,
         discipline: WizardDiscipline::Arcane,
     };
-    let book = NativeSkillBookState::new(selection.element, selection.discipline);
+    let book = SkillBookState::new(selection.element, selection.discipline);
     let mut economy = HubEconomyState::new(1, selection.element);
     economy.dowsing_rolled = rolled;
     let snapshot = PlayerPanelSnapshot {
@@ -79,7 +79,7 @@ fn footer_paints(
         dye_session_id: None,
         progression: &PlayerProgressionState::new(1),
         resources: &PlayerCombatState::default(),
-        offensive: &NativeOffensiveSpellFactors::default(),
+        offensive: &OffensiveSpellFactors::default(),
         attributes: InventoryAttributes::default(),
         concentrations: &[None; 2],
         mind_chug_active: false,
@@ -131,7 +131,7 @@ fn unforge_actual_footer_submits_one_complete_program_for_all_inventory_owners()
         PlayerPanel::Skills,
         PlayerPanel::Dialogue,
         PlayerPanel::SkillSelector(
-            solomon_sim::hud::skill_selector::NativeHudSkillSelectorTarget::Primary,
+            solomon_sim::hud::skill_selector::HudSkillSelectorTarget::Primary,
         ),
     ] {
         assert!(footer_paints(panel, 80.0, 1.0, false, 1.0).is_empty(), "{panel:?}");

@@ -5,12 +5,12 @@
 
 use crate::spells::model::PrimarySpellTransient;
 
-use super::air_water::{draw_native_disintegrate_percentile, draw_native_spell_damage};
-use super::earth::{NativeEarthBoulderContactInput, consume_native_earth_boulder_contact};
-use super::earth_debris::create_native_weld_boulder_contact_debris_program;
+use super::air_water::{draw_disintegrate_percentile, draw_spell_damage};
+use super::earth::{EarthBoulderContactInput, consume_earth_boulder_contact};
+use super::earth_debris::create_weld_boulder_contact_debris_program;
 use super::effects::*;
-use super::ether::{NATIVE_ETHER_BLAST_CONTACT_RADIUS, native_ether_blast_damage};
-use super::fire::native_fire_direct_damage;
+use super::ether::{ETHER_BLAST_CONTACT_RADIUS, ether_blast_damage};
+use super::fire::fire_direct_damage;
 use super::model::*;
 use super::targeting::*;
 use super::weld::*;
@@ -20,9 +20,9 @@ use crate::enemies::projectiles::EnemyProjectileKind;
 use crate::enemies::world::EnemyWorld;
 use crate::float::{fround, hypot};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
-use crate::profile::primary::NativePrimarySkillProfile;
-use crate::secondary::NativeSecondaryTargetEffectPatch;
-use crate::{NativeRng, Vec2};
+use crate::profile::primary::PrimarySkillProfile;
+use crate::secondary::SecondaryTargetEffectPatch;
+use crate::{Rng, Vec2};
 use std::collections::{BTreeMap, BTreeSet};
 
 mod fire;
@@ -33,7 +33,7 @@ mod weld_channels;
 mod weld_forces;
 mod weld_persistent;
 
-const NATIVE_WELD_FROST_SLOW_FACTOR: f64 = 0.5;
+const WELD_FROST_SLOW_FACTOR: f64 = 0.5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoneyardSpellHitKind {
@@ -97,7 +97,7 @@ pub struct BoneyardSpellEtherBurnContact {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardSpellTargetEffectContact {
-    pub patch: NativeSecondaryTargetEffectPatch,
+    pub patch: SecondaryTargetEffectPatch,
     pub target_id: usize,
     pub world_key: String,
 }
@@ -128,7 +128,7 @@ pub struct BoneyardSpellCombatContext<'a> {
     pub enhanced_effects: bool,
     pub channel_emissions: &'a [PrimarySpellChannelEmission],
     pub fire_actor_contacts: &'a [FireActorContact],
-    pub frost_missile_world_contacts: &'a [NativeWeldProjectileState],
+    pub frost_missile_world_contacts: &'a [WeldProjectileState],
     pub tick: u64,
     pub world_key: &'a str,
     pub first_world_contact: Option<&'a BoneyardSpellWorldContact<'a>>,
@@ -151,7 +151,7 @@ struct TargetRow {
 /// the returned age-zero actors wait until the ordinary primary pass completes.
 #[derive(Clone, Copy, Debug)]
 pub struct BoneyardSpecialDeathInput<'a> {
-    pub payload: super::special_death::NativeSpellSpecialDeathPayload,
+    pub payload: super::special_death::SpellSpecialDeathPayload,
     pub victim_id: usize,
     pub position: Vec2,
     pub owner_id: &'a str,
@@ -172,7 +172,7 @@ pub struct BoneyardSpecialDeathResult {
 pub fn resolve_boneyard_special_death_payload(
     enemies: &mut EnemyWorld,
     input: BoneyardSpecialDeathInput<'_>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     order: &mut WorldPainterOrder,
 ) -> BoneyardSpecialDeathResult {
     let mut spells = SpellState { next_id: input.next_spell_id, ..SpellState::default() };
@@ -197,7 +197,7 @@ pub fn resolve_boneyard_special_death_payload(
 
 struct ContactWork<'context, 'world> {
     enemies: &'world mut EnemyWorld,
-    rng: &'world mut NativeRng,
+    rng: &'world mut Rng,
     order: &'world mut WorldPainterOrder,
     context: BoneyardSpellCombatContext<'context>,
     source: SpellState,
@@ -219,7 +219,7 @@ pub fn resolve_boneyard_spell_combat(
     enemies: &mut EnemyWorld,
     spells: &mut SpellState,
     context: BoneyardSpellCombatContext<'_>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     painter_order: Option<&mut WorldPainterOrder>,
 ) -> BoneyardSpellCombatResult {
     let mut standalone = WorldPainterOrder {
@@ -240,7 +240,7 @@ fn resolve_with_order<'context, 'world>(
     enemies: &'world mut EnemyWorld,
     spells: &mut SpellState,
     context: BoneyardSpellCombatContext<'context>,
-    rng: &'world mut NativeRng,
+    rng: &'world mut Rng,
     order: &'world mut WorldPainterOrder,
     special_death: Option<BoneyardSpecialDeathInput<'_>>,
 ) -> BoneyardSpellCombatResult {
@@ -253,13 +253,13 @@ fn resolve_with_order<'context, 'world>(
             continue;
         }
         match effect {
-            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                NativeWeldHailChildActorState::Knockback(knockback),
+            PrimarySpellTransient::Weld(WeldWorldActor::HailChild(
+                WeldHailChildActorState::Knockback(knockback),
             )) => {
                 active_knockback_target_ids.insert(knockback.target_id.clone());
             }
             PrimarySpellTransient::Staff(
-                crate::spells::staff::NativePlayerStaffTransient::ContactKnockback(knockback),
+                crate::spells::staff::PlayerStaffTransient::ContactKnockback(knockback),
             ) => {
                 active_knockback_target_ids.insert(knockback.target_id.clone());
             }
@@ -466,7 +466,7 @@ impl ContactWork<'_, '_> {
         }
     }
 
-    fn target_effect(&mut self, actor_id: usize, patch: NativeSecondaryTargetEffectPatch) {
+    fn target_effect(&mut self, actor_id: usize, patch: SecondaryTargetEffectPatch) {
         self.result.target_effects.push(BoneyardSpellTargetEffectContact {
             patch,
             target_id: actor_id,
@@ -479,8 +479,8 @@ impl ContactWork<'_, '_> {
         projectile.common_mut().position = origin;
         let effect = match &projectile {
             PrimarySpellProjectile::Weld(spell) => {
-                let mut actor = NativeWeldWorldActor::Impact(create_primary_spell_weld_impact(
-                    NativeWeldActorBirth {
+                let mut actor = WeldWorldActor::Impact(create_primary_spell_weld_impact(
+                    WeldActorBirth {
                         build_id: spell.build_id,
                         direction: spell.common.direction,
                         id: self.next_id,
@@ -492,7 +492,7 @@ impl ContactWork<'_, '_> {
                     },
                     self.rng,
                 ));
-                enroll_native_weld_actor_painter(actor.common_mut(), self.order);
+                enroll_weld_actor_painter(actor.common_mut(), self.order);
                 PrimarySpellTransient::Weld(actor)
             }
             PrimarySpellProjectile::Earth(spell) => {
@@ -527,7 +527,7 @@ impl ContactWork<'_, '_> {
     }
 
     fn publish_earth_debris(&mut self, spell: &PrimarySpellEarthProjectile, charge: f64) {
-        let debris = create_native_weld_boulder_contact_debris_program(charge, self.rng);
+        let debris = create_weld_boulder_contact_debris_program(charge, self.rng);
         let id = self.next_id;
         self.next_id += 1;
         // The source consumes the contact program and id before testing a 0/0 pool.
@@ -584,13 +584,10 @@ impl ContactWork<'_, '_> {
             {
                 continue;
             }
-            for row in root_target_rows(
-                self.enemies,
-                effect.origin,
-                NATIVE_ETHER_BLAST_CONTACT_RADIUS,
-                0x2,
-            ) {
-                let amount = native_ether_blast_damage(effect.charges, row.current_health);
+            for row in
+                root_target_rows(self.enemies, effect.origin, ETHER_BLAST_CONTACT_RADIUS, 0x2)
+            {
+                let amount = ether_blast_damage(effect.charges, row.current_health);
                 let contact = self.damage(row.actor_id, amount, &effect.common.owner_id, true);
                 if !contact.accepted {
                     continue;
@@ -634,7 +631,7 @@ impl ContactWork<'_, '_> {
             targets.extend(rows.iter().map(|row| row.target.clone()));
             let target = match &projectile {
                 PrimarySpellProjectile::Fire(_) => {
-                    first_native_fireball_point_contact(FireballPointContactQuery {
+                    first_fireball_point_contact(FireballPointContactQuery {
                         contact: PrimaryPointContactQuery {
                             actor_mask: 0x6,
                             position: common.position,
@@ -648,7 +645,7 @@ impl ContactWork<'_, '_> {
                     })
                 }
                 PrimarySpellProjectile::Ether(spell) => {
-                    first_native_primary_point_contact(PrimaryPointContactQuery {
+                    first_primary_point_contact(PrimaryPointContactQuery {
                         actor_mask: if common.age_ticks >= 200 || spell.target_id.is_none() {
                             0x6
                         } else {
@@ -672,7 +669,7 @@ impl ContactWork<'_, '_> {
                 continue;
             };
             if let PrimarySpellProjectile::Fire(spell) = &projectile {
-                let amount = native_fire_direct_damage(common.damage, spell.explode_damage);
+                let amount = fire_direct_damage(common.damage, spell.explode_damage);
                 if amount > 0.0 {
                     let damaged = self.damage(row.actor_id, amount, &common.owner_id, true);
                     if !damaged.accepted {
@@ -740,12 +737,8 @@ impl ContactWork<'_, '_> {
 
     fn resolve_earth_contact(&mut self, spell: &PrimarySpellEarthProjectile, rows: &[TargetRow]) {
         let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
-        let contacts = native_primary_root_targets(
-            spell.common.position,
-            spell.common.charge * 75.0,
-            0x6,
-            &targets,
-        );
+        let contacts =
+            primary_root_targets(spell.common.position, spell.common.charge * 75.0, 0x6, &targets);
         let contacts: Vec<_> = contacts
             .into_iter()
             .filter(|target| !spell.hit_target_ids.contains(&target.id))
@@ -762,7 +755,7 @@ impl ContactWork<'_, '_> {
             }
             let row =
                 rows.iter().find(|row| row.target.id == target.id).expect("gathered enemy row");
-            let contact = consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+            let contact = consume_earth_boulder_contact(EarthBoulderContactInput {
                 release_base_damage: spell.common.damage,
                 release_charge: spell.maximum_charge,
                 remaining_pool: updated.remaining_damage,
@@ -829,7 +822,7 @@ impl ContactWork<'_, '_> {
             }
             let rows = target_rows(self.enemies);
             let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
-            let Some(target) = first_native_primary_point_contact(PrimaryPointContactQuery {
+            let Some(target) = first_primary_point_contact(PrimaryPointContactQuery {
                 actor_mask: 0x2,
                 position: effect.position,
                 query_radius: 7.0,
@@ -889,7 +882,7 @@ impl ContactWork<'_, '_> {
     }
 
     fn resolve_air_channel(&mut self, emission: &PrimarySpellChannelEmission) {
-        let NativePrimarySkillProfile::Air(profile) = &emission.primary_skill else {
+        let PrimarySkillProfile::Air(profile) = &emission.primary_skill else {
             panic!("Air channel requires an Air profile");
         };
         let mut target_id = self.source.transients.iter().find_map(|effect| {
@@ -909,26 +902,27 @@ impl ContactWork<'_, '_> {
         let mut hop = 0;
         while let Some(id) = target_id {
             let rows = target_rows(self.enemies);
-            let Some(row) = rows.iter().find(|row| {
-                row.target.id == id && native_primary_target_eligible(&row.target, 0x2)
-            }) else {
+            let Some(row) = rows
+                .iter()
+                .find(|row| row.target.id == id && primary_target_eligible(&row.target, 0x2))
+            else {
                 break;
             };
             contacted_ids.insert(id);
             if !emission.underpowered && profile.stun_movement_factor < 1.0 {
                 self.target_effect(
                     row.actor_id,
-                    NativeSecondaryTargetEffectPatch {
+                    SecondaryTargetEffectPatch {
                         stun_factor: Some(profile.stun_movement_factor),
                         stun_ticks: Some(25),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }
             let disintegrate = !emission.underpowered
                 && profile.disintegrate_chance > 0.0
                 && self.context.tick % 40 == row.disintegrate_phase as u64 % 40
-                && draw_native_disintegrate_percentile(self.rng, profile.disintegrate_chance);
+                && draw_disintegrate_percentile(self.rng, profile.disintegrate_chance);
             // Native Lightning samples this visual scalar after its optional execute roll.
             self.rng.draw_scaled_float(0.5, false);
             let amount = damage
@@ -1020,7 +1014,7 @@ impl ContactWork<'_, '_> {
     }
 
     fn resolve_water_channel(&mut self, emission: &PrimarySpellChannelEmission) {
-        let NativePrimarySkillProfile::Water(profile) = &emission.primary_skill else {
+        let PrimarySkillProfile::Water(profile) = &emission.primary_skill else {
             panic!("Water channel requires a Water profile");
         };
         let pushback = if emission.underpowered { 0.0 } else { profile.pushback_factor };
@@ -1031,7 +1025,7 @@ impl ContactWork<'_, '_> {
                 contact(emission.query_origin, target.position, 0.0).is_none()
             })
         };
-        let contacts = native_primary_cone_targets(PrimaryConeQuery {
+        let contacts = primary_cone_targets(PrimaryConeQuery {
             actor_mask: if emission.underpowered { 0x2 } else { 0x1082 },
             aim_direction: emission.direction,
             half_angle_degrees: if emission.underpowered {
@@ -1059,7 +1053,7 @@ impl ContactWork<'_, '_> {
             let ChannelTargetKind::Enemy { actor_id } = row.kind else { continue };
             self.target_effect(
                 actor_id,
-                NativeSecondaryTargetEffectPatch {
+                SecondaryTargetEffectPatch {
                     cold_slow_factor: Some(if emission.underpowered {
                         0.75
                     } else {
@@ -1071,7 +1065,7 @@ impl ContactWork<'_, '_> {
                     } else {
                         profile.cold_duration_ticks
                     }),
-                    ..NativeSecondaryTargetEffectPatch::default()
+                    ..SecondaryTargetEffectPatch::default()
                 },
             );
             let amount = emission.damage
@@ -1091,7 +1085,7 @@ impl ContactWork<'_, '_> {
                     && profile.hail_threshold > 0
                     && (self.rng.draw_integer(3_000) as u32) < profile.hail_threshold
                 {
-                    let hail_damage = draw_native_spell_damage(
+                    let hail_damage = draw_spell_damage(
                         self.rng,
                         profile.hail_damage_minimum,
                         profile.hail_damage_maximum,
@@ -1134,21 +1128,21 @@ impl ContactWork<'_, '_> {
         }
         if !emission.underpowered
             && profile.aura_radius_scale > 0.0
-            && self.context.tick.is_multiple_of(crate::cold_aura::NATIVE_COLD_AURA_PERIOD_TICKS)
+            && self.context.tick.is_multiple_of(crate::cold_aura::COLD_AURA_PERIOD_TICKS)
         {
             for row in root_target_rows(
                 self.enemies,
                 emission.query_origin,
-                crate::cold_aura::native_cold_aura_query_radius(profile.aura_radius_scale),
+                crate::cold_aura::cold_aura_query_radius(profile.aura_radius_scale),
                 0x2,
             ) {
                 self.target_effect(
                     row.actor_id,
-                    NativeSecondaryTargetEffectPatch {
+                    SecondaryTargetEffectPatch {
                         cold_slow_factor: Some(profile.aura_movement_factor),
                         cold_slow_material: Some(true),
                         cold_slow_ticks: Some(profile.cold_duration_ticks),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }
@@ -1222,7 +1216,7 @@ fn nearest_unused_air_chain_target(
     let targets = enemies.spell_targets();
     let mut selected = None;
     let mut selected_distance = f64::INFINITY;
-    for target in native_primary_root_targets(origin, radius, 0x2, &targets) {
+    for target in primary_root_targets(origin, radius, 0x2, &targets) {
         if contacted.contains(&target.id) {
             continue;
         }
@@ -1299,7 +1293,7 @@ fn frost_jet_push_blocked(enemies: &EnemyWorld, target: &PrimarySpellTarget, ori
     );
     let targets: Vec<_> =
         enemies.spell_targets().into_iter().filter(|candidate| candidate.id != target.id).collect();
-    first_native_primary_point_contact(PrimaryPointContactQuery {
+    first_primary_point_contact(PrimaryPointContactQuery {
         actor_mask: 0x2,
         position: probe,
         query_radius: fround(25.0 / 3.0),
@@ -1335,7 +1329,7 @@ fn target_rows(enemies: &EnemyWorld) -> Vec<TargetRow> {
 fn root_target_rows(enemies: &EnemyWorld, origin: Vec2, reach: f64, mask: u32) -> Vec<TargetRow> {
     let rows = target_rows(enemies);
     let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
-    let ids: BTreeSet<_> = native_primary_root_targets(origin, reach, mask, &targets)
+    let ids: BTreeSet<_> = primary_root_targets(origin, reach, mask, &targets)
         .into_iter()
         .map(|target| target.id.as_str())
         .collect();

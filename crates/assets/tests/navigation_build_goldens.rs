@@ -62,7 +62,7 @@ fn collision_world(scene: &BoneyardScene, value: &Value) -> BoneyardCollisionWor
         .map(|row| CollisionCircle {
             center: point(&row["center"]),
             radius: row["radius"].as_f64().unwrap(),
-            native_line_mask: mask(row),
+            line_mask: mask(row),
             source_id: source_id(row),
         })
         .collect();
@@ -72,7 +72,7 @@ fn collision_world(scene: &BoneyardScene, value: &Value) -> BoneyardCollisionWor
         .iter()
         .map(|row| CollisionPolygon {
             points: row["points"].as_array().unwrap().iter().map(point).collect(),
-            native_line_mask: mask(row),
+            line_mask: mask(row),
             source_id: source_id(row),
         })
         .collect();
@@ -84,7 +84,7 @@ fn collision_world(scene: &BoneyardScene, value: &Value) -> BoneyardCollisionWor
             start: point(&row["start"]),
             end: point(&row["end"]),
             radius: row["radius"].as_f64().unwrap(),
-            native_line_mask: mask(row),
+            line_mask: mask(row),
             source_id: source_id(row),
         })
         .collect();

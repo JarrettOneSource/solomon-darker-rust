@@ -16,14 +16,14 @@ use solomon_sim::Vec2;
 use solomon_sim::float::fround;
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::profile::primary::NativeSpentEmber;
+use solomon_sim::profile::primary::SpentEmber;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionInput, GameSessionOptions};
 use solomon_sim::spells::model::{
     PrimarySpellFireEmber, PrimarySpellFireParticle, PrimarySpellTransient,
     PrimarySpellTransientBase, PrimarySpellWaterHail,
 };
-use solomon_web::presentation::NativePresentationTimeline;
+use solomon_web::presentation::PresentationTimeline;
 
 fn primary_endpoint(session: &mut GameSession, tick: u64) {
     let registration =
@@ -59,7 +59,7 @@ fn primary_endpoint(session: &mut GameSession, tick: u64) {
         life: 2.0 - age * 0.01,
         phase: (3.8 + age * 0.4) % 4.0,
         position: Vec2::new(age * 3.0, age * 4.0),
-        spent_ember: NativeSpentEmber::None,
+        spent_ember: SpentEmber::None,
         vertical_velocity: age * 0.1,
     }));
     session.spells.transients.push(PrimarySpellTransient::WaterHail(PrimarySpellWaterHail {
@@ -148,7 +148,7 @@ fn client_clock_and_player_poses_follow_receipt_time_without_extrapolating() {
     .unwrap();
     for case in fixture["cases"].as_array().unwrap() {
         let base = initial(case["world"].as_str().unwrap());
-        let mut timeline = NativePresentationTimeline::new(100, 20);
+        let mut timeline = PresentationTimeline::new(100, 20);
         timeline.push(&endpoint(&base, 0, 0.0), 0.0, "local", None).unwrap();
         for (index, operation) in fixture["operations"].as_array().unwrap().iter().enumerate() {
             if let Some(tick) = operation["push"].as_u64() {
@@ -259,7 +259,7 @@ fn college_prediction_stops_after_one_snapshot_interval() {
     .unwrap();
     for case in fixture["prediction"].as_array().unwrap() {
         let session = endpoint(&initial("hub"), 0, 0.0);
-        let mut timeline = NativePresentationTimeline::new(100, 20);
+        let mut timeline = PresentationTimeline::new(100, 20);
         timeline.push(&session, 0.0, "local", None).unwrap();
         let input = GameSessionInput {
             movement: Vec2::new(
@@ -296,7 +296,7 @@ fn college_timeline_follows_the_local_native_manager_owner() {
     // `sameHubPresentationOwner` in the current Source client. Remote admissions
     // retain interpolation; post-run Create and local manager replacement do not.
     let base = initial("hub");
-    let mut timeline = NativePresentationTimeline::new(100, 20);
+    let mut timeline = PresentationTimeline::new(100, 20);
     timeline.push(&endpoint(&base, 0, 0.0), 0.0, "local", None).unwrap();
     let mut next = endpoint(&base, 5, 0.0);
     next.participants

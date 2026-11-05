@@ -1,16 +1,16 @@
 //! Exact stock draw values from `renderer/player-staff-vfx-presentation.ts`.
 //! Pike debris replays a private presentation snapshot; gameplay RNG is untouched.
 
-use super::{NativePlayerStaffPikeBreakVfx, NativePlayerStaffVfx};
+use super::{PlayerStaffPikeBreakVfx, PlayerStaffVfx};
 use crate::float;
 use crate::float::fround;
-use crate::secondary::presentation::NativeSecondaryBlend;
-use crate::{NativeRng, Vec2};
+use crate::secondary::presentation::SecondaryBlend;
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerStaffVfxRenderPlan {
     pub alpha: f64,
-    pub blend: NativeSecondaryBlend,
+    pub blend: SecondaryBlend,
     pub entry: usize,
     pub position: Vec2,
     pub rotation_radians: f64,
@@ -20,14 +20,12 @@ pub struct PlayerStaffVfxRenderPlan {
 }
 
 #[must_use]
-pub fn native_player_staff_vfx_render_plan(
-    state: &NativePlayerStaffVfx,
-) -> PlayerStaffVfxRenderPlan {
+pub fn player_staff_vfx_render_plan(state: &PlayerStaffVfx) -> PlayerStaffVfxRenderPlan {
     let (alpha, entry, position, rotation, scale, tint) = match state {
-        NativePlayerStaffVfx::Smoke(state) => {
+        PlayerStaffVfx::Smoke(state) => {
             (state.alpha, state.entry, state.position, state.rotation_degrees, state.scale, None)
         }
-        NativePlayerStaffVfx::MoveFade(state) => (
+        PlayerStaffVfx::MoveFade(state) => (
             state.alpha,
             state.entry,
             state.position,
@@ -35,7 +33,7 @@ pub fn native_player_staff_vfx_render_plan(
             state.scale,
             Some(state.tint),
         ),
-        NativePlayerStaffVfx::PerspectiveFade(state) => (
+        PlayerStaffVfx::PerspectiveFade(state) => (
             state.alpha,
             state.entry,
             state.position,
@@ -46,7 +44,7 @@ pub fn native_player_staff_vfx_render_plan(
     };
     PlayerStaffVfxRenderPlan {
         alpha,
-        blend: NativeSecondaryBlend::Add,
+        blend: SecondaryBlend::Add,
         entry,
         position,
         rotation_radians: rotation * std::f64::consts::PI / 180.0,
@@ -58,7 +56,7 @@ pub fn native_player_staff_vfx_render_plan(
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffPikeBreakDraw {
     pub alpha: f64,
-    pub blend: NativeSecondaryBlend,
+    pub blend: SecondaryBlend,
     pub entry: usize,
     pub offset: Vec2,
     pub role: String,
@@ -82,8 +80,8 @@ struct PikeBreakDebris {
 }
 
 #[must_use]
-pub fn native_player_staff_pike_break_draws(
-    state: &NativePlayerStaffPikeBreakVfx,
+pub fn player_staff_pike_break_draws(
+    state: &PlayerStaffPikeBreakVfx,
 ) -> Vec<PlayerStaffPikeBreakDraw> {
     let mut draws = Vec::new();
     let mut fade_alpha = fround(1.0);
@@ -94,7 +92,7 @@ pub fn native_player_staff_pike_break_draws(
         let radians = state.heading_degrees * std::f64::consts::PI / 180.0;
         draws.push(PlayerStaffPikeBreakDraw {
             alpha: fade_alpha.min(1.0),
-            blend: NativeSecondaryBlend::Add,
+            blend: SecondaryBlend::Add,
             entry: 15,
             offset: Vec2::new(
                 fround(float::sin(radians) * 75.0),
@@ -117,7 +115,7 @@ pub fn native_player_staff_pike_break_draws(
         if state.enhanced_shadow {
             draws.push(PlayerStaffPikeBreakDraw {
                 alpha: particle.alpha.min(1.0),
-                blend: NativeSecondaryBlend::Normal,
+                blend: SecondaryBlend::Normal,
                 entry: 55,
                 offset: Vec2::new(particle.position.x, particle.position.y + 2.0),
                 role: format!("pike-break-shadow-{index}"),
@@ -129,7 +127,7 @@ pub fn native_player_staff_pike_break_draws(
         }
         draws.push(PlayerStaffPikeBreakDraw {
             alpha: particle.alpha.min(1.0),
-            blend: NativeSecondaryBlend::Normal,
+            blend: SecondaryBlend::Normal,
             entry: 55,
             offset: Vec2::new(particle.position.x, particle.position.y + particle.height),
             role: format!("pike-break-debris-{index}"),
@@ -142,7 +140,7 @@ pub fn native_player_staff_pike_break_draws(
     draws
 }
 
-fn create_debris(rng: &mut NativeRng) -> Vec<PikeBreakDebris> {
+fn create_debris(rng: &mut Rng) -> Vec<PikeBreakDebris> {
     let mut angle = rng.draw_scaled_float(360.0, false);
     let mut debris = Vec::with_capacity(7);
     for _ in 0..7 {
@@ -174,7 +172,7 @@ fn create_debris(rng: &mut NativeRng) -> Vec<PikeBreakDebris> {
     debris
 }
 
-fn step_debris(debris: &mut [PikeBreakDebris], rng: &mut NativeRng, updates: u64) {
+fn step_debris(debris: &mut [PikeBreakDebris], rng: &mut Rng, updates: u64) {
     for _ in 0..updates {
         for particle in debris.iter_mut() {
             if particle.height != 0.0 {

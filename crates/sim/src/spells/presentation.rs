@@ -23,7 +23,7 @@ pub enum SpellDrawQueue {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSpellSprite {
+pub struct SpellSprite {
     pub alpha: f64,
     pub atlas: SpellAtlas,
     pub blend: SpellBlend,
@@ -35,7 +35,7 @@ pub struct NativeSpellSprite {
     pub tint: u32,
 }
 
-impl NativeSpellSprite {
+impl SpellSprite {
     #[must_use]
     pub const fn new(record: usize, scale: f64) -> Self {
         Self {
@@ -53,15 +53,15 @@ impl NativeSpellSprite {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSpellSpritePlan {
+pub struct SpellSpritePlan {
     pub position: Vec2,
     pub world_y: f64,
     pub sort_bias: f64,
     pub region_light_point: Option<Vec2>,
-    pub draws: Vec<NativeSpellSprite>,
+    pub draws: Vec<SpellSprite>,
 }
 
-impl NativeSpellSpritePlan {
+impl SpellSpritePlan {
     pub(super) fn at(position: Vec2) -> Self {
         Self {
             position,

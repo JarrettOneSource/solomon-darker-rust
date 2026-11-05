@@ -2,7 +2,7 @@
 //! fixtures already own the constructors; these rows preserve their real fields.
 use super::{integer, number, transient_common, values, vector};
 use serde_json::Value;
-use solomon_sim::spells::earth_debris::NativeWeldMeteorDebrisSeed;
+use solomon_sim::spells::earth_debris::WeldMeteorDebrisSeed;
 use solomon_sim::spells::model::{PrimarySpellProjectileBase, PrimarySpellProjectilePhase};
 use solomon_sim::spells::weld::*;
 
@@ -22,8 +22,8 @@ fn phase(value: &Value) -> PrimarySpellProjectilePhase {
         PrimarySpellProjectilePhase::Flight
     }
 }
-fn common(value: &Value) -> NativeWeldActorBase {
-    NativeWeldActorBase {
+fn common(value: &Value) -> WeldActorBase {
+    WeldActorBase {
         owner: transient_common(value),
         birth_tick: integer(value, "birthTick"),
         build_id: integer(value, "buildId") as u32,
@@ -32,8 +32,8 @@ fn common(value: &Value) -> NativeWeldActorBase {
         vector: scalars(value, "vector"),
     }
 }
-pub fn projectile(value: &Value, common: PrimarySpellProjectileBase) -> NativeWeldProjectileState {
-    NativeWeldProjectileState {
+pub fn projectile(value: &Value, common: PrimarySpellProjectileBase) -> WeldProjectileState {
+    WeldProjectileState {
         common,
         ball_lightning_acceleration: value["ballLightningAcceleration"].as_f64(),
         base_presentation_phase_degrees: value["basePresentationPhaseDegrees"].as_f64(),
@@ -50,7 +50,7 @@ pub fn projectile(value: &Value, common: PrimarySpellProjectileBase) -> NativeWe
         cast_sound_variant: value["castSoundVariant"].as_u64().map(|v| v as u32),
         presentation_seed: value["presentationSeed"].as_u64().map(|v| v as u32),
         hit_target_ids: strings(value, "hitTargetIds"),
-        ground_spark_native_age_ticks: value["groundSparkNativeAgeTicks"].as_u64(),
+        ground_spark_age_ticks: value["groundSparkNativeAgeTicks"].as_u64(),
         ground_spark_turn_ticks_remaining: value["groundSparkTurnTicksRemaining"].as_i64(),
         projectile_index: integer(value, "projectileIndex") as usize,
         reacquires_target: flag(value, "reacquiresTarget"),
@@ -58,7 +58,7 @@ pub fn projectile(value: &Value, common: PrimarySpellProjectileBase) -> NativeWe
         target_id: value["targetId"].as_str().map(String::from),
         vector: scalars(value, "vector"),
         frost_presentation_lanes: value["frostPresentationLanes"].as_array().map(|lanes| {
-            std::array::from_fn(|i| NativeWeldFrostPresentationLane {
+            std::array::from_fn(|i| WeldFrostPresentationLane {
                 aspect: number(&lanes[i], "aspect"),
                 rotation_degrees: number(&lanes[i], "rotationDegrees"),
                 scale: number(&lanes[i], "scale"),
@@ -66,21 +66,21 @@ pub fn projectile(value: &Value, common: PrimarySpellProjectileBase) -> NativeWe
         }),
     }
 }
-pub fn actor(value: &Value) -> NativeWeldWorldActor {
+pub fn actor(value: &Value) -> WeldWorldActor {
     match value["kind"].as_str().unwrap() {
-        "weld-hail-knockback" => NativeWeldWorldActor::HailChild(
-            NativeWeldHailChildActorState::Knockback(NativeWeldHailKnockbackState {
+        "weld-hail-knockback" => {
+            WeldWorldActor::HailChild(WeldHailChildActorState::Knockback(WeldHailKnockbackState {
                 common: common(value),
                 delta: vector(&value["delta"]),
                 remaining_ticks: integer(value, "remainingTicks"),
                 target_id: super::text(value, "targetId"),
-            }),
-        ),
-        "weld-channel" => NativeWeldWorldActor::Channel(NativeWeldChannelActorState {
+            }))
+        }
+        "weld-channel" => WeldWorldActor::Channel(WeldChannelActorState {
             common: common(value),
             enhanced_effects: true,
             flame_visual: if value["buildId"] == 1003 {
-                Some(NativeFlameChannelVisual::LegacySuppressed)
+                Some(FlameChannelVisual::LegacySuppressed)
             } else {
                 None
             },
@@ -90,15 +90,15 @@ pub fn actor(value: &Value) -> NativeWeldWorldActor {
             underpowered: flag(value, "underpowered"),
             variant: integer(value, "variant") as u32,
         }),
-        "weld-persistent" => NativeWeldWorldActor::Persistent(persistent(value)),
-        "weld-meteor" => NativeWeldWorldActor::Meteor(meteor(value)),
-        "weld-steam" => NativeWeldWorldActor::Steam(steam(value)),
+        "weld-persistent" => WeldWorldActor::Persistent(persistent(value)),
+        "weld-meteor" => WeldWorldActor::Meteor(meteor(value)),
+        "weld-steam" => WeldWorldActor::Steam(steam(value)),
         _ => panic!("unexpected Weld contact input"),
     }
 }
-fn persistent(value: &Value) -> NativeWeldPersistentActorState {
+fn persistent(value: &Value) -> WeldPersistentActorState {
     if value["buildId"] == 1006 {
-        return NativeWeldPersistentActorState::EtherealBoulder(NativeWeldEtherealBoulderState {
+        return WeldPersistentActorState::EtherealBoulder(WeldEtherealBoulderState {
             common: common(value),
             phase: phase(value),
             orientation: std::array::from_fn(|i| value["orientation"][i].as_f64().unwrap()),
@@ -131,7 +131,7 @@ fn persistent(value: &Value) -> NativeWeldPersistentActorState {
             velocity: vector(&value["velocity"]),
         });
     }
-    NativeWeldPersistentActorState::Hailstones(NativeWeldHailstonesState {
+    WeldPersistentActorState::Hailstones(WeldHailstonesState {
         common: common(value),
         phase: phase(value),
         collision_radius: number(value, "collisionRadius"),
@@ -146,10 +146,10 @@ fn persistent(value: &Value) -> NativeWeldPersistentActorState {
         release_fade_scale: value["releaseFadeScale"].as_f64(),
         rocks: values(value, "rocks")
             .iter()
-            .map(|value| NativeWeldHailstoneRockState {
+            .map(|value| WeldHailstoneRockState {
                 damage_remaining: number(value, "damageRemaining"),
                 decay: number(value, "decay"),
-                local_position: NativeWeldHailstoneLocalPosition {
+                local_position: WeldHailstoneLocalPosition {
                     x: number(&value["localPosition"], "x"),
                     y: number(&value["localPosition"], "y"),
                     z: number(&value["localPosition"], "z"),
@@ -165,16 +165,16 @@ fn persistent(value: &Value) -> NativeWeldPersistentActorState {
             .collect(),
     })
 }
-fn meteor(value: &Value) -> NativeWeldMeteorActorState {
-    NativeWeldMeteorActorState {
+fn meteor(value: &Value) -> WeldMeteorActorState {
+    WeldMeteorActorState {
         common: common(value),
         camera_displacement: value["cameraDisplacement"]
             .as_object()
             .map(|_| vector(&value["cameraDisplacement"])),
         phase: if value["phase"] == "fall" {
-            NativeWeldMeteorPhase::Fall
+            WeldMeteorPhase::Fall
         } else {
-            NativeWeldMeteorPhase::Impact
+            WeldMeteorPhase::Impact
         },
         debris: values(value, "debris").iter().map(debris).collect(),
         body_scale: number(value, "bodyScale"),
@@ -198,8 +198,8 @@ fn meteor(value: &Value) -> NativeWeldMeteorActorState {
         private_seed: integer(value, "privateSeed") as u32,
     }
 }
-fn debris(value: &Value) -> NativeWeldMeteorDebrisSeed {
-    NativeWeldMeteorDebrisSeed {
+fn debris(value: &Value) -> WeldMeteorDebrisSeed {
+    WeldMeteorDebrisSeed {
         alpha: number(value, "alpha"),
         color_green: number(value, "colorGreen"),
         height: number(value, "height"),
@@ -213,13 +213,13 @@ fn debris(value: &Value) -> NativeWeldMeteorDebrisSeed {
         velocity: vector(&value["velocity"]),
     }
 }
-fn steam(value: &Value) -> NativeWeldSteamActorState {
-    NativeWeldSteamActorState {
+fn steam(value: &Value) -> WeldSteamActorState {
+    WeldSteamActorState {
         common: common(value),
         variant: if value["variant"] == "normal" {
-            NativeWeldSteamVariant::Normal
+            WeldSteamVariant::Normal
         } else {
-            NativeWeldSteamVariant::Over
+            WeldSteamVariant::Over
         },
         alpha_multiplier: number(value, "alphaMultiplier"),
         blue: number(value, "blue"),

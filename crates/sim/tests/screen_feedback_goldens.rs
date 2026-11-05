@@ -4,11 +4,11 @@ use serde_json::{Value, json};
 use solomon_sim::region_feedback::*;
 use solomon_sim::screen_feedback::*;
 use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryEventKind,
-    NativeSecondaryEventState, NativeSecondaryScreenFlashState,
+    SecondaryActorKind, SecondaryActorState, SecondaryEventKind, SecondaryEventState,
+    SecondaryScreenFlashState,
 };
 use solomon_sim::spells::model::{PrimarySpellEtherBlast, PrimarySpellTransientBase};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -16,17 +16,17 @@ fn point(value: &Value) -> Vec2 {
 fn point_snapshot(value: Vec2) -> Value {
     json!({ "x": value.x, "y": value.y })
 }
-fn overlay_snapshot(value: Option<NativeSecondaryScreenOverlay>) -> Value {
+fn overlay_snapshot(value: Option<SecondaryScreenOverlay>) -> Value {
     json!(value.map(|overlay| json!({ "alpha": overlay.alpha, "color": overlay.color })))
 }
-fn read_overlay(value: &Value) -> Option<NativeSecondaryScreenOverlay> {
-    value.as_object().map(|_| NativeSecondaryScreenOverlay {
+fn read_overlay(value: &Value) -> Option<SecondaryScreenOverlay> {
+    value.as_object().map(|_| SecondaryScreenOverlay {
         alpha: value["alpha"].as_f64().unwrap(),
         color: value["color"].as_u64().unwrap() as u32,
     })
 }
-fn flash(value: &Value) -> Option<NativeSecondaryScreenFlashState> {
-    value.as_object().map(|_| NativeSecondaryScreenFlashState {
+fn flash(value: &Value) -> Option<SecondaryScreenFlashState> {
+    value.as_object().map(|_| SecondaryScreenFlashState {
         alpha: value["alpha"].as_f64().unwrap(),
         blue: value["blue"].as_f64().unwrap(),
         decay_per_tick: value["decayPerTick"].as_f64().unwrap(),
@@ -35,7 +35,7 @@ fn flash(value: &Value) -> Option<NativeSecondaryScreenFlashState> {
         red: value["red"].as_f64().unwrap(),
     })
 }
-fn feedback_snapshot(state: &NativeSecondaryScreenFeedbackPresentation) -> Value {
+fn feedback_snapshot(state: &SecondaryScreenFeedbackPresentation) -> Value {
     json!({
         "alpha": state.alpha,
         "blue": state.blue,
@@ -73,15 +73,15 @@ fn assert_snapshot(actual: &Value, expected: &Value, label: &str) {
     }
 }
 fn apply_action(
-    state: &mut NativeSecondaryScreenFeedbackPresentation,
+    state: &mut SecondaryScreenFeedbackPresentation,
     action: &Value,
-    context: NativeSecondaryScreenFeedbackContext,
+    context: SecondaryScreenFeedbackContext,
 ) -> Value {
     match action["kind"].as_str().unwrap() {
         "secondary" => {
             let value = &action["event"];
-            let mut event = NativeSecondaryEventState::new(
-                NativeSecondaryEventKind::Impact,
+            let mut event = SecondaryEventState::new(
+                SecondaryEventKind::Impact,
                 "player".into(),
                 value["worldKey"].as_str().unwrap().into(),
                 value["tick"].as_u64().unwrap(),
@@ -97,18 +97,18 @@ fn apply_action(
         }
         "enemy" => {
             let value = &action["event"];
-            let camera_shake = value["cameraShake"].as_object().map(|_| NativeRegionCameraShake {
+            let camera_shake = value["cameraShake"].as_object().map(|_| RegionCameraShake {
                 attenuation: match value["cameraShake"]["attenuation"].as_str().unwrap() {
-                    "fixed" => NativeRegionCameraShakeAttenuation::Fixed,
-                    "point" => NativeRegionCameraShakeAttenuation::Point,
-                    "hit" => NativeRegionCameraShakeAttenuation::Hit,
-                    "hit-squared" => NativeRegionCameraShakeAttenuation::HitSquared,
+                    "fixed" => RegionCameraShakeAttenuation::Fixed,
+                    "point" => RegionCameraShakeAttenuation::Point,
+                    "hit" => RegionCameraShakeAttenuation::Hit,
+                    "hit-squared" => RegionCameraShakeAttenuation::HitSquared,
                     other => panic!("unknown attenuation {other}"),
                 },
                 displacement: point(&value["cameraShake"]["displacement"]),
             });
             state.consume_enemy(
-                NativeEnemyScreenFeedbackInput {
+                EnemyScreenFeedbackInput {
                     camera_shake,
                     event_id: value["eventId"].as_u64().unwrap(),
                     run_id: value["runId"].as_str().unwrap(),
@@ -126,7 +126,7 @@ fn apply_action(
         }
         "displacement" => {
             let value = &action["input"];
-            state.consume_primary_camera_displacement(NativePrimaryCameraDisplacementInput {
+            state.consume_primary_camera_displacement(PrimaryCameraDisplacementInput {
                 displacement: point(&value["displacement"]),
                 event_id: value["eventId"].as_u64().unwrap(),
                 tick: value["tick"].as_u64().unwrap(),
@@ -135,7 +135,7 @@ fn apply_action(
         }
         "magnitude" => {
             let value = &action["input"];
-            state.consume_primary_camera_magnitude(NativePrimaryCameraMagnitudeInput {
+            state.consume_primary_camera_magnitude(PrimaryCameraMagnitudeInput {
                 event_id: value["eventId"].as_u64().unwrap(),
                 magnitude: value["magnitude"].as_f64().unwrap(),
                 tick: value["tick"].as_u64().unwrap(),
@@ -157,7 +157,7 @@ fn apply_action(
                     birth_tick: value["birthTick"].as_u64().unwrap(),
                     charges: value["charges"].as_u64().unwrap() as u32,
                     origin: point(&value["origin"]),
-                    presentation_rng: NativeRng::new(0),
+                    presentation_rng: Rng::new(0),
                 },
                 context,
             );
@@ -183,11 +183,11 @@ fn screen_overwrites_late_events_camera_arbitration_and_attenuation_replay_the_s
             .unwrap();
     for case in fixture["journeys"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
-        let mut state = NativeSecondaryScreenFeedbackPresentation::new(
+        let mut state = SecondaryScreenFeedbackPresentation::new(
             case["initialTick"].as_u64().unwrap(),
             "boneyard:test".into(),
         );
-        let context = NativeSecondaryScreenFeedbackContext {
+        let context = SecondaryScreenFeedbackContext {
             camera_center: point(&case["context"]["cameraCenter"]),
             local_player_alternate: case["context"]["localPlayerAlternate"].as_bool().unwrap(),
             visible_world_width: case["context"]["visibleWorldWidth"].as_f64().unwrap(),
@@ -224,16 +224,16 @@ fn screen_overwrites_late_events_camera_arbitration_and_attenuation_replay_the_s
         let width = case["width"].as_f64().unwrap();
         let alternate = case["alternate"].as_bool().unwrap();
         assert_eq!(
-            native_region_point_gain(position, center, width, alternate),
+            region_point_gain(position, center, width, alternate),
             case["point"].as_f64().unwrap()
         );
         assert_eq!(
-            native_region_hit_point_gain(position, center, width, alternate),
+            region_hit_point_gain(position, center, width, alternate),
             case["hit"].as_f64().unwrap()
         );
     }
     for case in fixture["overlays"].as_array().unwrap() {
-        let actual = present_native_secondary_screen_overlay(
+        let actual = present_secondary_screen_overlay(
             read_overlay(&case["overlay"]),
             case["reduced"].as_bool().unwrap(),
         );
@@ -246,12 +246,12 @@ fn screen_overwrites_late_events_camera_arbitration_and_attenuation_replay_the_s
             .iter()
             .enumerate()
             .map(|(index, value)| {
-                let mut actor = NativeSecondaryActorState::new(
+                let mut actor = SecondaryActorState::new(
                     index as u64,
                     if value["kind"] == "earthquake" {
-                        NativeSecondaryActorKind::Earthquake
+                        SecondaryActorKind::Earthquake
                     } else {
-                        NativeSecondaryActorKind::Golem
+                        SecondaryActorKind::Golem
                     },
                     "player".into(),
                     value["worldKey"].as_str().unwrap().into(),
@@ -261,8 +261,7 @@ fn screen_overwrites_late_events_camera_arbitration_and_attenuation_replay_the_s
                 actor
             })
             .collect::<Vec<_>>();
-        let actual =
-            native_secondary_world_shake(&actors, "boneyard:test", point(&case["current"]));
+        let actual = secondary_world_shake(&actors, "boneyard:test", point(&case["current"]));
         assert_snapshot(&point_snapshot(actual), &case["result"], "earthquake arbitration");
     }
 }

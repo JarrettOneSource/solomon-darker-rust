@@ -17,10 +17,7 @@ use solomon_sim::boneyard::{
     BoneyardWorld, LoadedBoneyard,
 };
 use solomon_sim::enemies::model::WebbedState;
-use solomon_sim::loot::{
-    NativeLootDropKind, NativeLootDropSource, NativeLootDropSpec, NativeLootModifiers,
-    NativeOrbKind,
-};
+use solomon_sim::loot::{LootDropKind, LootDropSource, LootDropSpec, LootModifiers, OrbKind};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::{HubWizard, Vec2};
 
@@ -86,7 +83,7 @@ fn step_ground_loot(
         connected: true,
         heading_index: wizard.heading_index,
         level: 1,
-        modifiers: NativeLootModifiers::default(),
+        modifiers: LootModifiers::default(),
         owned_recipe_indexes: &[],
         player_id: player.id,
         position: wizard.position,
@@ -133,7 +130,7 @@ fn movement_contacts_facing_locks_and_native_release_follow_the_real_world_step(
             );
         }
         assert_eq!(
-            world.enemies.next_native_registration_order,
+            world.enemies.next_registration_order,
             case["nativeRegistrationBase"].as_u64().unwrap() as usize
         );
         let alive = case["alive"].as_bool().unwrap();
@@ -239,13 +236,8 @@ fn restoring_scene_state_preserves_future_movement_encounter_wave_rng_and_gate_m
         }
         if tick == 499 {
             let position = Vec2::new(wizard.position.x + 65.0, wizard.position.y);
-            let mut orb = NativeLootDropSpec::new(
-                NativeLootDropKind::Orb,
-                0,
-                position,
-                NativeLootDropSource::Enemy,
-            );
-            orb.orb_kind = Some(NativeOrbKind::Mana);
+            let mut orb = LootDropSpec::new(LootDropKind::Orb, 0, position, LootDropSource::Enemy);
+            orb.orb_kind = Some(OrbKind::Mana);
             orb.value = Some(0.7);
             world.loot.spawn_specs(vec![orb], tick, &mut order);
         }

@@ -1,7 +1,7 @@
 //! Persistent Faculty and Heartmonger spell rows from `native-boss-spell.ts`.
 
-use super::faculty_spells::{NativeDarkFireballState, NativeDireFireState, NativeRainOfBonesState};
-use super::guided_missile::NativeGuidedMissileState;
+use super::faculty_spells::{DarkFireballState, DireFireState, RainOfBonesState};
+use super::guided_missile::GuidedMissileState;
 use crate::Vec2;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
@@ -137,7 +137,7 @@ pub enum BossSpellKind {
     TragicCircle {
         remaining_ticks: u64,
     },
-    DireFire(NativeDireFireState),
+    DireFire(DireFireState),
 }
 
 impl BossSpellKind {
@@ -180,14 +180,14 @@ impl BossSpellKind {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeBossSpell {
+pub struct BossSpell {
     pub owner: BossSpellOwner,
     pub kind: BossSpellKind,
 }
 
-impl NativeBossSpell {
+impl BossSpell {
     #[must_use]
-    pub fn guided_missile_state(&self) -> NativeGuidedMissileState {
+    pub fn guided_missile_state(&self) -> GuidedMissileState {
         let BossSpellKind::SkullMissile {
             heading_deg,
             minimum_speed,
@@ -201,7 +201,7 @@ impl NativeBossSpell {
         else {
             panic!("Skull Missile state required");
         };
-        NativeGuidedMissileState {
+        GuidedMissileState {
             heading_deg,
             minimum_speed,
             phase_deg,
@@ -214,7 +214,7 @@ impl NativeBossSpell {
     }
 
     #[must_use]
-    pub fn dark_fireball_state(&self) -> NativeDarkFireballState {
+    pub fn dark_fireball_state(&self) -> DarkFireballState {
         let BossSpellKind::DarkFireball {
             arc_phase,
             arc_phase_step,
@@ -226,7 +226,7 @@ impl NativeBossSpell {
         else {
             panic!("Dark Fireball state required");
         };
-        NativeDarkFireballState {
+        DarkFireballState {
             age_ticks: self.owner.age_ticks,
             arc_phase,
             arc_phase_step,
@@ -238,13 +238,13 @@ impl NativeBossSpell {
     }
 
     #[must_use]
-    pub fn rain_state(&self) -> NativeRainOfBonesState {
+    pub fn rain_state(&self) -> RainOfBonesState {
         let BossSpellKind::RainOfBones { alpha, phase, remaining_ticks, rotation_sign, scale } =
             self.kind
         else {
             panic!("Rain of Bones state required");
         };
-        NativeRainOfBonesState {
+        RainOfBonesState {
             alpha,
             phase,
             position: self.owner.position,
@@ -254,7 +254,7 @@ impl NativeBossSpell {
         }
     }
 
-    pub fn set_guided_missile_state(&mut self, state: NativeGuidedMissileState) {
+    pub fn set_guided_missile_state(&mut self, state: GuidedMissileState) {
         let BossSpellKind::SkullMissile {
             heading_deg,
             minimum_speed,
@@ -278,7 +278,7 @@ impl NativeBossSpell {
         self.owner.position = state.position;
     }
 
-    pub fn set_dark_fireball_state(&mut self, state: NativeDarkFireballState) {
+    pub fn set_dark_fireball_state(&mut self, state: DarkFireballState) {
         let BossSpellKind::DarkFireball {
             arc_phase,
             arc_phase_step,
@@ -330,7 +330,7 @@ impl super::world::EnemyWorld {
         position: Vec2,
         kind: BossSpellKind,
         order: &mut WorldPainterOrder,
-    ) -> NativeBossSpell {
+    ) -> BossSpell {
         let owner = self.create_boss_spell_owner(
             owner_actor_id,
             spawn_tick,
@@ -339,6 +339,6 @@ impl super::world::EnemyWorld {
             kind.manager_lane(),
             order,
         );
-        NativeBossSpell { owner, kind }
+        BossSpell { owner, kind }
     }
 }

@@ -1,7 +1,7 @@
 //! Discorporeal death stream and banishment birth from `enemies/demon-skull-death.ts`.
 
 use super::boss_spell::BossSpellKind;
-use super::demon_skull_controller::NATIVE_DEMON_SKULL_DEATH_STREAM_TICKS;
+use super::demon_skull_controller::DEMON_SKULL_DEATH_STREAM_TICKS;
 use super::demon_skull_effects::UNHOLY_GREEN;
 use super::effects::*;
 use super::model::*;
@@ -24,8 +24,7 @@ pub fn step_dying_demon_skull(
     let capabilities = brain.capabilities;
     let owner = DeathEffectOwner::from(&*actor);
     if actor.death_tick == 0 {
-        world.demon_skull_encounter.death_stream_ticks_remaining =
-            NATIVE_DEMON_SKULL_DEATH_STREAM_TICKS;
+        world.demon_skull_encounter.death_stream_ticks_remaining = DEMON_SKULL_DEATH_STREAM_TICKS;
         let mut event = EnemyEvent::new(EnemyEventKind::EnemyStream, actor.id, tick);
         event.stream = Some("unholy-die".to_owned());
         world.emit_event(event);
@@ -39,7 +38,7 @@ pub fn step_dying_demon_skull(
                 tick,
                 SimpleDeathEffectSpec {
                     alpha: 1.0,
-                    alpha_loss_per_tick: super::effects::NATIVE_BANISH_RING_ALPHA_LOSS,
+                    alpha_loss_per_tick: super::effects::BANISH_RING_ALPHA_LOSS,
                     atlas: EnemyEffectAtlas::DeadHawg,
                     entry: 16,
                     blend_mode: EnemyEffectBlend::Add,

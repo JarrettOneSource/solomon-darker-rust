@@ -5,7 +5,7 @@ use crate::Vec2;
 use crate::float::{fround, hypot};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeRegionCameraShakeAttenuation {
+pub enum RegionCameraShakeAttenuation {
     Fixed,
     Point,
     Hit,
@@ -13,13 +13,13 @@ pub enum NativeRegionCameraShakeAttenuation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeRegionCameraShake {
-    pub attenuation: NativeRegionCameraShakeAttenuation,
+pub struct RegionCameraShake {
+    pub attenuation: RegionCameraShakeAttenuation,
     pub displacement: Vec2,
 }
 
 #[must_use]
-pub fn native_region_hit_point_gain(
+pub fn region_hit_point_gain(
     position: Vec2,
     camera_center: Vec2,
     visible_world_width: f64,
@@ -46,7 +46,7 @@ pub fn native_region_hit_point_gain(
 }
 
 #[must_use]
-pub fn native_region_point_gain(
+pub fn region_point_gain(
     position: Vec2,
     camera_center: Vec2,
     visible_world_width: f64,

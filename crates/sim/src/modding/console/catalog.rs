@@ -2,11 +2,11 @@
 
 use crate::economy::{
     DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubInventoryItem,
-    NATIVE_SKILL_BOOK_DEFINITIONS, create_equipment_inventory_item,
-    create_fomentius_inventory_item, create_native_skill_book_inventory_item,
+    SKILL_BOOK_DEFINITIONS, create_equipment_inventory_item, create_fomentius_inventory_item,
+    create_skill_book_inventory_item,
 };
 use crate::enemies::EnemyToken;
-use crate::profile::{NATIVE_SKILL_CATALOG, NATIVE_WELD_BUILDS};
+use crate::profile::{SKILL_CATALOG, WELD_BUILDS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WebLuaStockEnemy {
@@ -33,8 +33,10 @@ pub struct WebLuaDeveloperItemDescriptor {
     pub key: String,
     pub kind: &'static str,
     pub name: &'static str,
-    pub native_subtype: Option<u32>,
-    pub native_type_id: u32,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_subtype"))]
+    pub subtype: Option<u32>,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+    pub type_id: u32,
     pub recipe_index: Option<usize>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,18 +64,18 @@ pub fn web_lua_developer_items() -> Vec<WebLuaDeveloperItemDescriptor> {
             key: definition.kind.as_str().into(),
             kind: definition.kind.as_str(),
             name: definition.name,
-            native_subtype: Some(definition.native_subtype),
-            native_type_id: definition.native_type_id,
+            subtype: Some(definition.subtype),
+            type_id: definition.type_id,
             recipe_index: None,
         });
     }
-    for definition in NATIVE_SKILL_BOOK_DEFINITIONS {
+    for definition in SKILL_BOOK_DEFINITIONS {
         rows.push(WebLuaDeveloperItemDescriptor {
             key: definition.key.into(),
             kind: "skill-book",
             name: definition.name,
-            native_subtype: Some(definition.native_subtype),
-            native_type_id: definition.native_type_id,
+            subtype: Some(definition.subtype),
+            type_id: definition.type_id,
             recipe_index: None,
         });
     }
@@ -82,8 +84,8 @@ pub fn web_lua_developer_items() -> Vec<WebLuaDeveloperItemDescriptor> {
             key: format!("equipment:{}", recipe.source_index),
             kind: "equipment",
             name: recipe.name,
-            native_subtype: None,
-            native_type_id: recipe.native_type_id,
+            subtype: None,
+            type_id: recipe.type_id,
             recipe_index: Some(recipe.source_index),
         });
     }
@@ -91,7 +93,7 @@ pub fn web_lua_developer_items() -> Vec<WebLuaDeveloperItemDescriptor> {
 }
 #[must_use]
 pub fn web_lua_developer_skills() -> Vec<WebLuaDeveloperSkillDescriptor> {
-    NATIVE_SKILL_CATALOG
+    SKILL_CATALOG
         .iter()
         .filter(|skill| (8..=79).contains(&skill.id) && skill.maximum_level > 0)
         .map(|skill| WebLuaDeveloperSkillDescriptor {
@@ -105,7 +107,7 @@ pub fn web_lua_developer_skills() -> Vec<WebLuaDeveloperSkillDescriptor> {
 }
 #[must_use]
 pub fn web_lua_developer_welds() -> Vec<WebLuaDeveloperWeldDescriptor> {
-    NATIVE_WELD_BUILDS
+    WELD_BUILDS
         .iter()
         .map(|weld| WebLuaDeveloperWeldDescriptor {
             component_skill_ids: weld.component_skill_ids,
@@ -139,16 +141,16 @@ pub fn create_web_lua_developer_grant_items(
     if let Some(definition) =
         FOMENTIUS_STOCK_DEFINITIONS.iter().find(|item| item.kind.as_str() == key)
     {
-        if definition.native_type_id == 7001 {
+        if definition.type_id == 7001 {
             return Some(vec![create_fomentius_inventory_item(definition, 0, quantity)]);
         }
         return Some(
             (0..quantity).map(|_| create_fomentius_inventory_item(definition, 0, 1)).collect(),
         );
     }
-    if let Some(definition) = NATIVE_SKILL_BOOK_DEFINITIONS.iter().find(|item| item.key == key) {
+    if let Some(definition) = SKILL_BOOK_DEFINITIONS.iter().find(|item| item.key == key) {
         return Some(
-            (0..quantity).map(|_| create_native_skill_book_inventory_item(definition, 0)).collect(),
+            (0..quantity).map(|_| create_skill_book_inventory_item(definition, 0)).collect(),
         );
     }
     let recipe = DOWSING_EQUIPMENT_RECIPES

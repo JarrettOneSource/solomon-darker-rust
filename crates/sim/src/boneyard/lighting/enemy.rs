@@ -8,15 +8,15 @@ use crate::enemies::model::{EnemyBrain, EnemyLifeState, EnemyLighting};
 use crate::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use crate::float::fround;
 use crate::painter::WorldManagerLane;
-use crate::random_domain::native_random_int_from_word;
+use crate::random_domain::random_int_from_word;
 
 use super::{
-    NativeBoneyardLightSource, native_fire_patch_light_source, native_missile_light_source,
-    presentation_random, presentation_random_word, presentation_signed_random,
+    BoneyardLightSource, fire_patch_light_source, missile_light_source, presentation_random,
+    presentation_random_word, presentation_signed_random,
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeEnemyLightOwner {
+pub struct EnemyLightOwner {
     pub burning: bool,
     pub scale: f64,
     pub demon_skull_body_offset: Vec2,
@@ -29,7 +29,7 @@ pub struct NativeEnemyLightOwner {
     pub lighting: EnemyLighting,
 }
 
-impl From<&EnemyActor> for NativeEnemyLightOwner {
+impl From<&EnemyActor> for EnemyLightOwner {
     fn from(actor: &EnemyActor) -> Self {
         Self {
             burning: actor.config.burning,
@@ -53,17 +53,17 @@ impl From<&EnemyActor> for NativeEnemyLightOwner {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeBoneyardLightProviderCandidate {
+pub struct BoneyardLightProviderCandidate {
     pub lane: WorldManagerLane,
-    pub source: NativeBoneyardLightSource,
+    pub source: BoneyardLightSource,
 }
 
 #[must_use]
-pub fn native_enemy_light_sources(
-    enemy: NativeEnemyLightOwner,
+pub fn enemy_light_sources(
+    enemy: EnemyLightOwner,
     frame: u64,
     multiple_shadows: bool,
-) -> Vec<NativeBoneyardLightSource> {
+) -> Vec<BoneyardLightSource> {
     if enemy.enemy_token == EnemyToken::Zombie || enemy.lighting.provider_copies == 0 {
         return Vec::new();
     }
@@ -74,7 +74,7 @@ pub fn native_enemy_light_sources(
     for copy in 0..enemy.lighting.provider_copies {
         let salt = (u32::from(copy) + 1).wrapping_mul(0x045d_9f3b) ^ enemy.id as u32;
         let source = match enemy.enemy_token {
-            EnemyToken::DemonSkull => NativeBoneyardLightSource::new(
+            EnemyToken::DemonSkull => BoneyardLightSource::new(
                 Vec2::new(
                     enemy.position.x + enemy.demon_skull_body_offset.x,
                     enemy.position.y + enemy.demon_skull_body_offset.y,
@@ -83,7 +83,7 @@ pub fn native_enemy_light_sources(
                 enemy.lighting.glow,
                 multiple_shadows,
             ),
-            EnemyToken::DireFaculty => NativeBoneyardLightSource::new(
+            EnemyToken::DireFaculty => BoneyardLightSource::new(
                 enemy.position,
                 fround(0.75 + presentation_signed_random(frame, salt ^ 0x479fa0, 0.1_f32 as f64)),
                 if presentation_random(frame, salt ^ 0x479f80, 1.0) < 0.5 {
@@ -93,7 +93,7 @@ pub fn native_enemy_light_sources(
                 },
                 multiple_shadows,
             ),
-            EnemyToken::Heartmonger => NativeBoneyardLightSource::new(
+            EnemyToken::Heartmonger => BoneyardLightSource::new(
                 enemy.position,
                 0.75,
                 fround(0.5 + presentation_random(frame, salt ^ 0x47a040, 0.100_000_023_841_857_91)),
@@ -104,7 +104,7 @@ pub fn native_enemy_light_sources(
                 if enemy.burning {
                     ordinary_skeleton_light(enemy, frame, salt, multiple_shadows)
                 } else {
-                    NativeBoneyardLightSource::new(
+                    BoneyardLightSource::new(
                         enemy.position,
                         fround(
                             fround(enemy.lighting.charge)
@@ -117,7 +117,7 @@ pub fn native_enemy_light_sources(
                     )
                 }
             }
-            EnemyToken::Imp => NativeBoneyardLightSource::new(
+            EnemyToken::Imp => BoneyardLightSource::new(
                 enemy.position,
                 fround(0.25 + presentation_signed_random(frame, salt ^ 0x478cc1, 0.1)),
                 fround(
@@ -126,7 +126,7 @@ pub fn native_enemy_light_sources(
                 ),
                 false,
             ),
-            EnemyToken::Wraith => NativeBoneyardLightSource::new(
+            EnemyToken::Wraith => BoneyardLightSource::new(
                 enemy.position,
                 0.5,
                 fround(
@@ -135,7 +135,7 @@ pub fn native_enemy_light_sources(
                 ),
                 multiple_shadows,
             ),
-            EnemyToken::Demon => NativeBoneyardLightSource::new(
+            EnemyToken::Demon => BoneyardLightSource::new(
                 enemy.position,
                 fround(1.5 + presentation_signed_random(frame, salt ^ 0x479471, 0.25)),
                 if enemy.dying {
@@ -145,18 +145,18 @@ pub fn native_enemy_light_sources(
                 },
                 multiple_shadows,
             ),
-            EnemyToken::Coffin => NativeBoneyardLightSource::new(
+            EnemyToken::Coffin => BoneyardLightSource::new(
                 enemy.position,
                 0.65,
                 fround(
-                    1.0 - f64::from(native_random_int_from_word(
+                    1.0 - f64::from(random_int_from_word(
                         presentation_random_word(frame, salt ^ 0x479ea0),
                         9,
                     )) * 0.1,
                 ),
                 multiple_shadows,
             ),
-            EnemyToken::Portal => NativeBoneyardLightSource::new(
+            EnemyToken::Portal => BoneyardLightSource::new(
                 enemy.position,
                 fround(
                     fround(enemy.alpha)
@@ -180,12 +180,12 @@ pub fn native_enemy_light_sources(
 }
 
 fn ordinary_skeleton_light(
-    enemy: NativeEnemyLightOwner,
+    enemy: EnemyLightOwner,
     frame: u64,
     salt: u32,
     multiple_shadows: bool,
-) -> NativeBoneyardLightSource {
-    NativeBoneyardLightSource::new(
+) -> BoneyardLightSource {
+    BoneyardLightSource::new(
         enemy.position,
         0.5,
         fround(
@@ -197,14 +197,14 @@ fn ordinary_skeleton_light(
 }
 
 #[must_use]
-pub fn native_enemy_projectile_light_provider(
+pub fn enemy_projectile_light_provider(
     kind: EnemyProjectileKind,
     payload: EnemyProjectilePayload,
     id: usize,
     position: Vec2,
     frame: u64,
     multiple_shadows: bool,
-) -> Option<NativeBoneyardLightProviderCandidate> {
+) -> Option<BoneyardLightProviderCandidate> {
     let (lane, source) = match kind {
         EnemyProjectileKind::Arrow => {
             if payload != EnemyProjectilePayload::Fire {
@@ -217,11 +217,11 @@ pub fn native_enemy_projectile_light_provider(
         }
         EnemyProjectileKind::GuidedMissile => (
             WorldManagerLane::Actor,
-            native_missile_light_source(id as u32, position, frame, multiple_shadows),
+            missile_light_source(id as u32, position, frame, multiple_shadows),
         ),
         EnemyProjectileKind::DemonBomb => (
             WorldManagerLane::Actor,
-            NativeBoneyardLightSource::new(
+            BoneyardLightSource::new(
                 position,
                 0.6,
                 fround(1.0 - presentation_random(frame, id as u32 ^ 0x5e98e0, 0.25)),
@@ -230,11 +230,11 @@ pub fn native_enemy_projectile_light_provider(
         ),
         EnemyProjectileKind::PoisonPool => return None,
     };
-    Some(NativeBoneyardLightProviderCandidate { lane, source })
+    Some(BoneyardLightProviderCandidate { lane, source })
 }
 
-fn fire_projectile_light(id: usize, position: Vec2, frame: u64) -> NativeBoneyardLightSource {
-    NativeBoneyardLightSource::new(
+fn fire_projectile_light(id: usize, position: Vec2, frame: u64) -> BoneyardLightSource {
+    BoneyardLightSource::new(
         position,
         fround(0.5 + presentation_signed_random(frame, id as u32 ^ 0x5e6140, 0.25)),
         0.85,
@@ -243,7 +243,7 @@ fn fire_projectile_light(id: usize, position: Vec2, frame: u64) -> NativeBoneyar
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeEnemyProjectileEffectLightKind {
+pub enum EnemyProjectileEffectLightKind {
     DemonFire,
     DemonExplosionLitArray,
     FireBurst,
@@ -252,53 +252,45 @@ pub enum NativeEnemyProjectileEffectLightKind {
 }
 
 #[must_use]
-pub fn native_enemy_projectile_effect_light_provider(
-    kind: NativeEnemyProjectileEffectLightKind,
+pub fn enemy_projectile_effect_light_provider(
+    kind: EnemyProjectileEffectLightKind,
     age_ticks: u64,
     alpha: f64,
     position: Vec2,
     has_light_registration: bool,
     multiple_shadows: bool,
     point_gain: f64,
-) -> Option<NativeBoneyardLightProviderCandidate> {
+) -> Option<BoneyardLightProviderCandidate> {
     let (lane, source) = match kind {
-        NativeEnemyProjectileEffectLightKind::DemonFire => {
+        EnemyProjectileEffectLightKind::DemonFire => {
             if age_ticks == 0 || !has_light_registration {
                 return None;
             }
-            (
-                WorldManagerLane::Actor,
-                native_fire_patch_light_source(position, alpha, multiple_shadows),
-            )
+            (WorldManagerLane::Actor, fire_patch_light_source(position, alpha, multiple_shadows))
         }
-        NativeEnemyProjectileEffectLightKind::DemonExplosionLitArray => (
+        EnemyProjectileEffectLightKind::DemonExplosionLitArray => (
             WorldManagerLane::Transient,
-            NativeBoneyardLightSource::new(
-                position,
-                fround(2.0 * point_gain),
-                1.0,
-                multiple_shadows,
-            ),
+            BoneyardLightSource::new(position, fround(2.0 * point_gain), 1.0, multiple_shadows),
         ),
-        NativeEnemyProjectileEffectLightKind::FireBurst => (
+        EnemyProjectileEffectLightKind::FireBurst => (
             WorldManagerLane::Transient,
-            NativeBoneyardLightSource::new(
+            BoneyardLightSource::new(
                 position,
                 1.5,
                 (1.0 - (0.04_f32 as f64) * age_ticks as f64).max(0.0),
                 false,
             ),
         ),
-        NativeEnemyProjectileEffectLightKind::GuidedImpact => (
+        EnemyProjectileEffectLightKind::GuidedImpact => (
             WorldManagerLane::Transient,
-            NativeBoneyardLightSource::new(
+            BoneyardLightSource::new(
                 position,
                 0.75,
                 (1.0 - (0.05_f32 as f64) * age_ticks as f64).max(0.0),
                 false,
             ),
         ),
-        NativeEnemyProjectileEffectLightKind::Unlit => return None,
+        EnemyProjectileEffectLightKind::Unlit => return None,
     };
-    Some(NativeBoneyardLightProviderCandidate { lane, source })
+    Some(BoneyardLightProviderCandidate { lane, source })
 }

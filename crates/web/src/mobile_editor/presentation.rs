@@ -5,7 +5,7 @@ use super::{EditorEvent, Hit, HitTarget, MobileUiEditor, egui_rect, hud_rect};
 use crate::gpu_ui::UiFrame;
 use egui::{Color32, FontFamily, FontId, Id, Rect, RichText, Stroke, Ui, pos2, vec2};
 use solomon_sim::mobile_ui::*;
-use solomon_sim::player_panels::native_tooltip_fixed;
+use solomon_sim::player_panels::tooltip_fixed;
 
 const GOLD: Color32 = Color32::from_rgb(233, 215, 157);
 fn copy(value: &str, size: f32) -> RichText {
@@ -116,10 +116,10 @@ impl MobileUiEditor {
             let label = format!(
                 "{}, x {} percent, y {} percent, scale {}, rotation {} degrees",
                 id.label(),
-                native_tooltip_fixed(transform.x, 1),
-                native_tooltip_fixed(transform.y, 1),
-                native_tooltip_fixed(transform.scale, 2),
-                native_tooltip_fixed(transform.rotation, 0)
+                tooltip_fixed(transform.x, 1),
+                tooltip_fixed(transform.y, 1),
+                tooltip_fixed(transform.scale, 2),
+                tooltip_fixed(transform.rotation, 0)
             );
             frame.record(&format!("mobile/control:{}", id.as_str()), &label, "button", &response);
             frame.record_value(
@@ -401,8 +401,8 @@ impl MobileUiEditor {
                     let status = format!(
                         "{}   X {}%   Y {}%   SIZE {}%   ROTATE {}°",
                         self.selected.label(),
-                        native_tooltip_fixed(current.x, 1),
-                        native_tooltip_fixed(current.y, 1),
+                        tooltip_fixed(current.x, 1),
+                        tooltip_fixed(current.y, 1),
                         (current.scale * 100.0).round(),
                         current.rotation.round()
                     );

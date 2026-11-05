@@ -7,12 +7,12 @@ mod shadow;
 mod tree;
 
 pub use fence::{
-    NativeBrokenFenceHalf, NativeFenceGrate, NativeSceneryFencePost, native_boneyard_fence_posts,
-    native_broken_fence_halves, native_fence_grate,
+    BrokenFenceHalf, NativeFenceGrate, SceneryFencePost, boneyard_fence_posts, broken_fence_halves,
+    native_fence_grate,
 };
 
-use super::gate::native_closed_gate_roots;
-use super::presentation::native_gate_art;
+use super::gate::closed_gate_roots;
+use super::presentation::gate_art;
 use super::{BoneyardBounds, BoneyardObject, BoneyardScene};
 pub use shadow::*;
 pub use tree::*;
@@ -21,15 +21,15 @@ use crate::Vec2;
 use crate::float::{cos, sin};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum NativeScenerySource {
+pub enum ScenerySource {
     Object { index: usize, entry: usize },
     FencePost { index: usize, entry: usize },
-    FenceBody { index: usize, piece: usize, broken: Option<NativeBrokenFenceHalf> },
+    FenceBody { index: usize, piece: usize, broken: Option<BrokenFenceHalf> },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSceneryLayer {
-    pub source: NativeScenerySource,
+pub struct SceneryLayer {
+    pub source: ScenerySource,
     pub position: Vec2,
     pub world_y: f64,
     pub sort_bias: f64,
@@ -37,28 +37,25 @@ pub struct NativeSceneryLayer {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSceneryPlan {
+pub struct SceneryPlan {
     pub underlays: Vec<(usize, usize)>,
     pub compact: Vec<(usize, usize)>,
-    pub main: Vec<NativeSceneryLayer>,
-    pub proxies: Vec<NativeSceneryLayer>,
-    pub walls: Vec<NativeSceneryLayer>,
-    pub posts: Vec<NativeSceneryFencePost>,
+    pub main: Vec<SceneryLayer>,
+    pub proxies: Vec<SceneryLayer>,
+    pub walls: Vec<SceneryLayer>,
+    pub posts: Vec<SceneryFencePost>,
 }
 
 /// The complete original record bank determines whether a Tree proxy is empty.
 #[must_use]
-pub fn native_scenery_plan(
-    scene: &BoneyardScene,
-    record_is_empty: &dyn Fn(usize) -> bool,
-) -> NativeSceneryPlan {
-    let mut plan = NativeSceneryPlan {
+pub fn scenery_plan(scene: &BoneyardScene, record_is_empty: &dyn Fn(usize) -> bool) -> SceneryPlan {
+    let mut plan = SceneryPlan {
         underlays: Vec::new(),
         compact: Vec::new(),
         main: Vec::new(),
         proxies: Vec::new(),
         walls: Vec::new(),
-        posts: native_boneyard_fence_posts(&scene.fences),
+        posts: boneyard_fence_posts(&scene.fences),
     };
     for (index, object) in scene.objects.iter().enumerate() {
         if object.type_id == 2029 {
@@ -69,11 +66,11 @@ pub fn native_scenery_plan(
                     .unwrap_or(88 + object.overlay_variant.unwrap_or(0) as usize),
             ));
         }
-        let Some(entry) = native_scenery_object_entry(object) else {
+        let Some(entry) = scenery_object_entry(object) else {
             continue;
         };
-        plan.main.push(NativeSceneryLayer {
-            source: NativeScenerySource::Object { index, entry },
+        plan.main.push(SceneryLayer {
+            source: ScenerySource::Object { index, entry },
             position: object.position,
             world_y: object.position.y,
             sort_bias: object.sort_bias.unwrap_or(0.0),
@@ -98,8 +95,8 @@ pub fn native_scenery_plan(
             _ => None,
         };
         if let Some((entry, offset)) = proxy {
-            plan.proxies.push(NativeSceneryLayer {
-                source: NativeScenerySource::Object { index, entry },
+            plan.proxies.push(SceneryLayer {
+                source: ScenerySource::Object { index, entry },
                 position: object.position,
                 world_y: object.position.y + offset,
                 sort_bias: 0.0,
@@ -114,8 +111,8 @@ pub fn native_scenery_plan(
         ));
     }
     for (index, post) in plan.posts.iter().enumerate() {
-        plan.main.push(NativeSceneryLayer {
-            source: NativeScenerySource::FencePost {
+        plan.main.push(SceneryLayer {
+            source: ScenerySource::FencePost {
                 index,
                 entry: if post.style == 1 { 320 } else { 36 } + post.variant as usize,
             },
@@ -130,7 +127,7 @@ pub fn native_scenery_plan(
         let halves = if fence.code() == 1 {
             // The broken constructor observes only fence prefixes, before later
             // endpoint selectors overwrite the shared post's presentation record.
-            let posts = native_boneyard_fence_posts(&scene.fences[..=index]);
+            let posts = boneyard_fence_posts(&scene.fences[..=index]);
             let selector = |endpoint: usize| {
                 fence
                     .points
@@ -138,16 +135,16 @@ pub fn native_scenery_plan(
                     .and_then(|position| posts.iter().find(|post| post.position == *position))
                     .map_or(0, |post| post.variant)
             };
-            native_broken_fence_halves(&fence.points, selector(0), selector(1))
+            broken_fence_halves(&fence.points, selector(0), selector(1))
         } else {
             Vec::new()
         };
         let positions: Vec<Vec2> = match fence.code() {
             1 => halves.iter().map(|half| half.root).collect(),
-            2 => native_closed_gate_roots(&fence.points)
+            2 => closed_gate_roots(&fence.points)
                 .into_iter()
                 .map(|(hinge, tip)| {
-                    let art = native_gate_art(hinge, tip);
+                    let art = gate_art(hinge, tip);
                     Vec2::new(
                         if tip.y < (hinge.y + tip.y) / 2.0 {
                             (hinge.x + tip.x) / 2.0
@@ -168,8 +165,8 @@ pub fn native_scenery_plan(
             }
         };
         for (piece, position) in positions.into_iter().enumerate() {
-            let layer = NativeSceneryLayer {
-                source: NativeScenerySource::FenceBody {
+            let layer = SceneryLayer {
+                source: ScenerySource::FenceBody {
                     index,
                     piece,
                     broken: halves.get(piece).copied(),
@@ -190,7 +187,7 @@ pub fn native_scenery_plan(
 }
 
 #[must_use]
-pub fn native_scenery_object_entry(object: &BoneyardObject) -> Option<usize> {
+pub fn scenery_object_entry(object: &BoneyardObject) -> Option<usize> {
     if let Some(entry) = object.atlas_entry {
         return Some(entry);
     }
@@ -210,7 +207,7 @@ pub fn native_scenery_object_entry(object: &BoneyardObject) -> Option<usize> {
 
 /// Original glyph transform, also used for strict off-camera source membership.
 #[must_use]
-pub fn native_scenery_art_corners(
+pub fn scenery_art_corners(
     position: Vec2,
     size: Vec2,
     anchor: Vec2,
@@ -230,7 +227,7 @@ pub fn native_scenery_art_corners(
 }
 
 #[must_use]
-pub fn native_scenery_points_bounds(points: &[Vec2]) -> Option<BoneyardBounds> {
+pub fn scenery_points_bounds(points: &[Vec2]) -> Option<BoneyardBounds> {
     let first = points.first()?;
     let mut left = first.x;
     let mut right = first.x;

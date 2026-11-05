@@ -1,15 +1,15 @@
 //! The articulated material captures in `player-harden-view.ts`,
 //! `player-webbed-view.ts` and `native-player-diffuse-capture.ts`.
 
-use solomon_sim::enemies::webbed::native_cocoon_tilt;
+use solomon_sim::enemies::webbed::cocoon_tilt;
 use solomon_sim::float;
 use solomon_sim::secondary::presentation::{
-    NATIVE_PLAYER_MAGIC_SHIELD_ENTRY, NATIVE_PLAYER_MAGIC_SHIELD_OFFSET_Y,
+    PLAYER_MAGIC_SHIELD_ENTRY, PLAYER_MAGIC_SHIELD_OFFSET_Y,
 };
-use solomon_sim::spells::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
+use solomon_sim::spells::presentation::{SpellBlend, SpellSprite, SpellSpritePlan};
 
 use super::*;
-use crate::native_mesh::native_sprite_texel_rect;
+use crate::beam_mesh::sprite_texel_rect;
 
 impl WizardView {
     pub(super) fn draw_living_layers(
@@ -52,18 +52,18 @@ impl WizardView {
     ) {
         let state = &self.player_presentation;
         if let Some(shield) = state.magic_shield.filter(|shield| shield.visible) {
-            let record = &self.records[NATIVE_PLAYER_MAGIC_SHIELD_ENTRY];
+            let record = &self.records[PLAYER_MAGIC_SHIELD_ENTRY];
             let mut tint = tint_rgba(shield.tint);
             tint[3] = packed_alpha(shield.alpha);
             draw_centered_texture(
                 renderer,
                 camera,
                 &self.atlas,
-                native_sprite_texel_rect(record),
+                sprite_texel_rect(record),
                 Vec2::new(
                     wizard.position.x + f64::from(record.center_x) * shield.scale,
                     wizard.position.y
-                        + NATIVE_PLAYER_MAGIC_SHIELD_OFFSET_Y
+                        + PLAYER_MAGIC_SHIELD_OFFSET_Y
                         + f64::from(record.center_y) * shield.scale,
                 ),
                 Vec2::new(
@@ -119,7 +119,7 @@ impl WizardView {
                     renderer,
                     &Camera { origin: Vec2::ZERO, scale: 1.0 },
                     &self.atlas,
-                    native_sprite_texel_rect(record),
+                    sprite_texel_rect(record),
                     Vec2::new(128.0 + offsets.head_offset.x, 128.0 + offsets.head_offset.y),
                     Vec2::new(f64::from(record.width), f64::from(record.height)),
                     wizard.heading_index as f64 * 24.0 * std::f64::consts::PI / 180.0,
@@ -158,7 +158,7 @@ impl WizardView {
         if web.severity >= 3.0 {
             let atlas = spells.dead_hawg();
             let record = &atlas.records[29];
-            let tilt = native_cocoon_tilt(wizard.heading_index as f64 * 15.0);
+            let tilt = cocoon_tilt(wizard.heading_index as f64 * 15.0);
             let height = f64::from(record.height);
             let left = -f64::from(record.width) * 0.5 + f64::from(record.center_x);
             let top = -height * 0.5 + f64::from(record.center_y);
@@ -181,7 +181,7 @@ impl WizardView {
             });
             renderer.draw_quad(
                 &atlas.texture,
-                native_sprite_texel_rect(record),
+                sprite_texel_rect(record),
                 corners,
                 [[1.0; 4]; 4],
                 BlendMode::Normal,
@@ -190,7 +190,7 @@ impl WizardView {
                 let alpha = packed_alpha(web.hit_pulse);
                 renderer.draw_quad(
                     &atlas.texture,
-                    native_sprite_texel_rect(record),
+                    sprite_texel_rect(record),
                     corners,
                     [[1.0, 0.0, 0.0, alpha]; 4],
                     BlendMode::Normal,
@@ -237,17 +237,15 @@ impl WizardView {
         spells: &SpellView,
     ) {
         let mut plan = particle_plan(position);
-        for layer in native_damage_x4_vfx_plan(
-            self.player_presentation.damage_x4_ticks_remaining,
-            tick,
-            scale,
-        ) {
-            plan.draws.push(NativeSpellSprite {
+        for layer in
+            damage_x4_vfx_plan(self.player_presentation.damage_x4_ticks_remaining, tick, scale)
+        {
+            plan.draws.push(SpellSprite {
                 alpha: layer.alpha,
                 blend: SpellBlend::Add,
                 rotation: layer.rotation_degrees * std::f64::consts::PI / 180.0,
                 tint: 0xd8ba70,
-                ..NativeSpellSprite::new(7, layer.scale)
+                ..SpellSprite::new(7, layer.scale)
             });
         }
         spells.draw_sprite_plan(renderer, camera, &plan);
@@ -260,8 +258,8 @@ impl WizardView {
     }
 }
 
-fn particle_plan(position: Vec2) -> NativeSpellSpritePlan {
-    NativeSpellSpritePlan {
+fn particle_plan(position: Vec2) -> SpellSpritePlan {
+    SpellSpritePlan {
         position,
         world_y: position.y,
         sort_bias: 0.0,

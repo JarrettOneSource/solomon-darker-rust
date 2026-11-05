@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::network::{self, NativeSession, NetworkEvent, ReceivedNativeSnapshot};
-use crate::presentation::{NativePresentationTimeline, PresentationFrame};
+use crate::presentation::{PresentationFrame, PresentationTimeline};
 use crate::shared_gameplay::{ResumeGraceView, SharedGameplaySnapshot, SharedPauseView};
 use solomon_protocol::{
     ClientMessage, GameCommand, HubActivity, PauseSource, ResumeCredentials, ResumeGraceReason,
@@ -55,7 +55,7 @@ pub(super) struct NativeGame {
     // separate pending_snapshot belongs to an already-started world materialization.
     waiting_boneyard_frame: Option<ReceivedNativeSnapshot>,
     pub(super) pending_snapshot: Option<ReceivedNativeSnapshot>,
-    presentation: NativePresentationTimeline,
+    presentation: PresentationTimeline,
     pub(super) display: Option<PresentationFrame>,
     pending_commands: BTreeMap<u64, CommandFeedback>,
     receipts: Vec<CommandReceipt>,
@@ -73,7 +73,7 @@ pub(super) struct NativeGame {
 }
 
 impl NativeGame {
-    pub(super) fn presentation_timeline(&self) -> &NativePresentationTimeline {
+    pub(super) fn presentation_timeline(&self) -> &PresentationTimeline {
         &self.presentation
     }
 
@@ -188,7 +188,7 @@ impl NativeGame {
             loaded_boneyard: None,
             waiting_boneyard_frame: None,
             pending_snapshot: None,
-            presentation: NativePresentationTimeline::new(
+            presentation: PresentationTimeline::new(
                 solomon_protocol::GAME_TICK_RATE,
                 solomon_protocol::SNAPSHOT_RATE,
             ),

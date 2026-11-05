@@ -1,9 +1,9 @@
 //! The actual host profile card and its Message/Invite commands.
 
-use solomon_sim::profile::native_wizard_class_title;
+use solomon_sim::profile::wizard_class_title;
 use solomon_sim::social::{
     GameChatSender, GameChatWorldKind, GamePlayerCardProfile, GameSessionKind,
-    hub_player_party_invite_available, native_player_card_college_invite_available,
+    hub_player_party_invite_available, player_card_college_invite_available,
 };
 
 use super::{SocialUi, Surface};
@@ -59,7 +59,7 @@ impl SocialUi {
         } else if self.hosted {
             // MainMenuScene2259: invitation opens the recipient's consent flow;
             // this is deliberately distinct from an in-session party invitation.
-            native_player_card_college_invite_available(
+            player_card_college_invite_available(
                 snapshot.session_kind,
                 snapshot.world_kind,
                 snapshot
@@ -215,11 +215,8 @@ impl SocialUi {
                                             frame,
                                             ui,
                                             "social/card-class",
-                                            &native_wizard_class_title(
-                                                card.element,
-                                                card.discipline,
-                                            )
-                                            .to_uppercase(),
+                                            &wizard_class_title(card.element, card.discipline)
+                                                .to_uppercase(),
                                             NativeLabelStyle {
                                                 letter_spacing: Some(class_size * 0.14),
                                                 ..NativeLabelStyle::new(

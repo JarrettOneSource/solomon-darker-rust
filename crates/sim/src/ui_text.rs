@@ -9,12 +9,12 @@ pub mod messages;
 use std::collections::BTreeSet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeUiAtlasName {
+pub enum UiAtlasName {
     ControlPanel,
     Fonts,
 }
 
-impl NativeUiAtlasName {
+impl UiAtlasName {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -33,7 +33,7 @@ impl NativeUiAtlasName {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeUiFontName {
+pub enum UiFontName {
     Belt,
     Body,
     ControlPanel,
@@ -46,7 +46,7 @@ pub enum NativeUiFontName {
     WorldAndRoster,
 }
 
-impl NativeUiFontName {
+impl UiFontName {
     pub const ALL: [Self; 10] = [
         Self::Belt,
         Self::Body,
@@ -78,7 +78,7 @@ impl NativeUiFontName {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUiGlyphRecord {
+pub struct UiGlyphRecord {
     pub code_point: u32,
     pub record: usize,
     pub frame: [f64; 4],
@@ -89,25 +89,25 @@ pub struct NativeUiGlyphRecord {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUiKerning {
+pub struct UiKerning {
     pub left: u32,
     pub right: u32,
     pub adjustment: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUiBitmapFont {
-    pub atlas: NativeUiAtlasName,
+pub struct UiBitmapFont {
+    pub atlas: UiAtlasName,
     /// Line height, space advance, native scale word.
     pub metrics: [f64; 3],
     pub space_advance: f64,
-    pub glyphs: &'static [NativeUiGlyphRecord],
-    pub kerning: &'static [NativeUiKerning],
+    pub glyphs: &'static [UiGlyphRecord],
+    pub kerning: &'static [UiKerning],
 }
 
-impl NativeUiBitmapFont {
+impl UiBitmapFont {
     #[must_use]
-    pub fn glyph(&self, code_point: u32) -> Option<&'static NativeUiGlyphRecord> {
+    pub fn glyph(&self, code_point: u32) -> Option<&'static UiGlyphRecord> {
         let index = self.glyphs.binary_search_by_key(&code_point, |glyph| glyph.code_point).ok()?;
         Some(&self.glyphs[index])
     }
@@ -125,42 +125,42 @@ impl NativeUiBitmapFont {
 }
 
 #[must_use]
-pub const fn native_ui_font(name: NativeUiFontName) -> &'static NativeUiBitmapFont {
+pub const fn ui_font(name: UiFontName) -> &'static UiBitmapFont {
     match name {
-        NativeUiFontName::Belt => &catalog::BELT,
-        NativeUiFontName::Body => &catalog::BODY,
-        NativeUiFontName::ControlPanel => &catalog::CONTROL_PANEL,
-        NativeUiFontName::Heading => &catalog::HEADING,
-        NativeUiFontName::Medium => &catalog::MEDIUM,
-        NativeUiFontName::Menu => &catalog::MENU,
-        NativeUiFontName::SkillUppercase => &catalog::SKILL_UPPERCASE,
-        NativeUiFontName::SpecialUppercase => &catalog::SPECIAL_UPPERCASE,
-        NativeUiFontName::Timeline => &catalog::TIMELINE,
-        NativeUiFontName::WorldAndRoster => &catalog::WORLD_AND_ROSTER,
+        UiFontName::Belt => &catalog::BELT,
+        UiFontName::Body => &catalog::BODY,
+        UiFontName::ControlPanel => &catalog::CONTROL_PANEL,
+        UiFontName::Heading => &catalog::HEADING,
+        UiFontName::Medium => &catalog::MEDIUM,
+        UiFontName::Menu => &catalog::MENU,
+        UiFontName::SkillUppercase => &catalog::SKILL_UPPERCASE,
+        UiFontName::SpecialUppercase => &catalog::SPECIAL_UPPERCASE,
+        UiFontName::Timeline => &catalog::TIMELINE,
+        UiFontName::WorldAndRoster => &catalog::WORLD_AND_ROSTER,
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeUiTextAlign {
+pub enum UiTextAlign {
     Left,
     Center,
     Right,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeUiTextPlacement {
+pub enum UiTextPlacement {
     Baseline,
     Box,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUiTextSpec<'a> {
-    pub font: NativeUiFontName,
+pub struct UiTextSpec<'a> {
+    pub font: UiFontName,
     pub text: &'a str,
     pub x: f64,
     pub y: f64,
-    pub align: NativeUiTextAlign,
-    pub placement: NativeUiTextPlacement,
+    pub align: UiTextAlign,
+    pub placement: UiTextPlacement,
     pub scale: f64,
     pub alpha: f64,
     pub tint: u32,
@@ -168,16 +168,16 @@ pub struct NativeUiTextSpec<'a> {
     pub max_width: Option<f64>,
 }
 
-impl<'a> NativeUiTextSpec<'a> {
+impl<'a> UiTextSpec<'a> {
     #[must_use]
-    pub const fn new(font: NativeUiFontName, text: &'a str, x: f64, y: f64) -> Self {
+    pub const fn new(font: UiFontName, text: &'a str, x: f64, y: f64) -> Self {
         Self {
             font,
             text,
             x,
             y,
-            align: NativeUiTextAlign::Center,
-            placement: NativeUiTextPlacement::Baseline,
+            align: UiTextAlign::Center,
+            placement: UiTextPlacement::Baseline,
             scale: 1.0,
             alpha: 1.0,
             tint: 0xffffff,
@@ -188,7 +188,7 @@ impl<'a> NativeUiTextSpec<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUiTextRun<'a> {
+pub struct UiTextRun<'a> {
     pub text: &'a str,
     pub scale: Option<f64>,
     pub advance_scale: Option<f64>,
@@ -197,7 +197,7 @@ pub struct NativeUiTextRun<'a> {
     pub italic: bool,
 }
 
-impl<'a> NativeUiTextRun<'a> {
+impl<'a> UiTextRun<'a> {
     #[must_use]
     pub const fn new(text: &'a str) -> Self {
         Self { text, scale: None, advance_scale: None, offset_x: 0.0, offset_y: 0.0, italic: false }
@@ -205,8 +205,8 @@ impl<'a> NativeUiTextRun<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUiGlyphLayout {
-    pub glyph: &'static NativeUiGlyphRecord,
+pub struct UiGlyphLayout {
+    pub glyph: &'static UiGlyphRecord,
     pub character: char,
     pub center_x: f64,
     pub center_y: f64,
@@ -217,7 +217,7 @@ pub struct NativeUiGlyphLayout {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUiGlyphInkBounds {
+pub struct UiGlyphInkBounds {
     pub left: f64,
     pub top: f64,
     pub width: f64,
@@ -225,7 +225,7 @@ pub struct NativeUiGlyphInkBounds {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeUiTextLineLayout {
+pub struct UiTextLineLayout {
     pub text: String,
     pub x: f64,
     pub baseline_y: f64,
@@ -233,10 +233,10 @@ pub struct NativeUiTextLineLayout {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeUiTextLayout {
-    pub font: NativeUiFontName,
-    pub glyphs: Vec<NativeUiGlyphLayout>,
-    pub lines: Vec<NativeUiTextLineLayout>,
+pub struct UiTextLayout {
+    pub font: UiFontName,
+    pub glyphs: Vec<UiGlyphLayout>,
+    pub lines: Vec<UiTextLineLayout>,
     pub width: f64,
     pub height: f64,
     pub unsupported_code_points: Vec<u32>,
@@ -244,9 +244,9 @@ pub struct NativeUiTextLayout {
 
 /// Tight atlas ink inside the glyph's authored logical sprite quad.
 #[must_use]
-pub fn native_ui_glyph_ink_bounds(layout: &NativeUiGlyphLayout) -> NativeUiGlyphInkBounds {
+pub fn ui_glyph_ink_bounds(layout: &UiGlyphLayout) -> UiGlyphInkBounds {
     let glyph = layout.glyph;
-    NativeUiGlyphInkBounds {
+    UiGlyphInkBounds {
         left: layout.center_x + (glyph.trim_origin[0] - glyph.logical_size[0] / 2.0) * layout.scale,
         top: layout.center_y + (glyph.trim_origin[1] - glyph.logical_size[1] / 2.0) * layout.scale,
         width: glyph.frame[2] * layout.scale,
@@ -255,16 +255,16 @@ pub fn native_ui_glyph_ink_bounds(layout: &NativeUiGlyphLayout) -> NativeUiGlyph
 }
 
 #[must_use]
-pub fn measure_native_ui_text(text: &str, font: NativeUiFontName, scale: f64) -> f64 {
+pub fn measure_ui_text(text: &str, font: UiFontName, scale: f64) -> f64 {
     assert!(scale.is_finite() && scale > 0.0, "native UI text scale must be positive");
-    let spec = NativeUiTextSpec { scale, ..NativeUiTextSpec::new(font, text, 0.0, 0.0) };
-    layout_line(&spec, &[NativeUiTextRun::new(text)], None, None)
+    let spec = UiTextSpec { scale, ..UiTextSpec::new(font, text, 0.0, 0.0) };
+    layout_line(&spec, &[UiTextRun::new(text)], None, None)
 }
 
 #[must_use]
-pub fn wrap_native_ui_text(
+pub fn wrap_ui_text(
     text: &str,
-    font: NativeUiFontName,
+    font: UiFontName,
     max_width: Option<f64>,
     scale: f64,
 ) -> Vec<String> {
@@ -279,8 +279,7 @@ pub fn wrap_native_ui_text(
         for word in paragraph.split(is_javascript_whitespace).filter(|word| !word.is_empty()) {
             let next =
                 if current.is_empty() { word.to_owned() } else { format!("{current} {word}") };
-            if !current.is_empty() && measure_native_ui_text(&next, font, 1.0) > unscaled_max_width
-            {
+            if !current.is_empty() && measure_ui_text(&next, font, 1.0) > unscaled_max_width {
                 lines.push(current);
                 current = word.to_owned();
             } else {
@@ -293,38 +292,38 @@ pub fn wrap_native_ui_text(
 }
 
 #[must_use]
-pub fn layout_native_ui_text(spec: &NativeUiTextSpec<'_>) -> NativeUiTextLayout {
+pub fn layout_ui_text(spec: &UiTextSpec<'_>) -> UiTextLayout {
     assert!(spec.scale.is_finite() && spec.scale > 0.0, "native UI text scale must be positive");
     assert!(
         spec.alpha.is_finite() && (0.0..=1.0).contains(&spec.alpha),
         "native UI text alpha must be within [0, 1]"
     );
-    let font = native_ui_font(spec.font);
-    let lines = wrap_native_ui_text(spec.text, spec.font, spec.max_width, spec.scale);
+    let font = ui_font(spec.font);
+    let lines = wrap_ui_text(spec.text, spec.font, spec.max_width, spec.scale);
     let line_height = spec.line_height.unwrap_or(font.metrics[0]) * spec.scale;
     let mut glyphs = Vec::new();
     let mut line_layouts = Vec::new();
     let mut unsupported = BTreeSet::new();
     let mut widest = 0.0_f64;
     for (line_index, text) in lines.into_iter().enumerate() {
-        let width = measure_native_ui_text(&text, spec.font, spec.scale);
+        let width = measure_ui_text(&text, spec.font, spec.scale);
         widest = widest.max(width);
         let x = match spec.align {
-            NativeUiTextAlign::Left => spec.x,
-            NativeUiTextAlign::Center => spec.x - width / 2.0,
-            NativeUiTextAlign::Right => spec.x - width,
+            UiTextAlign::Left => spec.x,
+            UiTextAlign::Center => spec.x - width / 2.0,
+            UiTextAlign::Right => spec.x - width,
         };
         let baseline_y = spec.y + line_index as f64 * line_height;
-        let line_spec = NativeUiTextSpec { x, y: baseline_y, ..*spec };
+        let line_spec = UiTextSpec { x, y: baseline_y, ..*spec };
         layout_line(
             &line_spec,
-            &[NativeUiTextRun::new(&text)],
+            &[UiTextRun::new(&text)],
             Some(&mut glyphs),
             Some(&mut unsupported),
         );
-        line_layouts.push(NativeUiTextLineLayout { text, x, baseline_y, width });
+        line_layouts.push(UiTextLineLayout { text, x, baseline_y, width });
     }
-    let mut layout = NativeUiTextLayout {
+    let mut layout = UiTextLayout {
         font: spec.font,
         glyphs,
         height: font.metrics[0] * spec.scale + (line_layouts.len() - 1) as f64 * line_height,
@@ -332,7 +331,7 @@ pub fn layout_native_ui_text(spec: &NativeUiTextSpec<'_>) -> NativeUiTextLayout 
         unsupported_code_points: unsupported.into_iter().collect(),
         width: widest,
     };
-    if spec.placement == NativeUiTextPlacement::Box {
+    if spec.placement == UiTextPlacement::Box {
         place_text_in_box(&mut layout);
     }
     layout
@@ -341,35 +340,35 @@ pub fn layout_native_ui_text(spec: &NativeUiTextSpec<'_>) -> NativeUiTextLayout 
 /// Styled runs retain kerning across boundaries and may scale their advance independently
 /// of the visible glyphs, as Inventory's italic damage units do.
 #[must_use]
-pub fn layout_native_ui_text_runs(
-    font: NativeUiFontName,
-    runs: &[NativeUiTextRun<'_>],
+pub fn layout_ui_text_runs(
+    font: UiFontName,
+    runs: &[UiTextRun<'_>],
     x: f64,
     y: f64,
     tint: u32,
-) -> NativeUiTextLayout {
-    let spec = NativeUiTextSpec { tint, ..NativeUiTextSpec::new(font, "", x, y) };
+) -> UiTextLayout {
+    let spec = UiTextSpec { tint, ..UiTextSpec::new(font, "", x, y) };
     let mut glyphs = Vec::new();
     let mut unsupported = BTreeSet::new();
     let width = layout_line(&spec, runs, Some(&mut glyphs), Some(&mut unsupported));
     let text = runs.iter().map(|run| run.text).collect();
-    NativeUiTextLayout {
+    UiTextLayout {
         font,
         glyphs,
-        lines: vec![NativeUiTextLineLayout { text, x, baseline_y: y, width }],
+        lines: vec![UiTextLineLayout { text, x, baseline_y: y, width }],
         width,
-        height: native_ui_font(font).metrics[0],
+        height: ui_font(font).metrics[0],
         unsupported_code_points: unsupported.into_iter().collect(),
     }
 }
 
 /// Native dialogue wrapping preserves authored spaces and emphasis across run boundaries.
 #[must_use]
-pub fn wrap_native_ui_text_runs<'a>(
-    runs: &[NativeUiTextRun<'a>],
-    font: NativeUiFontName,
+pub fn wrap_ui_text_runs<'a>(
+    runs: &[UiTextRun<'a>],
+    font: UiFontName,
     max_width: f64,
-) -> Vec<Vec<NativeUiTextRun<'a>>> {
+) -> Vec<Vec<UiTextRun<'a>>> {
     let mut lines = Vec::new();
     let mut paragraph = Vec::new();
     for run in runs {
@@ -379,7 +378,7 @@ pub fn wrap_native_ui_text_runs<'a>(
                 paragraph.clear();
             } else {
                 let text = &run.text[index..index + character.len_utf8()];
-                paragraph.push(NativeUiTextRun { text, ..*run });
+                paragraph.push(UiTextRun { text, ..*run });
             }
         }
     }
@@ -390,16 +389,12 @@ pub fn wrap_native_ui_text_runs<'a>(
 /// `MsgBox` mutates stored text at spaces/hyphens; it deliberately carries the glyph
 /// that overflowed into the next scan. This is not the renderer's greedy word wrap.
 #[must_use]
-pub fn wrap_native_ui_msg_box_text(
-    text: &str,
-    font: NativeUiFontName,
-    max_width: f64,
-) -> Vec<String> {
+pub fn wrap_ui_msg_box_text(text: &str, font: UiFontName, max_width: f64) -> Vec<String> {
     assert!(
         max_width.is_finite() && max_width >= 0.0,
         "native UI MsgBox width must be nonnegative"
     );
-    let font = native_ui_font(font);
+    let font = ui_font(font);
     let mut characters: Vec<char> = text.chars().collect();
     let mut index = 0_isize;
     let mut line_start = 0_isize;
@@ -466,12 +461,12 @@ pub fn wrap_native_ui_msg_box_text(
 }
 
 fn layout_line(
-    spec: &NativeUiTextSpec<'_>,
-    runs: &[NativeUiTextRun<'_>],
-    mut output: Option<&mut Vec<NativeUiGlyphLayout>>,
+    spec: &UiTextSpec<'_>,
+    runs: &[UiTextRun<'_>],
+    mut output: Option<&mut Vec<UiGlyphLayout>>,
     mut unsupported: Option<&mut BTreeSet<u32>>,
 ) -> f64 {
-    let font = native_ui_font(spec.font);
+    let font = ui_font(spec.font);
     let mut cursor = spec.x;
     let mut previous = None;
     for run in runs {
@@ -493,7 +488,7 @@ fn layout_line(
             };
             cursor += font.kerning(previous, code_point) * advance_scale;
             if let Some(output) = output.as_deref_mut() {
-                output.push(NativeUiGlyphLayout {
+                output.push(UiGlyphLayout {
                     glyph,
                     character,
                     center_x: cursor + glyph.metrics[1] * glyph_scale + run.offset_x,
@@ -511,14 +506,14 @@ fn layout_line(
     cursor - spec.x
 }
 
-fn place_text_in_box(layout: &mut NativeUiTextLayout) {
+fn place_text_in_box(layout: &mut UiTextLayout) {
     if layout.glyphs.is_empty() {
         return;
     }
     let mut ink_top = f64::INFINITY;
     let mut ink_bottom = f64::NEG_INFINITY;
     for glyph in &layout.glyphs {
-        let bounds = native_ui_glyph_ink_bounds(glyph);
+        let bounds = ui_glyph_ink_bounds(glyph);
         let baseline = glyph.center_y - glyph.glyph.metrics[2] * glyph.scale;
         ink_top = ink_top.min(bounds.top - baseline);
         ink_bottom = ink_bottom.max(bounds.top + bounds.height - baseline);
@@ -538,11 +533,11 @@ fn place_text_in_box(layout: &mut NativeUiTextLayout) {
 }
 
 fn wrap_run_paragraph<'a>(
-    paragraph: &[NativeUiTextRun<'a>],
-    font: NativeUiFontName,
+    paragraph: &[UiTextRun<'a>],
+    font: UiFontName,
     max_width: f64,
-) -> Vec<Vec<NativeUiTextRun<'a>>> {
-    let spec = NativeUiTextSpec::new(font, "", 0.0, 0.0);
+) -> Vec<Vec<UiTextRun<'a>>> {
+    let spec = UiTextSpec::new(font, "", 0.0, 0.0);
     let mut lines = Vec::new();
     let mut line = Vec::new();
     let mut index = 0;
@@ -586,14 +581,10 @@ mod tests {
 
     #[test]
     fn heading_name_limit_uses_authored_advances_and_menu_runs_keep_cross_run_kerning() {
-        assert_eq!(measure_native_ui_text("AAAAAAAAAAA", NativeUiFontName::Heading, 1.0), 363.0);
-        assert_eq!(measure_native_ui_text("AAAAAAAAAAAA", NativeUiFontName::Heading, 1.0), 396.0);
-        let runs = [
-            NativeUiTextRun::new("A"),
-            NativeUiTextRun { italic: true, ..NativeUiTextRun::new("V") },
-        ];
-        let layout =
-            layout_native_ui_text_runs(NativeUiFontName::Menu, &runs, 10.0, 20.0, 0xffffff);
+        assert_eq!(measure_ui_text("AAAAAAAAAAA", UiFontName::Heading, 1.0), 363.0);
+        assert_eq!(measure_ui_text("AAAAAAAAAAAA", UiFontName::Heading, 1.0), 396.0);
+        let runs = [UiTextRun::new("A"), UiTextRun { italic: true, ..UiTextRun::new("V") }];
+        let layout = layout_ui_text_runs(UiFontName::Menu, &runs, 10.0, 20.0, 0xffffff);
         assert_eq!(layout.width, 37.0);
         assert_eq!(layout.glyphs[1].center_x, 37.0);
         assert!(layout.glyphs[1].italic);

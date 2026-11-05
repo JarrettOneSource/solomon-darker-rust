@@ -4,8 +4,8 @@ use crate::Vec2;
 use crate::economy::HubInventoryAction;
 use crate::float::hypot;
 use crate::heading::heading_vector;
-use crate::profile::primary::{NativePrimaryCastMode, native_primary_cast_mode};
-use crate::profile::weld::{NativeWeldCastKind, native_weld_primary_cast_mode};
+use crate::profile::primary::{PrimaryCastMode, primary_cast_mode};
+use crate::profile::weld::{WeldCastKind, weld_primary_cast_mode};
 use crate::session::{GameSession, GameSessionInput};
 
 use super::enemies::MlBotPolicyEnemyRow;
@@ -182,11 +182,10 @@ impl MlBotPolicyActionContext {
 
     fn primary_continuous(&self) -> Result<bool, String> {
         if self.primary_skill_id != 52 {
-            return Ok(native_primary_cast_mode(self.primary_skill_id)
-                == NativePrimaryCastMode::Continuous);
+            return Ok(primary_cast_mode(self.primary_skill_id) == PrimaryCastMode::Continuous);
         }
         let id = self.weld_build_id.ok_or("ML bot policy selected Weld has no build")?;
-        Ok(native_weld_primary_cast_mode(id) == NativeWeldCastKind::Channel)
+        Ok(weld_primary_cast_mode(id) == WeldCastKind::Channel)
     }
 
     fn aim_point(&self, target: Option<&MlBotPolicyEnemyRow>, aim: usize) -> Vec2 {

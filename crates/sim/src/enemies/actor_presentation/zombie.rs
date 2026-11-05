@@ -6,12 +6,12 @@ use super::sample::*;
 use crate::enemies::config::EnemyFamilyConfig;
 use crate::enemies::model::{EnemyActor, EnemyBrain};
 use crate::float;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 pub(super) fn zombie_presentation(
     actor: &EnemyActor,
     facing: usize,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let EnemyBrain::Zombie(brain) = &actor.brain else { unreachable!("Zombie brain") };
@@ -154,7 +154,7 @@ fn rotten_layers(age: f64) -> Vec<EnemySpriteLayer> {
             ..EnemySpriteLayer::new(EnemyArtAtlas::BadGuys, 11, "zombie-gas-cloud:mirrored")
         },
     ];
-    let mut rng = NativeRng::new((age / 10.0).floor() as i64);
+    let mut rng = Rng::new((age / 10.0).floor() as i64);
     let count = rng.draw_integer(16) + 5;
     for index in 0..count {
         let alpha = rng.draw_scaled_float(0.5, false);

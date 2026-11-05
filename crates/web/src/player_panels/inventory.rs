@@ -4,19 +4,18 @@
 use super::chrome::PanelCanvas;
 use super::{PlayerPanel, PlayerPanelSnapshot, PlayerPanels, Target};
 use solomon_sim::economy::{EquipmentSlot, EquipmentType};
-use solomon_sim::equipment::native_equipment_completed_sets;
+use solomon_sim::equipment::equipment_completed_sets;
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{
-    NativeUiFontName as Font, NativeUiTextAlign as Align, NativeUiTextRun,
-    NativeUiTextSpec as TextSpec, layout_native_ui_text, layout_native_ui_text_runs,
-    measure_native_ui_text, native_ui_font,
-};
 use solomon_sim::player_panels::equipment_slot_rects;
 use solomon_sim::player_panels::sack_rename::inventory_sack_name_needs_browser_font;
-use solomon_sim::profile::native_wizard_class_title;
 use solomon_sim::profile::primary::{
-    NativePrimarySpellDamageUnit, NativePrimarySpellManaUnit, native_primary_spell_descriptor,
-    native_primary_spell_summary_with_stat_book,
+    PrimarySpellDamageUnit, PrimarySpellManaUnit, primary_spell_descriptor,
+    primary_spell_summary_with_stat_book,
+};
+use solomon_sim::profile::wizard_class_title;
+use solomon_sim::ui_text::{
+    UiFontName as Font, UiTextAlign as Align, UiTextRun, UiTextSpec as TextSpec, layout_ui_text,
+    layout_ui_text_runs, measure_ui_text, ui_font,
 };
 impl PlayerPanels {
     pub(super) fn draw_inventory(
@@ -82,7 +81,7 @@ impl PlayerPanels {
         };
         let width = fallback
             .as_ref()
-            .map_or_else(|| measure_native_ui_text(label, Font::Menu, 1.0), |name| name.size.x)
+            .map_or_else(|| measure_ui_text(label, Font::Menu, 1.0), |name| name.size.x)
             + 40.0;
         c.frame(&self.ui, 4, HudRect::new(center - width / 2.0, top, width, 40.0), 5.0, 0xffffff)?;
         if let Some(name) = fallback {
@@ -263,18 +262,17 @@ impl PlayerPanels {
         baseline: f64,
         tint: u32,
     ) -> Result<(), String> {
-        let mut runs =
-            vec![NativeUiTextRun { advance_scale: Some(0.9), ..NativeUiTextRun::new(line) }];
+        let mut runs = vec![UiTextRun { advance_scale: Some(0.9), ..UiTextRun::new(line) }];
         if let Some(unit) = unit {
-            runs.push(NativeUiTextRun {
+            runs.push(UiTextRun {
                 scale: Some(0.7),
                 advance_scale: Some(0.9 * 0.7),
                 offset_y: 1.0,
                 italic: true,
-                ..NativeUiTextRun::new(unit)
+                ..UiTextRun::new(unit)
             });
         }
-        c.layout(&layout_native_ui_text_runs(Font::Medium, &runs, 45.0, baseline, tint));
+        c.layout(&layout_ui_text_runs(Font::Medium, &runs, 45.0, baseline, tint));
         Ok(())
     }
     fn draw_active_set_bonuses(
@@ -290,7 +288,7 @@ impl PlayerPanels {
                 recipes.push(recipe);
             }
         }
-        let sets = native_equipment_completed_sets(&recipes);
+        let sets = equipment_completed_sets(&recipes);
         if sets.is_empty() {
             return Ok(());
         }
@@ -307,9 +305,9 @@ impl PlayerPanels {
         let mut layouts = Vec::new();
         let mut content_width: f64 = 0.0;
         let mut cursor = 25.0;
-        let line_height = native_ui_font(Font::Body).metrics[0];
+        let line_height = ui_font(Font::Body).metrics[0];
         for (text, tint) in &lines {
-            let layout = layout_native_ui_text(&TextSpec {
+            let layout = layout_ui_text(&TextSpec {
                 align: Align::Left,
                 max_width: Some(300.0),
                 line_height: Some(line_height),
@@ -380,7 +378,7 @@ impl PlayerPanels {
                     &format!(
                         "LEVEL {}\n{}",
                         snapshot.progression.level,
-                        native_wizard_class_title(
+                        wizard_class_title(
                             snapshot.selection.element,
                             snapshot.selection.discipline
                         )
@@ -394,11 +392,11 @@ impl PlayerPanels {
                 tint: 0xd9ba70,
                 ..TextSpec::new(Font::Body, "PRIMARY SPELL", 45.0, 136.0)
             });
-            let descriptor = native_primary_spell_descriptor(
+            let descriptor = primary_spell_descriptor(
                 snapshot.book.primary_skill_id,
                 snapshot.book.weld_build_id,
             );
-            let summary = native_primary_spell_summary_with_stat_book(
+            let summary = primary_spell_summary_with_stat_book(
                 snapshot.book,
                 snapshot.stat_book,
                 snapshot.offensive,
@@ -413,18 +411,18 @@ impl PlayerPanels {
                 inventory_stat_number(summary.damage_maximum)?
             };
             let damage_unit = match descriptor.damage_unit {
-                NativePrimarySpellDamageUnit::Bolt => "bolt",
-                NativePrimarySpellDamageUnit::Boulder => "boulder",
-                NativePrimarySpellDamageUnit::Impact => "impact",
-                NativePrimarySpellDamageUnit::Rock => "rock",
-                NativePrimarySpellDamageUnit::Second => "sec",
+                PrimarySpellDamageUnit::Bolt => "bolt",
+                PrimarySpellDamageUnit::Boulder => "boulder",
+                PrimarySpellDamageUnit::Impact => "impact",
+                PrimarySpellDamageUnit::Rock => "rock",
+                PrimarySpellDamageUnit::Second => "sec",
             };
             let mana_unit = match descriptor.mana_unit {
-                NativePrimarySpellManaUnit::Cast => "cast",
-                NativePrimarySpellManaUnit::Second => "sec",
+                PrimarySpellManaUnit::Cast => "cast",
+                PrimarySpellManaUnit::Second => "sec",
             };
             // Inventory uses the pale skill-picker palette, rather than the saturated VFX color.
-            let root = solomon_sim::profile::native_skill_root(snapshot.book.primary_skill_id)
+            let root = solomon_sim::profile::skill_root(snapshot.book.primary_skill_id)
                 .expect("selected primary root");
             let color =
                 [0xffe5ff, 0xffcbcb, 0xe5ffff, 0xcbcbff, 0xcbffcb, 0xffe5cb, 0xcbd8ff, 0xe5e5e5]
@@ -489,8 +487,8 @@ impl PlayerPanels {
                     "HEALTH:",
                     format!(
                         "{}/{}",
-                        native_rounded_stat(snapshot.resources.current_health),
-                        native_rounded_stat(snapshot.resources.maximum_health)
+                        rounded_stat(snapshot.resources.current_health),
+                        rounded_stat(snapshot.resources.maximum_health)
                     ),
                     0xe9c9c9,
                     91.0,
@@ -499,39 +497,39 @@ impl PlayerPanels {
                     "MANA:",
                     format!(
                         "{}/{}",
-                        native_rounded_stat(snapshot.resources.current_mana),
-                        native_rounded_stat(snapshot.resources.maximum_mana)
+                        rounded_stat(snapshot.resources.current_mana),
+                        rounded_stat(snapshot.resources.maximum_mana)
                     ),
                     0xc2c2e2,
                     105.0,
                 ),
                 (
                     "CAST SPEED:",
-                    format!("{}%", native_rounded_stat(attributes.cast_speed_percent)),
+                    format!("{}%", rounded_stat(attributes.cast_speed_percent)),
                     0xc9f9c9,
                     124.0,
                 ),
                 (
                     "WALK SPEED:",
-                    format!("{}%", native_rounded_stat(attributes.walk_speed_percent)),
+                    format!("{}%", rounded_stat(attributes.walk_speed_percent)),
                     0xc9f9c9,
                     138.0,
                 ),
                 (
                     "PAIN:",
-                    format!("{}%", native_rounded_stat(attributes.pain_resistance_percent)),
+                    format!("{}%", rounded_stat(attributes.pain_resistance_percent)),
                     0xe9c9c9,
                     239.0,
                 ),
                 (
                     "MAGIC:",
-                    format!("{}%", native_rounded_stat(attributes.magic_resistance_percent)),
+                    format!("{}%", rounded_stat(attributes.magic_resistance_percent)),
                     0xc2c2e2,
                     253.0,
                 ),
                 (
                     "POISON:",
-                    format!("{}%", native_rounded_stat(attributes.poison_resistance_percent)),
+                    format!("{}%", rounded_stat(attributes.poison_resistance_percent)),
                     0xc9f9c9,
                     267.0,
                 ),
@@ -585,6 +583,6 @@ fn inventory_stat_number(value: f64) -> Result<String, String> {
 }
 
 // `nativeRoundedStat` uses JavaScript Math.round, whose half cases round toward +∞.
-fn native_rounded_stat(value: f64) -> String {
+fn rounded_stat(value: f64) -> String {
     format!("{:.0}", (value + 0.5).floor())
 }

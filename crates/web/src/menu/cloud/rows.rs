@@ -9,8 +9,8 @@ use egui::{Rect, Ui, Vec2};
 use solomon_sim::menu::party_directory::{
     DirectoryPartyAction, directory_party_action, directory_party_presentation,
 };
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign};
 // NativeDarkCloudText keeps stock glyphs, with the Source display family for external Unicode.
 // Bitmap font, placement and tint are the authored drawing contract.
 #[allow(clippy::too_many_arguments)]
@@ -18,25 +18,25 @@ pub(super) fn ink(
     frame: &UiFrame<'_>,
     ui: &Ui,
     text: &str,
-    font: NativeUiFontName,
+    font: UiFontName,
     scale: f32,
     tint: u32,
     rect: Rect,
     center: bool,
 ) -> Result<(), String> {
-    let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
-        placement: solomon_sim::native_ui_text::NativeUiTextPlacement::Box,
+    let spec = solomon_sim::ui_text::UiTextSpec {
+        placement: solomon_sim::ui_text::UiTextPlacement::Box,
         scale: f64::from(scale),
         tint,
-        align: if center { NativeUiTextAlign::Center } else { NativeUiTextAlign::Left },
-        ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
+        align: if center { UiTextAlign::Center } else { UiTextAlign::Left },
+        ..solomon_sim::ui_text::UiTextSpec::new(
             font,
             text,
             if center { f64::from(rect.width() / 2.0) } else { 0.0 },
             0.0,
         )
     };
-    let mut layout = solomon_sim::native_ui_text::layout_native_ui_text(&spec);
+    let mut layout = solomon_sim::ui_text::layout_ui_text(&spec);
     let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
     if layout.unsupported_code_points.is_empty() {
         let offset = rect.min + Vec2::new(0.0, (rect.height() - layout.height as f32) / 2.0);
@@ -47,7 +47,7 @@ pub(super) fn ink(
         crate::gpu_ui::paint_text_layout(frame, &painter, &layout);
     } else {
         let font = egui::FontId::new(
-            solomon_sim::native_ui_text::native_ui_font(font).metrics[0] as f32 * scale,
+            solomon_sim::ui_text::ui_font(font).metrics[0] as f32 * scale,
             egui::FontFamily::Name("Cinzel".into()),
         );
         let run = crate::gpu_ui::font_run(ui.ctx(), font, widgets::color(tint), text, None)?;
@@ -82,7 +82,7 @@ pub(super) fn control_action(
         frame,
         ui,
         label,
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         1.0,
         tint,
         rect.shrink2(Vec2::new(10.0, 0.0)),
@@ -182,7 +182,7 @@ pub(super) fn mod_row(
         frame,
         ui,
         &content.name,
-        NativeUiFontName::Menu,
+        UiFontName::Menu,
         0.85,
         if selected { 0xbfffbf } else { 0xd9ba70 },
         copy,
@@ -205,7 +205,7 @@ pub(super) fn mod_row(
             frame,
             ui,
             &content.tags.iter().take(3).cloned().collect::<Vec<_>>().join(", "),
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0.85,
             0xa99a70,
             Rect::from_min_max(
@@ -227,7 +227,7 @@ pub(super) fn mod_row(
         frame,
         ui,
         &content.author.username,
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         if phone { 0.85 } else { 1.0 },
         0xd9ba70,
         author,
@@ -238,7 +238,7 @@ pub(super) fn mod_row(
             frame,
             ui,
             &format!("v{}", content.latest_version),
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             1.0,
             0xd9ba70,
             Rect::from_min_size(
@@ -271,7 +271,7 @@ pub(super) fn mod_row(
         frame,
         ui,
         state,
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         0.85,
         if on { 0xa9d29d } else { 0xa99a70 },
         status,
@@ -378,7 +378,7 @@ pub(super) fn party_row(
         frame,
         ui,
         &party.leader.chars().next().unwrap_or(' ').to_uppercase().to_string(),
-        NativeUiFontName::Menu,
+        UiFontName::Menu,
         1.0,
         0xd9ba70,
         mark,
@@ -390,7 +390,7 @@ pub(super) fn party_row(
         frame,
         ui,
         &format!("{}'s party", party.leader),
-        NativeUiFontName::Menu,
+        UiFontName::Menu,
         0.85,
         if selected { 0xbfffbf } else { 0xd9ba70 },
         Rect::from_min_max(
@@ -413,7 +413,7 @@ pub(super) fn party_row(
         frame,
         ui,
         &flags.join(" · "),
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         0.85,
         0xd9ba70,
         Rect::from_min_max(
@@ -445,7 +445,7 @@ pub(super) fn party_row(
             frame,
             ui,
             &format!("{} WIZARDS · {}", p.squad, p.status),
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0.85,
             0xd9ba70,
             Rect::from_min_size(
@@ -458,7 +458,7 @@ pub(super) fn party_row(
             frame,
             ui,
             p.location,
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0.85,
             0xd9ba70,
             Rect::from_min_size(
@@ -477,7 +477,7 @@ pub(super) fn party_row(
                 frame,
                 ui,
                 text,
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 0.85,
                 0xd9ba70,
                 Rect::from_min_size(egui::pos2(x, main.top()), Vec2::new(w, main.height())),
@@ -535,7 +535,7 @@ pub(super) fn developer_presence(
             players.len(),
             if players.len() == 1 { "WIZARD" } else { "WIZARDS" }
         ),
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         1.0,
         0xd9ba70,
         header,
@@ -547,10 +547,10 @@ pub(super) fn developer_presence(
     }
     if loading && players.is_empty() {
         let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
-        ink(frame, ui, "SCRYING...", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false)?;
+        ink(frame, ui, "SCRYING...", UiFontName::Medium, 1.0, 0xd9ba70, r, false)?;
     } else if !loading && error.is_none() && players.is_empty() {
         let (_, r) = ui.allocate_space(Vec2::new(width, 40.0));
-        ink(frame, ui, "NO WIZARDS CONNECTED.", NativeUiFontName::Medium, 1.0, 0xd9ba70, r, false)?;
+        ink(frame, ui, "NO WIZARDS CONNECTED.", UiFontName::Medium, 1.0, 0xd9ba70, r, false)?;
     }
     let phone = width < 600.0;
     for game in matches {
@@ -560,7 +560,7 @@ pub(super) fn developer_presence(
             frame,
             ui,
             &game.boneyard_name,
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             1.0,
             0xd9ba70,
             Rect::from_min_size(info.min, Vec2::new(info.width(), 24.0)),
@@ -570,7 +570,7 @@ pub(super) fn developer_presence(
             frame,
             ui,
             &game.players.join(", "),
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0.85,
             0xd9ba70,
             Rect::from_min_size(info.min + Vec2::new(0.0, 26.0), Vec2::new(info.width(), 22.0)),
@@ -590,7 +590,7 @@ pub(super) fn developer_presence(
             frame,
             ui,
             &format!("{status} · {visibility} · {}", session_label(game.session)),
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0.85,
             0xd9ba70,
             Rect::from_min_size(r.min + Vec2::new(0.0, 50.0), Vec2::new(r.width() - 130.0, 22.0)),
@@ -622,7 +622,7 @@ pub(super) fn developer_presence(
         frame,
         ui,
         &format!("CONNECTED WIZARDS   {}", players.len()),
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         1.0,
         0xd9ba70,
         r,
@@ -663,7 +663,7 @@ pub(super) fn developer_presence(
                 frame,
                 ui,
                 text,
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 if index == 0 { 1.0 } else { 0.85 },
                 0xd9ba70,
                 Rect::from_min_size(

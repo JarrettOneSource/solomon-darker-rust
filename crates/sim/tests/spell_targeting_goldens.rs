@@ -25,7 +25,8 @@ struct TargetRecord {
     attachment: Point,
     body_radius: f64,
     cell_binding_order: usize,
-    native_priority: i32,
+    #[serde(rename = "nativePriority")]
+    priority: i32,
     pending_remove: bool,
     query_lane: String,
     registration_order: usize,
@@ -43,7 +44,7 @@ impl From<TargetRecord> for PrimarySpellTarget {
             attachment: record.attachment.into(),
             body_radius: record.body_radius,
             cell_binding_order: record.cell_binding_order,
-            native_priority: record.native_priority,
+            priority: record.priority,
             pending_remove: record.pending_remove,
             query_lane: match record.query_lane.as_str() {
                 "grid" => PrimarySpellQueryLane::Grid,
@@ -165,13 +166,13 @@ fn spell_contacts_target_retention_and_ether_tracking_match_the_website() {
             query_radius: 6.0,
             targets: &targets,
         };
-        assert_eq!(target_id(first_native_primary_point_contact(contact)), sample.point.as_deref());
+        assert_eq!(target_id(first_primary_point_contact(contact)), sample.point.as_deref());
         let fire = FireballPointContactQuery {
             contact,
             direction: Vec2::new(0.0, 1.0),
             hostile_corridor_length: 400.0,
         };
-        assert_eq!(target_id(first_native_fireball_point_contact(fire)), sample.fire.as_deref());
+        assert_eq!(target_id(first_fireball_point_contact(fire)), sample.fire.as_deref());
     }
     let clear = |target: &PrimarySpellTarget| target.id != "priority";
     for sample in fixture.cones {
@@ -184,7 +185,7 @@ fn spell_contacts_target_retention_and_ether_tracking_match_the_website() {
             reach: sample.reach,
             targets: &targets,
         };
-        assert_eq!(target_ids(native_primary_cone_targets(query)), sample.ids);
+        assert_eq!(target_ids(primary_cone_targets(query)), sample.ids);
     }
     for sample in fixture.air {
         let query = AirPrimaryTargetQuery {
@@ -199,16 +200,13 @@ fn spell_contacts_target_retention_and_ether_tracking_match_the_website() {
     }
     for sample in fixture.roots {
         assert_eq!(
-            target_ids(native_primary_root_targets(Vec2::ZERO, sample.reach, 6, &targets)),
+            target_ids(primary_root_targets(Vec2::ZERO, sample.reach, 6, &targets)),
             sample.ids
         );
     }
     let polygon: Vec<_> =
         fixture.polygon.vertices.into_iter().map(|point| Vec2::new(point[0], point[1])).collect();
-    assert_eq!(
-        target_ids(native_primary_polygon_targets(6, &polygon, &targets)),
-        fixture.polygon.ids
-    );
+    assert_eq!(target_ids(primary_polygon_targets(6, &polygon, &targets)), fixture.polygon.ids);
     assert_eq!(
         target_id(select_ether_primary_target(Vec2::ZERO, Vec2::new(0.0, 1.0), &targets)),
         fixture.ether.as_deref()
@@ -245,7 +243,7 @@ fn spell_contacts_target_retention_and_ether_tracking_match_the_website() {
         assert_eq!(result.reacquires_target, sample.result.reacquires_target);
     }
     for (heading, quantity, index, expected_heading, expected_turn_scale) in fixture.fan {
-        assert_eq!(native_missile_fan_heading(heading, quantity, index), expected_heading);
-        assert_eq!(native_missile_fan_turn_scale(index), expected_turn_scale);
+        assert_eq!(missile_fan_heading(heading, quantity, index), expected_heading);
+        assert_eq!(missile_fan_turn_scale(index), expected_turn_scale);
     }
 }

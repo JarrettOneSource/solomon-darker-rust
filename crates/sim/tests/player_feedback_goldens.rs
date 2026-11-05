@@ -5,7 +5,7 @@ use solomon_sim::crow_blindness::*;
 use solomon_sim::enemies::model::{EnemyDeathEffect, EnemyEvent};
 use solomon_sim::enemies::world::EnemyWorld;
 use solomon_sim::session::player_feedback::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -13,11 +13,11 @@ fn point(value: &Value) -> Vec2 {
 fn point_snapshot(value: Vec2) -> Value {
     json!({ "x": value.x, "y": value.y })
 }
-fn rng_snapshot(value: &NativeRng) -> Value {
+fn rng_snapshot(value: &Rng) -> Value {
     json!({ "indexA": value.index_a, "indexB": value.index_b, "words": &value.words[..] })
 }
-fn read_rng(value: &Value) -> NativeRng {
-    let mut rng = NativeRng::new(0);
+fn read_rng(value: &Value) -> Rng {
+    let mut rng = Rng::new(0);
     rng.index_a = value["indexA"].as_u64().unwrap() as usize;
     rng.index_b = value["indexB"].as_u64().unwrap() as usize;
     for (word, value) in rng.words.iter_mut().zip(value["words"].as_array().unwrap()) {
@@ -93,7 +93,7 @@ fn crow_blindness_status_bursts_and_ouch_deadlines_replay_the_source() {
         );
     }
     for case in fixture["opacity"].as_array().unwrap() {
-        let result = native_crow_blindness_opacity(case["ticksRemaining"].as_f64().unwrap());
+        let result = crow_blindness_opacity(case["ticksRemaining"].as_f64().unwrap());
         assert_snapshot(
             &json!({ "cover": result.cover, "stamp": result.stamp }),
             &case["result"],
@@ -104,7 +104,7 @@ fn crow_blindness_status_bursts_and_ouch_deadlines_replay_the_source() {
         let mut world = EnemyWorld::new("feedback", 0);
         world.next_event_id = 83;
         world.next_death_effect_id = 71;
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let request = &case["request"];
         let event = emit_player_status_burst(
             &mut world,
@@ -133,7 +133,7 @@ fn crow_blindness_status_bursts_and_ouch_deadlines_replay_the_source() {
     for (index, case) in fixture["ouches"].as_array().unwrap().iter().enumerate() {
         let mut world = EnemyWorld::new("feedback", 0);
         world.next_event_id = 83;
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let request = &case["request"];
         let result = emit_boneyard_player_damage_sound(
             &mut world,
@@ -153,7 +153,7 @@ fn crow_blindness_status_bursts_and_ouch_deadlines_replay_the_source() {
             &format!("ouch:{index}"),
         );
         let readiness = [-1, 0, 1].map(|delta| {
-            native_wizard_ouch_cooldown_ready(
+            wizard_ouch_cooldown_ready(
                 result.deadline_tick.saturating_add_signed(delta),
                 result.deadline_tick,
             )

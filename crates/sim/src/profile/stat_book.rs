@@ -5,17 +5,17 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, OnceLock};
 
-use super::{NATIVE_SKILL_CATALOG, NativeSkillValue};
+use super::{SKILL_CATALOG, SkillValue};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(untagged))]
-pub enum NativeSkillStatBookValue {
+pub enum SkillStatBookValue {
     Scalar(f64),
     Ranks(Vec<f64>),
 }
 
-impl NativeSkillStatBookValue {
+impl SkillStatBookValue {
     #[must_use]
     pub fn at_rank(&self, rank: u32) -> Option<f64> {
         match self {
@@ -30,16 +30,16 @@ impl NativeSkillStatBookValue {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
-pub struct NativeSkillStatBookEntry {
+pub struct SkillStatBookEntry {
     pub cap_level: u32,
     pub description: String,
     pub id: usize,
     pub maximum_level: u32,
-    pub numeric_properties: BTreeMap<String, NativeSkillStatBookValue>,
+    pub numeric_properties: BTreeMap<String, SkillStatBookValue>,
     pub quick_description: String,
 }
 
-impl NativeSkillStatBookEntry {
+impl SkillStatBookEntry {
     #[must_use]
     pub fn stat(&self, property: &str, rank: u32) -> Option<f64> {
         self.numeric_properties.get(property)?.at_rank(rank)
@@ -50,26 +50,24 @@ impl NativeSkillStatBookEntry {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerStatBookComponent {
     /// Snapshots share definitions; authored mutation uses `Arc::make_mut`.
-    pub entries: Arc<[NativeSkillStatBookEntry]>,
+    pub entries: Arc<[SkillStatBookEntry]>,
 }
 
 impl Default for PlayerStatBookComponent {
     fn default() -> Self {
-        static STOCK: OnceLock<Arc<[NativeSkillStatBookEntry]>> = OnceLock::new();
+        static STOCK: OnceLock<Arc<[SkillStatBookEntry]>> = OnceLock::new();
         let entries = STOCK.get_or_init(|| {
             let mut entries = Vec::new();
-            for definition in NATIVE_SKILL_CATALOG {
+            for definition in SKILL_CATALOG {
                 let mut numeric_properties = BTreeMap::new();
                 for property in definition.numeric_properties {
                     let value = match property.value {
-                        NativeSkillValue::Scalar(value) => NativeSkillStatBookValue::Scalar(value),
-                        NativeSkillValue::Ranks(values) => {
-                            NativeSkillStatBookValue::Ranks(values.to_vec())
-                        }
+                        SkillValue::Scalar(value) => SkillStatBookValue::Scalar(value),
+                        SkillValue::Ranks(values) => SkillStatBookValue::Ranks(values.to_vec()),
                     };
                     numeric_properties.insert(property.name.to_owned(), value);
                 }
-                entries.push(NativeSkillStatBookEntry {
+                entries.push(SkillStatBookEntry {
                     cap_level: definition.cap_level,
                     description: definition.description.to_owned(),
                     id: definition.id,

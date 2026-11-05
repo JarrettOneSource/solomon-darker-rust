@@ -4,20 +4,15 @@ use super::MobileUiEditor;
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, FontFamily, FontId, Painter, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::belt::{
-    NATIVE_BELT_SLOT_COUNT, NativeBeltEntry, NativeBeltPotionKind, native_belt_entry_item,
-    native_belt_potion_projection,
+    BELT_SLOT_COUNT, BeltPotionKind, NativeBeltEntry, belt_entry_item, belt_potion_projection,
 };
 use solomon_sim::economy::{EquipmentType, HubInventoryItem};
-use solomon_sim::hud::quickbar::{
-    NativeSkillQuickbarCooldownPresentation, native_skill_quickbar_icon_alpha,
-};
-use solomon_sim::hud::{native_inventory_item_icon_tints, native_inventory_item_icon_transform};
+use solomon_sim::hud::quickbar::{SkillQuickbarCooldownPresentation, skill_quickbar_icon_alpha};
+use solomon_sim::hud::{inventory_item_icon_tints, inventory_item_icon_transform};
 use solomon_sim::mobile_ui::{MobileUiElementId, mobile_ui_belt_element_id};
 use solomon_sim::player::PlayerState;
-use solomon_sim::profile::native_skill_category;
-use solomon_sim::secondary::{
-    NativeSecondaryAbilityId, native_secondary_ability_mana_cost_with_stat_book,
-};
+use solomon_sim::profile::skill_category;
+use solomon_sim::secondary::{SecondaryAbilityId, secondary_ability_mana_cost_with_stat_book};
 
 #[derive(Clone, Debug, PartialEq)]
 struct ItemIcon {
@@ -34,7 +29,7 @@ enum BeltIcon {
         id: usize,
         record: usize,
         unavailable: bool,
-        cooldown: NativeSkillQuickbarCooldownPresentation,
+        cooldown: SkillQuickbarCooldownPresentation,
     },
     Item(ItemIcon),
     Potion {
@@ -58,7 +53,7 @@ impl MobileEditorPlayerPreview {
         // Source MobileUiElementPreview renders the eight named editor controls
         // from bank zero. The live HUD selects its own bank before projecting it;
         // the editor must never enumerate the other sixteen persisted entries.
-        for (slot, entry) in player.belt.entries.iter().take(NATIVE_BELT_SLOT_COUNT).enumerate() {
+        for (slot, entry) in player.belt.entries.iter().take(BELT_SLOT_COUNT).enumerate() {
             let id = mobile_ui_belt_element_id(&player.belt, slot);
             if id != MobileUiElementId::SLOTS[slot] {
                 aliases[slot] =
@@ -67,11 +62,11 @@ impl MobileEditorPlayerPreview {
             }
             slots[slot] = match *entry {
                 Some(NativeBeltEntry::Skill { skill_id }) => {
-                    let ability = NativeSecondaryAbilityId::from_skill_id(skill_id);
+                    let ability = SecondaryAbilityId::from_skill_id(skill_id);
                     let unavailable = ability.is_some_and(|ability| {
                         in_hub
                             || player.combat.current_mana
-                                < native_secondary_ability_mana_cost_with_stat_book(
+                                < secondary_ability_mana_cost_with_stat_book(
                                     &player.book,
                                     &player.stat_book,
                                     ability,
@@ -82,11 +77,11 @@ impl MobileEditorPlayerPreview {
                         id: skill_id,
                         record: player.book.skill_icon_record(skill_id),
                         unavailable,
-                        cooldown: NativeSkillQuickbarCooldownPresentation::default(),
+                        cooldown: SkillQuickbarCooldownPresentation::default(),
                     })
                 }
                 Some(entry) => {
-                    if let Some(item) = native_belt_entry_item(entry, &player.economy) {
+                    if let Some(item) = belt_entry_item(entry, &player.economy) {
                         Some(BeltIcon::Item(item_icon(item, u64::from(item.quantity), player)))
                     } else {
                         match entry {
@@ -99,24 +94,24 @@ impl MobileEditorPlayerPreview {
                 None => None,
             };
         }
-        let potions = [NativeBeltPotionKind::Health, NativeBeltPotionKind::Mana].map(|kind| {
-            let projection = native_belt_potion_projection(&player.economy.backpack, kind);
+        let potions = [BeltPotionKind::Health, BeltPotionKind::Mana].map(|kind| {
+            let projection = belt_potion_projection(&player.economy.backpack, kind);
             projection
                 .item
-                .map_or(BeltIcon::Potion { mana: kind == NativeBeltPotionKind::Mana }, |item| {
+                .map_or(BeltIcon::Potion { mana: kind == BeltPotionKind::Mana }, |item| {
                     BeltIcon::Item(item_icon(item, projection.count, player))
                 })
         });
         Self { slots, aliases, potions, in_hub }
     }
 
-    pub fn set_cooldowns(&mut self, cooldowns: &[NativeSkillQuickbarCooldownPresentation; 83]) {
+    pub fn set_cooldowns(&mut self, cooldowns: &[SkillQuickbarCooldownPresentation; 83]) {
         for icon in self.slots.iter_mut().flatten() {
             if let BeltIcon::Skill { id, cooldown, .. } = icon {
-                *cooldown = if native_skill_category(*id) == Some(2) {
+                *cooldown = if skill_category(*id) == Some(2) {
                     cooldowns[*id]
                 } else {
-                    NativeSkillQuickbarCooldownPresentation::default()
+                    SkillQuickbarCooldownPresentation::default()
                 };
             }
         }
@@ -129,7 +124,7 @@ fn item_icon(item: &HubInventoryItem, quantity: u64, player: &PlayerState) -> It
         records: item.icon_records.clone(),
         equipment_type: item.equipment_type,
         quantity,
-        tints: native_inventory_item_icon_tints(item, player.selection.element),
+        tints: inventory_item_icon_tints(item, player.selection.element),
     }
 }
 
@@ -461,7 +456,7 @@ impl MobileUiEditor {
                     painter.add(egui::Shape::mesh(mesh));
                 }
                 let alpha =
-                    native_skill_quickbar_icon_alpha(cooldown.remaining > 0.0, *unavailable) as f32;
+                    skill_quickbar_icon_alpha(cooldown.remaining > 0.0, *unavailable) as f32;
                 let dim = if self.preview.as_ref().is_some_and(|preview| preview.in_hub) {
                     0.25
                 } else {
@@ -484,7 +479,7 @@ impl MobileUiEditor {
                 )?;
             }
             Some(BeltIcon::Item(item)) => {
-                let ([x, y], rotation) = native_inventory_item_icon_transform(item.equipment_type);
+                let ([x, y], rotation) = inventory_item_icon_transform(item.equipment_type);
                 let translation = vec2(x as f32, y as f32);
                 let rotation = (rotation as f32).to_radians();
                 for (index, record) in item.records.iter().enumerate() {
@@ -531,7 +526,7 @@ impl MobileUiEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solomon_sim::NativeRng;
+    use solomon_sim::Rng;
     use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 
     #[test]
@@ -542,7 +537,7 @@ mod tests {
                 element: WizardElement::Ether,
                 discipline: WizardDiscipline::Arcane,
             },
-            &mut NativeRng::new(123),
+            &mut Rng::new(123),
         );
         assert_eq!(player.belt.entries.len(), 24);
         player.belt.entries.fill(None);
@@ -551,7 +546,7 @@ mod tests {
         let before = MobileEditorPlayerPreview::from_player(&player, true);
         assert!(matches!(before.slots[0], Some(BeltIcon::Skill { id: 8, .. })));
         assert_eq!(before.aliases[3], Some("Health"));
-        for entry in &mut player.belt.entries[NATIVE_BELT_SLOT_COUNT..] {
+        for entry in &mut player.belt.entries[BELT_SLOT_COUNT..] {
             *entry = Some(NativeBeltEntry::ManaPotion);
         }
         assert_eq!(MobileEditorPlayerPreview::from_player(&player, true), before);

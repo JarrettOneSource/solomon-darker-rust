@@ -5,7 +5,7 @@ use solomon_sim::boneyard::lighting::*;
 #[path = "support/website_rows.rs"]
 mod website_rows;
 
-fn row(source: NativeBoneyardLightSource) -> Value {
+fn row(source: BoneyardLightSource) -> Value {
     json!({
         "castsDirectionalShadow": source.casts_directional_shadow,
         "intensity": source.intensity,
@@ -27,27 +27,22 @@ fn primary_light_birth_retirement_and_private_presentation_samples_match_the_sou
         );
         let shadows = case["multipleShadows"].as_bool().unwrap();
         let actual = json!([
-            native_fire_explosion_light_source(
+            fire_explosion_light_source(
                 position,
                 frame,
                 case["pointGain"].as_f64().unwrap(),
                 shadows
             )
             .map(row),
-            row(native_fire_ember_light_source(
-                id,
-                position,
-                case["life"].as_f64().unwrap(),
-                frame
-            )),
-            row(native_fire_impact_light_source(position, frame as f64)),
-            row(native_fire_good_imp_light_source(
+            row(fire_ember_light_source(id, position, case["life"].as_f64().unwrap(), frame)),
+            row(fire_impact_light_source(position, frame as f64)),
+            row(fire_good_imp_light_source(
                 id,
                 position,
                 case["lightGlow"].as_f64().unwrap(),
                 frame
             )),
-            row(native_fireball_light_source(id, position, frame, shadows)),
+            row(fireball_light_source(id, position, frame, shadows)),
             row(ether_primary_impact_light_source(position, frame)),
         ]);
         website_rows::compare(&actual, &case["expected"], &format!("light{id} frame{frame}"));

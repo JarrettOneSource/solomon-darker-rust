@@ -2,7 +2,7 @@
 
 use egui::{Color32, FontId, Id, Painter, Pos2, Rect, Response, Sense, Ui, pos2, vec2};
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::NativeUiTextSpec;
+use solomon_sim::ui_text::UiTextSpec;
 
 use crate::gpu_ui::{self, StockAtlas, UiFrame};
 
@@ -39,7 +39,7 @@ pub(super) fn rect(bounds: HudRect, origin: Pos2, scale: f32) -> Rect {
 pub(super) fn native_text(
     frame: &mut UiFrame<'_>,
     painter: &Painter,
-    spec: &NativeUiTextSpec<'_>,
+    spec: &UiTextSpec<'_>,
     origin: Pos2,
     scale: f32,
 ) {

@@ -179,7 +179,7 @@ fn both_endpoints_can_leave_isolated_first_choices_through_a_shared_component() 
                 Vec2::new(600.0, 300.0),
                 Vec2::new(600.0, 900.0),
             ],
-            native_line_mask: 0,
+            line_mask: 0,
             source_id: None,
         }],
         vec![],

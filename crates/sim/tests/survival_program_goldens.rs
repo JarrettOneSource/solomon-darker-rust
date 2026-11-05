@@ -6,10 +6,10 @@ mod support;
 
 use enemy_snapshots::{policy_id, recipe_snapshot};
 use serde_json::{Value, json};
-use solomon_sim::boneyard::waves::native_survival_programs;
 use solomon_sim::boneyard::waves::programs::{
     BossBirth, BossEncounter, SkeletonBossState, SkeletonStep, SpiderState,
 };
+use solomon_sim::boneyard::waves::survival_programs;
 use support::assert_website_json;
 
 fn skeleton_births(step: &SkeletonStep) -> Value {
@@ -29,7 +29,7 @@ fn every_generated_survival_program_and_recipe_matches_the_website() {
     assert_eq!(fixture["data"].as_array().unwrap().len(), 12);
     for source in fixture["data"].as_array().unwrap() {
         let sha = source["sourceSha256"].as_str().unwrap();
-        let programs = native_survival_programs(sha).unwrap();
+        let programs = survival_programs(sha).unwrap();
         assert_eq!(programs.bosses.len(), 3);
         for (definition, expected) in
             programs.bosses.iter().zip(source["bosses"].as_array().unwrap())
@@ -80,7 +80,7 @@ fn every_generated_survival_program_and_recipe_matches_the_website() {
 
     for case in fixture["bossCases"].as_array().unwrap() {
         let sha = case["sourceSha256"].as_str().unwrap();
-        let programs = native_survival_programs(sha).unwrap();
+        let programs = survival_programs(sha).unwrap();
         let definition = programs
             .bosses
             .iter()
@@ -118,7 +118,7 @@ fn every_generated_survival_program_and_recipe_matches_the_website() {
 
     for case in fixture["skeletonCases"].as_array().unwrap() {
         let sha = case["sourceSha256"].as_str().unwrap();
-        let programs = native_survival_programs(sha).unwrap();
+        let programs = survival_programs(sha).unwrap();
         let mut state = SkeletonBossState::default();
         let mut tick = 0;
         for record in case["records"].as_array().unwrap() {
@@ -156,7 +156,7 @@ fn every_generated_survival_program_and_recipe_matches_the_website() {
 
     for case in fixture["spiderCases"].as_array().unwrap() {
         let sha = case["sourceSha256"].as_str().unwrap();
-        let programs = native_survival_programs(sha).unwrap();
+        let programs = survival_programs(sha).unwrap();
         let index = case["definitionIndex"].as_u64().unwrap() as usize;
         let definition = &programs.spiders[index];
         let mut state = SpiderState::default();

@@ -11,19 +11,15 @@ use crate::heading::heading_degrees_from_vector;
 use crate::line_obstruction::line_bounds_exit_obstruction;
 
 pub const AIR_PRIMARY_TARGET_Y_OFFSET: f64 = -20.0;
-pub const NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK: u32 = 0x380;
-pub const NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK: u32 = 0x700;
-pub const NATIVE_PRIMARY_HOSTILE_FLAG: u32 = 0x2;
+pub const PRIMARY_CAST_TERRAIN_EXCLUSION_MASK: u32 = 0x380;
+pub const PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK: u32 = 0x700;
+pub const PRIMARY_HOSTILE_FLAG: u32 = 0x2;
 pub const ETHER_PRIMARY_INITIAL_TURN: f64 = 0.01_f32 as f64;
 
 /// `nativePrimaryViewRayEndpoint`: range ends at the current camera view, with
 /// float32 stores before and after the shared bounds query.
 #[must_use]
-pub fn native_primary_view_ray_endpoint(
-    start: Vec2,
-    direction: Vec2,
-    view: BoneyardBounds,
-) -> Vec2 {
+pub fn primary_view_ray_endpoint(start: Vec2, direction: Vec2, view: BoneyardBounds) -> Vec2 {
     let far = Vec2::new(
         fround(start.x + fround(direction.x * 100_000.0)),
         fround(start.y + fround(direction.y * 100_000.0)),
@@ -58,7 +54,7 @@ pub struct PrimarySpellTarget {
     pub grid_position: Option<Vec2>,
     pub id: String,
     pub kind: PrimarySpellTargetKind,
-    pub native_priority: i32,
+    pub priority: i32,
     pub pending_remove: bool,
     pub position: Vec2,
     pub query_lane: PrimarySpellQueryLane,
@@ -121,32 +117,32 @@ pub fn air_primary_bolt_geometry(
 }
 
 #[must_use]
-pub fn native_primary_target_eligible(target: &PrimarySpellTarget, actor_mask: u32) -> bool {
+pub fn primary_target_eligible(target: &PrimarySpellTarget, actor_mask: u32) -> bool {
     target.active && !target.pending_remove && target.actor_flags & actor_mask != 0
 }
 
 #[must_use]
-pub fn native_primary_cell_coordinate(position: f64) -> i64 {
+pub fn primary_cell_coordinate(position: f64) -> i64 {
     fround(position / 100.0).trunc() as i64
 }
 
 #[must_use]
-pub fn first_native_primary_point_contact(
+pub fn first_primary_point_contact(
     query: PrimaryPointContactQuery<'_>,
 ) -> Option<&PrimarySpellTarget> {
-    let cell_x = native_primary_cell_coordinate(query.position.x);
-    let cell_y = native_primary_cell_coordinate(query.position.y);
+    let cell_x = primary_cell_coordinate(query.position.x);
+    let cell_y = primary_cell_coordinate(query.position.y);
     let mut selected: Option<&PrimarySpellTarget> = None;
     for target in query.targets {
         if selected.is_some_and(|previous| target.cell_binding_order >= previous.cell_binding_order)
         {
             continue;
         }
-        if !native_primary_target_eligible(target, query.actor_mask) {
+        if !primary_target_eligible(target, query.actor_mask) {
             continue;
         }
-        if native_primary_cell_coordinate(target.position.x) != cell_x
-            || native_primary_cell_coordinate(target.position.y) != cell_y
+        if primary_cell_coordinate(target.position.x) != cell_x
+            || primary_cell_coordinate(target.position.y) != cell_y
         {
             continue;
         }
@@ -159,11 +155,11 @@ pub fn first_native_primary_point_contact(
 }
 
 #[must_use]
-pub fn first_native_fireball_point_contact(
+pub fn first_fireball_point_contact(
     query: FireballPointContactQuery<'_>,
 ) -> Option<&PrimarySpellTarget> {
-    let contact = first_native_primary_point_contact(query.contact)?;
-    if contact.actor_flags & NATIVE_PRIMARY_HOSTILE_FLAG != 0 {
+    let contact = first_primary_point_contact(query.contact)?;
+    if contact.actor_flags & PRIMARY_HOSTILE_FLAG != 0 {
         return Some(contact);
     }
     if squared_distance(contact.position, query.contact.position) < 2.0 {
@@ -187,7 +183,7 @@ pub fn first_native_fireball_point_contact(
         Vec2::new(fround(far.x + side.x), fround(far.y + side.y)),
     ];
     let hostile_ahead = query.contact.targets.iter().any(|target| {
-        native_primary_target_eligible(target, NATIVE_PRIMARY_HOSTILE_FLAG)
+        primary_target_eligible(target, PRIMARY_HOSTILE_FLAG)
             && native_point_in_polygon(target.position, &polygon)
     });
     if hostile_ahead { None } else { Some(contact) }
@@ -201,8 +197,8 @@ pub fn select_air_primary_target(query: AirPrimaryTargetQuery<'_>) -> Option<&Pr
     let cone_dot = float::cos(15.0 * std::f64::consts::PI / 180.0);
     let mut selected: Option<&PrimarySpellTarget> = None;
     let mut selected_distance_squared = f64::INFINITY;
-    for target in native_broadphase_order(query.origin, query.maximum_range, query.targets) {
-        if !native_primary_target_eligible(target, 0x6) {
+    for target in broadphase_order(query.origin, query.maximum_range, query.targets) {
+        if !primary_target_eligible(target, 0x6) {
             continue;
         }
         let distance_squared = squared_distance(target.position, query.origin);
@@ -222,8 +218,8 @@ pub fn select_air_primary_target(query: AirPrimaryTargetQuery<'_>) -> Option<&Pr
             continue;
         }
         if selected.is_none_or(|previous| {
-            target.native_priority < previous.native_priority
-                || (target.native_priority == previous.native_priority
+            target.priority < previous.priority
+                || (target.priority == previous.priority
                     && distance_squared < selected_distance_squared)
         }) {
             selected = Some(target);
@@ -235,7 +231,7 @@ pub fn select_air_primary_target(query: AirPrimaryTargetQuery<'_>) -> Option<&Pr
     }
     let previous_id = query.previous_target_id?;
     let previous = query.targets.iter().find(|target| target.id == previous_id)?;
-    if !native_primary_target_eligible(previous, 0x6) {
+    if !primary_target_eligible(previous, 0x6) {
         return None;
     }
     let retained_direction = normalized(difference(previous.position, query.origin));
@@ -275,7 +271,7 @@ pub fn select_ether_primary_target_at_point<'a>(
         // The native Ether constructor consults hostile flags and registration order here,
         // even for a target whose active/pending-remove fields changed since enrollment.
         if excluded_target_id == Some(target.id.as_str())
-            || target.actor_flags & NATIVE_PRIMARY_HOSTILE_FLAG == 0
+            || target.actor_flags & PRIMARY_HOSTILE_FLAG == 0
         {
             continue;
         }
@@ -290,7 +286,7 @@ pub fn select_ether_primary_target_at_point<'a>(
 
 /// Native root rectangle: inclusive lower edges, exclusive upper edges.
 #[must_use]
-pub fn native_primary_rectangle_targets(
+pub fn primary_rectangle_targets(
     origin: Vec2,
     width: f64,
     height: f64,
@@ -299,10 +295,10 @@ pub fn native_primary_rectangle_targets(
 ) -> Vec<&PrimarySpellTarget> {
     let minimum = Vec2::new(fround(origin.x - width * 0.5), fround(origin.y - height * 0.5));
     let maximum = Vec2::new(fround(minimum.x + width), fround(minimum.y + height));
-    native_cell_range_order(minimum, maximum, targets)
+    cell_range_order(minimum, maximum, targets)
         .into_iter()
         .filter(|target| {
-            native_primary_target_eligible(target, actor_mask)
+            primary_target_eligible(target, actor_mask)
                 && target.position.x >= minimum.x
                 && target.position.x < maximum.x
                 && target.position.y >= minimum.y
@@ -312,17 +308,17 @@ pub fn native_primary_rectangle_targets(
 }
 
 #[must_use]
-pub fn native_primary_root_targets(
+pub fn primary_root_targets(
     origin: Vec2,
     reach: f64,
     actor_mask: u32,
     targets: &[PrimarySpellTarget],
 ) -> Vec<&PrimarySpellTarget> {
     let reach_squared = reach * reach;
-    native_broadphase_order(origin, reach, targets)
+    broadphase_order(origin, reach, targets)
         .into_iter()
         .filter(|target| {
-            native_primary_target_eligible(target, actor_mask)
+            primary_target_eligible(target, actor_mask)
                 && squared_distance(target.position, origin) < reach_squared
         })
         .collect()
@@ -331,7 +327,7 @@ pub fn native_primary_root_targets(
 /// `nativePrimaryCircleTargets`: native cell order, then the exact squared-radius
 /// contact test. Adding the radii first admits targets the Source excludes.
 #[must_use]
-pub fn native_primary_circle_targets(
+pub fn primary_circle_targets(
     origin: Vec2,
     radius: f64,
     actor_mask: u32,
@@ -339,8 +335,8 @@ pub fn native_primary_circle_targets(
 ) -> Vec<&PrimarySpellTarget> {
     let radius_squared = radius * radius;
     let mut selected = Vec::new();
-    for target in native_broadphase_order(origin, radius, targets) {
-        if native_primary_target_eligible(target, actor_mask)
+    for target in broadphase_order(origin, radius, targets) {
+        if primary_target_eligible(target, actor_mask)
             && squared_distance(target.position, origin)
                 < radius_squared + target.body_radius * target.body_radius
         {
@@ -351,14 +347,14 @@ pub fn native_primary_circle_targets(
 }
 
 #[must_use]
-pub fn native_primary_cone_targets(query: PrimaryConeQuery<'_>) -> Vec<&PrimarySpellTarget> {
+pub fn primary_cone_targets(query: PrimaryConeQuery<'_>) -> Vec<&PrimarySpellTarget> {
     let aim = normalized(query.aim_direction);
     let apex = directional_apex(query.origin, aim);
     let reach_squared = query.reach * query.reach;
     let cone_dot = float::cos(query.half_angle_degrees * std::f64::consts::PI / 180.0);
     let mut selected = Vec::new();
-    for target in native_broadphase_order(query.origin, query.reach, query.targets) {
-        if !native_primary_target_eligible(target, query.actor_mask) {
+    for target in broadphase_order(query.origin, query.reach, query.targets) {
+        if !primary_target_eligible(target, query.actor_mask) {
             continue;
         }
         let distance_squared = squared_distance(target.position, query.origin);
@@ -380,7 +376,7 @@ pub fn native_primary_cone_targets(query: PrimaryConeQuery<'_>) -> Vec<&PrimaryS
 }
 
 #[must_use]
-pub fn native_primary_polygon_targets<'a>(
+pub fn primary_polygon_targets<'a>(
     actor_mask: u32,
     polygon: &[Vec2],
     targets: &'a [PrimarySpellTarget],
@@ -399,8 +395,8 @@ pub fn native_primary_polygon_targets<'a>(
     let mut selected = Vec::new();
     let minimum = Vec2::new(fround(minimum.x - 25.0), fround(minimum.y - 25.0));
     let maximum = Vec2::new(fround(maximum.x + 25.0), fround(maximum.y + 25.0));
-    for target in native_cell_range_order(minimum, maximum, targets) {
-        if native_primary_target_eligible(target, actor_mask)
+    for target in cell_range_order(minimum, maximum, targets) {
+        if primary_target_eligible(target, actor_mask)
             && native_point_in_polygon(target.position, polygon)
         {
             selected.push(target);
@@ -486,7 +482,7 @@ pub fn advance_ether_primary_homing(input: EtherPrimaryHomingInput) -> EtherPrim
     };
     // Native movement uses the old heading; steering changes the following tick's direction.
     let desired = heading_degrees_from_vector(target.x - position.x, target.y - position.y);
-    let turn_direction = native_heading_turn_direction(heading, desired);
+    let turn_direction = heading_turn_direction(heading, desired);
     let turn = fround(
         input.turn_input * turn_accumulator * input.movement_scalar * f64::from(turn_direction),
     );
@@ -538,7 +534,7 @@ pub fn advance_ether_primary_tracking(
 }
 
 #[must_use]
-pub fn native_missile_fan_heading(aim_heading: f64, quantity: usize, index: usize) -> f64 {
+pub fn missile_fan_heading(aim_heading: f64, quantity: usize, index: usize) -> f64 {
     assert!(quantity > 0 && index < quantity, "missile index is outside its fan");
     let step = if quantity < 4 { 30.0 } else { 20.0 };
     let base = aim_heading + if quantity.is_multiple_of(2) { step / 2.0 } else { 0.0 };
@@ -548,12 +544,12 @@ pub fn native_missile_fan_heading(aim_heading: f64, quantity: usize, index: usiz
 }
 
 #[must_use]
-pub fn native_missile_fan_turn_scale(index: usize) -> f64 {
+pub fn missile_fan_turn_scale(index: usize) -> f64 {
     0.75_f64.powi(index.div_ceil(2) as i32)
 }
 
 #[must_use]
-pub fn native_heading_turn_direction(current: f64, desired: f64) -> i32 {
+pub fn heading_turn_direction(current: f64, desired: f64) -> i32 {
     let current = normalize_degrees(current);
     let desired = normalize_degrees(desired);
     let gap = (current - desired).abs();
@@ -579,7 +575,7 @@ fn normalize_degrees(degrees: f64) -> f64 {
     ((degrees % 360.0) + 360.0) % 360.0
 }
 
-fn native_broadphase_order(
+fn broadphase_order(
     origin: Vec2,
     reach: f64,
     targets: &[PrimarySpellTarget],
@@ -587,18 +583,18 @@ fn native_broadphase_order(
     let minimum = Vec2::new(fround(origin.x - reach), fround(origin.y - reach));
     let diameter = fround(reach + reach);
     let maximum = Vec2::new(fround(minimum.x + diameter), fround(minimum.y + diameter));
-    native_cell_range_order(minimum, maximum, targets)
+    cell_range_order(minimum, maximum, targets)
 }
 
-fn native_cell_range_order(
+fn cell_range_order(
     minimum: Vec2,
     maximum: Vec2,
     targets: &[PrimarySpellTarget],
 ) -> Vec<&PrimarySpellTarget> {
-    let min_cell_x = native_primary_cell_coordinate(minimum.x);
-    let min_cell_y = native_primary_cell_coordinate(minimum.y);
-    let max_cell_x = native_primary_cell_coordinate(maximum.x);
-    let max_cell_y = native_primary_cell_coordinate(maximum.y);
+    let min_cell_x = primary_cell_coordinate(minimum.x);
+    let min_cell_y = primary_cell_coordinate(minimum.y);
+    let max_cell_x = primary_cell_coordinate(maximum.x);
+    let max_cell_y = primary_cell_coordinate(maximum.y);
     let mut grid = Vec::new();
     let mut transient = Vec::new();
     for target in targets {
@@ -609,8 +605,8 @@ fn native_cell_range_order(
             continue;
         }
         let bound = target.grid_position.unwrap_or(target.position);
-        let x = native_primary_cell_coordinate(bound.x);
-        let y = native_primary_cell_coordinate(bound.y);
+        let x = primary_cell_coordinate(bound.x);
+        let y = primary_cell_coordinate(bound.y);
         if x >= min_cell_x && x <= max_cell_x && y >= min_cell_y && y <= max_cell_y {
             grid.push(target);
         }
@@ -618,8 +614,8 @@ fn native_cell_range_order(
     grid.sort_by_key(|target| {
         let bound = target.grid_position.unwrap_or(target.position);
         (
-            native_primary_cell_coordinate(bound.x),
-            native_primary_cell_coordinate(bound.y),
+            primary_cell_coordinate(bound.x),
+            primary_cell_coordinate(bound.y),
             target.cell_binding_order,
         )
     });

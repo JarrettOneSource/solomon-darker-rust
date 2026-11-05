@@ -5,7 +5,7 @@
 mod support;
 
 use serde_json::{Value, json};
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::combat::{PlayerCombatState, PlayerCombatTickOptions, PlayerLifeState};
 use solomon_sim::player::PlayerState;
 use solomon_sim::session::player_combat::{PlayerCombatContext, step_player_combat};
@@ -26,8 +26,8 @@ fn snapshot(player: &PlayerState) -> Value {
         .economy
         .backpack
         .iter()
-        .filter(|item| item.native_type_id == 7001)
-        .map(|item| (item.native_subtype, item.quantity))
+        .filter(|item| item.type_id == 7001)
+        .map(|item| (item.subtype, item.quantity))
         .collect();
     json!({"health":p.current_health,"mana":p.current_mana,"life":life(p.life_state),
         "death":[p.death_age_ticks,p.death_epoch,p.death_tick],"corpseConsumed":p.corpse_consumed,
@@ -64,7 +64,7 @@ fn current_damage_receiver_preserves_blindness_rescue_charm_and_corpse_boundarie
             &case["flags"],
             &format!("receiver{index} flags"),
         );
-        let mut rng = NativeRng::new(917);
+        let mut rng = Rng::new(917);
         for frame in case["frames"].as_array().unwrap() {
             let tick = frame["tick"].as_u64().unwrap();
             if tick > 201 {

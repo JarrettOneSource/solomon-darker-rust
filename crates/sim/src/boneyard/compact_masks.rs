@@ -5,25 +5,24 @@
 use crate::enemies::spider_remains::SpiderRemains;
 use crate::float;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::terrain_surface::{
-    NativeBridgeSurface, NativeSurfaceQuad, build_native_bridge_surfaces,
-    build_native_terrain_surface, native_bridge_surface_contains, native_surface_quad_bounds,
-    native_surface_quad_contains,
+    BridgeSurface, SurfaceQuad, bridge_surface_contains, build_bridge_surfaces,
+    build_terrain_surface, surface_quad_bounds, surface_quad_contains,
 };
 use super::{BoneyardBounds, BoneyardScene};
 use std::collections::BTreeMap;
 
-pub const NATIVE_COMPACT_MASK_TARGET_SIDE: u32 = 256;
-pub const NATIVE_COMPACT_MASK_RADIAL_ENTRY: usize = 9;
-pub const NATIVE_COMPACT_MASK_RADIAL_SCALE: f64 = 2.009999990463257;
-pub const NATIVE_COMPACT_MASK_COMPOSITE_SCALE: f64 = 2.0250000953674316;
-pub const NATIVE_COMPACT_MASK_COMPOSITE_ANCHOR: f64 = 128.5;
-pub const NATIVE_DIRECT_ENVIRONMENT_LIGHT_ENTRY: usize = 18;
+pub const COMPACT_MASK_TARGET_SIDE: u32 = 256;
+pub const COMPACT_MASK_RADIAL_ENTRY: usize = 9;
+pub const COMPACT_MASK_RADIAL_SCALE: f64 = 2.009999990463257;
+pub const COMPACT_MASK_COMPOSITE_SCALE: f64 = 2.0250000953674316;
+pub const COMPACT_MASK_COMPOSITE_ANCHOR: f64 = 128.5;
+pub const DIRECT_ENVIRONMENT_LIGHT_ENTRY: usize = 18;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeCompactMask {
+pub struct CompactMask {
     pub id: String,
     pub entry: usize,
     pub position: Vec2,
@@ -34,7 +33,7 @@ pub struct NativeCompactMask {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeCompactMaskPlayerPlan {
+pub struct CompactMaskPlayerPlan {
     /// Actual participant insertion order, including players with no candidates.
     pub slot: usize,
     pub position: Vec2,
@@ -43,33 +42,33 @@ pub struct NativeCompactMaskPlayerPlan {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeCompactMaskPlan {
-    pub masks: Vec<NativeCompactMask>,
-    pub players: Vec<NativeCompactMaskPlayerPlan>,
+pub struct CompactMaskPlan {
+    pub masks: Vec<CompactMask>,
+    pub players: Vec<CompactMaskPlayerPlan>,
 }
 
-pub struct NativeCompactMasks {
-    authored: Vec<NativeCompactMask>,
+pub struct CompactMasks {
+    authored: Vec<CompactMask>,
     maximum_column: i64,
     maximum_row: i64,
 }
 
 /// Arena's separate surface query. Terrain wins before compact/Spider glyphs;
 /// a bridge subtracts even an overlapping authored or dynamic stain.
-pub struct NativeCompactGroundSurface {
-    terrain: BTreeMap<(i64, i64), Vec<NativeSurfaceQuad>>,
-    bridges: Vec<NativeBridgeSurface>,
+pub struct CompactGroundSurface {
+    terrain: BTreeMap<(i64, i64), Vec<SurfaceQuad>>,
+    bridges: Vec<BridgeSurface>,
     authored: Vec<(usize, Vec2)>,
     maximum_column: i64,
     maximum_row: i64,
 }
 
-impl NativeCompactGroundSurface {
+impl CompactGroundSurface {
     #[must_use]
     pub fn new(scene: &BoneyardScene) -> Self {
-        let surfaces: Vec<_> = scene.terrain.iter().map(build_native_terrain_surface).collect();
+        let surfaces: Vec<_> = scene.terrain.iter().map(build_terrain_surface).collect();
         let mut result = Self {
-            bridges: build_native_bridge_surfaces(&surfaces, &scene.roads),
+            bridges: build_bridge_surfaces(&surfaces, &scene.roads),
             terrain: BTreeMap::new(),
             authored: scene
                 .sprites
@@ -82,7 +81,7 @@ impl NativeCompactGroundSurface {
         };
         for surface in surfaces {
             for quad in surface.quads {
-                let cells = result.grid_cells(native_surface_quad_bounds(&quad));
+                let cells = result.grid_cells(surface_quad_bounds(&quad));
                 for row in cells.top..=cells.bottom {
                     for column in cells.left..=cells.right {
                         result.terrain.entry((column, row)).or_default().push(quad);
@@ -103,10 +102,10 @@ impl NativeCompactGroundSurface {
         let point = stored_point(point);
         let cell = (cell(point.x, self.maximum_column), cell(point.y, self.maximum_row));
         for quad in self.terrain.get(&(cell.0, cell.1)).into_iter().flatten() {
-            if !native_surface_quad_contains(quad, point) {
+            if !surface_quad_contains(quad, point) {
                 continue;
             }
-            if self.bridges.iter().any(|bridge| native_bridge_surface_contains(bridge, point)) {
+            if self.bridges.iter().any(|bridge| bridge_surface_contains(bridge, point)) {
                 return false;
             }
             return true;
@@ -163,7 +162,7 @@ impl NativeCompactGroundSurface {
         {
             return false;
         }
-        native_compact_surface_contains(
+        compact_surface_contains(
             selector,
             Vec2::new(fround(point.x - position.x), fround(point.y - position.y)),
         )
@@ -185,7 +184,7 @@ fn stored_point(point: Vec2) -> Vec2 {
 
 /// The five compact glyph contours from `native-ground-auxiliary.ts`.
 #[must_use]
-pub fn native_compact_surface_contains(selector: usize, point: Vec2) -> bool {
+pub fn compact_surface_contains(selector: usize, point: Vec2) -> bool {
     const CONTOURS: [&[[f64; 2]]; 5] = [
         &[
             [-24., -25.],
@@ -244,7 +243,7 @@ pub fn native_compact_surface_contains(selector: usize, point: Vec2) -> bool {
     inside
 }
 
-impl NativeCompactMasks {
+impl CompactMasks {
     #[must_use]
     pub fn new(scene: &BoneyardScene) -> Self {
         let mut authored = Vec::new();
@@ -252,7 +251,7 @@ impl NativeCompactMasks {
             if !(25..=29).contains(&sprite.atlas_entry) {
                 continue;
             }
-            authored.push(NativeCompactMask {
+            authored.push(CompactMask {
                 id: sprite.eid.clone(),
                 entry: 114 + sprite.atlas_entry,
                 position: sprite.position,
@@ -281,13 +280,13 @@ impl NativeCompactMasks {
         world_bounds: BoneyardBounds,
         presentation_frame: f64,
         record_size: &dyn Fn(usize) -> Vec2,
-    ) -> NativeCompactMaskPlan {
+    ) -> CompactMaskPlan {
         let mut masks = self.authored.clone();
         for remains in remains {
             let Some(decal) = &remains.state.decal else {
                 continue;
             };
-            masks.push(NativeCompactMask {
+            masks.push(CompactMask {
                 id: format!("spider-decal:{}", remains.id),
                 entry: decal.entry,
                 position: decal.position,
@@ -329,11 +328,11 @@ impl NativeCompactMasks {
             let alpha = if mask_indices.is_empty() {
                 0.0
             } else {
-                native_compact_mask_alpha(presentation_frame, slot)
+                compact_mask_alpha(presentation_frame, slot)
             };
-            player_plans.push(NativeCompactMaskPlayerPlan { slot, position, alpha, mask_indices });
+            player_plans.push(CompactMaskPlayerPlan { slot, position, alpha, mask_indices });
         }
-        NativeCompactMaskPlan { masks, players: player_plans }
+        CompactMaskPlan { masks, players: player_plans }
     }
 
     fn grid_cells(&self, bounds: BoneyardBounds) -> GridCells {
@@ -348,16 +347,16 @@ impl NativeCompactMasks {
 
 /// The source's 0.95 base and remaining range are already single-precision.
 #[must_use]
-pub fn native_compact_mask_alpha(presentation_frame: f64, slot: usize) -> f64 {
+pub fn compact_mask_alpha(presentation_frame: f64, slot: usize) -> f64 {
     let seed = (presentation_frame.trunc() as i64 as u32) ^ slot as u32;
-    let mut rng = NativeRng::new(i64::from(seed));
+    let mut rng = Rng::new(i64::from(seed));
     fround(fround(0.95) + rng.draw_scaled_float(0.050000011920928955, false))
 }
 
 /// `boneyard-environment-light-plan.ts`: this direct aperture is separate from
 /// the logical light provider and the multiplied region-light render target.
 #[must_use]
-pub fn native_direct_environment_light_alpha(now_ms: f64, player_index: usize) -> f64 {
+pub fn direct_environment_light_alpha(now_ms: f64, player_index: usize) -> f64 {
     let flicker = (float::sin(now_ms * 0.017 + player_index as f64 * 2.399) + 1.0) / 2.0;
     (0.2375 + flicker * 0.0125) * 0.14
 }
@@ -378,7 +377,7 @@ fn cell(value: f64, maximum: i64) -> i64 {
     index.min(maximum)
 }
 
-fn intersects(mask: &NativeCompactMask, size: Vec2, bounds: BoneyardBounds) -> bool {
+fn intersects(mask: &CompactMask, size: Vec2, bounds: BoneyardBounds) -> bool {
     mask.position.x + size.x / 2.0 >= bounds.x
         && mask.position.y + size.y / 2.0 >= bounds.y
         && mask.position.x - size.x / 2.0 <= bounds.x + bounds.width

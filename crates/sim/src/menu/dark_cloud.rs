@@ -46,7 +46,7 @@ impl DarkCloudTab {
         }
     }
 
-    fn native_band(self) -> (f64, f64) {
+    fn band(self) -> (f64, f64) {
         match self {
             Self::Mods => (0.0, 170.0),
             Self::Subscribed => (170.0, 340.0),
@@ -67,7 +67,7 @@ pub struct DarkCloudTabStrip {
 impl DarkCloudTabStrip {
     #[must_use]
     pub fn bounds(self, tab: DarkCloudTab) -> HudRect {
-        let (left, width) = tab.native_band();
+        let (left, width) = tab.band();
         HudRect::new(
             left * self.width / DARK_CLOUD_TAB_STRIP_WIDTH,
             0.0,
@@ -80,7 +80,7 @@ impl DarkCloudTabStrip {
 /// Below0.4 the Source labels stop reading; preserve a wider scrollable strip
 /// instead of shrinking the fifth route out of view.
 #[must_use]
-pub fn native_dark_cloud_tab_strip(width: f64, height: f64) -> DarkCloudTabStrip {
+pub fn dark_cloud_tab_strip(width: f64, height: f64) -> DarkCloudTabStrip {
     let scale = 1.0_f64
         .min(height / DARK_CLOUD_TAB_STRIP_HEIGHT)
         .min((width / DARK_CLOUD_TAB_STRIP_WIDTH).max(0.4));

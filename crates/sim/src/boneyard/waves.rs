@@ -9,7 +9,7 @@ pub mod timeline;
 
 use crate::enemies::{EnemyFlag, EnemyToken, SpawnLocationPolicy, SpawnPositionPolicy};
 
-pub use native_programs::native_survival_programs;
+pub use native_programs::survival_programs;
 pub use retail_schedule::RETAIL_WAVES;
 
 /// An authored GROUP member; flag order and duplicates are part of its native meaning.

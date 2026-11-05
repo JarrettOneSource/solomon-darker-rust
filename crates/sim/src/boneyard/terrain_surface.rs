@@ -3,22 +3,22 @@
 //! distinct from the natural cubic spline used by Silk and College students.
 
 use crate::float::{atan2, cos, fround as f, sin};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::{BoneyardBounds, BoneyardRoad, BoneyardTerrain};
 
-pub const NATIVE_GROUND_PI: f64 = 3.141592502593994;
-pub type NativeSurfaceQuad = [Vec2; 4];
+pub const GROUND_PI: f64 = 3.141592502593994;
+pub type SurfaceQuad = [Vec2; 4];
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeTerrainSurface {
+pub struct TerrainSurface {
     pub cursors: Vec<f64>,
-    pub quads: Vec<NativeSurfaceQuad>,
+    pub quads: Vec<SurfaceQuad>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeBridgeSurface {
-    pub quad: NativeSurfaceQuad,
+pub struct BridgeSurface {
+    pub quad: SurfaceQuad,
     pub bounds: BoneyardBounds,
 }
 
@@ -183,9 +183,9 @@ fn sample_cursors(spline: &Spline) -> Vec<f64> {
 
 /// `buildNativeTerrainSurface`: style one profiles never enter the style-zero grid.
 #[must_use]
-pub fn build_native_terrain_surface(terrain: &BoneyardTerrain) -> NativeTerrainSurface {
+pub fn build_terrain_surface(terrain: &BoneyardTerrain) -> TerrainSurface {
     if terrain.style.unwrap_or(0) != 0 {
-        return NativeTerrainSurface::default();
+        return TerrainSurface::default();
     }
     let points = terrain.points.as_deref().unwrap_or(&[]);
     let spline = Spline {
@@ -199,7 +199,7 @@ pub fn build_native_terrain_surface(terrain: &BoneyardTerrain) -> NativeTerrainS
         seed.is_finite() && seed.trunc() == seed && seed.abs() <= 9_007_199_254_740_991.0,
         "native Terrain RNG seed must be a safe integer"
     );
-    let mut rng = NativeRng::new(seed as i64);
+    let mut rng = Rng::new(seed as i64);
     let mut sections = Vec::with_capacity(cursors.len());
     for index in 1..cursors.len() {
         let mut widths = [0.0; 4];
@@ -215,7 +215,7 @@ pub fn build_native_terrain_surface(terrain: &BoneyardTerrain) -> NativeTerrainS
     }
     let quads =
         sections.windows(2).map(|pair| [pair[1][0], pair[1][1], pair[0][0], pair[0][1]]).collect();
-    NativeTerrainSurface { cursors, quads }
+    TerrainSurface { cursors, quads }
 }
 
 fn difference(a: Vec2, b: Vec2) -> Vec2 {
@@ -237,13 +237,13 @@ fn triangle_contains(point: Vec2, a: Vec2, b: Vec2, c: Vec2) -> bool {
 }
 
 #[must_use]
-pub fn native_surface_quad_contains(quad: &NativeSurfaceQuad, point: Vec2) -> bool {
+pub fn surface_quad_contains(quad: &SurfaceQuad, point: Vec2) -> bool {
     triangle_contains(point, quad[0], quad[1], quad[2])
         || triangle_contains(point, quad[1], quad[3], quad[2])
 }
 
 #[must_use]
-pub fn native_surface_quad_bounds(quad: &NativeSurfaceQuad) -> BoneyardBounds {
+pub fn surface_quad_bounds(quad: &SurfaceQuad) -> BoneyardBounds {
     let x = quad.iter().map(|point| point.x).fold(f64::INFINITY, f64::min);
     let y = quad.iter().map(|point| point.y).fold(f64::INFINITY, f64::min);
     let right = quad.iter().map(|point| point.x).fold(f64::NEG_INFINITY, f64::max);
@@ -252,13 +252,13 @@ pub fn native_surface_quad_bounds(quad: &NativeSurfaceQuad) -> BoneyardBounds {
 }
 
 #[must_use]
-pub fn native_bridge_surface_contains(bridge: &NativeBridgeSurface, point: Vec2) -> bool {
+pub fn bridge_surface_contains(bridge: &BridgeSurface, point: Vec2) -> bool {
     let bounds = bridge.bounds;
     point.x >= bounds.x
         && point.y >= bounds.y
         && point.x < bounds.x + bounds.width
         && point.y < bounds.y + bounds.height
-        && native_surface_quad_contains(&bridge.quad, point)
+        && surface_quad_contains(&bridge.quad, point)
 }
 
 fn segments_cross(a: Vec2, b: Vec2, c: Vec2, d: Vec2) -> bool {
@@ -286,8 +286,8 @@ fn crossing(a: Vec2, b: Vec2, c: Vec2, d: Vec2) -> Option<Vec2> {
     }
 }
 
-fn road_crosses_quad(quad: &NativeSurfaceQuad, a: Vec2, b: Vec2) -> bool {
-    if native_surface_quad_contains(quad, a) || native_surface_quad_contains(quad, b) {
+fn road_crosses_quad(quad: &SurfaceQuad, a: Vec2, b: Vec2) -> bool {
+    if surface_quad_contains(quad, a) || surface_quad_contains(quad, b) {
         return true;
     }
     // Source visits both triangles, including their shared diagonal twice.
@@ -296,13 +296,13 @@ fn road_crosses_quad(quad: &NativeSurfaceQuad, a: Vec2, b: Vec2) -> bool {
         .any(|(i, j)| segments_cross(a, b, quad[i], quad[j]))
 }
 
-fn bridge_quad(center: Vec2, direction: Vec2) -> NativeSurfaceQuad {
+fn bridge_quad(center: Vec2, direction: Vec2) -> SurfaceQuad {
     let radians = f(atan2(direction.x, -direction.y));
-    let mut degrees = f(radians * 180.0 / NATIVE_GROUND_PI);
+    let mut degrees = f(radians * 180.0 / GROUND_PI);
     if degrees < 0.0 {
         degrees = f(degrees + 360.0);
     }
-    let angle = f(-degrees * NATIVE_GROUND_PI / 180.0);
+    let angle = f(-degrees * GROUND_PI / 180.0);
     let cosine = f(cos(angle));
     let sine = -f(sin(angle));
     let yx = f(f(0.9) * sine);
@@ -315,10 +315,10 @@ fn bridge_quad(center: Vec2, direction: Vec2) -> NativeSurfaceQuad {
 /// RegionLayout creates one bridge per Road/Terrain, using the first intersecting
 /// inner quad. Visual road width, style, links and explicit mesh never enter here.
 #[must_use]
-pub fn build_native_bridge_surfaces(
-    surfaces: &[NativeTerrainSurface],
+pub fn build_bridge_surfaces(
+    surfaces: &[TerrainSurface],
     roads: &[BoneyardRoad],
-) -> Vec<NativeBridgeSurface> {
+) -> Vec<BridgeSurface> {
     let mut bridges = Vec::new();
     for surface in surfaces {
         for road in roads {
@@ -365,7 +365,7 @@ pub fn build_native_bridge_surfaces(
             center =
                 Vec2::new(f(center.x + f(direction.x * 5.0)), f(center.y + f(direction.y * 5.0)));
             let quad = bridge_quad(center, difference(end, start));
-            bridges.push(NativeBridgeSurface { quad, bounds: native_surface_quad_bounds(&quad) });
+            bridges.push(BridgeSurface { quad, bounds: surface_quad_bounds(&quad) });
         }
     }
     bridges

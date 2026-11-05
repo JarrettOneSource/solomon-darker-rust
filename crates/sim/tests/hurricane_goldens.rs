@@ -2,15 +2,15 @@
 
 use serde_json::{Value, json};
 use solomon_sim::hurricane::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn rng(value: &NativeRng) -> Value {
+fn rng(value: &Rng) -> Value {
     json!({"indexA":value.index_a,"indexB":value.index_b,"words":&value.words[..]})
 }
-fn program(value: &NativeHurricanePresentationProgram) -> Value {
+fn program(value: &HurricanePresentationProgram) -> Value {
     json!({"phaseDegrees":value.phase_degrees,"lanes":value.lanes.map(|lane|json!({"angleDegrees":lane.angle_degrees,
         "angularVelocityDegrees":lane.angular_velocity_degrees,"radius":lane.radius,"verticalOffset":lane.vertical_offset}))})
 }
@@ -38,8 +38,8 @@ fn hurricane_program_force_damage_and_cadence_replay_the_website() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/hurricane-goldens.json")).unwrap();
     for case in fixture["programs"].as_array().unwrap() {
-        let mut random = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut current = create_native_hurricane_presentation(&mut random);
+        let mut random = Rng::new(case["seed"].as_i64().unwrap());
+        let mut current = create_hurricane_presentation(&mut random);
         assert_snapshot(
             &json!({"program":program(&current),"rng":rng(&random)}),
             &case["initial"],
@@ -52,7 +52,7 @@ fn hurricane_program_force_damage_and_cadence_replay_the_website() {
             } else {
                 1.0
             };
-            step_native_hurricane_presentation(&mut current, charge, &mut random);
+            step_hurricane_presentation(&mut current, charge, &mut random);
             if samples.peek().is_some_and(|sample| sample["tick"].as_i64() == Some(tick.into())) {
                 assert_snapshot(
                     &json!({"tick":tick,"program":program(&current),"rng":rng(&random)}),
@@ -63,7 +63,7 @@ fn hurricane_program_force_damage_and_cadence_replay_the_website() {
         }
     }
     for case in fixture["forces"].as_array().unwrap() {
-        let force = native_hurricane_orbit_force(
+        let force = hurricane_orbit_force(
             point(&case["source"]),
             point(&case["target"]),
             case["charge"].as_f64().unwrap(),
@@ -73,9 +73,9 @@ fn hurricane_program_force_damage_and_cadence_replay_the_website() {
         assert_eq!(force, expected, "Hurricane orbit force");
     }
     for case in fixture["damages"].as_array().unwrap() {
-        let mut random = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut random = Rng::new(case["seed"].as_i64().unwrap());
         for sample in case["samples"].as_array().unwrap() {
-            let result = draw_native_hurricane_damage(
+            let result = draw_hurricane_damage(
                 &mut random,
                 sample["charge"].as_f64().unwrap(),
                 sample["minimum"].as_f64().unwrap(),
@@ -90,7 +90,7 @@ fn hurricane_program_force_damage_and_cadence_replay_the_website() {
     }
     for case in fixture["cadence"].as_array().unwrap() {
         assert_eq!(
-            native_hurricane_movement_due(
+            hurricane_movement_due(
                 case["serial"].as_u64().unwrap(),
                 case["tick"].as_u64().unwrap(),
                 case["step"].as_u64().unwrap()

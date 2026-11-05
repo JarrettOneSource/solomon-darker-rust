@@ -15,17 +15,15 @@ use crate::hub::is_traversable_against_segments;
 use crate::hub::regions::HubRegion;
 use crate::secondary::geometry::*;
 use crate::secondary::*;
-use crate::spells::boneyard::{
-    boneyard_native_secondary_target, boneyard_native_secondary_targets,
-};
-use crate::{NativeRng, Vec2};
+use crate::spells::boneyard::{boneyard_secondary_target, boneyard_secondary_targets};
+use crate::{Rng, Vec2};
 
 pub(super) struct SessionSecondaryWorld<'a> {
     pub boneyard: Option<&'a mut BoneyardWorld>,
     pub players: Vec<crate::boneyard::world::BoneyardPlayerBody<'a>>,
     pub ether_drain: Option<super::ether_drain::SessionEtherDrainSnapshot>,
     pub regions: std::collections::BTreeMap<String, HubRegion>,
-    pub teleport_bodies: Vec<BoneyardNativeTeleportBody>,
+    pub teleport_bodies: Vec<BoneyardTeleportBody>,
     pub viewports: Vec<BoneyardProjectileViewport>,
 }
 
@@ -33,18 +31,18 @@ impl SessionSecondaryWorld<'_> {
     pub fn collect_teleport_bodies(
         world: Option<&BoneyardWorld>,
         positions: &[Vec2],
-        actors: &[crate::secondary::NativeSecondaryActorState],
-    ) -> Vec<BoneyardNativeTeleportBody> {
+        actors: &[crate::secondary::SecondaryActorState],
+    ) -> Vec<BoneyardTeleportBody> {
         let mut bodies: Vec<_> = positions
             .iter()
-            .map(|position| BoneyardNativeTeleportBody { position: *position, radius: 25.0 })
+            .map(|position| BoneyardTeleportBody { position: *position, radius: 25.0 })
             .collect();
         let Some(world) = world else {
             return bodies;
         };
         for actor in world.enemies.actors.iter() {
             if boneyard_enemy_actor_flags(actor) != 0 {
-                bodies.push(BoneyardNativeTeleportBody {
+                bodies.push(BoneyardTeleportBody {
                     position: actor.position,
                     radius: boneyard_enemy_collision_radius(actor),
                 });
@@ -52,7 +50,7 @@ impl SessionSecondaryWorld<'_> {
         }
         for maggot in world.enemies.maggots.iter() {
             if maggot.life_state == EnemyLifeState::Alive {
-                bodies.push(BoneyardNativeTeleportBody {
+                bodies.push(BoneyardTeleportBody {
                     position: maggot.position,
                     radius: maggot.collision_radius,
                 });
@@ -60,11 +58,9 @@ impl SessionSecondaryWorld<'_> {
         }
         let key = format!("boneyard:{}", world.loaded.run_id);
         for actor in actors.iter() {
-            if actor.kind == NativeSecondaryActorKind::Golem && actor.world_key == key {
-                bodies.push(BoneyardNativeTeleportBody {
-                    position: actor.position,
-                    radius: actor.radius,
-                });
+            if actor.kind == SecondaryActorKind::Golem && actor.world_key == key {
+                bodies
+                    .push(BoneyardTeleportBody { position: actor.position, radius: actor.radius });
             }
         }
         bodies
@@ -92,7 +88,7 @@ impl SessionSecondaryWorld<'_> {
     }
 }
 
-impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
+impl SecondaryWorld for SessionSecondaryWorld<'_> {
     fn knockback_area_movement(
         &mut self,
         key: &str,
@@ -119,7 +115,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
     fn ether_drain_targets(
         &self,
         key: &str,
-    ) -> Option<Vec<crate::secondary::ether_drain::NativeEtherDrainTarget>> {
+    ) -> Option<Vec<crate::secondary::ether_drain::EtherDrainTarget>> {
         if !self.matches_boneyard(key) {
             return Some(Vec::new());
         }
@@ -134,7 +130,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
     fn ether_drain_world_animations(
         &self,
         key: &str,
-    ) -> Vec<crate::secondary::ether_drain::NativeEtherDrainWorldAnimationTarget> {
+    ) -> Vec<crate::secondary::ether_drain::EtherDrainWorldAnimationTarget> {
         if !self.matches_boneyard(key) {
             return Vec::new();
         }
@@ -144,15 +140,15 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             .animations
             .clone()
     }
-    fn dampen_candidates(&self, key: &str, origin: Vec2) -> NativeSecondaryDampenCandidates {
+    fn dampen_candidates(&self, key: &str, origin: Vec2) -> SecondaryDampenCandidates {
         if !self.matches_boneyard(key) {
-            return NativeSecondaryDampenCandidates::default();
+            return SecondaryDampenCandidates::default();
         }
         let world = self.boneyard.as_deref().unwrap();
         let inside = |position: Vec2| {
             (position.x - origin.x).abs() <= 400.0 && (position.y - origin.y).abs() <= 400.0
         };
-        let mut result = NativeSecondaryDampenCandidates::default();
+        let mut result = SecondaryDampenCandidates::default();
         for actor in world.enemies.actors.iter() {
             if actor.life_state != EnemyLifeState::Alive || !inside(actor.position) {
                 continue;
@@ -176,10 +172,10 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             .filter(|projectile| {
                 let row = projectile.state();
                 inside(row.position)
-                    && ((row.native_type_id == 0x7eb
+                    && ((row.type_id == 0x7eb
                         && projectile.kind() == EnemyProjectileKind::Firebolt
                         && row.payload == EnemyProjectilePayload::Fire)
-                        || (row.native_type_id == 0x7ec
+                        || (row.type_id == 0x7ec
                             && projectile.kind() == EnemyProjectileKind::GuidedMissile
                             && matches!(
                                 row.payload,
@@ -192,20 +188,20 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
         });
         for projectile in projectiles {
             let row = projectile.state();
-            result.projectiles.push(NativeSecondaryDampenProjectileCandidate {
+            result.projectiles.push(SecondaryDampenProjectileCandidate {
                 id: row.id,
                 position: row.position,
-                kind: if row.native_type_id == 0x7eb {
-                    NativeSecondaryDampenProjectileKind::Firebolt
+                kind: if row.type_id == 0x7eb {
+                    SecondaryDampenProjectileKind::Firebolt
                 } else {
-                    NativeSecondaryDampenProjectileKind::GuidedMissile
+                    SecondaryDampenProjectileKind::GuidedMissile
                 },
-                payload: if row.native_type_id == 0x7eb {
-                    NativeSecondaryDampenPayload::Fire
+                payload: if row.type_id == 0x7eb {
+                    SecondaryDampenPayload::Fire
                 } else if row.payload == EnemyProjectilePayload::Poison {
-                    NativeSecondaryDampenPayload::Poison
+                    SecondaryDampenPayload::Poison
                 } else {
-                    NativeSecondaryDampenPayload::Cold
+                    SecondaryDampenPayload::Cold
                 },
             });
         }
@@ -214,25 +210,21 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
                 continue;
             }
             let kind = match spell.kind {
-                BossSpellKind::SkullMissile { .. } => {
-                    NativeSecondaryDampenProjectileKind::SkullMissile
-                }
-                BossSpellKind::DarkFireball { .. } => {
-                    NativeSecondaryDampenProjectileKind::DarkFireball
-                }
+                BossSpellKind::SkullMissile { .. } => SecondaryDampenProjectileKind::SkullMissile,
+                BossSpellKind::DarkFireball { .. } => SecondaryDampenProjectileKind::DarkFireball,
                 _ => continue,
             };
-            result.projectiles.push(NativeSecondaryDampenProjectileCandidate {
+            result.projectiles.push(SecondaryDampenProjectileCandidate {
                 id: spell.owner.id,
                 position: spell.owner.position,
                 kind,
-                payload: NativeSecondaryDampenPayload::Dark,
+                payload: SecondaryDampenPayload::Dark,
             });
         }
         result
     }
     fn phasing_destination(&self, player_id: &str, origin: Vec2, direction: Vec2) -> Option<Vec2> {
-        resolve_native_phasing_destination(origin, direction, |position| {
+        resolve_phasing_destination(origin, direction, |position| {
             self.can_place_for(player_id, position, 25.0)
         })
     }
@@ -261,13 +253,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             origin
         }
     }
-    fn golem_placement(
-        &self,
-        player_id: &str,
-        key: &str,
-        requested: Vec2,
-        rng: &mut NativeRng,
-    ) -> Vec2 {
+    fn golem_placement(&self, player_id: &str, key: &str, requested: Vec2, rng: &mut Rng) -> Vec2 {
         if self.boneyard.is_some() && !self.matches_boneyard(key) {
             return requested;
         }
@@ -279,19 +265,16 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
         {
             return requested;
         }
-        resolve_native_collision_adjusted_position(
-            requested,
-            NATIVE_GOLEM_PLACEMENT_RADIUS,
-            rng,
-            |position| self.can_place_for(player_id, position, NATIVE_GOLEM_PLACEMENT_RADIUS),
-        )
+        resolve_collision_adjusted_position(requested, GOLEM_PLACEMENT_RADIUS, rng, |position| {
+            self.can_place_for(player_id, position, GOLEM_PLACEMENT_RADIUS)
+        })
     }
-    fn teleport_destination(&self, _player_id: &str, rng: &mut NativeRng) -> Vec2 {
+    fn teleport_destination(&self, _player_id: &str, rng: &mut Rng) -> Vec2 {
         let Some(world) = self.boneyard.as_deref() else {
             return Vec2::ZERO;
         };
-        resolve_boneyard_native_teleport(
-            BoneyardNativeTeleportWorld {
+        resolve_boneyard_teleport(
+            BoneyardTeleportWorld {
                 bodies: &self.teleport_bodies,
                 bounds: world.active_bounds(),
                 collision: &world.dynamic_collision,
@@ -299,21 +282,17 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             rng,
         )
     }
-    fn target(&self, key: &str, id: usize) -> Option<NativeSecondaryTarget> {
+    fn target(&self, key: &str, id: usize) -> Option<SecondaryTarget> {
         if !self.matches_boneyard(key) {
             return None;
         }
-        boneyard_native_secondary_target(&self.boneyard.as_deref().unwrap().enemies, id)
+        boneyard_secondary_target(&self.boneyard.as_deref().unwrap().enemies, id)
     }
-    fn targets(&self, key: &str, center: Vec2, radius: f64) -> Vec<NativeSecondaryTarget> {
+    fn targets(&self, key: &str, center: Vec2, radius: f64) -> Vec<SecondaryTarget> {
         if !self.matches_boneyard(key) {
             return Vec::new();
         }
-        boneyard_native_secondary_targets(
-            &self.boneyard.as_deref().unwrap().enemies,
-            center,
-            radius,
-        )
+        boneyard_secondary_targets(&self.boneyard.as_deref().unwrap().enemies, center, radius)
     }
     fn effect_visible(&self, key: &str, position: Vec2, margin: f64) -> bool {
         // An immediate Inventory cast supplies no projectile-view sampler in Source.
@@ -370,12 +349,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
         )
         .is_some()
     }
-    fn scenery_targets(
-        &self,
-        key: &str,
-        center: Vec2,
-        radius: f64,
-    ) -> Vec<NativeSecondarySceneryTarget> {
+    fn scenery_targets(&self, key: &str, center: Vec2, radius: f64) -> Vec<SecondarySceneryTarget> {
         if !self.matches_boneyard(key) {
             return Vec::new();
         }
@@ -391,7 +365,7 @@ impl NativeSecondaryWorld for SessionSecondaryWorld<'_> {
             let x = object.position.x - center.x;
             let y = object.position.y - center.y;
             if x * x + y * y < radius * radius {
-                targets.push(NativeSecondarySceneryTarget {
+                targets.push(SecondarySceneryTarget {
                     id,
                     position: object.position,
                     type_id: object.type_id,

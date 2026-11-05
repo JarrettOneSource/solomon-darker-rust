@@ -234,7 +234,7 @@ fn membership_and_detached_choices_match_public_game_without_world_staging_clone
                         row.parent_sack_id,
                         row.slot,
                         row.item.id,
-                        row.item.native_type_id,
+                        row.item.type_id,
                         row.item.quantity,
                         row.item.name
                     ])

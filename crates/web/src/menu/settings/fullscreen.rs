@@ -7,7 +7,7 @@ use crate::fullscreen::{
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use crate::platform::Surface;
 use egui::{Ui, Vec2};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign};
 use std::cell::RefCell;
 use std::rc::Rc;
 pub(super) struct SettingsFullscreen {
@@ -69,22 +69,22 @@ impl SettingsFullscreen {
             &paint,
             ui,
             "FULLSCREEN",
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             rect.min + Vec2::new(10.0, 26.0),
             1.0,
             0xdbc174,
-            NativeUiTextAlign::Left,
+            UiTextAlign::Left,
         );
         if self.mode == ControlMode::Install {
             widgets::native(
                 &paint,
                 ui,
                 "OPTIONS",
-                NativeUiFontName::ControlPanel,
+                UiFontName::ControlPanel,
                 egui::pos2(rect.right() - 10.0, rect.top() + 26.0),
                 1.0,
                 0xd9bd72,
-                NativeUiTextAlign::Right,
+                UiTextAlign::Right,
             );
         } else {
             super::toggle_art(

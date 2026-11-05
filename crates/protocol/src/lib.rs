@@ -9,12 +9,12 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use solomon_sim::Vec2;
 use solomon_sim::audio::AudioEvent;
-use solomon_sim::belt::NativeBeltCommand;
+use solomon_sim::belt::BeltCommand;
 use solomon_sim::economy::{HubEconomyResult, HubInventoryAction};
 use solomon_sim::profile::{NewGameSelection, PlayerConcentrationSlot, PlayerSkillChoice};
 use solomon_sim::session::GameSessionInput;
 use solomon_sim::social::{GameChatMessage, GameChatRejection, SocialAction, SocialSnapshot};
-use solomon_sim::tutorial_surface::NativeTutorialSurfaceAction;
+use solomon_sim::tutorial_surface::TutorialSurfaceAction;
 
 pub mod client_input;
 pub mod flame_presentation;
@@ -96,7 +96,7 @@ pub enum GameCommand {
     },
     InteractGoodie,
     BindBelt {
-        command: NativeBeltCommand,
+        command: BeltCommand,
     },
     SelectPrimary {
         skill_id: usize,
@@ -124,7 +124,7 @@ pub enum GameCommand {
         selection: NewGameSelection,
     },
     TutorialAction {
-        action: NativeTutorialSurfaceAction,
+        action: TutorialSurfaceAction,
     },
     ContinueGameOver {
         run_id: String,
@@ -360,7 +360,7 @@ mod tests {
         assert!(matches!(
             command,
             GameCommand::BindBelt {
-                command: NativeBeltCommand::BindSkill { skill_id: Some(82), slot: 2 }
+                command: BeltCommand::BindSkill { skill_id: Some(82), slot: 2 }
             }
         ));
         let invalid = text.replace("\"sequence\":7", "\"sequence\":7,\"player_id\":\"other\"");
@@ -382,10 +382,10 @@ mod tests {
             reason: None,
             dowsing_pitch: Some(1.125),
             dye_session: None,
-            unforge_outcome: Some(solomon_sim::economy::NativeUnforgeOutcome {
+            unforge_outcome: Some(solomon_sim::economy::UnforgeOutcome {
                 amount: Some(3.5),
                 item_name: "Ring".into(),
-                kind: solomon_sim::economy::NativeUnforgeOutcomeKind::MaximumMana,
+                kind: solomon_sim::economy::UnforgeOutcomeKind::MaximumMana,
             }),
         };
         let message = ServerMessage::<()>::CommandResult {

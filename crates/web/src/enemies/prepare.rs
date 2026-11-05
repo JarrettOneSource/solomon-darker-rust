@@ -2,33 +2,31 @@
 
 use solomon_sim::enemies::actor_presentation::{
     EnemyActorAppearanceContext, EnemyArtAtlas, EnemyArtPoints, EnemySpiderOutlineTarget,
-    EnemySpriteLayer, native_enemy_actor_plan, native_enemy_actor_plan_with_input,
-    native_maggot_plan, native_maggot_plan_with_input,
+    EnemySpriteLayer, enemy_actor_plan, enemy_actor_plan_with_input, maggot_plan,
+    maggot_plan_with_input,
 };
-use solomon_sim::enemies::boss_presentation::native_boss_spell_plan;
+use solomon_sim::enemies::boss_presentation::boss_spell_plan;
 use solomon_sim::enemies::boss_spell::BossSpellKind;
-use solomon_sim::enemies::death_presentation::native_enemy_death_effect_plan_with_input;
+use solomon_sim::enemies::death_presentation::enemy_death_effect_plan_with_input;
 use solomon_sim::enemies::model::{DeathPresentationOwner, EnemyBrain, SpiderPhase};
 use solomon_sim::enemies::presentation::{
-    NativeEnemyEffectPresentationInput, NativeEnemyProjectileKind, NativeEnemyProjectilePayload,
-    NativeEnemyProjectileVisual, native_enemy_projectile_plan_at_age,
+    EnemyEffectPresentationInput, EnemyProjectileVisual, NativeEnemyProjectileKind,
+    NativeEnemyProjectilePayload, enemy_projectile_plan_at_age,
 };
 use solomon_sim::enemies::projectile_presentation::{
-    enemy_projectile_effect_bypasses_world_tint, native_enemy_projectile_effect_plan_with_input,
+    enemy_projectile_effect_bypasses_world_tint, enemy_projectile_effect_plan_with_input,
 };
 use solomon_sim::enemies::projectiles::{
     EnemyProjectileEffectKind, EnemyProjectileKind, EnemyProjectilePayload,
 };
-use solomon_sim::enemies::rain_presentation::NativeRainCloud;
-use solomon_sim::enemies::spider_remains::native_dead_spider_entry;
+use solomon_sim::enemies::rain_presentation::RainCloud;
+use solomon_sim::enemies::spider_remains::dead_spider_entry;
 use solomon_sim::enemies::tendrils::HeartmongerTendrils;
-use solomon_sim::enemies::underlay::{
-    native_enemy_underlay_plan, native_enemy_underlay_plan_with_input,
-};
-use solomon_sim::enemies::web_presentation::{native_fade_line_mesh, native_silk_mesh};
+use solomon_sim::enemies::underlay::{enemy_underlay_plan, enemy_underlay_plan_with_input};
+use solomon_sim::enemies::web_presentation::{fade_line_mesh, silk_mesh};
 use solomon_sim::enemies::world::EnemyWorld;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 use super::{EnemyDraw, EnemyDrawGroup, EnemyPainter, EnemyRoot, EnemyView, EnemyViewFrame};
 
@@ -68,10 +66,8 @@ impl EnemyView {
             };
             let sample = frame.presentation.and_then(|metadata| metadata.actors.get(&actor.id));
             let plan = match sample {
-                Some(sample) => {
-                    native_enemy_actor_plan_with_input(actor, context, sample, &self.art)
-                }
-                None => native_enemy_actor_plan(actor, context, &self.art),
+                Some(sample) => enemy_actor_plan_with_input(actor, context, sample, &self.art),
+                None => enemy_actor_plan(actor, context, &self.art),
             };
             let mut group = EnemyDrawGroup::at(actor.position);
             if let Some(origin) = plan.attack_effect_origin {
@@ -99,7 +95,7 @@ impl EnemyView {
             );
             let shadows = (frame.actor_shadows)(actor);
             let layers = match sample {
-                Some(sample) => native_enemy_underlay_plan_with_input(
+                Some(sample) => enemy_underlay_plan_with_input(
                     actor,
                     frame.tick,
                     &shadows.records,
@@ -108,7 +104,7 @@ impl EnemyView {
                     &self.art,
                     sample,
                 ),
-                None => native_enemy_underlay_plan(
+                None => enemy_underlay_plan(
                     actor,
                     frame.tick,
                     &shadows.records,
@@ -121,7 +117,7 @@ impl EnemyView {
             underlay.draws.extend(layers.into_iter().map(EnemyDraw::Underlay));
             if let EnemyBrain::Heartmonger(brain) = &actor.brain {
                 let tendrils = self.tendrils.entry(actor.id).or_insert_with(|| {
-                    let mut rng = NativeRng::new(actor.id as i64 + actor.spawn_tick as i64);
+                    let mut rng = Rng::new(actor.id as i64 + actor.spawn_tick as i64);
                     HeartmongerTendrils::new(actor.position, actor.heading_deg, &mut rng)
                 });
                 let facing =
@@ -145,10 +141,8 @@ impl EnemyView {
             let group = EnemyDrawGroup::sprites(
                 maggot.position,
                 match frame.presentation.and_then(|metadata| metadata.maggots.get(&maggot.id)) {
-                    Some(sample) => {
-                        native_maggot_plan_with_input(maggot, sample, frame.complex_lighting)
-                    }
-                    None => native_maggot_plan(maggot, frame.tick, frame.complex_lighting),
+                    Some(sample) => maggot_plan_with_input(maggot, sample, frame.complex_lighting),
+                    None => maggot_plan(maggot, frame.tick, frame.complex_lighting),
                 },
                 true,
             );
@@ -176,7 +170,7 @@ impl EnemyView {
     pub(super) fn prepare_projectiles(&mut self, world: &EnemyWorld, frame: &EnemyViewFrame<'_>) {
         for projectile in world.projectiles.iter() {
             let state = projectile.state();
-            let visual = NativeEnemyProjectileVisual {
+            let visual = EnemyProjectileVisual {
                 age_ticks: state.age_ticks,
                 heading_degrees: frame
                     .presentation
@@ -214,7 +208,7 @@ impl EnemyView {
                 .and_then(|metadata| metadata.projectile_age_ticks.get(&state.id))
                 .copied()
                 .unwrap_or(state.age_ticks as f64);
-            let plan = native_enemy_projectile_plan_at_age(&visual, frame.tick as f64, age);
+            let plan = enemy_projectile_plan_at_age(&visual, frame.tick as f64, age);
             let underlays = plan.underlays.into_iter().map(EnemySpriteLayer::from).collect();
             self.pre_world.push(EnemyDrawGroup::sprites(plan.position, underlays, false));
             if projectile.kind() == EnemyProjectileKind::PoisonPool {
@@ -236,11 +230,11 @@ impl EnemyView {
                     .presentation
                     .and_then(|metadata| metadata.projectile_effects.get(&trail.state.id))
                     .copied()
-                    .unwrap_or(NativeEnemyEffectPresentationInput {
+                    .unwrap_or(EnemyEffectPresentationInput {
                         age_ticks: trail.state.age_ticks as f64,
                         rotation_radians: trail.state.rotation_deg * std::f64::consts::PI / 180.0,
                     });
-                let trail_plan = native_enemy_projectile_effect_plan_with_input(trail, 1.0, sample);
+                let trail_plan = enemy_projectile_effect_plan_with_input(trail, 1.0, sample);
                 for mut layer in trail_plan.layers {
                     layer.alpha *= ((state.lifetime_ticks as f64 - age).max(0.0) / 100.0).min(1.0);
                     layer.offset = Vec2::new(
@@ -316,11 +310,11 @@ impl EnemyView {
                 .presentation
                 .and_then(|metadata| metadata.projectile_effects.get(&effect.state.id))
                 .copied()
-                .unwrap_or(NativeEnemyEffectPresentationInput {
+                .unwrap_or(EnemyEffectPresentationInput {
                     age_ticks: effect.state.age_ticks as f64,
                     rotation_radians: effect.state.rotation_deg * std::f64::consts::PI / 180.0,
                 });
-            let plan = native_enemy_projectile_effect_plan_with_input(
+            let plan = enemy_projectile_effect_plan_with_input(
                 effect,
                 (frame.point_gain)(effect.state.position),
                 sample,
@@ -365,11 +359,11 @@ impl EnemyView {
                 .presentation
                 .and_then(|metadata| metadata.death_effects.get(&effect.id))
                 .copied()
-                .unwrap_or(NativeEnemyEffectPresentationInput {
+                .unwrap_or(EnemyEffectPresentationInput {
                     age_ticks: effect.age_ticks as f64,
                     rotation_radians: effect.rotation_deg * std::f64::consts::PI / 180.0,
                 });
-            let plan = native_enemy_death_effect_plan_with_input(effect, frame.view_height, sample);
+            let plan = enemy_death_effect_plan_with_input(effect, frame.view_height, sample);
             let mut group = EnemyDrawGroup::at(effect.position);
             group.draws.extend(plan.gradients.into_iter().map(EnemyDraw::Gradient));
             for layer in plan.layers {
@@ -399,7 +393,7 @@ impl EnemyView {
         for spell in world.boss_spells.iter() {
             if matches!(spell.kind, BossSpellKind::Blightning { .. }) {
                 let layers =
-                    solomon_sim::enemies::lightning_presentation::native_dark_lightning_body(spell);
+                    solomon_sim::enemies::lightning_presentation::dark_lightning_body(spell);
                 Self::append_lightning_body(
                     &mut self.roots,
                     spell.owner.position,
@@ -409,7 +403,7 @@ impl EnemyView {
                 );
                 continue;
             }
-            let plan = native_boss_spell_plan(spell, frame.tick, frame.view_height);
+            let plan = boss_spell_plan(spell, frame.tick, frame.view_height);
             let mut group = EnemyDrawGroup::at(spell.owner.position);
             group.draws.extend(plan.gradients.into_iter().map(EnemyDraw::Gradient));
             if let BossSpellKind::MouthBeamSegment { vertices, uv_offset, start_alpha, end_alpha } =
@@ -426,7 +420,7 @@ impl EnemyView {
                 let rain = self
                     .rain_clouds
                     .entry(spell.owner.id)
-                    .or_insert_with(|| NativeRainCloud::new(spell, frame.tick));
+                    .or_insert_with(|| RainCloud::new(spell, frame.tick));
                 for layer in rain.update(spell, frame.tick) {
                     group.draws.push(EnemyDraw::Sprite { layer, region_tint: false });
                 }
@@ -470,15 +464,15 @@ impl EnemyView {
 
     pub(super) fn prepare_spider_webs(&mut self, world: &EnemyWorld, frame: &EnemyViewFrame<'_>) {
         for silk in &world.silks {
-            let mut rng = NativeRng::new((silk.id as u64 ^ frame.application_tick) as i64);
-            let mesh = native_silk_mesh(&silk.state, frame.light_at, &mut rng);
+            let mut rng = Rng::new((silk.id as u64 ^ frame.application_tick) as i64);
+            let mesh = silk_mesh(&silk.state, frame.light_at, &mut rng);
             let mut group = EnemyDrawGroup::at(Vec2::ZERO);
             group.draws.push(EnemyDraw::Web(mesh.mesh));
             self.push_root(silk.painter_registration, silk.state.position.y, 0.0, None, group);
         }
         for fragment in &world.silk_fragments {
             let mut group = EnemyDrawGroup::at(Vec2::ZERO);
-            group.draws.push(EnemyDraw::Web(native_fade_line_mesh(&fragment.state)));
+            group.draws.push(EnemyDraw::Web(fade_line_mesh(&fragment.state)));
             self.pre_world.push(group);
         }
     }
@@ -520,7 +514,7 @@ impl EnemyView {
                 };
                 self.background.push(EnemyDrawGroup::sprites(decal.position, vec![layer], false));
             }
-            let Some(entry) = native_dead_spider_entry(state) else { continue };
+            let Some(entry) = dead_spider_entry(state) else { continue };
             if state.life < 10.0 {
                 continue;
             }

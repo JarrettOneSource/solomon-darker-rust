@@ -1,16 +1,16 @@
 //! HUD primary/concentration choices from Website `hud-skill-selector.ts`.
 
 use crate::hud::HudRect;
-use crate::profile::{NATIVE_SKILL_CATALOG, NativeSkillBookState, native_skill_category};
+use crate::profile::{SKILL_CATALOG, SkillBookState, skill_category};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeHudSkillSelectorTarget {
+pub enum HudSkillSelectorTarget {
     Primary,
     ConcentrationA,
     ConcentrationB,
 }
 
-impl NativeHudSkillSelectorTarget {
+impl HudSkillSelectorTarget {
     #[must_use]
     pub const fn from_binding(binding: usize) -> Option<Self> {
         match binding {
@@ -37,32 +37,32 @@ impl NativeHudSkillSelectorTarget {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeHudSkillSelectorOption {
+pub struct HudSkillSelectorOption {
     pub icon_record: usize,
     pub name: &'static str,
     pub skill_id: usize,
 }
 
 #[must_use]
-pub fn native_hud_skill_selector_options(
-    book: &NativeSkillBookState,
+pub fn hud_skill_selector_options(
+    book: &SkillBookState,
     concentrations: &[Option<usize>; 2],
-    target: NativeHudSkillSelectorTarget,
-) -> Vec<NativeHudSkillSelectorOption> {
-    let category = if target == NativeHudSkillSelectorTarget::Primary { 1 } else { 3 };
+    target: HudSkillSelectorTarget,
+) -> Vec<HudSkillSelectorOption> {
+    let category = if target == HudSkillSelectorTarget::Primary { 1 } else { 3 };
     let excluded = target.concentration_slot().and_then(|slot| concentrations[1 - slot]);
     let mut options = Vec::new();
     for &skill_id in &book.learned_skill_order {
         if book.effective_ranks[skill_id] == 0
             || Some(skill_id) == excluded
-            || native_skill_category(skill_id) != Some(category)
+            || skill_category(skill_id) != Some(category)
             || (skill_id == 52 && book.weld_build_id.is_none())
         {
             continue;
         }
-        options.push(NativeHudSkillSelectorOption {
+        options.push(HudSkillSelectorOption {
             icon_record: book.skill_icon_record(skill_id),
-            name: NATIVE_SKILL_CATALOG[skill_id].name,
+            name: SKILL_CATALOG[skill_id].name,
             skill_id,
         });
     }
@@ -71,7 +71,7 @@ pub fn native_hud_skill_selector_options(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHudSkillSelectorLayout {
+pub struct HudSkillSelectorLayout {
     pub panel: HudRect,
     pub option_left: f64,
     pub option_top: f64,
@@ -80,13 +80,10 @@ pub struct NativeHudSkillSelectorLayout {
 }
 
 #[must_use]
-pub fn native_hud_skill_selector_layout(
-    option_count: usize,
-    title_width: f64,
-) -> NativeHudSkillSelectorLayout {
+pub fn hud_skill_selector_layout(option_count: usize, title_width: f64) -> HudSkillSelectorLayout {
     let strip_width = option_count as f64 * 52.0;
     let width = strip_width.max(title_width) + 10.0;
-    NativeHudSkillSelectorLayout {
+    HudSkillSelectorLayout {
         panel: HudRect::new(800.0 - width / 2.0, 52.0, width, 79.0),
         option_left: 800.0 - strip_width / 2.0,
         option_top: 74.0,

@@ -8,7 +8,7 @@ use solomon_sim::game_run::presentation::{
     solomon_riff_presentation,
 };
 use solomon_sim::game_run::{GameRunLifecycle, GameRunPhase};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
+use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 
 #[derive(Clone, Debug)]
 pub struct ContinueGameOver {
@@ -157,12 +157,12 @@ impl GameOverOverlay {
                 native_text(
                     frame,
                     painter,
-                    &NativeUiTextSpec {
+                    &UiTextSpec {
                         scale: scale as f64,
                         tint: 0xd9ba70,
                         alpha: view.prompt_alpha,
-                        ..NativeUiTextSpec::new(
-                            NativeUiFontName::Menu,
+                        ..UiTextSpec::new(
+                            UiFontName::Menu,
                             "CLICK TO CONTINUE...",
                             bounds.center().x as f64,
                             bounds.bottom() as f64 - 50.0 * scale as f64,

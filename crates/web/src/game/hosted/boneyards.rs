@@ -10,10 +10,7 @@ use crate::{
 };
 use egui::{Align2, Color32, FontFamily, FontId, Id, Rect, Ui, Vec2};
 use serde_json::{Value, json};
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextPlacement, NativeUiTextSpec,
-    layout_native_ui_text,
-};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextPlacement, UiTextSpec, layout_ui_text};
 use std::{cell::RefCell, rc::Rc};
 use store::DraftMeta;
 use wasm_bindgen::{JsCast, closure::Closure};
@@ -492,7 +489,7 @@ impl BoneyardLibrary {
             frame,
             ui,
             "YOUR BONEYARDS",
-            NativeUiFontName::Menu,
+            UiFontName::Menu,
             1.0,
             0xd9ba70,
             Rect::from_min_size(
@@ -680,7 +677,7 @@ impl BoneyardLibrary {
             egui::pos2(rect.left() + horizontal_pad, copy_top),
             Vec2::new(copy_width, name_height),
         );
-        stock_text(frame, ui, name, NativeUiFontName::Menu, 0.85, 0xd9ba70, copy, false);
+        stock_text(frame, ui, name, UiFontName::Menu, 0.85, 0xd9ba70, copy, false);
         let text_rect = Rect::from_min_size(
             copy.left_bottom() + Vec2::new(0.0, 3.0),
             Vec2::new(copy_width, detail_height),
@@ -758,25 +755,20 @@ fn stock_text(
     frame: &UiFrame<'_>,
     ui: &Ui,
     text: &str,
-    font: NativeUiFontName,
+    font: UiFontName,
     scale: f64,
     tint: u32,
     rect: Rect,
     center: bool,
 ) {
-    let spec = NativeUiTextSpec {
-        placement: NativeUiTextPlacement::Box,
-        align: if center { NativeUiTextAlign::Center } else { NativeUiTextAlign::Left },
+    let spec = UiTextSpec {
+        placement: UiTextPlacement::Box,
+        align: if center { UiTextAlign::Center } else { UiTextAlign::Left },
         scale,
         tint,
-        ..NativeUiTextSpec::new(
-            font,
-            text,
-            if center { f64::from(rect.width() / 2.0) } else { 0.0 },
-            0.0,
-        )
+        ..UiTextSpec::new(font, text, if center { f64::from(rect.width() / 2.0) } else { 0.0 }, 0.0)
     };
-    let mut layout = layout_native_ui_text(&spec);
+    let mut layout = layout_ui_text(&spec);
     let painter = ui.painter().with_clip_rect(rect.intersect(ui.clip_rect()));
     if layout.unsupported_code_points.is_empty() {
         for glyph in &mut layout.glyphs {
@@ -790,7 +782,7 @@ fn stock_text(
             Align2::LEFT_CENTER,
             text,
             FontId::new(
-                solomon_sim::native_ui_text::native_ui_font(font).metrics[0] as f32 * scale as f32,
+                solomon_sim::ui_text::ui_font(font).metrics[0] as f32 * scale as f32,
                 FontFamily::Name("Cinzel".into()),
             ),
             Color32::from_rgb((tint >> 16) as u8, (tint >> 8) as u8, tint as u8),
@@ -805,7 +797,7 @@ fn shelf_heading(frame: &UiFrame<'_>, ui: &mut Ui, text: &str, width: f32) {
         frame,
         ui,
         text,
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         1.0,
         0xd9ba70,
         Rect::from_min_size(r.min + Vec2::new(10.0, 0.0), Vec2::new(width - 10.0, 16.0)),

@@ -3,20 +3,19 @@
 use super::kernel::inside_broad_ellipse;
 use super::*;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
-use crate::secondary::program::MAX_NATIVE_TICKS;
+use crate::secondary::SecondaryActorState;
+use crate::secondary::program::MAX_TICKS;
 use crate::secondary::program::{actor as new_actor, actor_event, screen_flash};
 use crate::secondary::step::StepEngine;
 use crate::secondary::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryAudioCue as Cue,
-    NativeSecondaryEventKind as Event, NativeSecondarySimulationState as State,
-    NativeSecondaryWorld,
+    SecondaryActorKind as Kind, SecondaryAudioCue as Cue, SecondaryEventKind as Event,
+    SecondarySimulationState as State, SecondaryWorld,
 };
 
-pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
+pub(in crate::secondary) fn step_field<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let phase_at_entry = source.phase;
@@ -72,24 +71,21 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
         Some(targets) => targets,
         None => fallback_targets(engine, source, actor, refresh < 1.0),
     };
-    let (refreshed, mut field) = refresh_native_ether_drain_targets(
+    let (refreshed, mut field) = refresh_ether_drain_targets(
         source.ether_drain.as_ref(),
         &targets,
         actor.position,
         refresh < 1.0,
     );
     let world_animations = engine.world.ether_drain_world_animations(&actor.world_key);
-    refresh_native_ether_drain_world_animations(
+    refresh_ether_drain_world_animations(
         &mut field,
         &world_animations,
         actor.position,
         source.ether_drain.as_ref().is_some_and(|field| field.targets_initialized),
     );
-    let scenery = engine.world.scenery_targets(
-        &actor.world_key,
-        actor.position,
-        NATIVE_ETHER_DRAIN_BROAD_RADIUS,
-    );
+    let scenery =
+        engine.world.scenery_targets(&actor.world_key, actor.position, ETHER_DRAIN_BROAD_RADIUS);
     if refreshed {
         field.scenery = scenery
             .iter()
@@ -101,7 +97,7 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
     actor.hit_target_ids.clear();
     actor.quantity = refresh;
     if actor.phase != 2.0 && countdown > 50 {
-        let input = NativeEtherDrainField {
+        let input = EtherDrainField {
             alpha: actor.alpha,
             damage: actor.damage,
             id: actor.id,
@@ -110,8 +106,7 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
         };
         for reference in field.loose.iter().chain(&field.queried) {
             let target = targets.iter().rev().find(|target| &target.reference == reference);
-            let Some(mut contact) =
-                target.and_then(|target| native_ether_drain_contact(input, target))
+            let Some(mut contact) = target.and_then(|target| ether_drain_contact(input, target))
             else {
                 continue;
             };
@@ -124,7 +119,7 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
         for reference in &field.world_animation_refs {
             let target = world_animations.iter().find(|target| target.reference == *reference);
             if let Some(contact) =
-                target.and_then(|target| native_ether_drain_world_animation_contact(input, *target))
+                target.and_then(|target| ether_drain_world_animation_contact(input, *target))
             {
                 if contact.consume {
                     actor.slow_factor = 2.0;
@@ -176,7 +171,7 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
                         1,
                         target.position,
                     );
-                    carrier.lifetime_ticks = MAX_NATIVE_TICKS;
+                    carrier.lifetime_ticks = MAX_TICKS;
                     carrier.target_id = Some(target.id);
                     carrier.variant = target.type_id as i32;
                     carrier.phase = phase;
@@ -201,14 +196,13 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
             let rotation = engine.state.rng.draw_scaled_float(360.0, false);
             let radius = engine.state.rng.draw_scaled_float(150.0, false);
             let direction = engine.state.rng.draw_unit_vector();
-            let center = native_ether_drain_leaf_center(
-                super::trees::TREE_POLYGONS[secondary_variant as usize],
-            );
+            let center =
+                ether_drain_leaf_center(super::trees::TREE_POLYGONS[secondary_variant as usize]);
             let position = Vec2::new(
                 fround(target.position.x + fround(center.x + direction.x * radius)),
                 fround(target.position.y + fround(center.y + direction.y * radius)),
             );
-            field.animations.push(create_native_ether_drain_debris(
+            field.animations.push(create_ether_drain_debris(
                 actor.position,
                 position,
                 oscillation,
@@ -225,7 +219,7 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
                 fround(actor.position.x + direction.x * 1024.0),
                 fround(actor.position.y + direction.y * 1024.0),
             );
-            field.animations.push(create_native_ether_drain_debris(
+            field.animations.push(create_ether_drain_debris(
                 actor.position,
                 position,
                 oscillation,
@@ -235,11 +229,8 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
         }
     }
     actor.slow_factor = fround(actor.slow_factor - (0.1_f32 as f64)).max(0.0);
-    let stepped = step_native_ether_drain_animations(
-        &field.animations,
-        actor.position,
-        &mut engine.state.rng,
-    );
+    let stepped =
+        step_ether_drain_animations(&field.animations, actor.position, &mut engine.state.rng);
     field.animations = stepped.animations;
     for parameter in stepped.pulses {
         spawn_pulse(engine.state, actor, parameter, engine.context.tick);
@@ -248,31 +239,31 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
     actor.ether_drain = Some(field);
 }
 
-fn fallback_targets<W: NativeSecondaryWorld>(
+fn fallback_targets<W: SecondaryWorld>(
     engine: &StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &SecondaryActorState,
     refresh: bool,
-) -> Vec<NativeEtherDrainTarget> {
+) -> Vec<EtherDrainTarget> {
     let targets = match source.ether_drain.as_ref().filter(|_| !refresh) {
-        None => engine.candidates(actor, NATIVE_ETHER_DRAIN_BROAD_RADIUS),
+        None => engine.candidates(actor, ETHER_DRAIN_BROAD_RADIUS),
         Some(field) => field
             .queried
             .iter()
             .filter_map(|reference| {
-                let NativeEtherDrainTargetRef::Enemy { id, .. } = reference else { return None };
+                let EtherDrainTargetRef::Enemy { id, .. } = reference else { return None };
                 engine.world.target(&actor.world_key, *id as usize)
             })
             .collect(),
     };
     targets
         .into_iter()
-        .map(|target| NativeEtherDrainTarget {
+        .map(|target| EtherDrainTarget {
             activation_delay_ticks: 0,
-            force_factor: native_ether_drain_enemy_force_factor(&target.family),
+            force_factor: ether_drain_enemy_force_factor(&target.family),
             native_flags: target.native_flags.unwrap_or(2),
             position: target.position,
-            reference: NativeEtherDrainTargetRef::Enemy {
+            reference: EtherDrainTargetRef::Enemy {
                 id: target.id as u64,
                 registration_ordinal: target.light_registration.registration_ordinal,
             },
@@ -280,7 +271,7 @@ fn fallback_targets<W: NativeSecondaryWorld>(
         .collect()
 }
 
-fn spawn_pulse(state: &mut State, parent: &NativeSecondaryActorState, parameter: f64, tick: u64) {
+fn spawn_pulse(state: &mut State, parent: &SecondaryActorState, parameter: f64, tick: u64) {
     if parameter < 1.0 {
         return;
     }
@@ -325,7 +316,7 @@ impl State {
     pub fn capture_ether_drain_image(
         &mut self,
         field_id: u64,
-        image: Option<NativeEtherDrainCapturedImage>,
+        image: Option<EtherDrainCapturedImage>,
         tick: u64,
     ) {
         let Some(parent) = self
@@ -340,7 +331,7 @@ impl State {
             for animation in &field.animations {
                 self.pulse_ether_drain(
                     field_id,
-                    if matches!(animation, NativeEtherDrainAnimation::Captured { .. }) {
+                    if matches!(animation, EtherDrainAnimation::Captured { .. }) {
                         1.5
                     } else {
                         0.5
@@ -354,7 +345,7 @@ impl State {
         let field = actor.ether_drain.get_or_insert_default();
         field.animations.clear();
         if let Some(image) = image {
-            field.animations.push(NativeEtherDrainAnimation::Captured {
+            field.animations.push(EtherDrainAnimation::Captured {
                 alpha: fround(1.25 - (0.2_f32 as f64)),
                 atlas: image.atlas,
                 entry: image.entry,

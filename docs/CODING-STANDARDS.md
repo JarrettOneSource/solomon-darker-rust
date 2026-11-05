@@ -288,7 +288,10 @@ concepts on the screen, even if it is a few lines longer.
   convert integer codes into enums when they load. Simulation code should not
   `panic!` on a value that a file could contain.
 - **Names say what a thing is in the game**, not which port or file it came from.
-  Avoid prefixes such as `native_`, `kernel_` or `website_` on new items.
+  Game rules need no `native_` prefix: the whole game follows the original. Keep
+  `native` for the native authority (the Rust host), the desktop save archive and
+  the platform's own windows, text input and storage; use `stock` for original
+  content beside mod content; use `website` only for the Website's own interfaces.
 - **Comments never refer to the old client.** "Matches Pixi" or "from
   `native-crow.ts`" means nothing once that code is gone. State the rule and,
   when it needs a source, cite the original game.
@@ -325,7 +328,7 @@ pub fn hub_teacher_frame_at(absolute_tick: u64, seed: u32) -> u32 {
     if tick == 0 {
         0
     } else if tick < HUB_TEACHER_CAST_TICKS {
-        native_random_int_from_word(teacher_word(seed, absolute_tick, 0), 2)
+        random_int_from_word(teacher_word(seed, absolute_tick, 0), 2)
     } else if tick < HUB_TEACHER_IDLE_START_TICK {
         2
     } else {

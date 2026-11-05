@@ -31,7 +31,7 @@ pub fn patch_native_darkdata(source: &[u8], patch: &NativeProfilePatch) -> Resul
             "native first-mix state must contain {NATIVE_FIRST_MIX_COUNT} booleans"
         ));
     }
-    if !native_hagatha_bundle_state_is_valid(&patch.hagatha_bundle_selectors) {
+    if !hagatha_bundle_state_is_valid(&patch.hagatha_bundle_selectors) {
         return Err("native Hagatha bundle is invalid".into());
     }
     let mut buffer = decoded.buffer;
@@ -263,7 +263,7 @@ pub fn patch_native_gamestate(
     }
     let tonics = patch.perk_selectors.iter().filter(|value| **value == 27).count() as u32;
     if u32::try_from(patch.perk_capacity).ok().is_none_or(|capacity| {
-        !native_hagatha_outcome_state_is_valid(&patch.perk_selectors, tonics, capacity)
+        !hagatha_outcome_state_is_valid(&patch.perk_selectors, tonics, capacity)
     }) {
         return Err("native Hagatha outcomes are invalid".into());
     }

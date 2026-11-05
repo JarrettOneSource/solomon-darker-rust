@@ -5,20 +5,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::compact_masks::{
-    NATIVE_COMPACT_MASK_COMPOSITE_ANCHOR, NATIVE_COMPACT_MASK_COMPOSITE_SCALE,
-    NATIVE_COMPACT_MASK_RADIAL_ENTRY, NATIVE_COMPACT_MASK_RADIAL_SCALE,
-    NATIVE_COMPACT_MASK_TARGET_SIDE, NATIVE_DIRECT_ENVIRONMENT_LIGHT_ENTRY,
-    NativeCompactGroundSurface, NativeCompactMask, NativeCompactMaskPlan,
-    NativeCompactMaskPlayerPlan, NativeCompactMasks, native_direct_environment_light_alpha,
+    COMPACT_MASK_COMPOSITE_ANCHOR, COMPACT_MASK_COMPOSITE_SCALE, COMPACT_MASK_RADIAL_ENTRY,
+    COMPACT_MASK_RADIAL_SCALE, COMPACT_MASK_TARGET_SIDE, CompactGroundSurface, CompactMask,
+    CompactMaskPlan, CompactMaskPlayerPlan, CompactMasks, DIRECT_ENVIRONMENT_LIGHT_ENTRY,
+    direct_environment_light_alpha,
 };
 use solomon_sim::boneyard::{BoneyardBounds, BoneyardScene};
 use solomon_sim::enemies::spider_remains::SpiderRemains;
-use solomon_sim::spells::presentation::{
-    NativeSpellSprite, NativeSpellSpritePlan, SpellAtlas, SpellBlend,
-};
+use solomon_sim::spells::presentation::{SpellAtlas, SpellBlend, SpellSprite, SpellSpritePlan};
 
+use crate::beam_mesh::sprite_texel_rect;
 use crate::courtyard::Camera;
-use crate::native_mesh::native_sprite_texel_rect;
 use crate::spells::SpellView;
 use solomon_graphics::{BlendMode, Quad, RenderTarget, Renderer};
 
@@ -39,12 +36,12 @@ pub fn draw_environment_aperture(
     slot: usize,
 ) {
     let atlas = spells.dead_hawg();
-    let record = &atlas.records[NATIVE_DIRECT_ENVIRONMENT_LIGHT_ENTRY];
-    let alpha = native_direct_environment_light_alpha(now_ms, slot);
+    let record = &atlas.records[DIRECT_ENVIRONMENT_LIGHT_ENTRY];
+    let alpha = direct_environment_light_alpha(now_ms, slot);
     renderer.draw(
         &atlas.texture,
         Quad {
-            source: native_sprite_texel_rect(record),
+            source: sprite_texel_rect(record),
             destination: camera.project(
                 position.x - 168.0,
                 position.y - 153.0,
@@ -58,9 +55,9 @@ pub fn draw_environment_aperture(
 }
 
 pub struct CompactMaskView {
-    masks: NativeCompactMasks,
-    surface: NativeCompactGroundSurface,
-    plan: NativeCompactMaskPlan,
+    masks: CompactMasks,
+    surface: CompactGroundSurface,
+    plan: CompactMaskPlan,
     ground_order: Vec<String>,
     targets: BTreeMap<String, PlayerMaskTarget>,
 }
@@ -68,9 +65,9 @@ pub struct CompactMaskView {
 impl CompactMaskView {
     pub fn new(scene: &BoneyardScene) -> Self {
         Self {
-            masks: NativeCompactMasks::new(scene),
-            surface: NativeCompactGroundSurface::new(scene),
-            plan: NativeCompactMaskPlan::default(),
+            masks: CompactMasks::new(scene),
+            surface: CompactGroundSurface::new(scene),
+            plan: CompactMaskPlan::default(),
             ground_order: Vec::new(),
             targets: BTreeMap::new(),
         }
@@ -130,7 +127,7 @@ impl CompactMaskView {
                 continue;
             }
             if !self.targets.contains_key(player.id) {
-                let target = renderer.create_render_target(NATIVE_COMPACT_MASK_TARGET_SIDE)?;
+                let target = renderer.create_render_target(COMPACT_MASK_TARGET_SIDE)?;
                 self.targets.insert(
                     player.id.to_owned(),
                     PlayerMaskTarget {
@@ -172,9 +169,9 @@ impl CompactMaskView {
         let Some(target) = self.targets.get(player_id).filter(|target| target.visible) else {
             return;
         };
-        let side = f64::from(NATIVE_COMPACT_MASK_TARGET_SIDE);
-        let scale = NATIVE_COMPACT_MASK_COMPOSITE_SCALE;
-        let anchor = NATIVE_COMPACT_MASK_COMPOSITE_ANCHOR * scale;
+        let side = f64::from(COMPACT_MASK_TARGET_SIDE);
+        let scale = COMPACT_MASK_COMPOSITE_SCALE;
+        let anchor = COMPACT_MASK_COMPOSITE_ANCHOR * scale;
         renderer.draw(
             &target.target.texture,
             Quad {
@@ -214,10 +211,10 @@ impl PlayerMaskTarget {
         &mut self,
         renderer: &mut Renderer,
         spells: &SpellView,
-        masks: &[NativeCompactMask],
-        plan: &NativeCompactMaskPlayerPlan,
+        masks: &[CompactMask],
+        plan: &CompactMaskPlayerPlan,
     ) {
-        let side = f64::from(NATIVE_COMPACT_MASK_TARGET_SIDE);
+        let side = f64::from(COMPACT_MASK_TARGET_SIDE);
         let camera = Camera {
             origin: Vec2::new(plan.position.x - side, plan.position.y - side),
             scale: 0.5,
@@ -229,14 +226,14 @@ impl PlayerMaskTarget {
         });
         renderer.render_onto(&self.target, [side as f32; 2], |renderer| {
             let atlas = spells.dead_hawg();
-            let record = &atlas.records[NATIVE_COMPACT_MASK_RADIAL_ENTRY];
-            let scale = NATIVE_COMPACT_MASK_RADIAL_SCALE;
+            let record = &atlas.records[COMPACT_MASK_RADIAL_ENTRY];
+            let scale = COMPACT_MASK_RADIAL_SCALE;
             let width = f64::from(record.width);
             let height = f64::from(record.height);
             renderer.draw(
                 &atlas.texture,
                 Quad {
-                    source: native_sprite_texel_rect(record),
+                    source: sprite_texel_rect(record),
                     destination: [
                         (128.0 + (-width / 2.0 + f64::from(record.center_x)) * scale) as f32,
                         (128.0 + (-height / 2.0 + f64::from(record.center_y)) * scale) as f32,
@@ -258,21 +255,21 @@ fn draw_mask(
     renderer: &mut Renderer,
     camera: &Camera,
     spells: &SpellView,
-    mask: &NativeCompactMask,
+    mask: &CompactMask,
     blend: SpellBlend,
 ) {
-    let draw = NativeSpellSprite {
+    let draw = SpellSprite {
         alpha: mask.alpha,
         atlas: SpellAtlas::DeadHawg,
         blend,
         rotation: mask.rotation_degrees * std::f64::consts::PI / 180.0,
         scale: mask.scale,
-        ..NativeSpellSprite::new(mask.entry, 1.0)
+        ..SpellSprite::new(mask.entry, 1.0)
     };
     spells.draw_sprite_plan(
         renderer,
         camera,
-        &NativeSpellSpritePlan {
+        &SpellSpritePlan {
             position: mask.position,
             world_y: mask.position.y,
             sort_bias: 0.0,

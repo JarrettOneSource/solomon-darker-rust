@@ -7,11 +7,11 @@ use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::profile::{PlayerStaffAttackOutcome, WizardElement};
 use solomon_sim::secondary::*;
 use solomon_sim::spells::casting::PlayerPrimaryCastState;
-use solomon_sim::spells::fire::{SpawnNativeFireGoodImpOptions, spawn_native_fire_good_imp};
+use solomon_sim::spells::fire::{SpawnFireGoodImpOptions, spawn_fire_good_imp};
 use solomon_sim::spells::model::*;
-use solomon_sim::spells::staff::{NativePlayerStaffContactEvent, NativeStaffProcSound};
+use solomon_sim::spells::staff::{PlayerStaffContactEvent, StaffProcSound};
 use solomon_sim::spells::weld::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -31,7 +31,7 @@ fn common(value: &Value) -> PrimarySpellTransientBase {
 fn transient(value: &Value) -> PrimarySpellTransient {
     let common = common(value);
     let origin = value.get("origin").or_else(|| value.get("position")).map_or(Vec2::ZERO, point);
-    let mut rng = NativeRng::new(1);
+    let mut rng = Rng::new(1);
     match value["kind"].as_str().unwrap() {
         "water-hail" => PrimarySpellTransient::WaterHail(PrimarySpellWaterHail {
             common,
@@ -89,8 +89,8 @@ fn transient(value: &Value) -> PrimarySpellTransient {
             visual_scale: 1.0,
         }),
         "fire-good-imp" => {
-            let mut imp = spawn_native_fire_good_imp(
-                SpawnNativeFireGoodImpOptions {
+            let mut imp = spawn_fire_good_imp(
+                SpawnFireGoodImpOptions {
                     id: common.id,
                     owner_id: common.owner_id.clone(),
                     world_key: common.world_key.clone(),
@@ -112,7 +112,7 @@ fn transient(value: &Value) -> PrimarySpellTransient {
         }
         "weld-impact" | "weld-meteor" | "weld-persistent" => {
             let build_id = value["buildId"].as_u64().unwrap_or(1007) as u32;
-            let birth = NativeWeldActorBirth {
+            let birth = WeldActorBirth {
                 id: common.id,
                 build_id,
                 owner_id: &common.owner_id,
@@ -129,10 +129,10 @@ fn transient(value: &Value) -> PrimarySpellTransient {
                     actor.impact_sound_variant =
                         value["impactSoundVariant"].as_u64().map(|value| value as u32);
                     actor.boulder_terminal_charge = value["boulderTerminalCharge"].as_f64();
-                    NativeWeldWorldActor::Impact(actor)
+                    WeldWorldActor::Impact(actor)
                 }
                 "weld-meteor" => {
-                    let spawn = NativeWeldMeteorSpawnProgram {
+                    let spawn = WeldMeteorSpawnProgram {
                         body_scale: 1.0,
                         fall_heading_degrees: 0.0,
                         fall_height: -100.0,
@@ -141,7 +141,7 @@ fn transient(value: &Value) -> PrimarySpellTransient {
                         position: origin,
                         private_seed: 1,
                     };
-                    let mut actor = create_native_weld_meteor(
+                    let mut actor = create_weld_meteor(
                         birth,
                         spawn,
                         1.0,
@@ -150,17 +150,17 @@ fn transient(value: &Value) -> PrimarySpellTransient {
                     );
                     actor.position = origin;
                     actor.phase = if value["phase"] == "impact" {
-                        NativeWeldMeteorPhase::Impact
+                        WeldMeteorPhase::Impact
                     } else {
-                        NativeWeldMeteorPhase::Fall
+                        WeldMeteorPhase::Fall
                     };
                     actor.impact_sound_pitch = value["impactSoundPitch"].as_f64();
                     actor.impact_throw_fire_pitch = value["impactThrowFirePitch"].as_f64();
-                    NativeWeldWorldActor::Meteor(actor)
+                    WeldWorldActor::Meteor(actor)
                 }
                 _ => {
-                    let mut actor = create_native_weld_persistent_actor(birth, None);
-                    let NativeWeldPersistentActorState::Hailstones(hail) = &mut actor else {
+                    let mut actor = create_weld_persistent_actor(birth, None);
+                    let WeldPersistentActorState::Hailstones(hail) = &mut actor else {
                         panic!("fixture Hailstones")
                     };
                     hail.phase = if value["phase"] == "flight" {
@@ -168,7 +168,7 @@ fn transient(value: &Value) -> PrimarySpellTransient {
                     } else {
                         PrimarySpellProjectilePhase::Held
                     };
-                    NativeWeldWorldActor::Persistent(actor)
+                    WeldWorldActor::Persistent(actor)
                 }
             };
             PrimarySpellTransient::Weld(actor)
@@ -177,42 +177,42 @@ fn transient(value: &Value) -> PrimarySpellTransient {
     }
 }
 
-fn secondary_cue(value: &Value) -> Option<NativeSecondaryAudioCue> {
+fn secondary_cue(value: &Value) -> Option<SecondaryAudioCue> {
     let id = value.as_str()?;
     let candidates = [
-        NativeSecondaryAudioCue::Dampen,
-        NativeSecondaryAudioCue::GolemDie,
-        NativeSecondaryAudioCue::GolemProvoke,
-        NativeSecondaryAudioCue::LeviathanRoar,
-        NativeSecondaryAudioCue::Mindstar,
-        NativeSecondaryAudioCue::PlanewalkerOff,
-        NativeSecondaryAudioCue::PlanewalkerOn,
-        NativeSecondaryAudioCue::PrismaticShock,
-        NativeSecondaryAudioCue::QuakeCrackSmall,
-        NativeSecondaryAudioCue::QuakeCracks,
-        NativeSecondaryAudioCue::SetTrap,
-        NativeSecondaryAudioCue::StoneskinOn,
-        NativeSecondaryAudioCue::Thunder,
-        NativeSecondaryAudioCue::Trap,
-        NativeSecondaryAudioCue::MagicMissile,
-        NativeSecondaryAudioCue::Fizzle,
-        NativeSecondaryAudioCue::CometLoop,
-        NativeSecondaryAudioCue::ElectricLoop,
-        NativeSecondaryAudioCue::EarthquakeLoop,
-        NativeSecondaryAudioCue::LowFireLoop,
-        NativeSecondaryAudioCue::PlaneCrossLoop,
-        NativeSecondaryAudioCue::RainfallLoop,
-        NativeSecondaryAudioCue::SteadyWindLoop,
+        SecondaryAudioCue::Dampen,
+        SecondaryAudioCue::GolemDie,
+        SecondaryAudioCue::GolemProvoke,
+        SecondaryAudioCue::LeviathanRoar,
+        SecondaryAudioCue::Mindstar,
+        SecondaryAudioCue::PlanewalkerOff,
+        SecondaryAudioCue::PlanewalkerOn,
+        SecondaryAudioCue::PrismaticShock,
+        SecondaryAudioCue::QuakeCrackSmall,
+        SecondaryAudioCue::QuakeCracks,
+        SecondaryAudioCue::SetTrap,
+        SecondaryAudioCue::StoneskinOn,
+        SecondaryAudioCue::Thunder,
+        SecondaryAudioCue::Trap,
+        SecondaryAudioCue::MagicMissile,
+        SecondaryAudioCue::Fizzle,
+        SecondaryAudioCue::CometLoop,
+        SecondaryAudioCue::ElectricLoop,
+        SecondaryAudioCue::EarthquakeLoop,
+        SecondaryAudioCue::LowFireLoop,
+        SecondaryAudioCue::PlaneCrossLoop,
+        SecondaryAudioCue::RainfallLoop,
+        SecondaryAudioCue::SteadyWindLoop,
     ];
     Some(candidates.into_iter().find(|cue| cue.as_str() == id).unwrap())
 }
 
-fn primary(value: &Value) -> (SpellState, Vec<NativePlayerStaffContactEvent>) {
+fn primary(value: &Value) -> (SpellState, Vec<PlayerStaffContactEvent>) {
     let mut state = SpellState::default();
     let mut contacts = Vec::new();
     for actor in value["transients"].as_array().unwrap() {
         if actor["kind"] == "player-staff-contact" {
-            contacts.push(NativePlayerStaffContactEvent {
+            contacts.push(PlayerStaffContactEvent {
                 common: common(actor),
                 origin: point(&actor["origin"]),
                 impact_sound_pitches: serde_json::from_value(actor["impactSoundPitches"].clone())
@@ -221,7 +221,7 @@ fn primary(value: &Value) -> (SpellState, Vec<NativePlayerStaffContactEvent>) {
                     actor["pikeBreakSoundIndexes"].clone(),
                 )
                 .unwrap(),
-                proc_sound: Some(NativeStaffProcSound::CriticalHit),
+                proc_sound: Some(StaffProcSound::CriticalHit),
                 proc_sound_pitches: serde_json::from_value(actor["procSoundPitches"].clone())
                     .unwrap(),
                 swoosh_pitch: actor["swooshPitch"].as_f64().unwrap(),
@@ -268,24 +268,24 @@ fn primary(value: &Value) -> (SpellState, Vec<NativePlayerStaffContactEvent>) {
     (state, contacts)
 }
 
-fn secondary(value: &Value) -> NativeSecondarySimulationState {
-    let mut state = NativeSecondarySimulationState::new(1);
+fn secondary(value: &Value) -> SecondarySimulationState {
+    let mut state = SecondarySimulationState::new(1);
     state.next_event_id = value["nextEventId"].as_u64().unwrap();
     for (id, input) in value["players"].as_object().unwrap() {
         state.players.insert(
             id.clone(),
-            NativeSecondaryPlayerState {
+            SecondaryPlayerState {
                 planewalker_ticks_remaining: input["planewalkerTicksRemaining"].as_u64().unwrap(),
-                ..NativeSecondaryPlayerState::default()
+                ..SecondaryPlayerState::default()
             },
         );
     }
     for input in value["actors"].as_array().unwrap() {
-        let kind = NativeSecondaryActorKind::ALL
+        let kind = SecondaryActorKind::ALL
             .into_iter()
             .find(|kind| kind.as_str() == input["kind"].as_str().unwrap())
             .unwrap();
-        let mut actor = NativeSecondaryActorState::new(
+        let mut actor = SecondaryActorState::new(
             input["id"].as_u64().unwrap(),
             kind,
             input["ownerId"].as_str().unwrap().to_owned(),
@@ -298,8 +298,8 @@ fn secondary(value: &Value) -> NativeSecondarySimulationState {
         state.actors.push(actor);
     }
     for input in value["events"].as_array().unwrap() {
-        let mut event = NativeSecondaryEventState::new(
-            NativeSecondaryEventKind::Cast,
+        let mut event = SecondaryEventState::new(
+            SecondaryEventKind::Cast,
             "local".to_owned(),
             input["worldKey"].as_str().unwrap().to_owned(),
             0,
@@ -427,7 +427,7 @@ fn accepted_casts_actor_edges_and_owned_loops_match_the_source_synchronizer() {
         compare(&output_json(&output)["loops"], &scenario["destroy"]["loops"], "destroy loops");
     }
     for record in fixture["weld"].as_array().unwrap() {
-        let sounds: Vec<_> = native_weld_cast_sound_cues(
+        let sounds: Vec<_> = weld_cast_sound_cues(
             record["buildId"].as_u64().unwrap() as u32,
             record["variant"].as_u64().map(|value| value as u32),
         )
@@ -435,15 +435,14 @@ fn accepted_casts_actor_edges_and_owned_loops_match_the_source_synchronizer() {
         .map(|cue| cue.as_str())
         .collect();
         assert_eq!(json!(sounds), record["sounds"]);
-        let loops: Vec<_> = native_weld_loop_cues(record["buildId"].as_u64().unwrap() as u32)
+        let loops: Vec<_> = weld_loop_cues(record["buildId"].as_u64().unwrap() as u32)
             .iter()
             .map(|cue| cue.as_str())
             .collect();
         assert_eq!(json!(loops), record["loops"]);
     }
     for record in fixture["accepted"].as_array().unwrap() {
-        let output =
-            native_air_water_accepted_cast_audio(record["skillId"].as_u64().unwrap() as u32);
+        let output = air_water_accepted_cast_audio(record["skillId"].as_u64().unwrap() as u32);
         let actual = output.map_or(Value::Null, |events| {
             let mut requests = output_json(&CombatAudioOutput {
                 events,

@@ -42,8 +42,8 @@ pub fn next_xorshift_random(state: &mut u32) -> f64 {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "persistence", serde(try_from = "saved::NativeRngDocument"))]
-pub struct NativeRng {
+#[cfg_attr(feature = "persistence", serde(try_from = "saved::RngDocument"))]
+pub struct Rng {
     pub index_a: usize,
     pub index_b: usize,
     #[cfg_attr(feature = "persistence", serde(with = "crate::persistence::fixed_array"))]
@@ -53,11 +53,11 @@ pub struct NativeRng {
 
 #[cfg(feature = "persistence")]
 mod saved {
-    use super::{MASK, NativeRng, WORD_COUNT};
+    use super::{MASK, Rng, WORD_COUNT};
 
     // Deserialization must establish the ring invariants before any kernel indexes it.
     #[derive(serde::Deserialize)]
-    pub(super) struct NativeRngDocument {
+    pub(super) struct RngDocument {
         index_a: usize,
         index_b: usize,
         #[serde(with = "crate::persistence::fixed_array")]
@@ -65,10 +65,10 @@ mod saved {
         divisor: u32,
     }
 
-    impl TryFrom<NativeRngDocument> for NativeRng {
+    impl TryFrom<RngDocument> for Rng {
         type Error = &'static str;
 
-        fn try_from(value: NativeRngDocument) -> Result<Self, Self::Error> {
+        fn try_from(value: RngDocument) -> Result<Self, Self::Error> {
             if value.index_a >= WORD_COUNT || value.index_b >= WORD_COUNT {
                 return Err("random ring index is outside its 55 words");
             }
@@ -91,7 +91,7 @@ mod saved {
     }
 }
 
-impl NativeRng {
+impl Rng {
     /// `drawNativeUnitVector` preserves the native float32 angle stores before trig.
     pub fn draw_unit_vector(&mut self) -> crate::Vec2 {
         let angle = self.draw_scaled_float(360.0, false);
@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn seed_ladder_matches_the_documented_fibonacci_prefix() {
-        let rng = NativeRng::new(1);
+        let rng = Rng::new(1);
         assert_eq!(&rng.words[..8], &[1, 1, 2, 3, 5, 8, 13, 21]);
         assert_eq!(rng.index_a, 0);
         assert_eq!(rng.index_b, 31);
@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn zero_bound_consumes_no_words() {
-        let mut rng = NativeRng::new(7);
+        let mut rng = Rng::new(7);
         let before = rng.clone();
         assert_eq!(rng.draw_integer(0), 0);
         assert_eq!(rng, before);
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn negative_bound_draws_magnitude_then_sign() {
-        let mut rng = NativeRng::new(7);
+        let mut rng = Rng::new(7);
         let mut mirror = rng.clone();
         let value = rng.draw_integer(-16);
         let magnitude = mirror.draw_integer(16);

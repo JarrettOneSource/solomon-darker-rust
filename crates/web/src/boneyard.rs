@@ -16,24 +16,20 @@ use solomon_graphics::assets::Image;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::gate::GateLeaf;
 use solomon_sim::boneyard::lighting::{
-    NATIVE_DEFAULT_LIGHT_QUALITY, NativeBoneyardLightIndex, NativeBoneyardLightQuery,
-    native_region_light_target_plan,
+    BoneyardLightIndex, BoneyardLightQuery, DEFAULT_LIGHT_QUALITY, region_light_target_plan,
 };
 use solomon_sim::boneyard::presentation::{
-    BoneyardPainterEntry, BoneyardPainterProxy, TreeOcclusion, boneyard_painter_order,
-    native_gate_art,
+    BoneyardPainterEntry, BoneyardPainterProxy, TreeOcclusion, boneyard_painter_order, gate_art,
 };
 use solomon_sim::boneyard::scenery::{
-    NativeSceneryShadowGlyph, NativeSceneryShadowQuad, NativeTreeOcclusionPresentation,
-    native_tree_secondary_position,
+    NativeSceneryShadowGlyph, SceneryShadowQuad, TreeOcclusionPresentation, tree_secondary_position,
 };
 use solomon_sim::boneyard::shadows::{
-    NativeShadowCaster, NativeShadowEdge, NativeShadowProgram, native_shadow_edges,
-    native_shadow_line,
+    ShadowCaster, ShadowEdge, ShadowProgram, shadow_edges, shadow_line,
 };
 use solomon_sim::boneyard::surface::{
-    NativeArenaFieldLattice, NativeArenaFieldRange, NativeBoneyardSurfaceMesh,
-    native_arena_field_mesh_plan, native_arena_field_visible_range,
+    ArenaFieldLattice, ArenaFieldRange, BoneyardSurfaceMesh, arena_field_mesh_plan,
+    arena_field_visible_range,
 };
 use solomon_sim::boneyard::{BoneyardBounds, LoadedBoneyard};
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
@@ -166,11 +162,8 @@ impl PreparedBoneyardView {
                 }
             }
         }
-        let light_plan = native_region_light_target_plan(
-            logical_view,
-            device_resolution,
-            NATIVE_DEFAULT_LIGHT_QUALITY,
-        );
+        let light_plan =
+            region_light_target_plan(logical_view, device_resolution, DEFAULT_LIGHT_QUALITY);
         let light_target = renderer.create_render_target(light_plan.physical_side)?;
         let shadows = self
             .document
@@ -193,7 +186,7 @@ impl PreparedBoneyardView {
         Ok(BoneyardView {
             document: self.document,
             textures,
-            trees: NativeTreeOcclusionPresentation::new(trees, initial_tick),
+            trees: TreeOcclusionPresentation::new(trees, initial_tick),
             proxies,
             shadows,
             scrubs,
@@ -211,9 +204,9 @@ impl PreparedBoneyardView {
 pub struct BoneyardView {
     document: SceneryDocument,
     textures: BTreeMap<String, Texture>,
-    trees: NativeTreeOcclusionPresentation,
+    trees: TreeOcclusionPresentation,
     proxies: BTreeMap<String, usize>,
-    shadows: Vec<Option<NativeShadowCaster>>,
+    shadows: Vec<Option<ShadowCaster>>,
     scrubs: BTreeMap<usize, ScrubView>,
     light_target: RenderTarget,
     light_logical_side: f64,
@@ -221,13 +214,13 @@ pub struct BoneyardView {
     tree_frame_history: tree::TreeFrameHistory,
     puppet_target_ids: Vec<Option<String>>,
     cleanup_applied: bool,
-    field_range: Option<NativeArenaFieldRange>,
+    field_range: Option<ArenaFieldRange>,
 }
 
 pub struct BoneyardFrame<'a> {
     pub camera: &'a Camera,
     pub logical_view: Vec2,
-    pub lights: &'a NativeBoneyardLightIndex,
+    pub lights: &'a BoneyardLightIndex,
     pub reference_y: f64,
     pub gates: &'a [GateLeaf],
     pub presentation_frame: u64,
@@ -265,7 +258,7 @@ impl BoneyardView {
         resolution: f64,
         quality: f64,
     ) -> Result<(), String> {
-        let plan = native_region_light_target_plan(viewport, resolution, quality);
+        let plan = region_light_target_plan(viewport, resolution, quality);
         if plan.physical_side as f32 != self.light_target.texture.width
             || plan.logical_side != self.light_logical_side
         {
@@ -389,7 +382,7 @@ impl BoneyardView {
                     is_insertion: false,
                     manager_lane: PainterLane::Scenery,
                     registration_ordinal: registration.source_order,
-                    world_y: native_gate_art(gate.hinge, gate.tip).painter_y,
+                    world_y: gate_art(gate.hinge, gate.tip).painter_y,
                     sort_bias: registration.sort_bias,
                 },
                 proxy: None,
@@ -461,13 +454,13 @@ impl BoneyardView {
             frame.logical_view.x / frame.camera.scale,
             frame.logical_view.y / frame.camera.scale,
         );
-        let range = native_arena_field_visible_range(lattice, view)
+        let range = arena_field_visible_range(lattice, view)
             .expect("active camera has finite field bounds");
         if self.field_range == Some(range) {
             return;
         }
         self.document.ground = MeshDocument::native(
-            &native_arena_field_mesh_plan(lattice, range, self.document.field_mode)
+            &arena_field_mesh_plan(lattice, range, self.document.field_mode)
                 .expect("visible native field fits the checked view limit"),
         );
         self.field_range = Some(range);
@@ -583,7 +576,7 @@ impl BoneyardView {
             draw_shadow_edges(
                 renderer,
                 frame.camera,
-                &native_shadow_edges(caster, frame.lights, frame.presentation_frame),
+                &shadow_edges(caster, frame.lights, frame.presentation_frame),
             );
         }
         let material = SceneryMaterial { alpha, tint: 0xffffff, diffuse: false, hit_alpha: None };
@@ -637,23 +630,17 @@ impl BoneyardView {
         let light_position =
             tree.map(|tree| tree.position).or_else(|| layer.light_position.map(Into::into));
         let factors = if !frame.complex_lighting || layer.band == SceneryBand::Base {
-            solomon_sim::boneyard::lighting::NativeBoneyardLightFactors {
-                radial: 1.0,
-                elevated: 1.0,
-            }
+            solomon_sim::boneyard::lighting::BoneyardLightFactors { radial: 1.0, elevated: 1.0 }
         } else {
             light_position.map_or(
-                solomon_sim::boneyard::lighting::NativeBoneyardLightFactors {
+                solomon_sim::boneyard::lighting::BoneyardLightFactors {
                     radial: 1.0,
                     elevated: 1.0,
                 },
                 |position| {
                     frame.lights.factors_at(
                         position,
-                        NativeBoneyardLightQuery {
-                            camera_origin: frame.camera.origin,
-                            ambient: 0.0,
-                        },
+                        BoneyardLightQuery { camera_origin: frame.camera.origin, ambient: 0.0 },
                     )
                 },
             )
@@ -702,7 +689,7 @@ impl BoneyardView {
         if layer.band == SceneryBand::Proxy
             && let Some(tree) = tree
         {
-            let position = native_tree_secondary_position(
+            let position = tree_secondary_position(
                 tree.position,
                 BoneyardBounds::new(
                     frame.camera.origin.x,
@@ -796,7 +783,7 @@ impl BoneyardView {
                         if frame.complex_lighting {
                             fround(frame.lights.surface_scalar_with_query(
                                 (*point).into(),
-                                NativeBoneyardLightQuery {
+                                BoneyardLightQuery {
                                     camera_origin: frame.camera.origin,
                                     ambient: 0.0,
                                 },
@@ -812,10 +799,7 @@ impl BoneyardView {
                 let start_scalar = if frame.complex_lighting {
                     frame.lights.surface_scalar_with_query(
                         (*start).into(),
-                        NativeBoneyardLightQuery {
-                            camera_origin: frame.camera.origin,
-                            ambient: 0.0,
-                        },
+                        BoneyardLightQuery { camera_origin: frame.camera.origin, ambient: 0.0 },
                     )
                 } else {
                     1.0
@@ -823,10 +807,7 @@ impl BoneyardView {
                 let end_scalar = if frame.complex_lighting {
                     frame.lights.surface_scalar_with_query(
                         (*end).into(),
-                        NativeBoneyardLightQuery {
-                            camera_origin: frame.camera.origin,
-                            ambient: 0.0,
-                        },
+                        BoneyardLightQuery { camera_origin: frame.camera.origin, ambient: 0.0 },
                     )
                 } else {
                     1.0
@@ -883,16 +864,16 @@ impl BoneyardView {
     }
 
     fn draw_gate(&self, renderer: &mut Renderer, frame: &BoneyardFrame<'_>, gate: &GateLeaf) {
-        let art = native_gate_art(gate.hinge, gate.tip);
+        let art = gate_art(gate.hinge, gate.tip);
         let midpoint =
             Vec2::new((gate.hinge.x + gate.tip.x) / 2.0, (gate.hinge.y + gate.tip.y) / 2.0);
         let root = if gate.tip.y < midpoint.y { midpoint } else { gate.tip };
         if frame.complex_lighting && frame.complex_shadows {
-            let caster = NativeShadowCaster {
+            let caster = ShadowCaster {
                 id: format!("gate:{}:{}", gate.fence_eid, gate.side),
                 position: root,
                 outline: Vec::new(),
-                program: Some(NativeShadowProgram::FenceGrate {
+                program: Some(ShadowProgram::FenceGrate {
                     start: gate.hinge,
                     end: gate.tip,
                     gate: true,
@@ -901,13 +882,13 @@ impl BoneyardView {
             draw_shadow_edges(
                 renderer,
                 frame.camera,
-                &native_shadow_edges(&caster, frame.lights, frame.presentation_frame),
+                &shadow_edges(&caster, frame.lights, frame.presentation_frame),
             );
         }
         let shade = packed_light_scalar(if frame.complex_lighting {
             let factors = frame.lights.factors_at(
                 root,
-                NativeBoneyardLightQuery { camera_origin: frame.camera.origin, ambient: 0.0 },
+                BoneyardLightQuery { camera_origin: frame.camera.origin, ambient: 0.0 },
             );
             fround(factors.radial * factors.elevated)
         } else {
@@ -924,7 +905,7 @@ impl BoneyardView {
             BlendMode::Normal,
         );
         for [start, end] in art.lines {
-            draw_shadow_edges(renderer, frame.camera, &[native_shadow_line(start, end, 3.0, 1.0)]);
+            draw_shadow_edges(renderer, frame.camera, &[shadow_line(start, end, 3.0, 1.0)]);
         }
         let sprite = &self.document.sprites["gate-hinge"];
         let hinge = &self.textures[&sprite.image];
@@ -1002,7 +983,7 @@ fn project(camera: &Camera, point: Vec2) -> [f32; 2] {
     ]
 }
 
-fn draw_shadow_edges(renderer: &mut Renderer, camera: &Camera, edges: &[NativeShadowEdge]) {
+fn draw_shadow_edges(renderer: &mut Renderer, camera: &Camera, edges: &[ShadowEdge]) {
     let mut triangles = Vec::with_capacity(edges.len() * 2);
     for edge in edges {
         let vertex = |position, alpha| Vertex {
@@ -1027,7 +1008,7 @@ struct SceneryDocument {
     gates: Vec<GateDocument>,
     tree_inputs: Vec<TreeDocument>,
     ground: MeshDocument,
-    field_lattice: NativeArenaFieldLattice,
+    field_lattice: ArenaFieldLattice,
     field_mode: u8,
     roads: Vec<RoadDocument>,
     sprites: BTreeMap<String, SpriteDocument>,
@@ -1086,7 +1067,7 @@ impl BoundsDocument {
     }
 
     fn points(points: &[Vec2]) -> Self {
-        let bounds = solomon_sim::boneyard::scenery::native_scenery_points_bounds(points)
+        let bounds = solomon_sim::boneyard::scenery::scenery_points_bounds(points)
             .expect("a scenery primitive has vertices");
         Self { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
     }
@@ -1182,7 +1163,7 @@ struct MeshDocument {
 }
 
 impl MeshDocument {
-    fn native(mesh: &NativeBoneyardSurfaceMesh) -> Self {
+    fn native(mesh: &BoneyardSurfaceMesh) -> Self {
         Self {
             positions: mesh.positions.iter().flat_map(|point| [point.x, point.y]).collect(),
             uvs: mesh.uvs.iter().flat_map(|point| [point.x, point.y]).collect(),
@@ -1204,7 +1185,7 @@ impl MeshDocument {
     }
 
     fn line(start: Vec2, end: Vec2, width: f64) -> Self {
-        let edge = native_shadow_line(start, end, width, 1.0);
+        let edge = shadow_line(start, end, width, 1.0);
         let mut mesh = Self::quad(
             [edge.base_start, edge.base_end, edge.tip_end, edge.tip_start],
             [[0.0; 2]; 4],
@@ -1233,14 +1214,14 @@ struct ShadowDocument {
 }
 
 impl ShadowDocument {
-    fn caster(&self) -> NativeShadowCaster {
-        NativeShadowCaster {
+    fn caster(&self) -> ShadowCaster {
+        ShadowCaster {
             id: self.id.clone(),
             position: self.position.into(),
             outline: self.outline.iter().copied().map(Into::into).collect(),
             program: self.program.as_ref().map(|program| match program {
                 ShadowProgramDocument::BrokenFenceGrate { start, end, step, count } => {
-                    NativeShadowProgram::BrokenFenceGrate {
+                    ShadowProgram::BrokenFenceGrate {
                         start: (*start).into(),
                         end: (*end).into(),
                         step: (*step).into(),
@@ -1248,17 +1229,17 @@ impl ShadowDocument {
                     }
                 }
                 ShadowProgramDocument::FenceGrate { start, end, construction } => {
-                    NativeShadowProgram::FenceGrate {
+                    ShadowProgram::FenceGrate {
                         start: (*start).into(),
                         end: (*end).into(),
                         gate: construction == "gate",
                     }
                 }
                 ShadowProgramDocument::Rails { start, end } => {
-                    NativeShadowProgram::Rails { start: (*start).into(), end: (*end).into() }
+                    ShadowProgram::Rails { start: (*start).into(), end: (*end).into() }
                 }
                 ShadowProgramDocument::Wall { start, end } => {
-                    NativeShadowProgram::Wall { start: (*start).into(), end: (*end).into() }
+                    ShadowProgram::Wall { start: (*start).into(), end: (*end).into() }
                 }
             }),
         }

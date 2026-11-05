@@ -2,16 +2,16 @@
 //! `client/boneyard-presentation-timeline.ts::interpolatePlayer`.
 
 use solomon_sim::combat::PlayerLifeState;
-use solomon_sim::hub::college_intro::NativeCollegeIntroPhase;
+use solomon_sim::hub::college_intro::CollegeIntroPhase;
 use solomon_sim::hub::regions::{
     HUB_COLLEGE_INTRO_FADE_RATE, HUB_OUTGOING_FADE_RATE, HubTransitionPhase, hub_incoming_fade_rate,
 };
-use solomon_sim::profile::interpolate_native_harden_coating;
+use solomon_sim::profile::interpolate_harden_coating;
 use solomon_sim::session::{GameSession, SessionParticipant};
 
 // Source native-college-intro.ts exports these values; its sim tick stores the same literals.
-const NATIVE_COLLEGE_COVER_FADE_RATE: f64 = 0.0005_f32 as f64;
-const NATIVE_COLLEGE_TITLE_CURSOR_STEP: f64 = 0.005200000014156103;
+const COLLEGE_COVER_FADE_RATE: f64 = 0.0005_f32 as f64;
+const COLLEGE_TITLE_CURSOR_STEP: f64 = 0.005200000014156103;
 
 use super::PresentationClocks;
 use super::math::{interpolate_members, lerp, lerp_cycle, lerp_vec};
@@ -76,7 +76,7 @@ fn project_player(
         lerp(previous.primary_cast.ether_blast_charge, next.primary_cast.ether_blast_charge, blend);
     output.lighting.overlay_effect_phase =
         lerp(first.lighting.overlay_effect_phase, second.lighting.overlay_effect_phase, blend);
-    output.player.skill_runtime.harden.coating = interpolate_native_harden_coating(
+    output.player.skill_runtime.harden.coating = interpolate_harden_coating(
         first.player.skill_runtime.harden.coating,
         second.player.skill_runtime.harden.coating,
         previous.primary_cast.cast_sequence == next.primary_cast.cast_sequence,
@@ -211,12 +211,12 @@ pub(super) fn project_local(
     let Some(source) = newest.participants.get(local_id) else { return };
     let mut participant = source.clone();
     if let Some(intro) = &mut participant.college_intro
-        && intro.phase == NativeCollegeIntroPhase::CourtyardWalk
+        && intro.phase == CollegeIntroPhase::CourtyardWalk
     {
         intro.cover_alpha =
-            (intro.cover_alpha - NATIVE_COLLEGE_COVER_FADE_RATE * elapsed_ticks).clamp(0.0, 1.0);
+            (intro.cover_alpha - COLLEGE_COVER_FADE_RATE * elapsed_ticks).clamp(0.0, 1.0);
         intro.title_cursor =
-            (intro.title_cursor + NATIVE_COLLEGE_TITLE_CURSOR_STEP * elapsed_ticks).clamp(0.0, 5.0);
+            (intro.title_cursor + COLLEGE_TITLE_CURSOR_STEP * elapsed_ticks).clamp(0.0, 5.0);
     }
     if let Some(transition) = &mut participant.wizard.transition {
         let rate = match transition.phase {

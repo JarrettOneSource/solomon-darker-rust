@@ -1,12 +1,10 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::lighting::native_boss_spell_light;
-use solomon_sim::enemies::boss_spell::{
-    BossSpellKind, BossSpellLight, BossSpellOwner, NativeBossSpell,
-};
-use solomon_sim::enemies::faculty_spells::NativeDireFireState;
+use solomon_sim::boneyard::lighting::boss_spell_light;
+use solomon_sim::enemies::boss_spell::{BossSpell, BossSpellKind, BossSpellLight, BossSpellOwner};
+use solomon_sim::enemies::faculty_spells::DireFireState;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::spells::fire::{CreateNativeFirePatchOptions, create_native_fire_patch};
+use solomon_sim::spells::fire::{CreateFirePatchOptions, create_fire_patch};
 use solomon_sim::spells::model::FirePatchType;
 
 #[path = "support/website_rows.rs"]
@@ -14,7 +12,7 @@ mod website_rows;
 
 // The factory reads only age, alpha, light and identity. Other canonical payload
 // fields are inert here; full actor births and ticks have their own source replay.
-fn spell(value: &Value) -> NativeBossSpell {
+fn spell(value: &Value) -> BossSpell {
     let alpha = value["alpha"].as_f64().unwrap();
     let kind = match value["kind"].as_str().unwrap() {
         "ultra-banish" => BossSpellKind::UltraBanish {
@@ -48,8 +46,8 @@ fn spell(value: &Value) -> NativeBossSpell {
             spawn_imps: false,
         },
         "green-fire" => {
-            let mut fire = create_native_fire_patch(
-                CreateNativeFirePatchOptions {
+            let mut fire = create_fire_patch(
+                CreateFirePatchOptions {
                     atlas_phase_step: None,
                     burn_damage: 0.0,
                     damage: 0.0,
@@ -138,7 +136,7 @@ fn spell(value: &Value) -> NativeBossSpell {
             scale: 1.0,
         },
         "tragic-circle" => BossSpellKind::TragicCircle { remaining_ticks: 0 },
-        "dire-fire" => BossSpellKind::DireFire(NativeDireFireState {
+        "dire-fire" => BossSpellKind::DireFire(DireFireState {
             alpha,
             glow: false,
             phase: 0.0,
@@ -151,7 +149,7 @@ fn spell(value: &Value) -> NativeBossSpell {
         }),
         kind => panic!("uncovered boss light kind {kind}"),
     };
-    NativeBossSpell {
+    BossSpell {
         owner: BossSpellOwner {
             age_ticks: value["ageTicks"].as_u64().unwrap(),
             damage: 0.0,
@@ -177,7 +175,7 @@ fn boss_light_providers_preserve_private_frame_rng_and_shadow_disposition() {
         serde_json::from_str(include_str!("fixtures/website/boss-light-goldens.json")).unwrap();
     for case in fixture["cases"].as_array().unwrap() {
         let spell = spell(&case["spell"]);
-        let actual = native_boss_spell_light(
+        let actual = boss_spell_light(
             &spell,
             case["presentationFrame"].as_u64().unwrap(),
             case["multipleShadows"].as_bool().unwrap(),

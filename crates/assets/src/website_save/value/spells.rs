@@ -146,14 +146,14 @@ pub(super) fn prepare(name: &str, value: &mut Value) -> Result<(), String> {
         }
     }
     if value["flameVisual"]["kind"].as_str() == Some("native-birth-v1") {
-        use solomon_sim::spells::weld::{NativeFlameChannelBirth, NativeFlameFadeBirth};
+        use solomon_sim::spells::weld::{FlameChannelBirth, FlameFadeBirth};
         let source = value["flameVisual"].clone();
         let body = match name {
             "NativeWeldChannelActorState" => {
-                serde_json::to_value(super::decode::<NativeFlameChannelBirth>(source)?)
+                serde_json::to_value(super::decode::<FlameChannelBirth>(source)?)
             }
             "NativeWeldFlameLashFadeState" => {
-                serde_json::to_value(super::decode::<NativeFlameFadeBirth>(source)?)
+                serde_json::to_value(super::decode::<FlameFadeBirth>(source)?)
             }
             _ => return Ok(()),
         }

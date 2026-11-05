@@ -13,7 +13,7 @@ use solomon_assets::boneyard::BoneyardCatalog;
 use solomon_assets::navigation::decode_navigation;
 use solomon_sim::boneyard::loot::BoneyardLootDeathProgram;
 use solomon_sim::boneyard::navigation::NavigationSet;
-use solomon_sim::boneyard::tutorial::NativeTutorialStage;
+use solomon_sim::boneyard::tutorial::TutorialStage;
 use solomon_sim::boneyard::world::{
     BoneyardPlayerCombatStatus, BoneyardTutorialPlayer, BoneyardWorldParticipant,
     BoneyardWorldTickContext, BoneyardWorldTickResult,
@@ -24,12 +24,12 @@ use solomon_sim::combat::PlayerCombatState;
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::enemies::model::{EnemyDamageRequest, EnemyLifeState, EnemyReward};
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
-use solomon_sim::loot::{NativeBonusKind, NativeLootDropKind, NativeLootModifiers, NativeOrbKind};
+use solomon_sim::loot::{BonusKind, LootDropKind, LootModifiers, OrbKind};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use solomon_sim::profile::WizardElement;
-use solomon_sim::secondary::{NativeSecondaryAbilityId, NativeSecondaryPlayerState};
+use solomon_sim::secondary::{SecondaryAbilityId, SecondaryPlayerState};
 use solomon_sim::spells::boneyard::boneyard_primary_scenery_targets;
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 
 fn point(position: Vec2) -> Value {
     json!([position.x, position.y])
@@ -49,7 +49,7 @@ fn solomon_snapshot(world: &BoneyardWorld) -> Value {
     })))
 }
 
-fn rng(state: &NativeRng) -> Value {
+fn rng(state: &Rng) -> Value {
     json!({ "indexA": state.index_a, "indexB": state.index_b, "words": state.words.as_slice() })
 }
 
@@ -61,27 +61,27 @@ fn registration(value: PainterRegistration) -> Value {
     json!([lane, value.registration_ordinal])
 }
 
-fn loot_kind(kind: NativeLootDropKind) -> &'static str {
+fn loot_kind(kind: LootDropKind) -> &'static str {
     match kind {
-        NativeLootDropKind::Bonus => "bonus",
-        NativeLootDropKind::Gold => "gold",
-        NativeLootDropKind::Orb => "orb",
-        NativeLootDropKind::Sack => "sack",
+        LootDropKind::Bonus => "bonus",
+        LootDropKind::Gold => "gold",
+        LootDropKind::Orb => "orb",
+        LootDropKind::Sack => "sack",
     }
 }
 
-fn orb_kind(kind: NativeOrbKind) -> &'static str {
+fn orb_kind(kind: OrbKind) -> &'static str {
     match kind {
-        NativeOrbKind::Health => "health",
-        NativeOrbKind::Mana => "mana",
+        OrbKind::Health => "health",
+        OrbKind::Mana => "mana",
     }
 }
 
-fn bonus_kind(kind: NativeBonusKind) -> u8 {
+fn bonus_kind(kind: BonusKind) -> u8 {
     match kind {
-        NativeBonusKind::SkillChoice => 0,
-        NativeBonusKind::SkillRank => 1,
-        NativeBonusKind::DamageX4 => 2,
+        BonusKind::SkillChoice => 0,
+        BonusKind::SkillRank => 1,
+        BonusKind::DamageX4 => 2,
     }
 }
 
@@ -157,7 +157,7 @@ fn snapshot(
                 pickup.actor_id,
                 pickup.amount,
                 pickup.bonus_kind.map(bonus_kind),
-                pickup.item.as_ref().map(|item| item.native_type_id),
+                pickup.item.as_ref().map(|item| item.type_id),
                 pickup.item.as_ref().map(|item| &item.name),
                 loot_kind(pickup.kind),
                 pickup.orb_kind.map(orb_kind),
@@ -191,14 +191,14 @@ fn snapshot(
         "tutorial": world.tutorial.as_ref().map(tutorial_snapshot::state_row),
         "actors": actors, "projectiles": projectiles,
         "counters": [store.next_actor_id, store.next_event_id, store.next_projectile_id,
-            store.next_death_effect_id, store.next_native_cell_binding_order, store.next_native_registration_order],
+            store.next_death_effect_id, store.next_cell_binding_order, store.next_registration_order],
         "enemyRng": [json!(store.rng_state), rng(&store.steering_rng), rng(&store.locomotion_rng), rng(&store.head_facing_rng)],
         "loot": { "sharedRng": rng(&world.loot.shared_rng), "nextActorId": world.loot.next_actor_id,
             "nextItemId": world.loot.next_item_id, "lastSuccessfulItemLevel": world.loot.last_successful_item_level,
             "nextKeyDropLevel": world.loot.next_key_drop_level,
             "actors": world.loot.actors.iter().map(|actor| json!([actor.id, loot_kind(actor.kind),
                 point(actor.position), actor.age_ticks, actor.amount, actor.orb_value,
-                actor.item.as_ref().map(|item|item.native_type_id), actor.item.as_ref().map(|item|&item.name),
+                actor.item.as_ref().map(|item|item.type_id), actor.item.as_ref().map(|item|&item.name),
                 actor.spawn_tick, registration(actor.painter_registration)])).collect::<Vec<_>>(),
             "effects": world.loot.effects.iter().map(|effect| json!([effect.id, effect.age_ticks,
                 effect.entry, effect.alpha])).collect::<Vec<_>>() },
@@ -279,10 +279,10 @@ fn step(
     if world.tutorial.is_some() {
         let combat = PlayerCombatState::new();
         let economy = HubEconomyState::new(0, WizardElement::Ether);
-        let secondary = NativeSecondaryPlayerState {
+        let secondary = SecondaryPlayerState {
             cast_sequence: 1,
-            last_skill_id: Some(NativeSecondaryAbilityId::AcidRain),
-            ..NativeSecondaryPlayerState::default()
+            last_skill_id: Some(SecondaryAbilityId::AcidRain),
+            ..SecondaryPlayerState::default()
         };
         external.extend(
             world
@@ -353,7 +353,7 @@ fn step(
                     advanced_unlocks: &[false; 8],
                     inventory_has_health_potion: false,
                     level: 1,
-                    loot_modifiers: NativeLootModifiers::default(),
+                    loot_modifiers: LootModifiers::default(),
                     owned_recipe_indexes: &[],
                 },
                 movement,
@@ -426,7 +426,7 @@ fn real_world_ticks_preserve_wave_births_reward_loot_entropy_and_tutorial_progre
             tutorial.intro_delay_ticks_remaining = 0;
             tutorial.intro_fade = 0.0;
             tutorial.intro_movement_ticks_remaining = 0;
-            tutorial.stage = NativeTutorialStage::CastAcidRain;
+            tutorial.stage = TutorialStage::CastAcidRain;
         }
         let mut order = WorldPainterOrder { next_actor_ordinal: 3, next_transient_ordinal: 0 };
         let frames = case["frames"].as_array().unwrap();

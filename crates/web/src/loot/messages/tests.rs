@@ -4,7 +4,7 @@ use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::economy::{HubActionFeedback, HubActionFeedbackAction};
 use solomon_sim::enemies::model::EnemyEvent;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::NativeSecondaryEventState;
+use solomon_sim::secondary::SecondaryEventState;
 use solomon_sim::session::GameSessionOptions;
 
 #[test]
@@ -86,7 +86,7 @@ fn book(sequence: u64) -> HubActionFeedback {
         dye_session_id: None,
         reason: None,
         sequence,
-        skill_book_outcome: Some(NativeSkillBookOutcome::Rank { skill_id: Some(8) }),
+        skill_book_outcome: Some(SkillBookOutcome::Rank { skill_id: Some(8) }),
         transfer_direction: None,
         transfer_gesture: None,
         unforge_outcome: None,
@@ -98,9 +98,9 @@ fn cheat(id: usize, tick: u64, player: Option<Option<&str>>) -> EnemyEvent {
     event.target_player_id = player.map(|player| player.map(String::from));
     event
 }
-fn overload(id: u64, tick: u64, player: &str, run_id: &str) -> NativeSecondaryEventState {
-    let mut event = NativeSecondaryEventState::new(
-        NativeSecondaryEventKind::Overload,
+fn overload(id: u64, tick: u64, player: &str, run_id: &str) -> SecondaryEventState {
+    let mut event = SecondaryEventState::new(
+        SecondaryEventKind::Overload,
         player.into(),
         format!("boneyard:{run_id}"),
         tick,
@@ -337,7 +337,7 @@ fn college_book_feedback_uses_the_same_clock_and_rejects_invalid_source_skill_id
         .action_feedback
         .as_mut()
         .unwrap()
-        .skill_book_outcome = Some(NativeSkillBookOutcome::Rank { skill_id: Some(7) });
+        .skill_book_outcome = Some(SkillBookOutcome::Rank { skill_id: Some(7) });
     notifications.update(&session, "local", true).unwrap();
     assert_eq!(keys(&notifications), ["book:-1"]);
     session

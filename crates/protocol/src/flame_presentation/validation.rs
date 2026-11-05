@@ -8,12 +8,10 @@ use solomon_sim::Vec2;
 use solomon_sim::float::{fround, hypot};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::spells::weld::{
-    NATIVE_FLAME_MAXIMUM_PATH_POINTS, NATIVE_FLAME_MAXIMUM_RIBBON_PAIRS, NativeFlameChannelRole,
-    NativeFlameChannelVisual, NativeFlameFadeVisual, NativeFlameLashFactoryInput,
-    NativeFlameLashGeometryKind, NativeFlameRibbonBirth, NativeWeldFlameLashFadeVariant,
-    native_camera_magnitude_squared, native_flame_fade_alpha, native_flame_lash_birth_phase,
-    native_flame_lash_factory_geometry, native_flame_lash_path_points,
-    native_flame_lash_ribbon_pair_count,
+    FLAME_MAXIMUM_PATH_POINTS, FLAME_MAXIMUM_RIBBON_PAIRS, FlameChannelRole, FlameChannelVisual,
+    FlameFadeVisual, FlameLashFactoryInput, FlameLashGeometryKind, FlameRibbonBirth,
+    WeldFlameLashFadeVariant, camera_magnitude_squared, flame_fade_alpha, flame_lash_birth_phase,
+    flame_lash_factory_geometry, flame_lash_path_points, flame_lash_ribbon_pair_count,
 };
 
 use super::{
@@ -103,7 +101,7 @@ fn recipe(value: &FlamePresentationRecipe, birth_tick: u64, field: &str) -> Resu
             variant,
             painter_registration,
         } => {
-            let NativeFlameFadeVisual::NativeBirth(birth) = birth else {
+            let FlameFadeVisual::Birth(birth) = birth else {
                 return Err(format!("{field} cannot replay an incomplete fade"));
             };
             if birth.birth_alpha != 0.5 && birth.birth_alpha != 1.0 {
@@ -114,7 +112,7 @@ fn recipe(value: &FlamePresentationRecipe, birth_tick: u64, field: &str) -> Resu
                 WorldManagerLane::Transient,
                 &format!("{field}.painterRegistration"),
             )?;
-            let source = *variant == NativeWeldFlameLashFadeVariant::Source;
+            let source = *variant == WeldFlameLashFadeVariant::Source;
             positive(*alpha_step, &format!("{field}.alphaStep"))?;
             if *alpha_step != 0.4_f32 as f64
                 && *alpha_step != fround(if source { 0.1 } else { 0.2 })
@@ -122,7 +120,7 @@ fn recipe(value: &FlamePresentationRecipe, birth_tick: u64, field: &str) -> Resu
                 return Err(format!("{field}.alphaStep is not a native Flame fade branch"));
             }
             if (source && birth.birth_alpha != 0.5)
-                || (*variant == NativeWeldFlameLashFadeVariant::Chain && birth.birth_alpha != 1.0)
+                || (*variant == WeldFlameLashFadeVariant::Chain && birth.birth_alpha != 1.0)
             {
                 return Err(format!("{field} violates its native Flame birth-update clock"));
             }
@@ -141,7 +139,7 @@ fn recipe(value: &FlamePresentationRecipe, birth_tick: u64, field: &str) -> Resu
             }
             point(*position, &format!("{field}.position"))?;
             let mut lifetime = 0;
-            while native_flame_fade_alpha(birth.birth_alpha, *alpha_step, lifetime) > 0.0 {
+            while flame_fade_alpha(birth.birth_alpha, *alpha_step, lifetime) > 0.0 {
                 lifetime += 1;
             }
             Ok(lifetime)
@@ -150,26 +148,26 @@ fn recipe(value: &FlamePresentationRecipe, birth_tick: u64, field: &str) -> Resu
 }
 
 fn channel(
-    visual: &NativeFlameChannelVisual,
+    visual: &FlameChannelVisual,
     enhanced_effects: bool,
     weak: bool,
     birth_tick: u64,
     field: &str,
 ) -> Result<(), String> {
-    let NativeFlameChannelVisual::NativeBirth(birth) = visual else {
+    let FlameChannelVisual::Birth(birth) = visual else {
         return Err(format!(
             "{} cannot replay a suppressed legacy ribbon",
             field.trim_end_matches(".birth")
         ));
     };
-    let main = birth.role == NativeFlameChannelRole::Main;
+    let main = birth.role == FlameChannelRole::Main;
     if main && !weak {
         let camera = birth
             .camera_displacement
             .ok_or_else(|| format!("{field}.cameraDisplacement must be an object"))?;
         native_float(camera.x, &format!("{field}.cameraDisplacement.x"), -4.0, 4.0)?;
         native_float(camera.y, &format!("{field}.cameraDisplacement.y"), -4.0, 4.0)?;
-        if native_camera_magnitude_squared(camera) > 16.000004_f32 as f64 {
+        if camera_magnitude_squared(camera) > 16.000004_f32 as f64 {
             return Err(format!("{field}.cameraDisplacement exceeds the native magnitude"));
         }
     } else if birth.camera_displacement.is_some() {
@@ -201,13 +199,13 @@ fn channel(
     let spacing = if enhanced_effects { 7.0 } else { 30.0 };
     if !first_leg.is_finite()
         || !second_leg.is_finite()
-        || first_leg > NATIVE_FLAME_MAXIMUM_RIBBON_PAIRS as f64 * spacing * 2.0
-        || first_leg > (NATIVE_FLAME_MAXIMUM_PATH_POINTS + 1) as f64 * 100.0
-        || second_leg + 15.0 > (NATIVE_FLAME_MAXIMUM_PATH_POINTS + 1) as f64 * 100.0
+        || first_leg > FLAME_MAXIMUM_RIBBON_PAIRS as f64 * spacing * 2.0
+        || first_leg > (FLAME_MAXIMUM_PATH_POINTS + 1) as f64 * 100.0
+        || second_leg + 15.0 > (FLAME_MAXIMUM_PATH_POINTS + 1) as f64 * 100.0
     {
         return Err(format!("{field} exceeds the Flame geometry work budget"));
     }
-    let geometry = native_flame_lash_factory_geometry(NativeFlameLashFactoryInput {
+    let geometry = flame_lash_factory_geometry(FlameLashFactoryInput {
         start: birth.start,
         control: birth.control,
         end: birth.end,
@@ -232,12 +230,12 @@ fn channel(
         return Err(format!("{field} has non-finite native Flame geometry"));
     }
     match (geometry.kind, birth.ribbon) {
-        (NativeFlameLashGeometryKind::Short, NativeFlameRibbonBirth::Short { width_factor }) => {
+        (FlameLashGeometryKind::Short, FlameRibbonBirth::Short { width_factor }) => {
             native_float(width_factor, &format!("{field}.ribbon.widthFactor"), 0.75, 1.0)?;
         }
-        (NativeFlameLashGeometryKind::Long, NativeFlameRibbonBirth::Long { phase_degrees }) => {
+        (FlameLashGeometryKind::Long, FlameRibbonBirth::Long { phase_degrees }) => {
             finite(phase_degrees, &format!("{field}.ribbon.phaseDegrees"))?;
-            if phase_degrees != native_flame_lash_birth_phase(birth_tick) {
+            if phase_degrees != flame_lash_birth_phase(birth_tick) {
                 return Err(format!("{field}.ribbon.phaseDegrees does not match its birth clock"));
             }
         }
@@ -250,9 +248,9 @@ fn channel(
         if weak { 0.0625 } else { 0.25 },
         if weak { 0.25 } else { 1.0 },
     )?;
-    if path.radius_factors.len() > NATIVE_FLAME_MAXIMUM_PATH_POINTS {
+    if path.radius_factors.len() > FLAME_MAXIMUM_PATH_POINTS {
         return Err(format!(
-            "{field}.path.radiusFactors may contain at most {NATIVE_FLAME_MAXIMUM_PATH_POINTS} entries"
+            "{field}.path.radiusFactors may contain at most {FLAME_MAXIMUM_PATH_POINTS} entries"
         ));
     }
     for (index, factor) in path.radius_factors.iter().enumerate() {
@@ -269,13 +267,9 @@ fn channel(
     {
         return Err(format!("{field}.path.miscAppendOrdinal does not match its factory role"));
     }
-    native_flame_lash_ribbon_pair_count(
-        &geometry,
-        enhanced_effects,
-        NATIVE_FLAME_MAXIMUM_RIBBON_PAIRS,
-    )
-    .map_err(|_| format!("{field} exceeds the Flame geometry work budget"))?;
-    let points = native_flame_lash_path_points(&geometry, NATIVE_FLAME_MAXIMUM_PATH_POINTS)
+    flame_lash_ribbon_pair_count(&geometry, enhanced_effects, FLAME_MAXIMUM_RIBBON_PAIRS)
+        .map_err(|_| format!("{field} exceeds the Flame geometry work budget"))?;
+    let points = flame_lash_path_points(&geometry, FLAME_MAXIMUM_PATH_POINTS)
         .map_err(|_| format!("{field} exceeds the Flame geometry work budget"))?;
     if points.len() != path.radius_factors.len() {
         return Err(format!(

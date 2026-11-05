@@ -40,10 +40,10 @@ use solomon_sim::Vec2;
 use solomon_sim::appearance::StarterEquipmentAppearance;
 use solomon_sim::audio::MusicScene;
 use solomon_sim::audio::combat::{CombatAudioCursor, CombatAudioFrame, CombatAudioPlayer};
-use solomon_sim::belt::{NativeBeltEntry, NativeBeltPotionKind, native_belt_potion_projection};
+use solomon_sim::belt::{BeltPotionKind, NativeBeltEntry, belt_potion_projection};
 use solomon_sim::boneyard::BONEYARD_CAMERA_SCALE;
 use solomon_sim::boneyard::LoadedBoneyard;
-use solomon_sim::boneyard::lighting::NativeBoneyardLightIndex;
+use solomon_sim::boneyard::lighting::BoneyardLightIndex;
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::economy::{HubInventoryAction, HubItemKind, HubTraderId};
 use solomon_sim::game_run::GameRunPhase;
@@ -59,8 +59,7 @@ use solomon_sim::hub::teacher::hub_teacher_draw_plan;
 use solomon_sim::hub::{HUB_CAMERA_SCALE, hub_region_camera_origin_for_view};
 use solomon_sim::hud::{HudBeltEntry, HudItemIcon, HudState};
 use solomon_sim::input::{
-    GameplayAction, GameplayAim, GameplayInputSample, project_native_stick_aim,
-    project_native_world_pointer,
+    GameplayAction, GameplayAim, GameplayInputSample, project_stick_aim, project_world_pointer,
 };
 use solomon_sim::menu::loading::{MatchLoadingFlow, MatchLoadingStage, MatchLoadingState};
 use solomon_sim::painter::overlays::PainterOwnerOverlay;
@@ -172,7 +171,7 @@ pub struct Game {
     fullscreen: FullscreenControl,
     audio: GameAudio,
     combat_audio: Option<CombatAudioCursor>,
-    level_up: BTreeMap<String, solomon_sim::player_presentation::NativeLevelUpPresentationTracker>,
+    level_up: BTreeMap<String, solomon_sim::player_presentation::LevelUpPresentationTracker>,
     hall_entries: Vec<solomon_sim::hall_of_fame::HallOfFameEntry>,
     archived_hall_run: Option<String>,
     tutorial_ui: TutorialUi,
@@ -465,10 +464,8 @@ impl Game {
         )?;
         let compact_masks = crate::compact_masks::CompactMaskView::new(&loaded.scene);
         let bounds = loaded.scene.bounds;
-        let lights = NativeBoneyardLightIndex::new(Vec2::new(
-            bounds.x + bounds.width,
-            bounds.y + bounds.height,
-        ));
+        let lights =
+            BoneyardLightIndex::new(Vec2::new(bounds.x + bounds.width, bounds.y + bounds.height));
         let weather = crate::boneyard_weather::BoneyardWeatherView::new(
             &self.renderer,
             initial_tick,
@@ -880,7 +877,7 @@ impl Game {
                     solomon_sim::audio::AudioOptions::default(),
                 ))?;
                 self.apply_panel_action(
-                    PlayerPanelAction::Belt(solomon_sim::belt::NativeBeltCommand::BindSkill {
+                    PlayerPanelAction::Belt(solomon_sim::belt::BeltCommand::BindSkill {
                         skill_id: None,
                         slot,
                     }),
@@ -1231,12 +1228,12 @@ impl Game {
                 && (self.menu.is_blocking() || self.panels.is_open()))
     }
 
-    fn tutorial_access(&self) -> Option<solomon_sim::boneyard::tutorial::NativeTutorialHudAccess> {
+    fn tutorial_access(&self) -> Option<solomon_sim::boneyard::tutorial::TutorialHudAccess> {
         self.session
             .boneyard
             .as_ref()
             .and_then(|world| world.tutorial.as_ref())
-            .map(solomon_sim::boneyard::tutorial::native_tutorial_hud_access)
+            .map(solomon_sim::boneyard::tutorial::tutorial_hud_access)
     }
 
     fn can_edit_books(&self) -> bool {
@@ -1460,8 +1457,7 @@ impl Game {
             .expect("participant exists")
             .college_intro
             .is_some_and(|intro| {
-                intro.phase
-                    == solomon_sim::hub::college_intro::NativeCollegeIntroPhase::ArchDialogue
+                intro.phase == solomon_sim::hub::college_intro::CollegeIntroPhase::ArchDialogue
             })
             && !self.panels.is_open()
         {
@@ -1533,7 +1529,7 @@ impl Game {
             .iter()
             .filter_map(|effect| {
                 if let solomon_sim::spells::model::PrimarySpellTransient::Staff(
-                    solomon_sim::spells::staff::NativePlayerStaffTransient::Contact(event),
+                    solomon_sim::spells::staff::PlayerStaffTransient::Contact(event),
                 ) = effect
                 {
                     Some(event.clone())
@@ -1557,12 +1553,10 @@ impl Game {
             .life_state
             != solomon_sim::combat::PlayerLifeState::Alive;
         let point_gain = |point| {
-            solomon_sim::region_feedback::native_region_point_gain(point, center, width, alternate)
+            solomon_sim::region_feedback::region_point_gain(point, center, width, alternate)
         };
         let hit_gain = |point| {
-            solomon_sim::region_feedback::native_region_hit_point_gain(
-                point, center, width, alternate,
-            )
+            solomon_sim::region_feedback::region_hit_point_gain(point, center, width, alternate)
         };
         let world = session.boneyard.as_ref();
         let frame = CombatAudioFrame {
@@ -1990,7 +1984,7 @@ impl Game {
             let resolution = self.surface.scale_factor();
             let compact_masks = crate::compact_masks::CompactMaskView::new(&loaded.scene);
             let bounds = loaded.scene.bounds;
-            let lights = NativeBoneyardLightIndex::new(Vec2::new(
+            let lights = BoneyardLightIndex::new(Vec2::new(
                 bounds.x + bounds.width,
                 bounds.y + bounds.height,
             ));
@@ -2099,16 +2093,15 @@ impl Game {
         let action = if matches!(entry, NativeBeltEntry::Skill { .. }) {
             None
         } else {
-            let Some(item) = solomon_sim::belt::native_belt_entry_item(entry, &player.economy)
-            else {
+            let Some(item) = solomon_sim::belt::belt_entry_item(entry, &player.economy) else {
                 return Ok(());
             };
-            if item.native_type_id == 7001 {
+            if item.type_id == 7001 {
                 Some(HubInventoryAction::Consume { item_id: item.id })
             } else if item.kind == HubItemKind::Sack {
                 Some(HubInventoryAction::EquipSackContents { item_id: item.id })
             } else {
-                solomon_sim::belt::native_belt_equipment_slots(
+                solomon_sim::belt::belt_equipment_slots(
                     item,
                     player.economy.owned_perk_selectors.contains(&19),
                 )
@@ -2206,13 +2199,10 @@ impl Game {
         match aim {
             None => None,
             Some(GameplayAim::Retain) => self.input_aim,
-            Some(GameplayAim::Direction(direction)) => project_native_stick_aim(
-                direction,
-                wizard.position,
-                viewport.logical_size,
-                camera.scale,
-            ),
-            Some(GameplayAim::Facing) => project_native_stick_aim(
+            Some(GameplayAim::Direction(direction)) => {
+                project_stick_aim(direction, wizard.position, viewport.logical_size, camera.scale)
+            }
+            Some(GameplayAim::Facing) => project_stick_aim(
                 solomon_sim::heading::heading_vector(wizard.heading_index),
                 wizard.position,
                 viewport.logical_size,
@@ -2227,7 +2217,7 @@ impl Game {
     fn pointer_to_world(&self, point: Vec2, camera: &Camera, viewport: Vec2) -> Option<Vec2> {
         let width = f64::from(self.surface.logical_width());
         let height = f64::from(self.surface.logical_height());
-        project_native_world_pointer(
+        project_world_pointer(
             Vec2::new(point.x * width, point.y * height),
             solomon_sim::hud::HudRect::new(0.0, 0.0, width, height),
             viewport,
@@ -2376,8 +2366,7 @@ impl Game {
                 .expect("participant exists")
                 .college_intro
                 .is_some_and(|intro| {
-                    intro.phase
-                        == solomon_sim::hub::college_intro::NativeCollegeIntroPhase::ArchDialogue
+                    intro.phase == solomon_sim::hub::college_intro::CollegeIntroPhase::ArchDialogue
                 })
         {
             self.panels.show_college_intro_dialogue(context, &player.economy.npc, now)
@@ -2423,7 +2412,7 @@ impl Game {
             .entries
             .iter()
             .skip(self.hotbar.start())
-            .take(solomon_sim::belt::NATIVE_BELT_SLOT_COUNT)
+            .take(solomon_sim::belt::BELT_SLOT_COUNT)
             .enumerate()
         {
             hud.belt[slot] = match entry {
@@ -2437,21 +2426,15 @@ impl Game {
                         }),
                 }),
                 Some(NativeBeltEntry::HealthPotion) => Some(HudBeltEntry::HealthPotion {
-                    count: native_belt_potion_projection(
-                        &player.economy.backpack,
-                        NativeBeltPotionKind::Health,
-                    )
-                    .count as u32,
+                    count: belt_potion_projection(&player.economy.backpack, BeltPotionKind::Health)
+                        .count as u32,
                 }),
                 Some(NativeBeltEntry::ManaPotion) => Some(HudBeltEntry::ManaPotion {
-                    count: native_belt_potion_projection(
-                        &player.economy.backpack,
-                        NativeBeltPotionKind::Mana,
-                    )
-                    .count as u32,
+                    count: belt_potion_projection(&player.economy.backpack, BeltPotionKind::Mana)
+                        .count as u32,
                 }),
                 Some(entry @ NativeBeltEntry::Item { .. }) => {
-                    solomon_sim::belt::native_belt_entry_item(*entry, &player.economy).map(|item| {
+                    solomon_sim::belt::belt_entry_item(*entry, &player.economy).map(|item| {
                         HudBeltEntry::Item {
                             icon: HudItemIcon::from_item(item, player.selection.element),
                             count: item.quantity,
@@ -2665,7 +2648,7 @@ impl Game {
             self.mod_overlays.reset();
             self.mod_projection = None;
             let (width, height) = self.fit_canvas();
-            self.renderer.set_native_world_pixel_centers(false);
+            self.renderer.set_world_pixel_centers(false);
             self.renderer.begin_frame(
                 width,
                 height,
@@ -2683,7 +2666,7 @@ impl Game {
             self.mod_assets.as_mut(),
         )?;
         self.wizard_view.set_equipment(&equipment);
-        self.wizard_view.set_material_tint(solomon_sim::presentation::native_player_material_tint(
+        self.wizard_view.set_material_tint(solomon_sim::presentation::player_material_tint(
             0xffffff,
             session.secondary.players.get(&self.local_player_id),
             &player.combat,
@@ -2718,10 +2701,10 @@ impl Game {
         self.spectator_ui.update(spectator_status.as_ref(), layout)?;
         let viewport = layout.logical_size;
         let (width, height) = self.fit_canvas();
-        self.renderer.set_native_world_pixel_centers(true);
+        self.renderer.set_world_pixel_centers(true);
         self.renderer.begin_frame(width, height, [viewport.x as f32, viewport.y as f32]);
         if self.panels.covers_world() {
-            self.renderer.set_native_world_pixel_centers(false);
+            self.renderer.set_world_pixel_centers(false);
             let client_width = self.surface.logical_width().max(1) as f32;
             let client_height = self.surface.logical_height().max(1) as f32;
             self.renderer.begin_frame(width, height, [client_width, client_height]);
@@ -2806,7 +2789,7 @@ impl Game {
             spells: &session.spells,
             secondary: &session.secondary,
             clocks,
-            context: solomon_sim::screen_feedback::NativeSecondaryScreenFeedbackContext {
+            context: solomon_sim::screen_feedback::SecondaryScreenFeedbackContext {
                 camera_center,
                 visible_world_width: viewport.x / camera.scale,
                 local_player_alternate: player.combat.life_state
@@ -2944,23 +2927,22 @@ impl Game {
             )?;
         } else {
             let base_camera = camera;
-            let transform =
-                solomon_sim::boneyard::presentation::native_enemy_world_feedback_transform(
-                    camera_center,
-                    base_camera.scale,
-                    viewport,
-                    session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .wizard
-                        .position,
-                    if self.menu.settings().zoom_effects {
-                        screen_feedback.camera_magnitude
-                    } else {
-                        0.0
-                    },
-                );
+            let transform = solomon_sim::boneyard::presentation::enemy_world_feedback_transform(
+                camera_center,
+                base_camera.scale,
+                viewport,
+                session
+                    .participants
+                    .get(&self.local_player_id)
+                    .expect("participant exists")
+                    .wizard
+                    .position,
+                if self.menu.settings().zoom_effects {
+                    screen_feedback.camera_magnitude
+                } else {
+                    0.0
+                },
+            );
             let displacement = if self.menu.settings().zoom_effects {
                 screen_feedback.camera_displacement
             } else {
@@ -3080,7 +3062,7 @@ impl Game {
                     &[],
                     clocks,
                     session.enhanced_effects,
-                    Some(solomon_sim::spells::weld::NativeFlameLashBounds {
+                    Some(solomon_sim::spells::weld::FlameLashBounds {
                         x: base_camera.origin.x,
                         y: base_camera.origin.y,
                         width: viewport.x / base_camera.scale,
@@ -3254,12 +3236,10 @@ impl Game {
                     renderable: !player.economy.college_intro_pending,
                 },
             );
-            if let Some(overlay) =
-                solomon_sim::screen_feedback::present_native_secondary_screen_overlay(
-                    screen_feedback.overlay,
-                    self.menu.settings().reduced_screen_flashes,
-                )
-            {
+            if let Some(overlay) = solomon_sim::screen_feedback::present_secondary_screen_overlay(
+                screen_feedback.overlay,
+                self.menu.settings().reduced_screen_flashes,
+            ) {
                 self.renderer.draw_solid(
                     [0.0, 0.0, viewport.x as f32, viewport.y as f32],
                     [
@@ -3307,7 +3287,7 @@ fn prepare_hub_wizard(
     view: &mut WizardView,
     participant: &solomon_sim::session::SessionParticipant,
     equipment: &crate::wizard::WizardEquipment,
-    secondary: Option<&solomon_sim::secondary::NativeSecondaryPlayerState>,
+    secondary: Option<&solomon_sim::secondary::SecondaryPlayerState>,
     stoneskin_warp: Option<&[f64]>,
     enhanced_effects: bool,
     complex_lighting: bool,
@@ -3316,7 +3296,7 @@ fn prepare_hub_wizard(
 ) {
     let player = &participant.player;
     view.set_equipment(equipment);
-    view.set_material_tint(solomon_sim::presentation::native_player_material_tint(
+    view.set_material_tint(solomon_sim::presentation::player_material_tint(
         0xffffff,
         secondary,
         &player.combat,

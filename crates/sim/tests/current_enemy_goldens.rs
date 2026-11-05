@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 use solomon_sim::enemies::model::WraithBrain;
-use solomon_sim::enemies::wraith::{create_native_wraith_flight_state, step_wraith_flight_clock};
+use solomon_sim::enemies::wraith::{create_wraith_flight_state, step_wraith_flight_clock};
 
 #[path = "current_enemy_goldens/stationary.rs"]
 mod stationary;
@@ -53,7 +53,7 @@ fn current_wraith_cruise_and_visibility_clocks_match_the_independent_source() {
     let goldens: CurrentEnemyGoldens = serde_json::from_str(fixture).unwrap();
     assert_eq!(goldens.source_revision, "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     for (case_index, case) in goldens.wraith_clocks.iter().enumerate() {
-        let mut brain = create_native_wraith_flight_state(
+        let mut brain = create_wraith_flight_state(
             case.chase_speed,
             case.resting_sample,
             case.initial_sample,

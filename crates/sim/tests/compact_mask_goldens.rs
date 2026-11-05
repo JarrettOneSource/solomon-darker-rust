@@ -2,11 +2,9 @@
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::compact_masks::{
-    NativeCompactMasks, native_direct_environment_light_alpha,
-};
+use solomon_sim::boneyard::compact_masks::{CompactMasks, direct_environment_light_alpha};
 use solomon_sim::boneyard::{BoneyardBounds, BoneyardScene, BoneyardSpawn, BoneyardSprite};
-use solomon_sim::enemies::spider_remains::{SpiderDecal, SpiderRemains, create_native_dead_spider};
+use solomon_sim::enemies::spider_remains::{SpiderDecal, SpiderRemains, create_dead_spider};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -47,7 +45,7 @@ fn compact_ground_masks_and_player_cell_admission_match_source() {
         .unwrap()
         .iter()
         .map(|remains| {
-            let mut state = create_native_dead_spider(Vec2::ZERO, 0.0);
+            let mut state = create_dead_spider(Vec2::ZERO, 0.0);
             let decal = &remains["state"]["decal"];
             if !decal.is_null() {
                 state.decal = Some(SpiderDecal {
@@ -61,7 +59,7 @@ fn compact_ground_masks_and_player_cell_admission_match_source() {
             SpiderRemains { id: remains["id"].as_u64().unwrap() as usize, spawn_tick: 0, state }
         })
         .collect();
-    let masks = NativeCompactMasks::new(&scene);
+    let masks = CompactMasks::new(&scene);
     for (index, case) in fixture["cases"].as_array().unwrap().iter().enumerate() {
         let players: Vec<_> = case["players"].as_array().unwrap().iter().map(point).collect();
         let plan = masks.plan(
@@ -109,7 +107,7 @@ fn compact_ground_masks_and_player_cell_admission_match_source() {
     // Only the source's unrounded sine may differ between Darwin libm and V8.
     const TRIG_TOLERANCE: f64 = 1e-15;
     for aperture in fixture["apertures"].as_array().unwrap() {
-        let alpha = native_direct_environment_light_alpha(
+        let alpha = direct_environment_light_alpha(
             number(&aperture[0]),
             aperture[1].as_u64().unwrap() as usize,
         );

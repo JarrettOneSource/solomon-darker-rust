@@ -3,11 +3,11 @@
 
 use crate::audio::{AudioCue, AudioEvent, AudioOptions};
 use crate::profile::WizardElement;
-use crate::secondary::NativeSecondaryActorKind;
+use crate::secondary::SecondaryActorKind;
 use crate::spells::model::{
     PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient,
 };
-use crate::spells::weld::native_weld_audio_plan;
+use crate::spells::weld::weld_audio_plan;
 
 use super::{
     CombatAudioCursor, CombatAudioFrame, CombatAudioLoop, CombatAudioPlayer, distance_gain,
@@ -35,7 +35,7 @@ pub(super) const PRIMARY_LOOP_CUES: [AudioCue; 15] = [
 /// `None` means this is outside the accepted Air/Water cast table. Skill 76 is admitted
 /// with an empty request list: its sound comes from the actual later actor, not the cast.
 #[must_use]
-pub fn native_air_water_accepted_cast_audio(skill_id: u32) -> Option<Vec<AudioEvent>> {
+pub fn air_water_accepted_cast_audio(skill_id: u32) -> Option<Vec<AudioEvent>> {
     let cues: &[(AudioCue, f64)] = match skill_id {
         27 | 72 => &[(AudioCue::MagicStorm, 1.0)],
         30 => &[(AudioCue::PrismaticShock, 1.0), (AudioCue::LightningStart, 0.8)],
@@ -53,21 +53,21 @@ pub fn native_air_water_accepted_cast_audio(skill_id: u32) -> Option<Vec<AudioEv
 }
 
 #[must_use]
-pub fn native_weld_cast_sound_cues(build_id: u32, sound_variant: Option<u32>) -> Vec<AudioCue> {
-    let plan = native_weld_audio_plan(build_id);
-    let mut native_ids = plan.native_sound_ids.to_vec();
-    if plan.native_sound_variant_ids.is_empty() {
+pub fn weld_cast_sound_cues(build_id: u32, sound_variant: Option<u32>) -> Vec<AudioCue> {
+    let plan = weld_audio_plan(build_id);
+    let mut stock_ids = plan.sound_ids.to_vec();
+    if plan.sound_variant_ids.is_empty() {
         assert!(sound_variant.is_none(), "Weld build {build_id} has no native sound variant");
     } else {
         let variant = sound_variant.expect("Weld cast requires its native sound variant") as usize;
-        native_ids.push(
+        stock_ids.push(
             *plan
-                .native_sound_variant_ids
+                .sound_variant_ids
                 .get(variant)
                 .expect("Weld sound variant lies in its authored bank"),
         );
     }
-    native_ids
+    stock_ids
         .into_iter()
         .map(|id| match id {
             33 => AudioCue::FlameLashStart,
@@ -87,9 +87,9 @@ pub fn native_weld_cast_sound_cues(build_id: u32, sound_variant: Option<u32>) ->
 }
 
 #[must_use]
-pub fn native_weld_loop_cues(build_id: u32) -> Vec<AudioCue> {
-    native_weld_audio_plan(build_id)
-        .native_loop_ids
+pub fn weld_loop_cues(build_id: u32) -> Vec<AudioCue> {
+    weld_audio_plan(build_id)
+        .loop_ids
         .iter()
         .map(|id| match id {
             157 => AudioCue::FireLoop,
@@ -135,7 +135,7 @@ impl CombatAudioCursor {
             let Some(volume) = player_attenuation(frame, player.id) else { continue };
             let owner = format!("primary-player:{}", player.id);
             if let Some(build_id) = active_weld_build(player) {
-                for cue in native_weld_loop_cues(build_id) {
+                for cue in weld_loop_cues(build_id) {
                     desired.push(CombatAudioLoop {
                         cue,
                         owner: owner.clone(),
@@ -227,35 +227,35 @@ impl CombatAudioCursor {
             }
             let gain = distance_gain(listener.position, actor.position);
             match actor.kind {
-                NativeSecondaryActorKind::Leviathan | NativeSecondaryActorKind::EtherDrain => {
+                SecondaryActorKind::Leviathan | SecondaryActorKind::EtherDrain => {
                     request_secondary_loop(&mut desired, AudioCue::PlaneCrossLoop, gain);
                 }
-                NativeSecondaryActorKind::MovingFire | NativeSecondaryActorKind::FirePatch => {
+                SecondaryActorKind::MovingFire | SecondaryActorKind::FirePatch => {
                     request_secondary_loop(&mut desired, AudioCue::LowFireLoop, gain);
                 }
-                NativeSecondaryActorKind::StormCloud => {
+                SecondaryActorKind::StormCloud => {
                     request_secondary_loop(&mut desired, AudioCue::RainfallLoop, gain);
                     request_secondary_loop(&mut desired, AudioCue::SteadyWindLoop, gain);
                 }
-                NativeSecondaryActorKind::AcidRain if actor.phase > 0.0 => {
+                SecondaryActorKind::AcidRain if actor.phase > 0.0 => {
                     request_secondary_loop(
                         &mut desired,
                         AudioCue::RainfallLoop,
                         gain * actor.phase,
                     );
                 }
-                NativeSecondaryActorKind::Earthquake => {
+                SecondaryActorKind::Earthquake => {
                     request_secondary_loop(&mut desired, AudioCue::EarthquakeLoop, gain)
                 }
-                NativeSecondaryActorKind::Comet => {
+                SecondaryActorKind::Comet => {
                     request_secondary_loop(&mut desired, AudioCue::CometLoop, gain)
                 }
-                NativeSecondaryActorKind::ElectricBurn if actor.age_ticks > 0 => {
+                SecondaryActorKind::ElectricBurn if actor.age_ticks > 0 => {
                     request_secondary_loop(&mut desired, AudioCue::ElectricLoop, gain)
                 }
                 _ => {}
             }
-            if actor.kind == NativeSecondaryActorKind::EtherDrain {
+            if actor.kind == SecondaryActorKind::EtherDrain {
                 request_secondary_loop(&mut desired, AudioCue::SteadyWindLoop, gain);
             }
         }

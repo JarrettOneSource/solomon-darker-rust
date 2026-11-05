@@ -6,9 +6,8 @@ use solomon_sim::Vec2;
 use solomon_sim::painter::PainterRegistration;
 use solomon_sim::spells::model::{PrimarySpellTransient, SpellState};
 use solomon_sim::spells::weld::{
-    NativeFlameChannelVisual, NativeFlameFadeVisual, NativeWeldActorBirth,
-    NativeWeldChannelActorState, NativeWeldFlameLashFadeState, NativeWeldFlameLashFadeVariant,
-    NativeWeldWorldActor, native_flame_fade_alpha,
+    FlameChannelVisual, FlameFadeVisual, WeldActorBirth, WeldChannelActorState,
+    WeldFlameLashFadeState, WeldFlameLashFadeVariant, WeldWorldActor, flame_fade_alpha,
 };
 
 mod client;
@@ -41,7 +40,7 @@ pub enum FlamePresentationKind {
 pub enum FlamePresentationRecipe {
     Ribbon {
         #[serde(with = "wire::ChannelVisual")]
-        birth: NativeFlameChannelVisual,
+        birth: FlameChannelVisual,
         enhanced_effects: bool,
         weak: bool,
         #[serde(with = "wire::Registration")]
@@ -49,14 +48,14 @@ pub enum FlamePresentationRecipe {
     },
     Fade {
         #[serde(with = "wire::FadeVisual")]
-        birth: NativeFlameFadeVisual,
+        birth: FlameFadeVisual,
         #[serde(with = "wire::Point")]
         position: Vec2,
         alpha_step: f64,
         base_scale: f64,
         wrapper_scalar: f64,
         #[serde(with = "wire::FadeVariant")]
-        variant: NativeWeldFlameLashFadeVariant,
+        variant: WeldFlameLashFadeVariant,
         #[serde(with = "wire::Registration")]
         painter_registration: PainterRegistration,
     },
@@ -95,7 +94,7 @@ impl FlamePresentationBirth {
     fn same_recipe(&self, other: &Self) -> bool {
         self.same_identity(other) && self.recipe == other.recipe
     }
-    fn maximum_native_end_tick(&self) -> u64 {
+    fn maximum_end_tick(&self) -> u64 {
         self.birth_tick + if self.kind == FlamePresentationKind::Fade { 5 } else { 1 }
     }
     fn validate(&self, world_key: &str) -> Result<(), String> {
@@ -108,7 +107,7 @@ impl FlamePresentationBirth {
             || self.owner_id.is_empty()
             || self.kind != self.recipe.kind()
             || self.end_tick_exclusive < self.birth_tick
-            || self.end_tick_exclusive > self.maximum_native_end_tick()
+            || self.end_tick_exclusive > self.maximum_end_tick()
         {
             return Err("Invalid Flame presentation birth interval or identity".into());
         }
@@ -180,8 +179,8 @@ pub fn flame_presentation_birth(
 ) -> Result<Option<FlamePresentationBirth>, String> {
     let PrimarySpellTransient::Weld(actor) = actor else { return Ok(None) };
     let recipe = match actor {
-        NativeWeldWorldActor::Channel(channel) if channel.common.build_id == 1003 => {
-            let Some(NativeFlameChannelVisual::NativeBirth(_)) = &channel.flame_visual else {
+        WeldWorldActor::Channel(channel) if channel.common.build_id == 1003 => {
+            let Some(FlameChannelVisual::Birth(_)) = &channel.flame_visual else {
                 return Ok(None);
             };
             FlamePresentationRecipe::Ribbon {
@@ -191,8 +190,8 @@ pub fn flame_presentation_birth(
                 painter_registration: root(actor)?,
             }
         }
-        NativeWeldWorldActor::FlameLashFade(fade) => {
-            let NativeFlameFadeVisual::NativeBirth(_) = fade.flame_visual else { return Ok(None) };
+        WeldWorldActor::FlameLashFade(fade) => {
+            let FlameFadeVisual::Birth(_) = fade.flame_visual else { return Ok(None) };
             FlamePresentationRecipe::Fade {
                 birth: fade.flame_visual,
                 position: fade.position,
@@ -208,13 +207,11 @@ pub fn flame_presentation_birth(
     let common = actor.common();
     let mut lifetime = 1;
     if let FlamePresentationRecipe::Fade {
-        birth: NativeFlameFadeVisual::NativeBirth(birth),
-        alpha_step,
-        ..
+        birth: FlameFadeVisual::Birth(birth), alpha_step, ..
     } = recipe
     {
         lifetime = 0;
-        while native_flame_fade_alpha(birth.birth_alpha, alpha_step, lifetime) > 0.0 {
+        while flame_fade_alpha(birth.birth_alpha, alpha_step, lifetime) > 0.0 {
             lifetime += 1;
         }
     }
@@ -251,7 +248,7 @@ pub fn materialize_flame_presentation(
     if tick < birth.birth_tick as f64 || tick >= birth.end_tick_exclusive as f64 {
         return None;
     }
-    let common = NativeWeldActorBirth {
+    let common = WeldActorBirth {
         build_id: 1003,
         direction: Vec2::new(0.0, -1.0),
         id: birth.id,
@@ -268,8 +265,8 @@ pub fn materialize_flame_presentation(
             weak,
             painter_registration,
         } => {
-            let NativeFlameChannelVisual::NativeBirth(visual_birth) = visual else { return None };
-            let mut channel = NativeWeldChannelActorState {
+            let FlameChannelVisual::Birth(visual_birth) = visual else { return None };
+            let mut channel = WeldChannelActorState {
                 common: common.actor(),
                 enhanced_effects: *enhanced_effects,
                 flame_visual: Some(visual.clone()),
@@ -281,7 +278,7 @@ pub fn materialize_flame_presentation(
             };
             channel.common.origin = visual_birth.start;
             channel.common.owner.painter_registrations.push(*painter_registration);
-            NativeWeldWorldActor::Channel(channel)
+            WeldWorldActor::Channel(channel)
         }
         FlamePresentationRecipe::Fade {
             birth: visual,
@@ -292,21 +289,17 @@ pub fn materialize_flame_presentation(
             variant,
             painter_registration,
         } => {
-            let NativeFlameFadeVisual::NativeBirth(visual_birth) = visual else { return None };
-            let mut fade = NativeWeldFlameLashFadeState {
+            let FlameFadeVisual::Birth(visual_birth) = visual else { return None };
+            let mut fade = WeldFlameLashFadeState {
                 common: common.actor(),
-                alpha: native_flame_fade_alpha(
+                alpha: flame_fade_alpha(
                     visual_birth.birth_alpha,
                     *alpha_step,
                     tick.floor() as u64 - birth.birth_tick,
                 ),
                 alpha_step: *alpha_step,
                 base_scale: *base_scale,
-                color_green: if *variant == NativeWeldFlameLashFadeVariant::Source {
-                    1.0
-                } else {
-                    0.75
-                },
+                color_green: if *variant == WeldFlameLashFadeVariant::Source { 1.0 } else { 0.75 },
                 flame_visual: *visual,
                 position: *position,
                 record: 35,
@@ -316,17 +309,17 @@ pub fn materialize_flame_presentation(
             };
             fade.common.origin = *position;
             fade.common.owner.painter_registrations.push(*painter_registration);
-            if *variant != NativeWeldFlameLashFadeVariant::Source {
+            if *variant != WeldFlameLashFadeVariant::Source {
                 fade.common.owner.light_registration = Some(*painter_registration);
             }
-            NativeWeldWorldActor::FlameLashFade(fade)
+            WeldWorldActor::FlameLashFade(fade)
         }
     };
     actor.common_mut().owner.age_ticks = tick.floor() as u64 - birth.birth_tick;
     Some(PrimarySpellTransient::Weld(actor))
 }
 
-fn root(actor: &NativeWeldWorldActor) -> Result<PainterRegistration, String> {
+fn root(actor: &WeldWorldActor) -> Result<PainterRegistration, String> {
     actor
         .common()
         .owner

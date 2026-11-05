@@ -6,9 +6,7 @@ mod patch;
 pub use patch::{patch_native_darkdata, patch_native_gamestate};
 
 use serde::{Deserialize, Serialize};
-use solomon_sim::economy::{
-    native_hagatha_bundle_state_is_valid, native_hagatha_outcome_state_is_valid,
-};
+use solomon_sim::economy::{hagatha_bundle_state_is_valid, hagatha_outcome_state_is_valid};
 
 use super::codec::{
     NativeChunkNode, NativeSyncBuffer, decode_native_darkdata, parse_native_sync_buffer, utf8,
@@ -311,7 +309,7 @@ pub fn decode_native_darkdata_profile(bytes: &[u8]) -> Result<NativeDarkdataProf
     let raw_selectors = bulk.i32s(count, "selectors")?;
     bulk.finish()?;
     let hagatha_bundle_selectors = selectors(raw_selectors, "native Hagatha bundle is invalid")?;
-    if !native_hagatha_bundle_state_is_valid(&hagatha_bundle_selectors) {
+    if !hagatha_bundle_state_is_valid(&hagatha_bundle_selectors) {
         return Err("native Hagatha bundle is invalid".into());
     }
     let mut mix = PayloadReader::new(&children[3].payload, "darkdata first-mix state");
@@ -644,9 +642,9 @@ pub fn decode_native_gamestate_wizard(bytes: &[u8]) -> Result<NativeWizardProgre
         selectors(progression.perk_selectors, "native Hagatha outcomes are invalid")?;
     let tonics = perk_selectors.iter().filter(|value| **value == 27).count() as u32;
     let capacity = u32::try_from(progression.perk_capacity).ok();
-    if capacity.is_none_or(|capacity| {
-        !native_hagatha_outcome_state_is_valid(&perk_selectors, tonics, capacity)
-    }) {
+    if capacity
+        .is_none_or(|capacity| !hagatha_outcome_state_is_valid(&perk_selectors, tonics, capacity))
+    {
         return Err("native Hagatha outcomes are invalid".into());
     }
     Ok(NativeWizardProgression {
@@ -725,7 +723,7 @@ fn boast_statement(selected: Option<u32>) -> Result<&'static str, String> {
     let Some(selected) = selected else {
         return Ok("");
     };
-    solomon_sim::hub::interaction::NATIVE_BOASTS
+    solomon_sim::hub::interaction::BOASTS
         .iter()
         .find(|boast| boast.id == selected)
         .map(|boast| boast.statement)

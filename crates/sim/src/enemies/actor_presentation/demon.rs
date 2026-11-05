@@ -58,7 +58,7 @@ pub(super) fn articulation(actor: &EnemyActor, tick: u64) -> DemonArticulationVi
 pub(super) fn presentation(
     actor: &EnemyActor,
     facing: usize,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let pose = sampled_articulation(sample);
@@ -183,7 +183,7 @@ pub(super) fn presentation(
 
 pub(super) fn death(
     actor: &EnemyActor,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
     let pose = sampled_articulation(sample);
     let offset = midpoint(pose.front, pose.rear);
@@ -207,7 +207,7 @@ pub(super) fn death(
     EnemyFamilyPresentation::body(layers)
 }
 
-fn sampled_articulation(sample: &NativeEnemyPresentationInput) -> DemonArticulationVisual {
+fn sampled_articulation(sample: &EnemyPresentationInput) -> DemonArticulationVisual {
     DemonArticulationVisual {
         front: sample.demon_front_extremity_offset,
         rear: sample.demon_rear_extremity_offset,

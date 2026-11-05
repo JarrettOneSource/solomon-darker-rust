@@ -3,27 +3,27 @@
 use crate::float;
 
 use super::*;
-use crate::actor_physics::NATIVE_ACTOR_SEPARATION_EPSILON;
+use crate::actor_physics::ACTOR_SEPARATION_EPSILON;
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::profile::WizardElement;
 use crate::profile::runtime::PlayerStaffAttackOutcome;
 use crate::spells::targeting::{
     PrimaryConeQuery, PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
-    native_primary_circle_targets, native_primary_cone_targets,
+    primary_circle_targets, primary_cone_targets,
 };
 
 #[must_use]
-pub fn native_staff_admission_target<'a>(
-    player: &NativeStaffPlayer,
-    targets: &'a [NativeStaffTarget],
-) -> Option<&'a NativeStaffTarget> {
+pub fn staff_admission_target<'a>(
+    player: &StaffPlayer,
+    targets: &'a [StaffTarget],
+) -> Option<&'a StaffTarget> {
     targets.iter().find(|target| admits_physical_contact(player, target))
 }
 
 #[must_use]
-pub fn native_staff_physical_contact_targets<'a, T: AsRef<NativeStaffTarget>>(
-    player: &NativeStaffPlayer,
+pub fn staff_physical_contact_targets<'a, T: AsRef<StaffTarget>>(
+    player: &StaffPlayer,
     targets: &'a [T],
 ) -> Vec<&'a T> {
     let mut contacts = Vec::new();
@@ -35,25 +35,25 @@ pub fn native_staff_physical_contact_targets<'a, T: AsRef<NativeStaffTarget>>(
     contacts
 }
 
-fn admits_physical_contact(player: &NativeStaffPlayer, target: &NativeStaffTarget) -> bool {
+fn admits_physical_contact(player: &StaffPlayer, target: &StaffTarget) -> bool {
     let dx = target.position.x - player.position.x;
     let dy = target.position.y - player.position.y;
-    let reach = player.collision_radius + target.collision_radius + NATIVE_ACTOR_SEPARATION_EPSILON;
+    let reach = player.collision_radius + target.collision_radius + ACTOR_SEPARATION_EPSILON;
     if dx * dx + dy * dy > reach * reach {
         return false;
     }
     absolute_heading_delta(player.heading_degrees, heading_degrees_from_vector(dx, dy))
-        < NATIVE_STAFF_ADMISSION_HEADING_DEGREES
+        < STAFF_ADMISSION_HEADING_DEGREES
 }
 
 #[must_use]
-pub fn resolve_native_staff_physical_contacts(
-    action: &NativePlayerStaffAction,
-    targets: &[NativeStaffPhysicalTarget],
+pub fn resolve_staff_physical_contacts(
+    action: &PlayerStaffAction,
+    targets: &[StaffPhysicalTarget],
     element: WizardElement,
     ether_knockback_chance: f64,
-    rng: &mut NativeRng,
-) -> Vec<NativeStaffPhysicalImpact> {
+    rng: &mut Rng,
+) -> Vec<StaffPhysicalImpact> {
     let mut impacts = Vec::with_capacity(targets.len());
     for physical in targets {
         let target = &physical.target;
@@ -67,17 +67,17 @@ pub fn resolve_native_staff_physical_contacts(
                 contact_knockback_delta = Some(direction_with_magnitude(
                     action.base().origin,
                     target.position,
-                    NATIVE_STAFF_CONTACT_KNOCKBACK_STEP,
+                    STAFF_CONTACT_KNOCKBACK_STEP,
                 ));
                 if physical.pike {
                     pike_break_presentation_rng = Some(rng.clone());
-                    for _ in 0..NATIVE_STAFF_PIKE_BREAK_RNG_WORDS {
+                    for _ in 0..STAFF_PIKE_BREAK_RNG_WORDS {
                         rng.draw_word();
                     }
                 }
             }
         }
-        impacts.push(NativeStaffPhysicalImpact {
+        impacts.push(StaffPhysicalImpact {
             contact_knockback_delta,
             pike_break_presentation_rng,
             sound_pitch: fround(1.0 + pitch),
@@ -89,8 +89,8 @@ pub fn resolve_native_staff_physical_contacts(
 }
 
 #[must_use]
-pub fn native_staff_damage_targets<'a, T: AsRef<NativeStaffTarget>>(
-    action: &NativePlayerStaffAction,
+pub fn staff_damage_targets<'a, T: AsRef<StaffTarget>>(
+    action: &PlayerStaffAction,
     targets: &'a [T],
 ) -> Vec<&'a T> {
     let base = action.base();
@@ -98,7 +98,7 @@ pub fn native_staff_damage_targets<'a, T: AsRef<NativeStaffTarget>>(
     for target in targets {
         let target_row = target.as_ref();
         let contained = if base.outcome == PlayerStaffAttackOutcome::Whirl {
-            circle_contains(base.origin, NATIVE_STAFF_WHIRL_RADIUS, target_row)
+            circle_contains(base.origin, STAFF_WHIRL_RADIUS, target_row)
         } else {
             point_in_staff_polygon(
                 base.origin,
@@ -115,8 +115,8 @@ pub fn native_staff_damage_targets<'a, T: AsRef<NativeStaffTarget>>(
 }
 
 #[must_use]
-pub fn native_staff_knockback_targets<'a, T: AsRef<NativeStaffTarget>>(
-    action: &NativePlayerStaffAction,
+pub fn staff_knockback_targets<'a, T: AsRef<StaffTarget>>(
+    action: &PlayerStaffAction,
     targets: &'a [T],
 ) -> Vec<&'a T> {
     let base = action.base();
@@ -139,7 +139,7 @@ pub fn native_staff_knockback_targets<'a, T: AsRef<NativeStaffTarget>>(
                 grid_position: None,
                 id: target.id.clone(),
                 kind: PrimarySpellTargetKind::Enemy,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: target.position,
                 query_lane: PrimarySpellQueryLane::Grid,
@@ -149,15 +149,15 @@ pub fn native_staff_knockback_targets<'a, T: AsRef<NativeStaffTarget>>(
         .collect::<Vec<_>>();
     let radians = base.heading_degrees * std::f64::consts::PI / 180.0;
     let queried = if arc_degrees >= 360.0 {
-        native_primary_circle_targets(base.origin, NATIVE_STAFF_WHIRL_RADIUS, 2, &query_targets)
+        primary_circle_targets(base.origin, STAFF_WHIRL_RADIUS, 2, &query_targets)
     } else {
-        native_primary_cone_targets(PrimaryConeQuery {
+        primary_cone_targets(PrimaryConeQuery {
             actor_mask: 2,
             aim_direction: Vec2::new(float::sin(radians), -float::cos(radians)),
             half_angle_degrees: arc_degrees,
             has_line_of_sight: &|_| true,
             origin: base.origin,
-            reach: NATIVE_STAFF_WHIRL_RADIUS,
+            reach: STAFF_WHIRL_RADIUS,
             targets: &query_targets,
         })
     };
@@ -169,23 +169,19 @@ pub fn native_staff_knockback_targets<'a, T: AsRef<NativeStaffTarget>>(
 }
 
 #[must_use]
-pub fn native_staff_contact_damage_per_target(
-    damage: f64,
-    target_count: usize,
-    radial: bool,
-) -> f64 {
+pub fn staff_contact_damage_per_target(damage: f64, target_count: usize, radial: bool) -> f64 {
     assert!(damage.is_finite() && damage >= 0.0, "staff damage must be finite and non-negative");
     assert!(target_count > 0, "staff target count must be positive");
     if radial { damage } else { damage.min(2.0 * damage / target_count as f64) }
 }
 
 #[must_use]
-pub fn create_native_staff_knockback(
+pub fn create_staff_knockback(
     id: u64,
-    action: &NativePlayerStaffAction,
+    action: &PlayerStaffAction,
     target_ids: &[String],
     push_strength_factor: f64,
-) -> Option<NativeStaffKnockbackActor> {
+) -> Option<StaffKnockbackActor> {
     assert!(
         push_strength_factor.is_finite() && push_strength_factor >= 0.0,
         "staff push-strength factor must be finite and non-negative"
@@ -196,7 +192,7 @@ pub fn create_native_staff_knockback(
         PlayerStaffAttackOutcome::CriticalHit | PlayerStaffAttackOutcome::Whirl => 50.0,
         _ => return None,
     };
-    Some(NativeStaffKnockbackActor {
+    Some(StaffKnockbackActor {
         common: new_common(id, action),
         arc_degrees,
         origin: action.base().origin,
@@ -206,13 +202,13 @@ pub fn create_native_staff_knockback(
 }
 
 #[must_use]
-pub fn step_native_staff_knockback(
-    source: &NativeStaffKnockbackActor,
-    world: &mut impl crate::knockback::NativeKnockbackAreaWorld<String>,
-    rng: &mut NativeRng,
-) -> NativeStaffKnockbackStep {
-    let area = crate::knockback::step_native_knockback_area(
-        crate::knockback::NativeKnockbackArea {
+pub fn step_staff_knockback(
+    source: &StaffKnockbackActor,
+    world: &mut impl crate::knockback::KnockbackAreaWorld<String>,
+    rng: &mut Rng,
+) -> StaffKnockbackStep {
+    let area = crate::knockback::step_knockback_area(
+        crate::knockback::KnockbackArea {
             origin: source.origin,
             remaining_distance: source.remaining_distance,
             target_ids: &source.target_ids,
@@ -229,7 +225,7 @@ pub fn step_native_staff_knockback(
         actor.target_ids = area.target_ids;
         Some(actor)
     };
-    NativeStaffKnockbackStep {
+    StaffKnockbackStep {
         actor,
         camera_displacement: area.camera_displacement,
         dazzled_target_ids: if area.terminal {
@@ -240,12 +236,12 @@ pub fn step_native_staff_knockback(
         displacements: area
             .displacements
             .into_iter()
-            .map(|row| NativeStaffDisplacement { delta: row.delta, target_id: row.target_id })
+            .map(|row| StaffDisplacement { delta: row.delta, target_id: row.target_id })
             .collect(),
         heading_perturbations: area
             .heading_perturbations
             .into_iter()
-            .map(|row| NativeStaffHeadingPerturbation {
+            .map(|row| StaffHeadingPerturbation {
                 heading_degrees: row.heading_degrees,
                 target_id: row.target_id,
             })
@@ -254,27 +250,27 @@ pub fn step_native_staff_knockback(
 }
 
 #[must_use]
-pub fn create_native_staff_contact_knockback(
+pub fn create_staff_contact_knockback(
     id: u64,
-    action: &NativePlayerStaffAction,
+    action: &PlayerStaffAction,
     target_id: &str,
     delta: Vec2,
-) -> NativePlayerStaffContactKnockback {
-    NativePlayerStaffContactKnockback {
+) -> PlayerStaffContactKnockback {
+    PlayerStaffContactKnockback {
         common: new_common(id, action),
         delta,
-        remaining_ticks: NATIVE_STAFF_CONTACT_KNOCKBACK_TICKS,
+        remaining_ticks: STAFF_CONTACT_KNOCKBACK_TICKS,
         target_id: target_id.into(),
     }
 }
 
 #[must_use]
-pub fn step_native_staff_contact_knockback(
-    source: &NativePlayerStaffContactKnockback,
+pub fn step_staff_contact_knockback(
+    source: &PlayerStaffContactKnockback,
     target_exists: bool,
-) -> NativeStaffContactKnockbackStep {
+) -> StaffContactKnockbackStep {
     if !target_exists {
-        return NativeStaffContactKnockbackStep { actor: None, displacement: None };
+        return StaffContactKnockbackStep { actor: None, displacement: None };
     }
     let actor = if source.remaining_ticks <= 1 {
         None
@@ -284,7 +280,7 @@ pub fn step_native_staff_contact_knockback(
         actor.remaining_ticks -= 1;
         Some(actor)
     };
-    NativeStaffContactKnockbackStep { actor, displacement: Some(source.delta) }
+    StaffContactKnockbackStep { actor, displacement: Some(source.delta) }
 }
 
 fn knockback_arc(outcome: PlayerStaffAttackOutcome) -> Option<f64> {
@@ -312,7 +308,7 @@ fn point_in_staff_polygon(origin: Vec2, heading: f64, point: Vec2, critical: boo
     local_x.abs() < half_width
 }
 
-fn circle_contains(origin: Vec2, radius: f64, target: &NativeStaffTarget) -> bool {
+fn circle_contains(origin: Vec2, radius: f64, target: &StaffTarget) -> bool {
     let dx = target.position.x - origin.x;
     let dy = target.position.y - origin.y;
     dx * dx + dy * dy < radius * radius + target.collision_radius * target.collision_radius

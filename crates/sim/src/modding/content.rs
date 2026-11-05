@@ -465,7 +465,7 @@ impl PreparedModContentCatalog {
     ) -> Option<crate::hub::interaction::BoastRules<'_>> {
         match selection {
             crate::economy::BoastSelection::Native(_) => {
-                crate::hub::interaction::native_boast_rules_for_selection(selection)
+                crate::hub::interaction::boast_rules_for_selection(selection)
             }
             crate::economy::BoastSelection::Mod(selection) => {
                 let definition = self.boast(&selection.content_id)?;

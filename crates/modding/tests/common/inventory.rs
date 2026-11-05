@@ -9,7 +9,7 @@ use solomon_sim::economy::{
 pub fn item_value(item: &HubInventoryItem) -> Value {
     let mut value = json!({"equipmentType":item.equipment_type.map(EquipmentType::as_str),
         "iconRecords":item.icon_records,"id":item.id,"kind":item.kind.as_str(),"name":item.name,
-        "nativeSubtype":item.native_subtype,"nativeTypeId":item.native_type_id,"quantity":item.quantity,
+        "nativeSubtype":item.subtype,"nativeTypeId":item.type_id,"quantity":item.quantity,
         "rarity":item.rarity.map(|rarity| match rarity {ItemRarity::Epic=>"Epic",ItemRarity::Rare=>"Rare"}),
         "recipeIndex":item.recipe_index});
     for (key, field) in [
@@ -22,7 +22,7 @@ pub fn item_value(item: &HubInventoryItem) -> Value {
         ("generatedLevel", item.generated_level.map(|value| json!(value))),
         ("iconTints", item.icon_tints.map(|value| json!(value))),
         ("inventorySlot", item.inventory_slot.map(|value| json!(value))),
-        ("nativeSelector", item.native_selector.map(|value| json!(value))),
+        ("nativeSelector", item.selector.map(|value| json!(value))),
         ("nativeEffects", item.native_effects.as_ref().map(|value| json!(value))),
         ("modContent", item.mod_content.as_ref().map(|value| json!(value))),
         ("modItemContent", item.mod_item_content.as_ref().map(|value| json!(value))),

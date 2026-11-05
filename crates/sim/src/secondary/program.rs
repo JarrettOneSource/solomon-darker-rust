@@ -1,33 +1,31 @@
 //! Shared source geometry and constructor programs for the secondary actor families.
 
-use super::context::NativeSecondaryPlayerAuthority;
+use super::context::SecondaryPlayerAuthority;
 use super::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryAudioCue,
-    NativeSecondaryEventKind, NativeSecondaryEventState, NativeSecondaryScreenFlashState,
-    NativeSecondarySimulationState, NativeSecondaryTarget,
+    SecondaryActorKind, SecondaryActorState, SecondaryAudioCue, SecondaryEventKind,
+    SecondaryEventState, SecondaryScreenFlashState, SecondarySimulationState, SecondaryTarget,
 };
 use crate::float::{fround, hypot};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub(crate) const MAX_NATIVE_TICKS: u64 = 9_007_199_254_740_991;
+pub(crate) const MAX_TICKS: u64 = 9_007_199_254_740_991;
 pub(crate) const FIRE_LIFE_STEP: f64 = 0.01_f32 as f64;
 pub(crate) const RING_FIRE_INITIAL_LIFE: f64 = ((0.7_f32 as f64) * (1.5_f32 as f64)) as f32 as f64;
 
 pub(crate) fn actor(
-    kind: NativeSecondaryActorKind,
+    kind: SecondaryActorKind,
     owner: &str,
     world: &str,
     skill: Option<usize>,
     rank: u32,
     position: Vec2,
-) -> NativeSecondaryActorState {
-    let mut actor =
-        NativeSecondaryActorState::new(0, kind, owner.to_owned(), world.to_owned(), skill);
+) -> SecondaryActorState {
+    let mut actor = SecondaryActorState::new(0, kind, owner.to_owned(), world.to_owned(), skill);
     actor.rank = rank;
     actor.position = position;
     actor
 }
-pub(crate) fn advance_rng(rng: &mut NativeRng, words: usize) {
+pub(crate) fn advance_rng(rng: &mut Rng, words: usize) {
     for _ in 0..words {
         rng.draw_word();
     }
@@ -46,16 +44,14 @@ pub(crate) fn squared_distance(from: Vec2, to: Vec2) -> f64 {
 pub(crate) fn normalize_radians(value: f64) -> f64 {
     (value % std::f64::consts::TAU + std::f64::consts::TAU) % std::f64::consts::TAU
 }
-pub(crate) fn native_unit_vector(rng: &mut NativeRng) -> Vec2 {
+pub(crate) fn unit_vector(rng: &mut Rng) -> Vec2 {
     rng.draw_unit_vector()
 }
-pub(crate) fn stable_targets(
-    mut targets: Vec<NativeSecondaryTarget>,
-) -> Vec<NativeSecondaryTarget> {
+pub(crate) fn stable_targets(mut targets: Vec<SecondaryTarget>) -> Vec<SecondaryTarget> {
     targets.sort_by_key(|target| target.id);
     targets
 }
-pub(crate) fn shuffle_fixed_bound<T>(values: &mut [T], rng: &mut NativeRng) {
+pub(crate) fn shuffle_fixed_bound<T>(values: &mut [T], rng: &mut Rng) {
     for index in 0..values.len() {
         let selected = rng.draw_integer(values.len() as i32) as usize;
         values.swap(index, selected);
@@ -84,23 +80,19 @@ pub(crate) fn screen_flash(
     blue: f64,
     decay: f64,
     point: bool,
-) -> NativeSecondaryScreenFlashState {
-    NativeSecondaryScreenFlashState::new(red, green, blue, decay, point, 1.0)
+) -> SecondaryScreenFlashState {
+    SecondaryScreenFlashState::new(red, green, blue, decay, point, 1.0)
 }
 pub(crate) fn cast_event(
     owner: &str,
     skill: usize,
-    authority: &NativeSecondaryPlayerAuthority<'_>,
+    authority: &SecondaryPlayerAuthority<'_>,
     tick: u64,
-    kind: NativeSecondaryEventKind,
-    cue: Option<NativeSecondaryAudioCue>,
-) -> NativeSecondaryEventState {
-    let mut event = NativeSecondaryEventState::new(
-        kind,
-        owner.to_owned(),
-        authority.world_key.to_owned(),
-        tick,
-    );
+    kind: SecondaryEventKind,
+    cue: Option<SecondaryAudioCue>,
+) -> SecondaryEventState {
+    let mut event =
+        SecondaryEventState::new(kind, owner.to_owned(), authority.world_key.to_owned(), tick);
     event.cue = cue;
     event.position = authority.character.position;
     event.skill_id = Some(skill);
@@ -108,14 +100,14 @@ pub(crate) fn cast_event(
     event
 }
 pub(crate) fn actor_event(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     tick: u64,
-    kind: NativeSecondaryEventKind,
-    cue: Option<NativeSecondaryAudioCue>,
-) -> NativeSecondaryEventState {
+    kind: SecondaryEventKind,
+    cue: Option<SecondaryAudioCue>,
+) -> SecondaryEventState {
     assert_ne!(actor.skill_id, Some(14), "Ether Burn has no native semantic audio event");
     let mut event =
-        NativeSecondaryEventState::new(kind, actor.owner_id.clone(), actor.world_key.clone(), tick);
+        SecondaryEventState::new(kind, actor.owner_id.clone(), actor.world_key.clone(), tick);
     event.actor_id = Some(actor.id);
     event.cue = cue;
     event.position = actor.position;
@@ -124,8 +116,8 @@ pub(crate) fn actor_event(
 }
 
 pub(crate) fn freeze_wave(
-    state: &mut NativeSecondarySimulationState,
-    mut seed: NativeSecondaryActorState,
+    state: &mut SecondarySimulationState,
+    mut seed: SecondaryActorState,
     enhanced: bool,
     maximum: bool,
 ) {
@@ -138,13 +130,13 @@ pub(crate) fn freeze_wave(
             state.rng.draw_scaled_float(magnitude, false);
         }
     }
-    seed.kind = NativeSecondaryActorKind::FreezeWave;
+    seed.kind = SecondaryActorKind::FreezeWave;
     seed.lifetime_ticks = 93;
     seed.phase = 0.924_f32 as f64;
     seed.radius = 75.0;
     seed.variant = i32::from(maximum);
     let mut visual = actor(
-        NativeSecondaryActorKind::FreezeWaveVisual,
+        SecondaryActorKind::FreezeWaveVisual,
         &seed.owner_id,
         &seed.world_key,
         seed.skill_id,
@@ -158,13 +150,13 @@ pub(crate) fn freeze_wave(
     state.spawn_actor(visual);
 }
 
-pub(crate) fn magic_circle_visual_tick(rng: &mut NativeRng, tick: u64) -> f64 {
+pub(crate) fn magic_circle_visual_tick(rng: &mut Rng, tick: u64) -> f64 {
     let light = rng.draw_scaled_float(0.25, true);
     advance_rng(rng, (1 + (tick & 1)) as usize * 5);
     fround(0.75 + light)
 }
 pub(crate) fn magic_circle_player_flash(
-    state: &mut NativeSecondarySimulationState,
+    state: &mut SecondarySimulationState,
     owner: &str,
     world: &str,
     position: Vec2,
@@ -173,14 +165,8 @@ pub(crate) fn magic_circle_player_flash(
     let rotation = state.rng.draw_scaled_float(360.0, false);
     let scale = state.rng.draw_scaled_float(1.0, false);
     let life = state.rng.draw_scaled_float(0.25, false);
-    let mut flash = actor(
-        NativeSecondaryActorKind::MagicCirclePlayerFlash,
-        owner,
-        world,
-        Some(49),
-        rank,
-        position,
-    );
+    let mut flash =
+        actor(SecondaryActorKind::MagicCirclePlayerFlash, owner, world, Some(49), rank, position);
     flash.alpha = fround(0.5 + life);
     flash.rotation_radians = rotation * std::f64::consts::PI / 180.0;
     flash.scale = fround(1.0 + scale * 0.65);
@@ -189,9 +175,9 @@ pub(crate) fn magic_circle_player_flash(
 }
 
 pub(crate) fn firewalker_patch(
-    state: &mut NativeSecondarySimulationState,
+    state: &mut SecondarySimulationState,
     owner: &str,
-    authority: &NativeSecondaryPlayerAuthority<'_>,
+    authority: &SecondaryPlayerAuthority<'_>,
     contact_geometry: bool,
 ) {
     let phase = state.rng.draw_scaled_float(32.0, false);
@@ -202,7 +188,7 @@ pub(crate) fn firewalker_patch(
     let life = state.rng.draw_scaled_float(0.25, false);
     let skill = super::resolved_secondary_ability_rank_stats(
         authority.skill_book,
-        super::NativeSecondaryAbilityId::Firewalker,
+        super::SecondaryAbilityId::Firewalker,
         &authority.offensive_factors,
     );
     let velocity =
@@ -213,7 +199,7 @@ pub(crate) fn firewalker_patch(
         authority.character.position.y - velocity.x * perpendicular + velocity.y * forward,
     );
     let mut patch = actor(
-        NativeSecondaryActorKind::FirePatch,
+        SecondaryActorKind::FirePatch,
         owner,
         authority.world_key,
         Some(23),
@@ -230,8 +216,8 @@ pub(crate) fn firewalker_patch(
     state.spawn_actor(patch);
 }
 
-pub(crate) fn advance_actor(actor: &mut NativeSecondaryActorState) {
-    use NativeSecondaryActorKind::*;
+pub(crate) fn advance_actor(actor: &mut SecondaryActorState) {
+    use SecondaryActorKind::*;
     let moves = !matches!(
         actor.kind,
         PlaneOrbShot

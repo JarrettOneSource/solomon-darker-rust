@@ -39,7 +39,7 @@ impl SecondaryView {
                 origin: Vec2::new(parent.plan.root.x - 128.0, parent.plan.root.y - 128.0),
                 scale: 1.0,
             };
-            let composite = native_leviathan_composite_plan(parent.scale);
+            let composite = leviathan_composite_plan(parent.scale);
             renderer.render_to_color(
                 &self.leviathan_targets[&parent_id],
                 [256.0; 2],
@@ -72,13 +72,13 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        mask: NativeLeviathanCompositeMask,
+        mask: LeviathanCompositeMask,
         hit: Option<SecondaryPuppetHit>,
     ) {
-        let draw = NativeSecondarySpriteDraw {
+        let draw = SecondarySpriteDraw {
             alpha: hit.map_or(1.0, |hit| hit.alpha),
-            atlas: NativeSecondaryAtlas::BadGuys,
-            blend: NativeSecondaryBlend::Normal,
+            atlas: SecondaryAtlas::BadGuys,
+            blend: SecondaryBlend::Normal,
             color_mode: None,
             clip: None,
             entry: mask.entry,
@@ -96,7 +96,7 @@ impl SecondaryView {
         // Source's geometric clip starts at (0, clipTop) from the top-left.
         let clip = [
             0,
-            (NATIVE_LEVIATHAN_RENDER_TARGET_SIZE - mask.clip_top - mask.clip_size) as i32,
+            (LEVIATHAN_RENDER_TARGET_SIZE - mask.clip_top - mask.clip_size) as i32,
             mask.clip_size as i32,
             mask.clip_size as i32,
         ];
@@ -121,7 +121,7 @@ impl SecondaryView {
     ) {
         let actor = &self.actors[index];
         let texture = &self.leviathan_targets[&actor.id].texture;
-        for output in native_leviathan_composite_plan(actor.scale).outputs {
+        for output in leviathan_composite_plan(actor.scale).outputs {
             self.draw_target(
                 renderer,
                 camera,
@@ -131,7 +131,7 @@ impl SecondaryView {
                     center: Vec2::new(actor.plan.root.x - 0.5, actor.plan.root.y - 0.5),
                     scale: 1.0,
                     alpha: output.alpha,
-                    blend: if output.blend == NativeSecondaryBlend::Add {
+                    blend: if output.blend == SecondaryBlend::Add {
                         BlendMode::Add
                     } else {
                         BlendMode::Normal

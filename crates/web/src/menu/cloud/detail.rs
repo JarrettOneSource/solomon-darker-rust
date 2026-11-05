@@ -8,7 +8,7 @@ use crate::gpu_ui::{
 use crate::hosted::{ModComments, ModDetail, ModSubscription, ModSummary};
 use crate::menu::{HostedMenuAction, ModSubscriptionAction};
 use egui::{Color32, Rect, Ui, Vec2};
-use solomon_sim::native_ui_text::{NativeUiFontName, measure_native_ui_text};
+use solomon_sim::ui_text::{UiFontName, measure_ui_text};
 
 struct DetailHeader {
     title: Rect,
@@ -281,17 +281,10 @@ impl ModDetailView {
         let phone = view.width() <= 700.0;
         let short = view.height() <= 620.0;
         let summary = self.detail.as_ref().map_or(&self.summary, |d| &d.summary);
-        let native = solomon_sim::native_ui_text::layout_native_ui_text(
-            &solomon_sim::native_ui_text::NativeUiTextSpec {
-                scale: 1.05,
-                ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
-                    NativeUiFontName::Menu,
-                    &summary.name,
-                    0.0,
-                    0.0,
-                )
-            },
-        );
+        let native = solomon_sim::ui_text::layout_ui_text(&solomon_sim::ui_text::UiTextSpec {
+            scale: 1.05,
+            ..solomon_sim::ui_text::UiTextSpec::new(UiFontName::Menu, &summary.name, 0.0, 0.0)
+        });
         let fallback = if native.unsupported_code_points.is_empty() {
             None
         } else {
@@ -304,9 +297,7 @@ impl ModDetailView {
                 .collect::<Vec<_>>()
                 .join(" ");
             let title_width = rect.width() - if phone { 8.0 } else { 248.0 };
-            let size = solomon_sim::native_ui_text::native_ui_font(NativeUiFontName::Menu).metrics
-                [0] as f32
-                * 1.05;
+            let size = solomon_sim::ui_text::ui_font(UiFontName::Menu).metrics[0] as f32 * 1.05;
             Some(font_run_with_options(
                 ui.ctx(),
                 egui::FontId::new(size, egui::FontFamily::Name("Cinzel".into())),
@@ -333,22 +324,13 @@ impl ModDetailView {
                 1.0,
             )?;
         } else {
-            ink(
-                frame,
-                ui,
-                &summary.name,
-                NativeUiFontName::Menu,
-                1.05,
-                0xd9ba70,
-                header.title,
-                true,
-            )?;
+            ink(frame, ui, &summary.name, UiFontName::Menu, 1.05, 0xd9ba70, header.title, true)?;
         }
         ink(
             frame,
             ui,
             &format!("BY {}", summary.author.username),
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             1.0,
             0xd9ba70,
             header.author,
@@ -569,7 +551,7 @@ impl ModDetailView {
                 frame,
                 ui,
                 "LEAVE A COMMENT",
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 1.0,
                 0xd9ba70,
                 Rect::from_min_size(
@@ -632,7 +614,7 @@ impl ModDetailView {
                 frame,
                 ui,
                 &format!("{} / 1000", self.body.encode_utf16().count()),
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 0.85,
                 0xd9ba70,
                 Rect::from_min_size(
@@ -825,7 +807,7 @@ impl ModDetailView {
                 frame,
                 ui,
                 &layout.author,
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 1.0,
                 0xd9ba70,
                 Rect::from_min_size(
@@ -845,7 +827,7 @@ impl ModDetailView {
                 frame,
                 ui,
                 &layout.time,
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 0.85,
                 0xd9ba70,
                 Rect::from_min_size(
@@ -959,7 +941,7 @@ impl ModDetailView {
                     frame,
                     ui,
                     &field.label,
-                    NativeUiFontName::Medium,
+                    UiFontName::Medium,
                     field.scale,
                     0xd9ba70,
                     Rect::from_min_size(
@@ -1003,10 +985,8 @@ impl ModDetailView {
         let inner_width = width - 6.0;
         let deck = narrative(ui, &summary.summary, inner_width - 28.0)?;
         let deck_height = if summary.summary.is_empty() { 28.0 } else { deck.size().y + 28.0 };
-        let tag_width = inner_width
-            - 28.0
-            - 14.0
-            - measure_native_ui_text("TAGS:", NativeUiFontName::Medium, 1.0) as f32;
+        let tag_width =
+            inner_width - 28.0 - 14.0 - measure_ui_text("TAGS:", UiFontName::Medium, 1.0) as f32;
         let mut tag_lines: Vec<Vec<(&str, f32)>> = Vec::new();
         let mut line_width = 0.0;
         for tag in &summary.tags {
@@ -1047,7 +1027,7 @@ impl ModDetailView {
                 frame,
                 ui,
                 label,
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 1.0,
                 0xd9ba70,
                 Rect::from_min_size(
@@ -1061,7 +1041,7 @@ impl ModDetailView {
                 frame,
                 ui,
                 &value,
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 1.0,
                 0xd9ba70,
                 Rect::from_min_size(
@@ -1077,7 +1057,7 @@ impl ModDetailView {
                 frame,
                 ui,
                 "TAGS:",
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 1.0,
                 0xd9ba70,
                 Rect::from_min_size(
@@ -1095,7 +1075,7 @@ impl ModDetailView {
                         frame,
                         ui,
                         tag,
-                        NativeUiFontName::Medium,
+                        UiFontName::Medium,
                         1.0,
                         0xd9ba70,
                         Rect::from_min_size(
@@ -1229,7 +1209,7 @@ fn empty_panel(
         frame,
         ui,
         text,
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         1.0,
         0xd9ba70,
         Rect::from_min_size(panel.min + Vec2::splat(14.0), Vec2::new(width - 34.0, 22.0)),
@@ -1307,19 +1287,19 @@ fn caption(
         frame,
         ui,
         text,
-        NativeUiFontName::Medium,
+        UiFontName::Medium,
         1.0,
         0xd9ba70,
         Rect::from_min_size(rect.min, Vec2::new(rect.width(), 16.0)),
         false,
     )?;
     if let Some(status) = status {
-        let width = measure_native_ui_text(status, NativeUiFontName::Medium, 0.85) as f32;
+        let width = measure_ui_text(status, UiFontName::Medium, 0.85) as f32;
         ink(
             frame,
             ui,
             status,
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0.85,
             0xd9ba70,
             Rect::from_min_size(
@@ -1332,16 +1312,11 @@ fn caption(
     Ok(())
 }
 fn content_width(ui: &Ui, text: &str, scale: f32) -> Result<f32, String> {
-    let spec = solomon_sim::native_ui_text::NativeUiTextSpec {
+    let spec = solomon_sim::ui_text::UiTextSpec {
         scale: f64::from(scale),
-        ..solomon_sim::native_ui_text::NativeUiTextSpec::new(
-            NativeUiFontName::Medium,
-            text,
-            0.0,
-            0.0,
-        )
+        ..solomon_sim::ui_text::UiTextSpec::new(UiFontName::Medium, text, 0.0, 0.0)
     };
-    let layout = solomon_sim::native_ui_text::layout_native_ui_text(&spec);
+    let layout = solomon_sim::ui_text::layout_ui_text(&spec);
     if layout.unsupported_code_points.is_empty() {
         Ok(layout.width as f32)
     } else {

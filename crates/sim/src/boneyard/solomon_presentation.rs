@@ -48,8 +48,8 @@ pub struct SolomonVisualState {
     pub clip_rect_world: Option<SolomonClipRect>,
     pub direction: usize,
     pub mouth_pose: Option<usize>,
-    pub native_body_record: usize,
-    pub native_mouth_record: Option<usize>,
+    pub body_record: usize,
+    pub mouth_record: Option<usize>,
     pub offset_y: f64,
     pub grave_mark_visible: bool,
     pub visible: bool,
@@ -77,20 +77,20 @@ pub struct SolomonSetPieceLighting {
 
 /// The body is self-lit. Only dirt and the physical lantern query the accepted light field.
 #[must_use]
-pub fn native_solomon_set_piece_lighting(
+pub fn solomon_set_piece_lighting(
     dig_position: Vec2,
     lantern_position: Vec2,
     tint_at: &dyn Fn(Vec2) -> u32,
 ) -> SolomonSetPieceLighting {
     SolomonSetPieceLighting {
         body_tint: 0xffffff,
-        dirt_tint: tint_at(native_solomon_dirt_origin(dig_position)),
+        dirt_tint: tint_at(solomon_dirt_origin(dig_position)),
         lantern_tint: tint_at(lantern_position),
     }
 }
 
 #[must_use]
-pub fn native_solomon_direction(heading_degrees: f64) -> usize {
+pub fn solomon_direction(heading_degrees: f64) -> usize {
     let normalized = ((heading_degrees % 360.0) + 360.0) % 360.0;
     ((normalized + 12.0) / 24.0).trunc() as usize % 15
 }
@@ -136,14 +136,14 @@ pub fn boneyard_solomon_visual_state(
             clip_rect_world: Some(clip_rect(dig.position, 100.0, 100.0, 200.0, 100.0)),
             direction: 0,
             mouth_pose: None,
-            native_body_record: 2 + pose,
-            native_mouth_record: None,
+            body_record: 2 + pose,
+            mouth_record: None,
             offset_y: 5.0,
             grave_mark_visible: true,
             visible: true,
         };
     };
-    let direction = native_solomon_direction(encounter.heading_degrees);
+    let direction = solomon_direction(encounter.heading_degrees);
     match encounter.phase {
         SolomonPhase::Digging => SolomonVisualState {
             body_bank: SolomonBodyBank::Dig,
@@ -151,8 +151,8 @@ pub fn boneyard_solomon_visual_state(
             clip_rect_world: Some(clip_rect(encounter.position, 100.0, 100.0, 200.0, 100.0)),
             direction,
             mouth_pose: None,
-            native_body_record: 2 + encounter.dig_frame,
-            native_mouth_record: None,
+            body_record: 2 + encounter.dig_frame,
+            mouth_record: None,
             offset_y: 5.0 + encounter.dig_body_offset_y,
             grave_mark_visible: true,
             visible: true,
@@ -170,8 +170,8 @@ pub fn boneyard_solomon_visual_state(
                 )),
                 direction,
                 mouth_pose: Some(encounter.mouth_pose),
-                native_body_record: 213 + direction,
-                native_mouth_record: Some(228 + encounter.mouth_pose * 15 + direction),
+                body_record: 213 + direction,
+                mouth_record: Some(228 + encounter.mouth_pose * 15 + direction),
                 offset_y: 5.0 + encounter.transition_offset_y + encounter.motion,
                 grave_mark_visible: true,
                 visible: true,
@@ -209,8 +209,8 @@ fn walk_visual(
         clip_rect_world,
         direction,
         mouth_pose: None,
-        native_body_record: 95 + pose * 15 + direction,
-        native_mouth_record: None,
+        body_record: 95 + pose * 15 + direction,
+        mouth_record: None,
         offset_y,
         grave_mark_visible: false,
         visible: true,
@@ -222,7 +222,7 @@ fn clip_rect(position: Vec2, x: f64, y: f64, width: f64, height: f64) -> Solomon
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSolomonDirtState {
+pub struct SolomonDirtState {
     pub age_ticks: u64,
     pub alpha: f64,
     pub heading_degrees: f64,
@@ -231,23 +231,20 @@ pub struct NativeSolomonDirtState {
 }
 
 #[must_use]
-pub fn native_solomon_dirt_origin(position: Vec2) -> Vec2 {
+pub fn solomon_dirt_origin(position: Vec2) -> Vec2 {
     Vec2::new(fround(position.x - 22.0), fround(position.y - 62.0))
 }
 
 #[must_use]
-pub fn native_solomon_dirt_state_at(
-    solomon_position: Vec2,
-    age_ticks: u64,
-) -> Option<NativeSolomonDirtState> {
+pub fn solomon_dirt_state_at(solomon_position: Vec2, age_ticks: u64) -> Option<SolomonDirtState> {
     if age_ticks >= SOLOMON_DIRT_VISIBLE_TICKS {
         return None;
     }
-    let mut state = NativeSolomonDirtState {
+    let mut state = SolomonDirtState {
         age_ticks: 0,
         alpha: 1.0,
         heading_degrees: 35.0,
-        position: native_solomon_dirt_origin(solomon_position),
+        position: solomon_dirt_origin(solomon_position),
         speed: 2.0,
     };
     for _ in 0..age_ticks {
@@ -268,7 +265,7 @@ pub fn native_solomon_dirt_state_at(
 
 /// The first accepted snapshot establishes a cursor without replaying past dirt throws.
 #[must_use]
-pub fn native_solomon_dirt_event_delta(
+pub fn solomon_dirt_event_delta(
     last_seen_event_id: Option<u64>,
     current: &[SolomonDigEvent],
 ) -> (u64, Vec<SolomonDigEvent>) {
@@ -292,7 +289,7 @@ pub struct SolomonDirtParticle {
     pub event_id: u64,
     birth_tick: u64,
     birth_position: Vec2,
-    pub state: NativeSolomonDirtState,
+    pub state: SolomonDirtState,
 }
 
 /// Cosmetic state belongs to the retained view. Particle roots remain at their birth world
@@ -320,7 +317,7 @@ impl SolomonDirtPaintState {
             return;
         };
         let (event_id, events) =
-            native_solomon_dirt_event_delta(self.last_event_id, &encounter.dig_events);
+            solomon_dirt_event_delta(self.last_event_id, &encounter.dig_events);
         self.last_event_id = Some(event_id);
         for event in events {
             if tick >= event.tick && tick - event.tick < SOLOMON_DIRT_VISIBLE_TICKS {
@@ -328,7 +325,7 @@ impl SolomonDirtPaintState {
                     event_id: event.id,
                     birth_tick: event.tick,
                     birth_position: encounter.position,
-                    state: native_solomon_dirt_state_at(encounter.position, 0).unwrap(),
+                    state: solomon_dirt_state_at(encounter.position, 0).unwrap(),
                 });
             }
         }
@@ -337,7 +334,7 @@ impl SolomonDirtPaintState {
                 return true;
             }
             let age = tick - particle.birth_tick;
-            let Some(state) = native_solomon_dirt_state_at(particle.birth_position, age) else {
+            let Some(state) = solomon_dirt_state_at(particle.birth_position, age) else {
                 return false;
             };
             particle.state = state;

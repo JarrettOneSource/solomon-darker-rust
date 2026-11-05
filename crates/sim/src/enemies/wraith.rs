@@ -5,8 +5,8 @@ use super::effects::{
     DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec, radial_vector,
 };
 use super::model::*;
-use super::movement::{positive_modulo, route_native_enemy_goal};
-use super::path::{PathRecoveryRequest, native_enemy_movement_clock};
+use super::movement::{positive_modulo, route_enemy_goal};
+use super::path::{PathRecoveryRequest, enemy_movement_clock};
 use super::targeting::{target_by_id, target_eligible};
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
@@ -16,7 +16,7 @@ use crate::painter::WorldPainterOrder;
 
 /// `createNativeWraithFlightState`: constructor samples are owned by the caller's stream.
 #[must_use]
-pub fn create_native_wraith_flight_state(
+pub fn create_wraith_flight_state(
     chase_speed: f64,
     resting_sample: f64,
     initial_sample: f64,
@@ -90,7 +90,7 @@ fn move_wraith(
     if status <= (0.0001_f32 as f64) {
         return;
     }
-    let view = context.native_movement_view;
+    let view = context.movement_view;
     let visible = view.is_none_or(|view| {
         view.cameras.iter().any(|camera| {
             actor.position.x + 100.0 >= camera.x
@@ -99,7 +99,7 @@ fn move_wraith(
                 && actor.position.y - 100.0 <= camera.y + camera.height
         })
     });
-    let clock = native_enemy_movement_clock(
+    let clock = enemy_movement_clock(
         actor.id,
         context.tick,
         visible,
@@ -119,7 +119,7 @@ fn move_wraith(
     }
     let (delta, heading) = if clock.full {
         actor.path.clear_route();
-        native_wraith_movement(actor, brain, clock.cadence, status, target)
+        wraith_movement(actor, brain, clock.cadence, status, target)
     } else {
         let wander = radial_vector(
             actor.id as f64 * 225.0,
@@ -127,8 +127,8 @@ fn move_wraith(
         );
         let raw_goal = target
             .unwrap_or_else(|| Vec2::new(actor.position.x + wander.x, actor.position.y + wander.y));
-        let routed = route_native_enemy_goal(actor, raw_goal, target, context, clock.cadence);
-        native_wraith_degraded_movement(
+        let routed = route_enemy_goal(actor, raw_goal, target, context, clock.cadence);
+        wraith_degraded_movement(
             actor,
             brain,
             clock.cadence,
@@ -186,7 +186,7 @@ pub fn step_wraith_flight_clock(brain: &mut WraithBrain, admitted: bool) {
 }
 
 #[must_use]
-pub fn native_wraith_movement(
+pub fn wraith_movement(
     actor: &EnemyActor,
     brain: &WraithBrain,
     cadence: u64,
@@ -220,7 +220,7 @@ pub fn native_wraith_movement(
 }
 
 #[must_use]
-pub fn native_wraith_degraded_movement(
+pub fn wraith_degraded_movement(
     actor: &EnemyActor,
     brain: &WraithBrain,
     cadence: u64,

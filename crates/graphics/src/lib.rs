@@ -339,7 +339,7 @@ pub struct Renderer {
     viewport: [i32; 4],
     logical_size: [f32; 2],
     pixel_center_offset: [f32; 2],
-    native_world_pixel_centers: bool,
+    world_pixel_centers: bool,
     vertices: Vec<f32>,
     bound_texture: Option<u32>,
     sampling: TextureSampling,
@@ -566,7 +566,7 @@ impl Renderer {
                 viewport: [0; 4],
                 logical_size: [1.0; 2],
                 pixel_center_offset: [0.0; 2],
-                native_world_pixel_centers: false,
+                world_pixel_centers: false,
                 vertices: Vec::new(),
                 bound_texture: None,
                 sampling: TextureSampling::Texture,
@@ -975,24 +975,24 @@ impl Renderer {
 
     /// InventoryScreen's scratch target uses D3D9 integer pixel centers and native
     /// per-channel alpha. Ordinary UI groups keep SourceOver and WebGL centers.
-    pub fn render_native_ui_capture(
+    pub fn render_ui_capture(
         &mut self,
         target: &RenderTarget,
         logical: [f32; 2],
         draw: impl FnOnce(&mut Self),
     ) {
         self.flush();
-        let centers = self.native_world_pixel_centers;
+        let centers = self.world_pixel_centers;
         let alpha = self.standard_alpha;
         let erasing = self.erasing;
         let opacity = self.opacity;
-        self.native_world_pixel_centers = true;
+        self.world_pixel_centers = true;
         self.standard_alpha = false;
         self.erasing = false;
         self.opacity = 1.0;
         self.bind_blend();
         self.render_to_color(target, logical, [0.0; 4], draw);
-        self.native_world_pixel_centers = centers;
+        self.world_pixel_centers = centers;
         self.standard_alpha = alpha;
         self.erasing = erasing;
         self.opacity = opacity;
@@ -1135,12 +1135,12 @@ impl Renderer {
             self.set_clip(None);
             let viewport = self.viewport;
             let logical_size = self.logical_size;
-            let native_centers = self.native_world_pixel_centers;
+            let centers = self.world_pixel_centers;
             let saturation = self.saturation;
             let opacity = self.opacity;
             self.viewport = [0, 0, physical[0], physical[1]];
             self.logical_size = logical;
-            self.native_world_pixel_centers = false;
+            self.world_pixel_centers = false;
             self.opacity = 1.0;
             self.gl.viewport(0, 0, physical[0], physical[1]);
             self.bind_projection(logical, [physical[0] as f32, physical[1] as f32]);
@@ -1153,7 +1153,7 @@ impl Renderer {
             self.set_sampling(sampling);
             self.viewport = viewport;
             self.logical_size = logical_size;
-            self.native_world_pixel_centers = native_centers;
+            self.world_pixel_centers = centers;
             self.opacity = opacity;
             self.gl.viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
             self.bind_projection(logical_size, [viewport[2] as f32, viewport[3] as f32]);
@@ -1245,8 +1245,8 @@ impl Renderer {
 
     /// Source `installNativePixelCenterProjection` changes subsequent projection
     /// binds, including offscreen targets. Enable only on its Hub/Boneyard scopes.
-    pub fn set_native_world_pixel_centers(&mut self, enabled: bool) {
-        self.native_world_pixel_centers = enabled;
+    pub fn set_world_pixel_centers(&mut self, enabled: bool) {
+        self.world_pixel_centers = enabled;
     }
 
     fn bind_projection(&mut self, logical: [f32; 2], physical: [f32; 2]) {
@@ -1257,7 +1257,7 @@ impl Renderer {
             self.gl.uniform_2_f32(Some(&self.u_logical_size), logical[0], logical[1]);
             // Source adds projection.a/d * (0.5 / targetResolution). Express that
             // same translation in this target's logical units before projection.
-            let offset = if self.native_world_pixel_centers {
+            let offset = if self.world_pixel_centers {
                 [
                     (0.5 * f64::from(logical[0]) / f64::from(physical[0])) as f32,
                     (0.5 * f64::from(logical[1]) / f64::from(physical[1])) as f32,

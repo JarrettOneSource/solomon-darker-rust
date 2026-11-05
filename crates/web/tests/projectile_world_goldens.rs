@@ -4,9 +4,7 @@ use serde_json::Value;
 use solomon_assets::boneyard::decode_scene;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::collision::BoneyardCollisionWorld;
-use solomon_sim::boneyard::feedback::{
-    NativeEnemyWorldFeedback, native_enemy_world_feedback_impulses,
-};
+use solomon_sim::boneyard::feedback::{EnemyWorldFeedback, enemy_world_feedback_impulses};
 use solomon_sim::boneyard::projectile_world::{
     BoneyardProjectileViewport, BoneyardProjectileWorld, boneyard_projectile_point_gain,
 };
@@ -28,8 +26,8 @@ fn viewport(value: &Value) -> BoneyardProjectileViewport {
     }
 }
 
-fn feedback(value: &Value) -> NativeEnemyWorldFeedback {
-    NativeEnemyWorldFeedback {
+fn feedback(value: &Value) -> EnemyWorldFeedback {
+    EnemyWorldFeedback {
         accumulator: value["accumulator"].as_f64().unwrap(),
         magnitude: value["magnitude"].as_f64().unwrap(),
     }
@@ -74,7 +72,7 @@ fn projectile_contact_kinds_stock_retention_cameras_and_feedback_match_the_websi
                     projectile_id: 1,
                     start: point(&query["start"]),
                     end: point(&query["end"]),
-                    native_exclusion_mask: query["nativeExclusionMask"].as_u64().unwrap() as u32,
+                    exclusion_mask: query["nativeExclusionMask"].as_u64().unwrap() as u32,
                 },
                 "point" => EnemyProjectileWorldQuery::Point {
                     projectile_id: 1,
@@ -110,7 +108,7 @@ fn projectile_contact_kinds_stock_retention_cameras_and_feedback_match_the_websi
         let output = terminal(record["output"].as_str().unwrap());
         let count = record["count"].as_u64().map(|count| count as usize);
         let expected: Vec<f64> = serde_json::from_value(record["expected"].clone()).unwrap();
-        assert_eq!(native_enemy_world_feedback_impulses(output, count), expected);
+        assert_eq!(enemy_world_feedback_impulses(output, count), expected);
     }
     for record in fixture["transitions"].as_array().unwrap() {
         let mut state = feedback(&record["state"]);

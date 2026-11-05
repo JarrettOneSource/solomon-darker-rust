@@ -2,14 +2,14 @@
 
 use solomon_sim::Vec2;
 use solomon_sim::float;
-use solomon_sim::presentation::multiply_native_tints;
+use solomon_sim::presentation::multiply_tints;
 use solomon_sim::secondary::presentation::*;
-use solomon_sim::spells::air::{NativeAirCoronaPlan, NativeAirMesh};
-use solomon_sim::spells::weld::NativeFlameLashBounds;
+use solomon_sim::spells::air::{AirCoronaPlan, AirMesh};
+use solomon_sim::spells::weld::FlameLashBounds;
 
 use super::SecondaryView;
+use crate::beam_mesh::clip_to_rect;
 use crate::courtyard::Camera;
-use crate::native_mesh::clip_native_mesh_in_rect;
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
 pub(super) struct TargetDraw {
@@ -27,12 +27,12 @@ pub(super) struct SpriteRecord<'a> {
     pub width: f64,
     pub height: f64,
     pub origin: Vec2,
-    pub native_texels: bool,
+    pub texels: bool,
 }
 
 impl SecondaryView {
-    pub(super) fn record(&self, atlas: NativeSecondaryAtlas, entry: usize) -> SpriteRecord<'_> {
-        if atlas == NativeSecondaryAtlas::Clothes {
+    pub(super) fn record(&self, atlas: SecondaryAtlas, entry: usize) -> SpriteRecord<'_> {
+        if atlas == SecondaryAtlas::Clothes {
             let texture =
                 &self.clothes[entry.checked_sub(1).expect("Clothes secondary entry is 1 or 2")];
             return SpriteRecord {
@@ -41,15 +41,15 @@ impl SecondaryView {
                 width: f64::from(texture.width),
                 height: f64::from(texture.height),
                 origin: Vec2::ZERO,
-                native_texels: false,
+                texels: false,
             };
         }
         let atlas = match atlas {
-            NativeSecondaryAtlas::BadGuys => &self.bad_guys,
-            NativeSecondaryAtlas::DeadHawg => &self.dead_hawg,
-            NativeSecondaryAtlas::Demon => &self.demon,
-            NativeSecondaryAtlas::Golem => &self.golem,
-            NativeSecondaryAtlas::Clothes => unreachable!(),
+            SecondaryAtlas::BadGuys => &self.bad_guys,
+            SecondaryAtlas::DeadHawg => &self.dead_hawg,
+            SecondaryAtlas::Demon => &self.demon,
+            SecondaryAtlas::Golem => &self.golem,
+            SecondaryAtlas::Clothes => unreachable!(),
         };
         let record = &atlas.records[entry];
         SpriteRecord {
@@ -58,7 +58,7 @@ impl SecondaryView {
             width: f64::from(record.width),
             height: f64::from(record.height),
             origin: Vec2::new(f64::from(record.center_x), f64::from(record.center_y)),
-            native_texels: true,
+            texels: true,
         }
     }
 
@@ -69,11 +69,11 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        draw: &NativeSecondarySpriteDraw,
+        draw: &SecondarySpriteDraw,
         region_tint: [f32; 3],
     ) {
         let mode = match draw.color_mode {
-            Some(NativeSecondaryColorMode::AlphaMask) => TextureColorMode::WhiteAlphaFilter,
+            Some(SecondaryColorMode::AlphaMask) => TextureColorMode::WhiteAlphaFilter,
             _ => TextureColorMode::Texture,
         };
         self.draw_sprite_with_color_mode(renderer, camera, root, draw, region_tint, mode);
@@ -86,7 +86,7 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        draw: &NativeSecondarySpriteDraw,
+        draw: &SecondarySpriteDraw,
         region_tint: [f32; 3],
         mode: TextureColorMode,
     ) {
@@ -118,7 +118,7 @@ impl SecondaryView {
         &self,
         camera: &Camera,
         root: Vec2,
-        draw: &NativeSecondarySpriteDraw,
+        draw: &SecondarySpriteDraw,
         tint: [f32; 3],
     ) -> (SpriteRecord<'_>, [Vertex; 4]) {
         let record = self.record(draw.atlas, draw.entry);
@@ -232,7 +232,7 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        draw: &NativeSecondaryGradientDraw,
+        draw: &SecondaryGradientDraw,
     ) {
         let left = root.x + draw.top_left.x;
         let top = root.y + draw.top_left.y;
@@ -259,7 +259,7 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        draw: &NativeSecondaryMeshDraw,
+        draw: &SecondaryMeshDraw,
         tint: [f32; 3],
     ) {
         let group = rgba(draw.tint, draw.alpha, tint);
@@ -294,7 +294,7 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        draw: &NativeSecondaryQuadDraw,
+        draw: &SecondaryQuadDraw,
         tint: [f32; 3],
     ) {
         let record = draw.atlas.zip(draw.entry).map(|(atlas, entry)| self.record(atlas, entry));
@@ -327,11 +327,11 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        mesh: &NativeAirMesh,
+        mesh: &AirMesh,
         entry: usize,
         tint: [f32; 4],
     ) {
-        let record = self.record(NativeSecondaryAtlas::BadGuys, entry);
+        let record = self.record(SecondaryAtlas::BadGuys, entry);
         let [top_left, _, bottom_right, _] = texels(&record);
         let vertices = mesh
             .vertices
@@ -361,14 +361,14 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        corona: &NativeAirCoronaPlan,
+        corona: &AirCoronaPlan,
     ) {
         let root = Vec2::new(root.x + corona.center.x, root.y + corona.center.y);
         for sprite in &corona.draws {
-            let draw = NativeSecondarySpriteDraw {
+            let draw = SecondarySpriteDraw {
                 alpha: sprite.alpha * corona.alpha,
-                atlas: NativeSecondaryAtlas::BadGuys,
-                blend: NativeSecondaryBlend::Add,
+                atlas: SecondaryAtlas::BadGuys,
+                blend: SecondaryBlend::Add,
                 color_mode: None,
                 clip: None,
                 entry: sprite.record,
@@ -418,7 +418,7 @@ impl SecondaryView {
 pub(super) fn rgba(tint: u32, alpha: f64, light: [f32; 3]) -> [f32; 4] {
     let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u32;
     let light = byte(light[0]) << 16 | byte(light[1]) << 8 | byte(light[2]);
-    let color = multiply_native_tints(tint, light);
+    let color = multiply_tints(tint, light);
     [
         ((color >> 16) & 255) as f32 / 255.0,
         ((color >> 8) & 255) as f32 / 255.0,
@@ -430,7 +430,7 @@ pub(super) fn rgba(tint: u32, alpha: f64, light: [f32; 3]) -> [f32; 4] {
 pub(super) fn texels(record: &SpriteRecord<'_>) -> [[f32; 2]; 4] {
     let [x, y, width, height] = record.source;
     // `nativeSpriteRecordUvs`: retained half-texel start and quarter-texel end.
-    let (left, top, right, bottom) = if record.native_texels {
+    let (left, top, right, bottom) = if record.texels {
         (x + 0.5, y + 0.5, x + width + 0.25, y + height + 0.25)
     } else {
         (x, y, x + width, y + height)
@@ -447,17 +447,17 @@ fn indexed_triangles(vertices: &[Vertex], indices: &[u32]) -> Vec<[Vertex; 3]> {
     triangles.iter().map(|triangle| triangle.map(|index| vertices[index as usize])).collect()
 }
 
-fn blend(value: NativeSecondaryBlend) -> BlendMode {
+fn blend(value: SecondaryBlend) -> BlendMode {
     match value {
-        NativeSecondaryBlend::Normal => BlendMode::Normal,
-        NativeSecondaryBlend::Add => BlendMode::Add,
+        SecondaryBlend::Normal => BlendMode::Normal,
+        SecondaryBlend::Add => BlendMode::Add,
     }
 }
 
 /// Sprite tint is uniform. The existing Region clipper retains position and UV
 /// interpolation while the sprite keeps that tint and the enclosing GPU state.
 fn clipped_sprite_triangles(vertices: [Vertex; 4], clip: [f32; 4]) -> Vec<[Vertex; 3]> {
-    let mesh = NativeAirMesh {
+    let mesh = AirMesh {
         indices: vec![0, 1, 2, 0, 2, 3],
         vertices: vertices
             .iter()
@@ -468,10 +468,10 @@ fn clipped_sprite_triangles(vertices: [Vertex; 4], clip: [f32; 4]) -> Vec<[Verte
             .map(|vertex| Vec2::new(f64::from(vertex.texel[0]), f64::from(vertex.texel[1])))
             .collect(),
     };
-    clip_native_mesh_in_rect(
+    clip_to_rect(
         &mesh,
         Vec2::ZERO,
-        NativeFlameLashBounds {
+        FlameLashBounds {
             x: f64::from(clip[0]),
             y: f64::from(clip[1]),
             width: f64::from(clip[2]),

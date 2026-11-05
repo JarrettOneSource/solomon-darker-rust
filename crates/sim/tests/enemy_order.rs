@@ -48,10 +48,10 @@ fn step(world: &mut EnemyWorld, players: &[EnemyTarget], tick: u64, order: &mut 
             roll_loot_seed: None,
             native_visibility: None,
             projected_point_visible: None,
-            native_view_bounds: None,
+            view_bounds: None,
             puppet_targets: &[],
             light_at: None,
-            native_movement_view: None,
+            movement_view: None,
         },
         Some(order),
         None,
@@ -217,7 +217,7 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
 
 #[test]
 fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
-    use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellOwner, NativeBossSpell};
+    use solomon_sim::enemies::boss_spell::{BossSpell, BossSpellKind, BossSpellOwner};
 
     let mut live = EnemyWorld::new("boss-spell-order", 50);
     let mut order = WorldPainterOrder::default();
@@ -241,7 +241,7 @@ fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
     ];
     let mut records = Vec::new();
     for (index, kind) in kinds.into_iter().enumerate() {
-        let record = NativeBossSpell {
+        let record = BossSpell {
             owner: BossSpellOwner {
                 age_ticks: 0,
                 damage: 1.0,

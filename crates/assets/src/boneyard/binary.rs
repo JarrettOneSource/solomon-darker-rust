@@ -106,7 +106,7 @@ pub fn decode_boneyard(bytes: &[u8]) -> Result<BoneyardScene, String> {
             .collect(),
         solomon_dig: None,
     };
-    materialize_native_scenery(&mut scene);
+    materialize_scenery(&mut scene);
     materialize_opening_solomon(&mut scene);
     Ok(scene)
 }
@@ -450,7 +450,7 @@ fn decode_terrain(chunk: &NativeChunkNode, index: usize) -> BoneyardTerrain {
 
 /// Current `project-boneyard.ts::materializeNativeBoneyardScenery` retires
 /// stored Tree15..18, then appends freshly constructed Scrubs in source order.
-fn materialize_native_scenery(scene: &mut BoneyardScene) {
+fn materialize_scenery(scene: &mut BoneyardScene) {
     let mut replacements = Vec::new();
     scene.objects.retain(|object| {
         let variant = object.variant.unwrap_or(0);

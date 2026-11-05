@@ -3,7 +3,7 @@
 mod common;
 
 use serde_json::{Value, json};
-use solomon_sim::boneyard::tutorial::NativeTutorialState;
+use solomon_sim::boneyard::tutorial::TutorialState;
 use solomon_sim::boneyard::waves::director::{WaveDirector, WavePhase};
 use solomon_sim::boneyard::waves::programs::{BossPhase, FoulshaftPhase};
 use solomon_sim::boneyard::waves::{WaveDef, WaveGroup, WaveGroupEntry};
@@ -174,7 +174,7 @@ fn current_lua_wave_commands_preserve_holds_signed_edges_and_request_generations
             }
             "tutorial" => {
                 let world = game.boneyard.as_mut().unwrap();
-                world.tutorial = Some(NativeTutorialState::new(
+                world.tutorial = Some(TutorialState::new(
                     world.loaded.scene.spawn.position,
                     0,
                     &world.loaded.seed,

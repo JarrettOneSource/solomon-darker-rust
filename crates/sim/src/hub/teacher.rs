@@ -8,7 +8,7 @@ use super::painter::{PainterLane, PainterLayer};
 use crate::collision::Vec2;
 use crate::float::fround;
 use crate::painter::PainterRegistration;
-use crate::random_domain::{native_random_float_from_word, native_random_int_from_word};
+use crate::random_domain::{random_float_from_word, random_int_from_word};
 
 pub const HUB_TEACHER_TICKS_PER_SECOND: u64 = 100;
 pub const HUB_TEACHER_CAST_TICKS: u64 = 268;
@@ -54,7 +54,7 @@ pub fn hub_teacher_frame_at(absolute_tick: u64, seed: u32) -> u32 {
     if tick == 0 {
         0
     } else if tick < HUB_TEACHER_CAST_TICKS {
-        native_random_int_from_word(teacher_word(seed, absolute_tick, 0), 2)
+        random_int_from_word(teacher_word(seed, absolute_tick, 0), 2)
     } else if tick < HUB_TEACHER_IDLE_START_TICK {
         2
     } else {
@@ -183,22 +183,19 @@ pub fn hub_teacher_burst_at(absolute_tick: u64, seed: u32) -> HubTeacherBurst {
 
     let age_ticks = cycle_tick - HUB_TEACHER_CAST_TICKS;
     let release_word = |channel: u32| teacher_word(seed, release_index, channel);
-    let flare_scale = fround(1.0 + native_random_float_from_word(release_word(1), 0.1));
-    let frame_scale = fround(2.0 - native_random_float_from_word(release_word(2), 0.5));
-    let frame_factor = fround(1.0 + native_random_float_from_word(release_word(3), 0.2));
+    let flare_scale = fround(1.0 + random_float_from_word(release_word(1), 0.1));
+    let frame_scale = fround(2.0 - random_float_from_word(release_word(2), 0.5));
+    let frame_factor = fround(1.0 + random_float_from_word(release_word(3), 0.2));
     let frame_step = fround(0.75 * frame_factor);
     let frame_alpha_loss = fround(0.02 * frame_factor);
     let frame = fround(frame_step * age_ticks as f64).trunc();
-    let frame_alpha = native_decay(1.0, frame_alpha_loss, age_ticks);
-    let mirrored = native_random_int_from_word(release_word(4), 2) == 1;
+    let frame_alpha = decay(1.0, frame_alpha_loss, age_ticks);
+    let mirrored = random_int_from_word(release_word(4), 2) == 1;
 
-    let core = HubTeacherBurstMember::decaying(native_decay(1.0, 0.1, age_ticks), 6.0, 4.0);
-    let flare = HubTeacherBurstMember::decaying(
-        native_decay(1.0, 0.0075, age_ticks),
-        flare_scale,
-        flare_scale,
-    );
-    let column = HubTeacherBurstMember::decaying(native_decay(2.0, 0.04, age_ticks), 1.0, 1.0);
+    let core = HubTeacherBurstMember::decaying(decay(1.0, 0.1, age_ticks), 6.0, 4.0);
+    let flare =
+        HubTeacherBurstMember::decaying(decay(1.0, 0.0075, age_ticks), flare_scale, flare_scale);
+    let column = HubTeacherBurstMember::decaying(decay(2.0, 0.04, age_ticks), 1.0, 1.0);
     let frames = HubTeacherBurstFrames {
         member: HubTeacherBurstMember {
             alpha: frame_alpha.clamp(0.0, 1.0),
@@ -232,7 +229,7 @@ impl HubTeacherBurst {
 }
 
 /// Subtracts `loss` from `initial` once per tick in single precision, stopping at zero.
-fn native_decay(initial: f64, loss: f64, age_ticks: u64) -> f64 {
+fn decay(initial: f64, loss: f64, age_ticks: u64) -> f64 {
     let native_loss = fround(loss);
     let mut value = fround(initial);
     for _ in 0..age_ticks {
@@ -296,9 +293,9 @@ mod tests {
 
     #[test]
     fn decay_stops_at_zero_in_single_precision() {
-        assert_eq!(native_decay(1.0, 0.1, 0), 1.0);
-        assert_eq!(native_decay(1.0, 0.1, 1), fround(1.0 - fround(0.1)));
-        assert!(native_decay(1.0, 0.1, 20) <= 0.0);
-        assert_eq!(native_decay(1.0, 0.1, 20), native_decay(1.0, 0.1, 200));
+        assert_eq!(decay(1.0, 0.1, 0), 1.0);
+        assert_eq!(decay(1.0, 0.1, 1), fround(1.0 - fround(0.1)));
+        assert!(decay(1.0, 0.1, 20) <= 0.0);
+        assert_eq!(decay(1.0, 0.1, 20), decay(1.0, 0.1, 200));
     }
 }

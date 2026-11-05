@@ -15,7 +15,7 @@ use solomon_sim::hub::memorial::{
 };
 use solomon_sim::modding::{LuaObject, LuaValue};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 
 pub const MAX_GAME_MEMORIAL_BYTES: usize = 256 * 1024;
 pub const MEMORIAL_SIZE_ERROR: &str = "Game memorial state exceeds its bounded document size";
@@ -272,8 +272,8 @@ fn equipment(
                 let source = record(value, &field, &["kind", "selector"])?;
                 let kind = string(source.get("kind"), &format!("{field}.kind"), 8)?;
                 let kind = match kind.as_str() {
-                    "staff" => NativePlayerWeaponKind::Staff,
-                    "wand" => NativePlayerWeaponKind::Wand,
+                    "staff" => PlayerWeaponKind::Staff,
+                    "wand" => PlayerWeaponKind::Wand,
                     _ => return Err(format!("{field}.kind is not supported")),
                 };
                 Some(PlayerWeaponAppearance {

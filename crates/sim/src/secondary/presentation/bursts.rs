@@ -5,13 +5,13 @@ use super::draws::*;
 use super::types::*;
 use crate::float;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
-use crate::{NativeRng, Vec2};
+use crate::secondary::SecondaryActorState;
+use crate::{Rng, Vec2};
 
 pub(super) const MAGIC_TRAP_FULL_DRAW_THRESHOLD: f64 = 0.99_f32 as f64;
 pub(super) const FIRE_DRAW_SCALE: f64 = 1.1_f32 as f64;
 
-pub(super) fn native_ether_fade_scalar(initial: f64, decrement: f64, age: f64) -> f64 {
+pub(super) fn ether_fade_scalar(initial: f64, decrement: f64, age: f64) -> f64 {
     let mut life = fround(initial);
     for _ in 0..=age.floor().max(0.0) as u64 {
         life = fround(life - fround(decrement));
@@ -20,14 +20,14 @@ pub(super) fn native_ether_fade_scalar(initial: f64, decrement: f64, age: f64) -
 }
 
 #[must_use]
-pub fn dampen_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn dampen_draws(actor: &SecondaryActorState) -> Vec<SecondarySpriteDraw> {
     dampen_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn dampen_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let mut rng = actor
         .presentation_rng
         .clone()
@@ -55,11 +55,8 @@ pub(super) fn dampen_draws_at_age(
         }
         let radians = degrees_to_radians(f64::from(heading));
         let scale = fround(1.5 + scale);
-        let mut draw = NativeSecondarySpriteDraw::new(
-            actor,
-            NativeSecondaryAtlas::BadGuys,
-            (10 + record) as usize,
-        );
+        let mut draw =
+            SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, (10 + record) as usize);
         draw.alpha = alpha;
         draw.offset = if distance == 0.0 {
             Vec2::ZERO
@@ -85,9 +82,9 @@ pub(super) fn dampen_draws_at_age(
             continue;
         }
         let scale = fround(0.75 + scale);
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 48);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 48);
         draw.alpha = alpha.min(1.0);
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.role = format!("dampen-additive-{index}");
         draw.rotation_radians = degrees_to_radians(rotation);
         draw.scale_x = scale;
@@ -98,14 +95,14 @@ pub(super) fn dampen_draws_at_age(
 }
 
 #[must_use]
-pub fn shield_explosion_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn shield_explosion_draws(actor: &SecondaryActorState) -> Vec<SecondarySpriteDraw> {
     shield_explosion_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn shield_explosion_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let rng = actor
         .presentation_rng
         .as_ref()
@@ -113,7 +110,7 @@ pub(super) fn shield_explosion_draws_at_age(
     let mut draws = Vec::new();
     let flash = repeated_float_decay(1.0, 0.1, age);
     if flash > 0.0 {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 15);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 15);
         draw.alpha = flash.min(1.0);
         draw.offset = Vec2::new(0.0, -25.0);
         draw.role = "explosive-shield-center-flash".into();
@@ -124,9 +121,9 @@ pub(super) fn shield_explosion_draws_at_age(
     let ring = repeated_float_decay(1.5, 0.05, age);
     if ring > 0.0 {
         let scale = repeated_float_multiply(2.5, 1.01, age);
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::Clothes, 2);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::Clothes, 2);
         draw.alpha = ring.min(1.0);
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.offset = Vec2::new(0.0, -35.0);
         draw.role = "explosive-shield-expanding-ring".into();
         draw.scale_x = scale;
@@ -138,14 +135,14 @@ pub(super) fn shield_explosion_draws_at_age(
 }
 
 #[must_use]
-pub fn magic_trap_burst_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn magic_trap_burst_draws(actor: &SecondaryActorState) -> Vec<SecondarySpriteDraw> {
     magic_trap_burst_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn magic_trap_burst_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let rng = actor
         .presentation_rng
         .as_ref()
@@ -153,7 +150,7 @@ pub(super) fn magic_trap_burst_draws_at_age(
     let mut draws = Vec::new();
     let flash = repeated_float_decay(1.0, 0.1, age);
     if flash > 0.0 {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 15);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 15);
         draw.alpha = flash.min(1.0);
         draw.offset = Vec2::new(0.0, -25.0);
         draw.role = "magic-trap-center-flash".into();
@@ -166,14 +163,14 @@ pub(super) fn magic_trap_burst_draws_at_age(
 }
 
 #[must_use]
-pub fn mindblast_burst_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn mindblast_burst_draws(actor: &SecondaryActorState) -> Vec<SecondarySpriteDraw> {
     mindblast_burst_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn mindblast_burst_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let rng = actor
         .presentation_rng
         .as_ref()
@@ -181,7 +178,7 @@ pub(super) fn mindblast_burst_draws_at_age(
     let mut draws = Vec::new();
     let core = repeated_float_decay(1.0, 0.025, age);
     if core > 0.0 {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 15);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 15);
         draw.alpha = core.min(1.0);
         draw.offset = Vec2::new(0.0, -25.0);
         draw.role = "mindblast-center-flash".into();
@@ -194,9 +191,9 @@ pub(super) fn mindblast_burst_draws_at_age(
         if alpha <= 0.0 {
             continue;
         }
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::Clothes, 2);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::Clothes, 2);
         draw.alpha = alpha.min(1.0);
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.offset = Vec2::new(0.0, -35.0);
         draw.role = format!("mindblast-expanding-ring-{index}");
         draw.scale_x = repeated_float_multiply(4.5, growth, age);
@@ -209,12 +206,12 @@ pub(super) fn mindblast_burst_draws_at_age(
 }
 
 fn fuzzy_spear_burst_draws(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
-    source: &NativeRng,
+    source: &Rng,
     prefix: &str,
     mindblast: bool,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let mut rng = source.clone();
     let mut draws = Vec::new();
     for index in 0..2 {
@@ -231,13 +228,10 @@ fn fuzzy_spear_burst_draws(
         if frame >= 10.0 {
             continue;
         }
-        let mut draw = NativeSecondarySpriteDraw::new(
-            actor,
-            NativeSecondaryAtlas::BadGuys,
-            158 + frame.floor() as usize,
-        );
+        let mut draw =
+            SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 158 + frame.floor() as usize);
         draw.alpha = 1.0;
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         if !mindblast {
             draw.offset = Vec2::new(0.0, -35.0);
         }
@@ -274,9 +268,9 @@ fn fuzzy_spear_burst_draws(
             );
         }
         let sign = if hash_unit(actor.id + index, age * 101 + index) < 0.5 { -1.0 } else { 1.0 };
-        let mut base = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 17);
+        let mut base = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 17);
         base.alpha = life.min(1.0);
-        base.blend = NativeSecondaryBlend::Add;
+        base.blend = SecondaryBlend::Add;
         base.offset = offset;
         base.role = format!("{prefix}-fuzzy-spear-base-{index}");
         base.rotation_radians = radians;

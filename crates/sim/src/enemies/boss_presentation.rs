@@ -2,11 +2,11 @@
 //! and `native-ultra-banish-presentation.ts`. Mesh-only spells retain their own view paths.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpell, BossSpellKind};
 use super::death_presentation::EnemyBanishGradient;
-use super::presentation::native_death_magic_layers;
+use super::presentation::death_magic_layers;
 use crate::float;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EnemyBossSpellPlan {
@@ -15,12 +15,8 @@ pub struct EnemyBossSpellPlan {
 }
 
 #[must_use]
-pub fn native_boss_spell_plan(
-    spell: &NativeBossSpell,
-    tick: u64,
-    view_height: f64,
-) -> EnemyBossSpellPlan {
-    let mut rng = NativeRng::new((spell.owner.id as u64 + tick) as i64);
+pub fn boss_spell_plan(spell: &BossSpell, tick: u64, view_height: f64) -> EnemyBossSpellPlan {
+    let mut rng = Rng::new((spell.owner.id as u64 + tick) as i64);
     let layers = match &spell.kind {
         BossSpellKind::UltraBanish { alpha, flash_alpha, .. } => {
             return ultra_banish_plan(*alpha, *flash_alpha, view_height, &mut rng);
@@ -229,14 +225,14 @@ fn radians(degrees: f64) -> f64 {
     degrees * std::f64::consts::PI / 180.0
 }
 
-fn death_magic(scale: f64, phase: f64, rng: &mut NativeRng) -> Vec<EnemySpriteLayer> {
-    native_death_magic_layers(Vec2::ZERO, scale, phase, rng)
+fn death_magic(scale: f64, phase: f64, rng: &mut Rng) -> Vec<EnemySpriteLayer> {
+    death_magic_layers(Vec2::ZERO, scale, phase, rng)
         .into_iter()
         .map(EnemySpriteLayer::from)
         .collect()
 }
 
-fn mouth_beam_spark(rng: &mut NativeRng) -> Vec<EnemySpriteLayer> {
+fn mouth_beam_spark(rng: &mut Rng) -> Vec<EnemySpriteLayer> {
     if rng.draw_integer(8) != 1 {
         return Vec::new();
     }
@@ -251,7 +247,7 @@ fn mouth_beam_spark(rng: &mut NativeRng) -> Vec<EnemySpriteLayer> {
     }]
 }
 
-fn eye_laser(phase_deg: f64, rng: &mut NativeRng) -> Vec<EnemySpriteLayer> {
+fn eye_laser(phase_deg: f64, rng: &mut Rng) -> Vec<EnemySpriteLayer> {
     rng.draw_scaled_float(0.25, true);
     let size = rng.draw_scaled_float(f64::from(0.15_f32), true);
     let glow_size = rng.draw_scaled_float(f64::from(0.15_f32), true);
@@ -273,7 +269,7 @@ fn eye_laser(phase_deg: f64, rng: &mut NativeRng) -> Vec<EnemySpriteLayer> {
     ]
 }
 
-fn unholy_spit(progress: f64, height: f64, rng: &mut NativeRng) -> Vec<EnemySpriteLayer> {
+fn unholy_spit(progress: f64, height: f64, rng: &mut Rng) -> Vec<EnemySpriteLayer> {
     let offset = Vec2::new(0.0, -float::sin(progress * std::f64::consts::PI) * height);
     let mut layers = Vec::new();
     for (index, scale) in [3.0, 3.0, 2.0].into_iter().enumerate() {
@@ -299,7 +295,7 @@ fn ultra_banish_plan(
     alpha: f64,
     flash_alpha: f64,
     view_height: f64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> EnemyBossSpellPlan {
     let progress = alpha - rng.draw_scaled_float(f64::from(0.2_f32), false);
     let scale = 5.0 + rng.draw_scaled_float(4.0, false);

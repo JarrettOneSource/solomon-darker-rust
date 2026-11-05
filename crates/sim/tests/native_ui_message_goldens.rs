@@ -2,10 +2,8 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::NativeUiFontName;
-use solomon_sim::native_ui_text::messages::{
-    NativeUiMessageDataLineSpec, layout_native_ui_single_action_message,
-};
+use solomon_sim::ui_text::UiFontName;
+use solomon_sim::ui_text::messages::{UiMessageDataLineSpec, layout_ui_single_action_message};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -22,10 +20,10 @@ fn stock_notices_keep_native_msgbox_wrapping_and_measured_frames() {
     for case in fixture["cases"].as_array().unwrap() {
         let mut inputs = Vec::new();
         for line in case["lines"].as_array().unwrap() {
-            inputs.push(NativeUiMessageDataLineSpec {
+            inputs.push(UiMessageDataLineSpec {
                 font: match line["font"].as_str().unwrap() {
-                    "menu" => NativeUiFontName::Menu,
-                    "medium" => NativeUiFontName::Medium,
+                    "menu" => UiFontName::Menu,
+                    "medium" => UiFontName::Medium,
                     _ => unreachable!(),
                 },
                 text: line["text"].as_str().unwrap(),
@@ -33,7 +31,7 @@ fn stock_notices_keep_native_msgbox_wrapping_and_measured_frames() {
                 gap_after: line["gapAfter"].as_f64().unwrap_or(0.0),
             });
         }
-        let layout = layout_native_ui_single_action_message(
+        let layout = layout_ui_single_action_message(
             Vec2::new(case["anchor"]["x"].as_f64().unwrap(), case["anchor"]["y"].as_f64().unwrap()),
             &inputs,
         )

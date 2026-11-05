@@ -5,7 +5,7 @@ use solomon_sim::Vec2;
 use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::enemies::config::EnemyArenaScalars;
 use solomon_sim::enemies::model::{EnemyBrain, EnemyTarget};
-use solomon_sim::enemies::path::{EnemyNavigation, NativeEnemyPathState};
+use solomon_sim::enemies::path::{EnemyNavigation, EnemyPathState};
 use solomon_sim::enemies::world::*;
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::painter::WorldPainterOrder;
@@ -56,7 +56,7 @@ impl EnemyGeometry for ClearWorld {
     }
 }
 
-fn path_values(path: NativeEnemyPathState) -> [f64; 20] {
+fn path_values(path: EnemyPathState) -> [f64; 20] {
     let previous = path.route_previous_vector.unwrap_or(Vec2::ZERO);
     let waypoints = path.route_waypoints.unwrap_or([Vec2::ZERO; 2]);
     [
@@ -114,7 +114,7 @@ fn current_wraith_world_motion_and_shared_random_streams_match_the_source() {
         );
         let admitted = case.view != "unlit";
         let intensity = if admitted { 1.0 } else { 0.0 };
-        let visible = |_| NativeEnemyVisibility { admitted, intensity };
+        let visible = |_| EnemyVisibility { admitted, intensity };
         let light_at = |_| intensity;
         let cameras = [if case.view == "offscreen" {
             BoneyardBounds::new(2000.0, 2000.0, 500.0, 500.0)
@@ -152,10 +152,10 @@ fn current_wraith_world_motion_and_shared_random_streams_match_the_source() {
                     roll_loot_seed: None,
                     native_visibility: Some(&visible),
                     projected_point_visible: None,
-                    native_view_bounds: None,
+                    view_bounds: None,
                     puppet_targets: &[],
                     light_at: Some(&light_at),
-                    native_movement_view: Some(NativeEnemyMovementView {
+                    movement_view: Some(EnemyMovementView {
                         arena_bounds: BoneyardBounds::new(0.0, 0.0, 1000.0, 1000.0),
                         cameras: &cameras,
                         enhanced_effects: case.view != "basic",

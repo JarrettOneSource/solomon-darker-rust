@@ -7,12 +7,11 @@ use super::*;
 use solomon_graphics::assets;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::scenery::{
-    NativeSceneryLayer, NativeSceneryPlan, NativeSceneryShadowTexture, NativeScenerySource,
-    native_fence_grate, native_scenery_object_entry, native_scenery_plan,
-    native_scenery_shadow_plan, native_wall_skirt_plan,
+    SceneryLayer, SceneryPlan, SceneryShadowTexture, ScenerySource, native_fence_grate,
+    scenery_object_entry, scenery_plan, scenery_shadow_plan, wall_skirt_plan,
 };
 use solomon_sim::boneyard::surface::{
-    create_native_arena_field_lattice, native_arena_field_mesh_plan, native_road_mesh_plan,
+    arena_field_mesh_plan, create_arena_field_lattice, road_mesh_plan,
 };
 use solomon_sim::boneyard::{BoneyardBounds, BoneyardScene, LoadedBoneyard};
 use solomon_sim::float::{fround, hypot};
@@ -23,7 +22,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
     let catalog: SceneryCatalog = serde_json::from_slice(&assets::fetch_bytes(&url).await?)
         .map_err(|error| format!("{url}: {error}"))?;
     let scene = &loaded.scene;
-    let plan = native_scenery_plan(scene, &|entry| catalog.record(entry).is_none());
+    let plan = scenery_plan(scene, &|entry| catalog.record(entry).is_none());
     let cleanup_bounds = cleanup_bounds(loaded);
     let mut compiler = SceneCompiler {
         catalog: &catalog,
@@ -71,7 +70,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
         )?;
     }
     for (index, layer) in plan.walls.iter().enumerate() {
-        let NativeScenerySource::FenceBody { index: fence_index, .. } = layer.source else {
+        let ScenerySource::FenceBody { index: fence_index, .. } = layer.source else {
             unreachable!()
         };
         let fence = &scene.fences[fence_index];
@@ -113,7 +112,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
                 end: end.into(),
                 vertex_weights: weights.to_vec(),
             });
-            let skirt = native_wall_skirt_plan(start, end);
+            let skirt = wall_skirt_plan(start, end);
             resident.shadow_plans = SceneryShadowPlans { off: vec![skirt], on: vec![skirt] };
         }
         resident.shadow = shadow;
@@ -121,7 +120,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
     }
     let mut gates = Vec::new();
     for (index, layer) in plan.main.iter().enumerate() {
-        if let NativeScenerySource::FenceBody { index: fence_index, piece, .. } = layer.source
+        if let ScenerySource::FenceBody { index: fence_index, piece, .. } = layer.source
             && scene.fences[fence_index].code() == 2
         {
             gates.push(GateDocument {
@@ -138,7 +137,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
     }
     let mut trees = Vec::new();
     for layer in &plan.proxies {
-        let NativeScenerySource::Object { index, entry } = layer.source else { unreachable!() };
+        let ScenerySource::Object { index, entry } = layer.source else { unreachable!() };
         let object = &scene.objects[index];
         let Some(mut resident) =
             compiler.glyph(entry, object.position, 0.0, Vec2::new(1.0, 1.0), 1.0)
@@ -219,14 +218,14 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
             base_images.push(CleanedBaseImage { layer: layer_index, image: name });
         }
     }
-    let lattice = create_native_arena_field_lattice(scene.bounds)?;
-    let range = NativeArenaFieldRange { x_start: 0, x_end: 0, y_start: 0, y_end: 0, tile_count: 0 };
+    let lattice = create_arena_field_lattice(scene.bounds)?;
+    let range = ArenaFieldRange { x_start: 0, x_end: 0, y_start: 0, y_end: 0, tile_count: 0 };
     let mode =
         if matches!(scene.environment_mode, 1 | 2) { scene.environment_mode as u8 } else { 0 };
-    let ground = MeshDocument::native(&native_arena_field_mesh_plan(&lattice, range, mode)?);
+    let ground = MeshDocument::native(&arena_field_mesh_plan(&lattice, range, mode)?);
     let mut roads = Vec::with_capacity(scene.roads.len());
     for road in &scene.roads {
-        let plan = native_road_mesh_plan(road)?;
+        let plan = road_mesh_plan(road)?;
         roads.push(RoadDocument { style: plan.style, mesh: MeshDocument::native(&plan.mesh) });
     }
     let mut sprites = BTreeMap::new();
@@ -250,7 +249,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
         }
         for plan in [&layer.shadow_plans.off, &layer.shadow_plans.on] {
             for quad in plan {
-                if let NativeSceneryShadowTexture::Glyph(entry) = quad.texture {
+                if let SceneryShadowTexture::Glyph(entry) = quad.texture {
                     shadow_entries.insert(entry);
                 }
             }
@@ -311,7 +310,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
 struct SceneCompiler<'a> {
     catalog: &'a SceneryCatalog,
     scene: &'a BoneyardScene,
-    plan: &'a NativeSceneryPlan,
+    plan: &'a SceneryPlan,
     images: BTreeMap<String, PreparedImage>,
     layers: Vec<LayerDocument>,
     visual_bounds: BTreeMap<String, BoneyardBounds>,
@@ -387,11 +386,11 @@ impl SceneCompiler<'_> {
 
     fn main(
         &mut self,
-        source: &NativeSceneryLayer,
+        source: &SceneryLayer,
         shadow_index: usize,
     ) -> Result<Option<LayerDocument>, String> {
         let mut resident = match source.source {
-            NativeScenerySource::Object { index, entry } => {
+            ScenerySource::Object { index, entry } => {
                 let object = &self.scene.objects[index];
                 let entry = if object.type_id == 2062 {
                     264 + object.variant.unwrap_or(0) as usize
@@ -437,7 +436,7 @@ impl SceneCompiler<'_> {
                 }
                 layer
             }
-            NativeScenerySource::FencePost { index, entry } => {
+            ScenerySource::FencePost { index, entry } => {
                 let Some(mut layer) =
                     self.glyph(entry, source.position, 0.0, Vec2::new(1.0, 1.0), 1.0)
                 else {
@@ -447,7 +446,7 @@ impl SceneCompiler<'_> {
                 layer.glyph_material = Some(SceneryGlyphMaterial::Ordinary);
                 layer
             }
-            NativeScenerySource::FenceBody { index, broken, .. } => {
+            ScenerySource::FenceBody { index, broken, .. } => {
                 let fence = &self.scene.fences[index];
                 if fence.points.len() < 2 {
                     return Ok(None);
@@ -528,8 +527,8 @@ impl SceneCompiler<'_> {
         resident.shadow = self.shadow(source, shadow_index)?;
         let glyph = |entry| self.catalog.record(entry).map(|record| record.shadow_glyph());
         resident.shadow_plans = SceneryShadowPlans {
-            off: native_scenery_shadow_plan(self.scene, self.plan, source, false, &glyph),
-            on: native_scenery_shadow_plan(self.scene, self.plan, source, true, &glyph),
+            off: scenery_shadow_plan(self.scene, self.plan, source, false, &glyph),
+            on: scenery_shadow_plan(self.scene, self.plan, source, true, &glyph),
         };
         self.merge_bounds(&resident);
         Ok(Some(resident))
@@ -537,7 +536,7 @@ impl SceneCompiler<'_> {
 
     fn building_grid(&self, index: usize) -> Result<SurfaceLightingDocument, String> {
         let object = &self.scene.objects[index];
-        let entry = native_scenery_object_entry(object).ok_or("Building has no base glyph")?;
+        let entry = scenery_object_entry(object).ok_or("Building has no base glyph")?;
         let record = self.catalog.record(entry).ok_or("Building base glyph is unavailable")?;
         let offset = *[135.0, 100.0, 0.0, 0.0]
             .get(object.variant.unwrap_or(0) as usize)
@@ -563,11 +562,7 @@ impl SceneCompiler<'_> {
         })
     }
 
-    fn shadow(
-        &self,
-        layer: &NativeSceneryLayer,
-        index: usize,
-    ) -> Result<Option<ShadowDocument>, String> {
+    fn shadow(&self, layer: &SceneryLayer, index: usize) -> Result<Option<ShadowDocument>, String> {
         let mut shadow = ShadowDocument {
             id: format!("main:{index}"),
             position: layer.position.into(),
@@ -575,7 +570,7 @@ impl SceneCompiler<'_> {
             program: None,
         };
         match layer.source {
-            NativeScenerySource::Object { index, entry } => {
+            ScenerySource::Object { index, entry } => {
                 let object = &self.scene.objects[index];
                 let (family, base) = match object.type_id {
                     2001 => ("Tree", 264),
@@ -592,14 +587,14 @@ impl SceneCompiler<'_> {
                 };
                 shadow.outline = self.catalog.outline(family, variant)?;
             }
-            NativeScenerySource::FencePost { index, .. } => {
+            ScenerySource::FencePost { index, .. } => {
                 let post = &self.plan.posts[index];
                 shadow.outline = self.catalog.outline(
                     if post.style == 1 { "Railpost" } else { "Fencepost" },
                     (post.variant % 7) as usize,
                 )?;
             }
-            NativeScenerySource::FenceBody { index, broken, .. } => {
+            ScenerySource::FenceBody { index, broken, .. } => {
                 let fence = &self.scene.fences[index];
                 let [start, end, ..] = fence.points.as_slice() else {
                     return Ok(None);
@@ -741,7 +736,7 @@ fn canvas_layer(image: String, bounds: BoundsDocument) -> LayerDocument {
 
 fn cleanup_bounds(loaded: &LoadedBoneyard) -> Option<BoneyardBounds> {
     if loaded.choice_id == "stock-tutorial" {
-        Some(solomon_sim::boneyard::tutorial::NATIVE_TUTORIAL_CAMERA_TARGET)
+        Some(solomon_sim::boneyard::tutorial::TUTORIAL_CAMERA_TARGET)
     } else if loaded.choice_id == "default-random" && loaded.scene.solomon_dig.is_some() {
         Some(
             solomon_sim::boneyard::arena::ArenaTransition::new(

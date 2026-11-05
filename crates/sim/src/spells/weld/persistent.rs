@@ -1,32 +1,32 @@
 //! Held growth, native split/release and flight of the three persistent builds
 //! from `core-kernels/native-weld-primary-runtime.ts`.
 
-use super::model::{NativeWeldActorBase, NativeWeldActorBirth};
+use super::model::{WeldActorBase, WeldActorBirth};
 use crate::float::{fround, hypot, hypot3};
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::spells::earth::{
     EARTH_BOULDER_IDENTITY_ORIENTATION, earth_boulder_flight_orientation_step,
-    earth_boulder_held_orientation_step, native_earth_boulder_released_damage,
+    earth_boulder_held_orientation_step, earth_boulder_released_damage,
 };
 use crate::spells::earth_debris::{
-    NativeWeldMeteorDebrisSeed, create_native_weld_ethereal_boulder_weak_debris_program,
+    WeldMeteorDebrisSeed, create_weld_ethereal_boulder_weak_debris_program,
 };
 use crate::spells::model::{EarthBoulderOrientation, PrimarySpellProjectilePhase};
 use crate::spells::targeting::{
-    PrimarySpellTarget, direction_from_heading, native_heading_turn_direction,
+    PrimarySpellTarget, direction_from_heading, heading_turn_direction,
     select_ether_primary_target_at_point,
 };
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS: usize = 3;
-pub const NATIVE_WELD_HAIL_SUBSTEP_DISTANCE: f64 = 10.0;
-pub const NATIVE_WELD_HAIL_LOOKAHEAD_DISTANCE: f64 = 30.0;
+pub const WELD_HAIL_FLIGHT_SUBSTEPS: usize = 3;
+pub const WELD_HAIL_SUBSTEP_DISTANCE: f64 = 10.0;
+pub const WELD_HAIL_LOOKAHEAD_DISTANCE: f64 = 30.0;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldEtherealBoulderState {
-    pub common: NativeWeldActorBase,
+pub struct WeldEtherealBoulderState {
+    pub common: WeldActorBase,
     pub assembly_scale: f64,
     pub damage: f64,
     pub flight_ticks: u64,
@@ -59,7 +59,7 @@ fn required_boulder_target<'de, D: serde::Deserializer<'de>>(
     <Option<String> as serde::Deserialize>::deserialize(deserializer)
 }
 
-impl NativeWeldEtherealBoulderState {
+impl WeldEtherealBoulderState {
     /// Required authoritative guidance fields cross checkpoint and wire boundaries.
     pub fn validate_guidance(&self) -> Result<(), String> {
         if !self.flight_speed.is_finite()
@@ -80,7 +80,7 @@ impl NativeWeldEtherealBoulderState {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldHailstoneLocalPosition {
+pub struct WeldHailstoneLocalPosition {
     pub x: f64,
     pub y: f64,
     pub z: f64,
@@ -88,10 +88,10 @@ pub struct NativeWeldHailstoneLocalPosition {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldHailstoneRockState {
+pub struct WeldHailstoneRockState {
     pub damage_remaining: f64,
     pub decay: f64,
-    pub local_position: NativeWeldHailstoneLocalPosition,
+    pub local_position: WeldHailstoneLocalPosition,
     pub phase: f64,
     pub rock_id: usize,
     /// Collision retains this release offset even while the draw height decays.
@@ -102,8 +102,8 @@ pub struct NativeWeldHailstoneRockState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldHailstonesState {
-    pub common: NativeWeldActorBase,
+pub struct WeldHailstonesState {
+    pub common: WeldActorBase,
     pub collision_radius: f64,
     pub damage: f64,
     pub maximum_scale: f64,
@@ -112,7 +112,7 @@ pub struct NativeWeldHailstonesState {
     pub pushback: f64,
     pub release_age_ticks: Option<u64>,
     pub release_fade_scale: Option<f64>,
-    pub rocks: Vec<NativeWeldHailstoneRockState>,
+    pub rocks: Vec<WeldHailstoneRockState>,
     pub scale: f64,
     pub toughness: f64,
     pub widen: f64,
@@ -120,22 +120,22 @@ pub struct NativeWeldHailstonesState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldMeteorFieldState {
-    pub common: NativeWeldActorBase,
+pub struct WeldMeteorFieldState {
+    pub common: WeldActorBase,
     pub pulse_sequence: u64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeWeldPersistentActorState {
-    EtherealBoulder(NativeWeldEtherealBoulderState),
-    Hailstones(NativeWeldHailstonesState),
-    MeteorField(NativeWeldMeteorFieldState),
+pub enum WeldPersistentActorState {
+    EtherealBoulder(WeldEtherealBoulderState),
+    Hailstones(WeldHailstonesState),
+    MeteorField(WeldMeteorFieldState),
 }
 
-impl NativeWeldPersistentActorState {
+impl WeldPersistentActorState {
     #[must_use]
-    pub fn common(&self) -> &NativeWeldActorBase {
+    pub fn common(&self) -> &WeldActorBase {
         match self {
             Self::EtherealBoulder(actor) => &actor.common,
             Self::Hailstones(actor) => &actor.common,
@@ -143,7 +143,7 @@ impl NativeWeldPersistentActorState {
         }
     }
 
-    pub fn common_mut(&mut self) -> &mut NativeWeldActorBase {
+    pub fn common_mut(&mut self) -> &mut WeldActorBase {
         match self {
             Self::EtherealBoulder(actor) => &mut actor.common,
             Self::Hailstones(actor) => &mut actor.common,
@@ -162,40 +162,40 @@ impl NativeWeldPersistentActorState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldHailRockFadeSeed {
+pub struct WeldHailRockFadeSeed {
     pub position: Vec2,
     pub rotation_degrees: f64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeWeldPersistentUpdate {
-    pub debris: Vec<NativeWeldMeteorDebrisSeed>,
-    pub hail_rock_fades: Vec<NativeWeldHailRockFadeSeed>,
+pub struct WeldPersistentUpdate {
+    pub debris: Vec<WeldMeteorDebrisSeed>,
+    pub hail_rock_fades: Vec<WeldHailRockFadeSeed>,
     pub release_requested: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldPersistentUpdateOptions {
+pub struct WeldPersistentUpdateOptions {
     pub cast_progress_factor: f64,
     pub enhanced_effects: bool,
     pub underpowered: bool,
 }
 
-impl Default for NativeWeldPersistentUpdateOptions {
+impl Default for WeldPersistentUpdateOptions {
     fn default() -> Self {
         Self { cast_progress_factor: 1.0, enhanced_effects: true, underpowered: false }
     }
 }
 
 #[must_use]
-pub fn create_native_weld_persistent_actor(
-    birth: NativeWeldActorBirth<'_>,
+pub fn create_weld_persistent_actor(
+    birth: WeldActorBirth<'_>,
     painters: Option<&mut WorldPainterOrder>,
-) -> NativeWeldPersistentActorState {
+) -> WeldPersistentActorState {
     let vector = birth.vector;
     let initial_scale = 0.18_f32 as f64;
     match birth.build_id {
-        1006 => NativeWeldPersistentActorState::EtherealBoulder(NativeWeldEtherealBoulderState {
+        1006 => WeldPersistentActorState::EtherealBoulder(WeldEtherealBoulderState {
             common: birth.actor_with_light(painters),
             assembly_scale: initial_scale,
             damage: vector[0],
@@ -226,7 +226,7 @@ pub fn create_native_weld_persistent_actor(
             toughness: vector[4],
             velocity: Vec2::ZERO,
         }),
-        1008 => NativeWeldPersistentActorState::Hailstones(NativeWeldHailstonesState {
+        1008 => WeldPersistentActorState::Hailstones(WeldHailstonesState {
             common: birth.actor_with_light(painters),
             collision_radius: 40.0,
             damage: vector[0],
@@ -241,7 +241,7 @@ pub fn create_native_weld_persistent_actor(
             toughness: vector[3],
             widen: vector[5],
         }),
-        1007 => NativeWeldPersistentActorState::MeteorField(NativeWeldMeteorFieldState {
+        1007 => WeldPersistentActorState::MeteorField(WeldMeteorFieldState {
             common: birth.actor(),
             pulse_sequence: 0,
         }),
@@ -249,22 +249,22 @@ pub fn create_native_weld_persistent_actor(
     }
 }
 
-pub fn update_native_weld_persistent_actor(
-    actor: &mut NativeWeldPersistentActorState,
+pub fn update_weld_persistent_actor(
+    actor: &mut WeldPersistentActorState,
     origin: Vec2,
     direction: Vec2,
-    options: NativeWeldPersistentUpdateOptions,
-    rng: &mut NativeRng,
-) -> NativeWeldPersistentUpdate {
+    options: WeldPersistentUpdateOptions,
+    rng: &mut Rng,
+) -> WeldPersistentUpdate {
     assert!(
         options.cast_progress_factor.is_finite() && options.cast_progress_factor > 0.0,
         "Weld cast progress factor must be finite and positive",
     );
-    let mut update = NativeWeldPersistentUpdate::default();
+    let mut update = WeldPersistentUpdate::default();
     match actor {
-        NativeWeldPersistentActorState::EtherealBoulder(actor) => {
+        WeldPersistentActorState::EtherealBoulder(actor) => {
             if options.underpowered && actor.quantity > 1 {
-                update.debris = create_native_weld_ethereal_boulder_weak_debris_program(
+                update.debris = create_weld_ethereal_boulder_weak_debris_program(
                     actor.common.direction,
                     actor.scale,
                     rng,
@@ -303,7 +303,7 @@ pub fn update_native_weld_persistent_actor(
                 actor.turn_input = 1.0;
             }
         }
-        NativeWeldPersistentActorState::Hailstones(actor) => {
+        WeldPersistentActorState::Hailstones(actor) => {
             let old_bucket = fround(30.0 * actor.scale).round_ties_even();
             let growth_input = if options.underpowered && actor.scale > 0.3_f32 as f64 {
                 0.0
@@ -327,7 +327,7 @@ pub fn update_native_weld_persistent_actor(
                 actor.damage = fround(actor.common.vector[0] * 0.5);
             }
         }
-        NativeWeldPersistentActorState::MeteorField(actor) => {
+        WeldPersistentActorState::MeteorField(actor) => {
             actor.common.owner.age_ticks += 1;
             actor.common.direction = direction;
             actor.common.origin = origin;
@@ -339,33 +339,31 @@ pub fn update_native_weld_persistent_actor(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldFrostFadeActorState {
-    pub common: NativeWeldActorBase,
+pub struct WeldFrostFadeActorState {
+    pub common: WeldActorBase,
     pub scale: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldPersistentRelease {
-    pub actors: Vec<NativeWeldPersistentActorState>,
-    pub frost_fade: Option<NativeWeldFrostFadeActorState>,
+pub struct WeldPersistentRelease {
+    pub actors: Vec<WeldPersistentActorState>,
+    pub frost_fade: Option<WeldFrostFadeActorState>,
     pub next_id: u64,
 }
 
-pub fn release_native_weld_persistent_actor(
-    actor: NativeWeldPersistentActorState,
+pub fn release_weld_persistent_actor(
+    actor: WeldPersistentActorState,
     first_child_id: u64,
     tick: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     mut painters: Option<&mut WorldPainterOrder>,
     targets: &[PrimarySpellTarget],
-) -> NativeWeldPersistentRelease {
+) -> WeldPersistentRelease {
     match actor {
-        NativeWeldPersistentActorState::MeteorField(_) => NativeWeldPersistentRelease {
-            actors: Vec::new(),
-            frost_fade: None,
-            next_id: first_child_id,
-        },
-        NativeWeldPersistentActorState::Hailstones(mut actor) => {
+        WeldPersistentActorState::MeteorField(_) => {
+            WeldPersistentRelease { actors: Vec::new(), frost_fade: None, next_id: first_child_id }
+        }
+        WeldPersistentActorState::Hailstones(mut actor) => {
             let presentation = rng.draw_scaled_float(0.75, false);
             actor.common.origin = Vec2::new(
                 fround(actor.common.origin.x - actor.common.direction.x * 20.0),
@@ -373,12 +371,12 @@ pub fn release_native_weld_persistent_actor(
             );
             for rock in &mut actor.rocks {
                 rock.damage_remaining = actor.damage;
-                rock.release_offset = Some(native_weld_hailstone_draw_offset(rock));
+                rock.release_offset = Some(weld_hailstone_draw_offset(rock));
             }
             actor.phase = PrimarySpellProjectilePhase::Flight;
             actor.release_age_ticks = Some(0);
             actor.release_fade_scale = Some(fround(presentation + 0.75));
-            let fade_birth = NativeWeldActorBirth {
+            let fade_birth = WeldActorBirth {
                 build_id: 1008,
                 direction: actor.common.direction,
                 id: first_child_id,
@@ -388,17 +386,17 @@ pub fn release_native_weld_persistent_actor(
                 vector: &actor.common.vector,
                 world_key: &actor.common.owner.world_key,
             };
-            let fade = NativeWeldFrostFadeActorState {
+            let fade = WeldFrostFadeActorState {
                 common: fade_birth.actor(),
                 scale: fround(fround(presentation + 0.75) * 5.0),
             };
-            NativeWeldPersistentRelease {
-                actors: vec![NativeWeldPersistentActorState::Hailstones(actor)],
+            WeldPersistentRelease {
+                actors: vec![WeldPersistentActorState::Hailstones(actor)],
                 frost_fade: Some(fade),
                 next_id: first_child_id + 1,
             }
         }
-        NativeWeldPersistentActorState::EtherealBoulder(actor) => {
+        WeldPersistentActorState::EtherealBoulder(actor) => {
             let pieces = ethereal_boulder_split(&actor);
             let mut actors = Vec::with_capacity(pieces.len());
             for (index, piece) in pieces.iter().enumerate() {
@@ -433,15 +431,15 @@ pub fn release_native_weld_persistent_actor(
                 released.pulse_sequence = actor.pulse_sequence + 1;
                 released.quantity = 0;
                 released.remaining_damage =
-                    native_earth_boulder_released_damage(actor.damage, actor.scale, 1.0);
+                    earth_boulder_released_damage(actor.damage, actor.scale, 1.0);
                 released.turn_input = piece.turn_input;
                 released.velocity = Vec2::new(
                     fround(piece.direction.x * released.flight_speed),
                     fround(piece.direction.y * released.flight_speed),
                 );
-                actors.push(NativeWeldPersistentActorState::EtherealBoulder(released));
+                actors.push(WeldPersistentActorState::EtherealBoulder(released));
             }
-            NativeWeldPersistentRelease {
+            WeldPersistentRelease {
                 actors,
                 frost_fade: None,
                 next_id: first_child_id + pieces.len() as u64 - 1,
@@ -451,8 +449,8 @@ pub fn release_native_weld_persistent_actor(
 }
 
 /// Preserves the source pool and scale written by actual contact acceptance.
-pub fn retain_native_weld_persistent_actor_contacts(
-    actor: &mut NativeWeldEtherealBoulderState,
+pub fn retain_weld_persistent_actor_contacts(
+    actor: &mut WeldEtherealBoulderState,
     hit_target_ids: Vec<String>,
     remaining_damage: f64,
     scale: f64,
@@ -467,8 +465,8 @@ pub fn retain_native_weld_persistent_actor_contacts(
     true
 }
 
-pub fn retain_native_weld_hailstone_damage(
-    actor: &mut NativeWeldHailstonesState,
+pub fn retain_weld_hailstone_damage(
+    actor: &mut WeldHailstonesState,
     damage_by_index: &[f64],
 ) -> bool {
     for (index, rock) in actor.rocks.iter_mut().enumerate() {
@@ -480,18 +478,17 @@ pub fn retain_native_weld_hailstone_damage(
     !actor.rocks.is_empty()
 }
 
-pub type NativeWeldPersistentTraversal<'a> =
-    dyn Fn(&NativeWeldPersistentActorState, Vec2, Vec2) -> bool + 'a;
+pub type WeldPersistentTraversal<'a> = dyn Fn(&WeldPersistentActorState, Vec2, Vec2) -> bool + 'a;
 
 /// Returns a terminal Boulder separately so terrain contact uses its moved pose.
-pub fn step_native_weld_persistent_actor(
-    actor: &mut NativeWeldPersistentActorState,
-    can_advance: &NativeWeldPersistentTraversal<'_>,
-) -> (bool, Option<NativeWeldEtherealBoulderState>) {
+pub fn step_weld_persistent_actor(
+    actor: &mut WeldPersistentActorState,
+    can_advance: &WeldPersistentTraversal<'_>,
+) -> (bool, Option<WeldEtherealBoulderState>) {
     if actor.held() {
         return (true, None);
     }
-    if let NativeWeldPersistentActorState::EtherealBoulder(boulder) = actor {
+    if let WeldPersistentActorState::EtherealBoulder(boulder) = actor {
         boulder.tracking_ticks_remaining = boulder.tracking_ticks_remaining.saturating_sub(1);
         boulder.common.origin = Vec2::new(
             fround(boulder.common.origin.x + boulder.velocity.x),
@@ -511,28 +508,22 @@ pub fn step_native_weld_persistent_actor(
         if can_advance(actor, from, to) {
             return (true, None);
         }
-        let NativeWeldPersistentActorState::EtherealBoulder(boulder) = actor else {
-            unreachable!()
-        };
+        let WeldPersistentActorState::EtherealBoulder(boulder) = actor else { unreachable!() };
         return (false, Some(boulder.clone()));
     }
     let common = actor.common();
     let lookahead = Vec2::new(
-        fround(common.origin.x + common.direction.x * NATIVE_WELD_HAIL_LOOKAHEAD_DISTANCE),
-        fround(common.origin.y + common.direction.y * NATIVE_WELD_HAIL_LOOKAHEAD_DISTANCE),
+        fround(common.origin.x + common.direction.x * WELD_HAIL_LOOKAHEAD_DISTANCE),
+        fround(common.origin.y + common.direction.y * WELD_HAIL_LOOKAHEAD_DISTANCE),
     );
     if !can_advance(actor, common.origin, lookahead) {
         return (false, None);
     }
-    let NativeWeldPersistentActorState::Hailstones(hail) = actor else { unreachable!() };
-    for _ in 0..NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS {
+    let WeldPersistentActorState::Hailstones(hail) = actor else { unreachable!() };
+    for _ in 0..WELD_HAIL_FLIGHT_SUBSTEPS {
         hail.common.origin = Vec2::new(
-            fround(
-                hail.common.origin.x + hail.common.direction.x * NATIVE_WELD_HAIL_SUBSTEP_DISTANCE,
-            ),
-            fround(
-                hail.common.origin.y + hail.common.direction.y * NATIVE_WELD_HAIL_SUBSTEP_DISTANCE,
-            ),
+            fround(hail.common.origin.x + hail.common.direction.x * WELD_HAIL_SUBSTEP_DISTANCE),
+            fround(hail.common.origin.y + hail.common.direction.y * WELD_HAIL_SUBSTEP_DISTANCE),
         );
         if hail.widen > 0.0 {
             hail.collision_radius = fround(hail.collision_radius + hail.widen);
@@ -551,36 +542,36 @@ pub fn step_native_weld_persistent_actor(
 }
 
 #[must_use]
-pub fn native_weld_hailstone_draw_offset(rock: &NativeWeldHailstoneRockState) -> Vec2 {
+pub fn weld_hailstone_draw_offset(rock: &WeldHailstoneRockState) -> Vec2 {
     let position = rock.local_position;
     let falling_height = fround(50.0 - position.z * 0.8_f32 as f64);
     Vec2::new(position.x, fround(position.y + fround(falling_height - position.y) * rock.decay))
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldHailstoneFlightContactSubstep {
+pub struct WeldHailstoneFlightContactSubstep {
     pub origin: Vec2,
     pub release_offsets: Vec<(usize, Vec2)>,
 }
 
 #[must_use]
-pub fn native_weld_hailstone_flight_contact_substeps(
-    actor: &NativeWeldHailstonesState,
-) -> Vec<NativeWeldHailstoneFlightContactSubstep> {
+pub fn weld_hailstone_flight_contact_substeps(
+    actor: &WeldHailstonesState,
+) -> Vec<WeldHailstoneFlightContactSubstep> {
     if actor.phase != PrimarySpellProjectilePhase::Flight {
         return Vec::new();
     }
-    let mut substeps = Vec::with_capacity(NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS);
-    for index in 0..NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS {
-        let remaining = (NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS - index - 1) as f64;
+    let mut substeps = Vec::with_capacity(WELD_HAIL_FLIGHT_SUBSTEPS);
+    for index in 0..WELD_HAIL_FLIGHT_SUBSTEPS {
+        let remaining = (WELD_HAIL_FLIGHT_SUBSTEPS - index - 1) as f64;
         let origin = Vec2::new(
             fround(
                 actor.common.origin.x
-                    - actor.common.direction.x * NATIVE_WELD_HAIL_SUBSTEP_DISTANCE * remaining,
+                    - actor.common.direction.x * WELD_HAIL_SUBSTEP_DISTANCE * remaining,
             ),
             fround(
                 actor.common.origin.y
-                    - actor.common.direction.y * NATIVE_WELD_HAIL_SUBSTEP_DISTANCE * remaining,
+                    - actor.common.direction.y * WELD_HAIL_SUBSTEP_DISTANCE * remaining,
             ),
         );
         let mut release_offsets = Vec::with_capacity(actor.rocks.len());
@@ -598,18 +589,18 @@ pub fn native_weld_hailstone_flight_contact_substeps(
             }
             release_offsets.push((rock.rock_id, offset));
         }
-        substeps.push(NativeWeldHailstoneFlightContactSubstep { origin, release_offsets });
+        substeps.push(WeldHailstoneFlightContactSubstep { origin, release_offsets });
     }
     substeps
 }
 
 fn rebuild_hailstone_rocks(
-    actor: &mut NativeWeldHailstonesState,
+    actor: &mut WeldHailstonesState,
     origin: Vec2,
     scale: f64,
     enhanced_effects: bool,
-    rng: &mut NativeRng,
-) -> Vec<NativeWeldHailRockFadeSeed> {
+    rng: &mut Rng,
+) -> Vec<WeldHailRockFadeSeed> {
     let desired_count = fround(fround(fround(actor.widen * 3.0 + 20.0) * scale) * scale)
         .max(1.0)
         .round_ties_even() as usize;
@@ -621,16 +612,16 @@ fn rebuild_hailstone_rocks(
         let z = rng.draw_scaled_float(50.0, true);
         let length = hypot3(x, y, z);
         let unit = if length > 0.0 {
-            NativeWeldHailstoneLocalPosition { x: x / length, y: y / length, z: z / length }
+            WeldHailstoneLocalPosition { x: x / length, y: y / length, z: z / length }
         } else {
-            NativeWeldHailstoneLocalPosition { x: 0.0, y: 0.0, z: 0.0 }
+            WeldHailstoneLocalPosition { x: 0.0, y: 0.0, z: 0.0 }
         };
         let radial_scale =
             if actor.rocks.is_empty() { rng.draw_scaled_float(10.0, false) } else { 40.0 };
         let visual = rng.draw_scaled_float(0.75, false);
         if enhanced_effects {
             let rotation = rng.draw_scaled_float(20.0, false);
-            fades.push(NativeWeldHailRockFadeSeed {
+            fades.push(WeldHailRockFadeSeed {
                 position: Vec2::new(
                     fround(origin.x + unit.x * radial_scale * 1.5),
                     fround(origin.y + unit.z * radial_scale * 0.8_f32 as f64 * 1.5),
@@ -638,10 +629,10 @@ fn rebuild_hailstone_rocks(
                 rotation_degrees: rotation,
             });
         }
-        actor.rocks.push(NativeWeldHailstoneRockState {
+        actor.rocks.push(WeldHailstoneRockState {
             damage_remaining: 0.0,
             decay: 1.0,
-            local_position: NativeWeldHailstoneLocalPosition {
+            local_position: WeldHailstoneLocalPosition {
                 x: fround(unit.x * radial_scale),
                 y: fround(unit.y * radial_scale),
                 z: fround(unit.z * radial_scale),
@@ -656,7 +647,7 @@ fn rebuild_hailstone_rocks(
     fades
 }
 
-fn widen_hailstone_rock(rock: &mut NativeWeldHailstoneRockState, amount: f64) {
+fn widen_hailstone_rock(rock: &mut WeldHailstoneRockState, amount: f64) {
     let Some(offset) = rock.release_offset.as_mut() else {
         return;
     };
@@ -673,8 +664,8 @@ fn widen_hailstone_rock(rock: &mut NativeWeldHailstoneRockState, amount: f64) {
 }
 
 /// Retail0x621450 guidance tail: shared movement and accepted contacts run first.
-pub fn finish_native_weld_ethereal_boulder_guidance(
-    actor: &mut NativeWeldEtherealBoulderState,
+pub fn finish_weld_ethereal_boulder_guidance(
+    actor: &mut WeldEtherealBoulderState,
     targets: &[PrimarySpellTarget],
 ) {
     if actor.phase != PrimarySpellProjectilePhase::Flight
@@ -701,9 +692,8 @@ pub fn finish_native_weld_ethereal_boulder_guidance(
         target.position.x - actor.common.origin.x,
         target.position.y - actor.common.origin.y,
     );
-    let turn = fround(
-        f64::from(native_heading_turn_direction(actor.heading_degrees, desired)) * 0.7_f32 as f64,
-    );
+    let turn =
+        fround(f64::from(heading_turn_direction(actor.heading_degrees, desired)) * 0.7_f32 as f64);
     actor.heading_degrees =
         fround(actor.heading_degrees + actor.turn_input * actor.turn_accumulator * turn);
     actor.common.direction = direction_from_heading(actor.heading_degrees);
@@ -729,7 +719,7 @@ struct EtherealBoulderPiece {
     turn_input: f64,
 }
 
-fn ethereal_boulder_split(actor: &NativeWeldEtherealBoulderState) -> Vec<EtherealBoulderPiece> {
+fn ethereal_boulder_split(actor: &WeldEtherealBoulderState) -> Vec<EtherealBoulderPiece> {
     let direction = actor.common.direction;
     let perpendicular = Vec2::new(direction.y, -direction.x);
     let piece = |along: f64, across: f64, offset: f64, factor: f64, original: bool| {

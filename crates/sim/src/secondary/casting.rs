@@ -1,38 +1,37 @@
 //! Every stock secondary constructor and admission/cooldown path, in source RNG order.
 
 use super::context::*;
-use super::dampened::create_native_dampened_spell;
-use super::golem::{NativeGolemBirthStats, NativeGolemWorld, NativeSecondaryGolemState};
+use super::dampened::create_dampened_spell;
+use super::golem::{GolemBirthStats, NativeGolemWorld, SecondaryGolemState};
 use super::leviathan::*;
 use super::program::*;
 use super::{
-    NativeSecondaryAbilityId as Ability, NativeSecondaryActorKind as Kind,
-    NativeSecondaryAudioCue as Cue, NativeSecondaryEventKind as Event,
-    NativeSecondaryManaCostBonuses, NativeSecondaryPlayerState, NativeSecondarySimulationState,
-    NativeSecondaryTargetEffectPatch, apply_native_secondary_target_effect,
-    native_secondary_ability_mana_cost, native_secondary_cooldown_capacity_ticks,
-    resolved_secondary_ability_rank_stats,
+    SecondaryAbilityId as Ability, SecondaryActorKind as Kind, SecondaryAudioCue as Cue,
+    SecondaryEventKind as Event, SecondaryManaCostBonuses, SecondaryPlayerState,
+    SecondarySimulationState, SecondaryTargetEffectPatch, apply_secondary_target_effect,
+    resolved_secondary_ability_rank_stats, secondary_ability_mana_cost,
+    secondary_cooldown_capacity_ticks,
 };
 use crate::float;
 use crate::float::{atan2, fround, hypot};
 use crate::heading::heading_vector;
-use crate::profile::{NATIVE_SKILL_CATALOG, native_skill_stat, native_weld_build};
-use crate::{NativeRng, Vec2};
+use crate::profile::{SKILL_CATALOG, skill_stat, weld_build};
+use crate::{Rng, Vec2};
 
 pub(crate) struct SecondaryCastResult {
-    pub target_heading_changes: Vec<super::NativeSecondaryTargetHeadingChange>,
+    pub target_heading_changes: Vec<super::SecondaryTargetHeadingChange>,
     pub dispelled_shield_target_ids: Vec<usize>,
     pub dampened_caster_target_ids: Vec<usize>,
     pub mana_recovered: f64,
     pub mana_underflow: bool,
     pub mana_spent: f64,
-    pub player: NativeSecondaryPlayerState,
+    pub player: SecondaryPlayerState,
     pub facing_heading_degrees: Option<f64>,
     pub relocated: Option<Vec2>,
     pub removed_projectile_ids: Vec<usize>,
 }
 impl SecondaryCastResult {
-    fn none(player: NativeSecondaryPlayerState, mana_underflow: bool) -> Self {
+    fn none(player: SecondaryPlayerState, mana_underflow: bool) -> Self {
         Self {
             target_heading_changes: Vec::new(),
             dispelled_shield_target_ids: Vec::new(),
@@ -54,7 +53,7 @@ pub(crate) struct GolemWorld<'a, W> {
     pub world_key: &'a str,
     pub origin: Vec2,
 }
-impl<W: NativeSecondaryWorld> NativeGolemWorld for GolemWorld<'_, W> {
+impl<W: SecondaryWorld> NativeGolemWorld for GolemWorld<'_, W> {
     fn resolve_movement(&mut self, requested: Vec2) -> Vec2 {
         self.world.golem_movement(self.owner, self.world_key, self.origin, requested, 30.0)
     }
@@ -64,12 +63,12 @@ impl<W: NativeSecondaryWorld> NativeGolemWorld for GolemWorld<'_, W> {
 }
 
 pub(crate) fn cast_ability(
-    state: &mut NativeSecondarySimulationState,
-    mut player: NativeSecondaryPlayerState,
+    state: &mut SecondarySimulationState,
+    mut player: SecondaryPlayerState,
     owner: &str,
     ability: Ability,
-    context: &NativeSecondaryTickContext<'_>,
-    world: &impl NativeSecondaryWorld,
+    context: &SecondaryTickContext<'_>,
+    world: &impl SecondaryWorld,
 ) -> SecondaryCastResult {
     let authority = &context.players[owner];
     let tick = context.tick;
@@ -112,17 +111,17 @@ pub(crate) fn cast_ability(
         &authority.offensive_factors,
     );
     let value = |name| ranked.value(name).expect("secondary constructor has its authored property");
-    let cost = native_secondary_ability_mana_cost(
+    let cost = secondary_ability_mana_cost(
         authority.skill_book,
         ability,
         &authority.offensive_factors,
-        NativeSecondaryManaCostBonuses {
+        SecondaryManaCostBonuses {
             explosive_shield: authority.explosive_shield_raw_mana_cost,
             golem: authority.golem_raw_mana_cost,
             magic_storm: authority.magic_storm_raw_mana_cost,
         },
     );
-    let capacity = native_secondary_cooldown_capacity_ticks(authority.skill_book, ability);
+    let capacity = secondary_cooldown_capacity_ticks(authority.skill_book, ability);
     let toggling_off = ability == Ability::Planewalker && player.planewalker_ticks_remaining > 0
         || ability == Ability::Firewalker && player.firewalker
         || ability == Ability::Mindstar && player.mindstar
@@ -153,7 +152,7 @@ pub(crate) fn cast_ability(
     let mut post_cast_cue = None;
     match ability {
         Ability::CallLeviathan => {
-            let birth = create_native_leviathan_birth(
+            let birth = create_leviathan_birth(
                 &mut state.rng,
                 value("mQuantity"),
                 authority.maximum_leviathan,
@@ -163,7 +162,7 @@ pub(crate) fn cast_ability(
             let mut parent = make(Kind::Leviathan, aim);
             parent.damage = damage;
             parent.enhanced = authority.enhanced_effects;
-            parent.lifetime_ticks = NATIVE_LEVIATHAN_LIFETIME_TICKS;
+            parent.lifetime_ticks = LEVIATHAN_LIFETIME_TICKS;
             parent.quantity = birth.quantity as f64;
             parent.radius = fround(birth.maximum_scale * 30.0);
             parent.rotation_radians = birth.rotation_radians;
@@ -174,12 +173,11 @@ pub(crate) fn cast_ability(
                 let mut child = make(Kind::LeviathanAppendage, aim);
                 child.damage = damage;
                 child.endpoint = appendage.base_offset;
-                child.frame =
-                    (native_leviathan_heading_vector(appendage.heading_degrees).y * 100.0 + 0.5)
-                        .floor()
-                        + 100.0;
+                child.frame = (leviathan_heading_vector(appendage.heading_degrees).y * 100.0 + 0.5)
+                    .floor()
+                    + 100.0;
                 child.hit_target_ids = vec![parent_id];
-                child.lifetime_ticks = NATIVE_LEVIATHAN_LIFETIME_TICKS;
+                child.lifetime_ticks = LEVIATHAN_LIFETIME_TICKS;
                 child.phase = f64::from(appendage.bank);
                 child.quantity = f64::from(appendage.countdown);
                 child.radius = appendage.sprite_scale;
@@ -253,7 +251,7 @@ pub(crate) fn cast_ability(
                 let mirror = state.rng.draw_sign(1.0);
                 let jitter = state.rng.draw_scaled_float(2.0, true);
                 let radial = state.rng.draw_scaled_float(30.0, false);
-                let radial_direction = native_unit_vector(&mut state.rng);
+                let radial_direction = unit_vector(&mut state.rng);
                 let speed = state.rng.draw_scaled_float(0.025, false);
                 let radians = (f64::from(index) * 12.0 + jitter) * std::f64::consts::PI / 180.0;
                 let heading = Vec2::new(float::sin(radians), -float::cos(radians));
@@ -362,13 +360,13 @@ pub(crate) fn cast_ability(
                 [0.0, 1.0, 1.0],
             ];
             for target in stable_targets(world.targets(authority.world_key, origin, 350.0)) {
-                apply_native_secondary_target_effect(
+                apply_secondary_target_effect(
                     &mut state.target_effects,
                     authority.world_key,
                     target.id,
-                    NativeSecondaryTargetEffectPatch {
+                    SecondaryTargetEffectPatch {
                         prismatic_ticks: Some((value("mDuration") * 100.0 + 0.5).floor() as u64),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }
@@ -452,7 +450,7 @@ pub(crate) fn cast_ability(
                     Some(id) => id,
                     None => {
                         let mut wobble = make(Kind::EarthquakeSceneryWobble, target.position);
-                        wobble.lifetime_ticks = MAX_NATIVE_TICKS;
+                        wobble.lifetime_ticks = MAX_TICKS;
                         wobble.target_id = Some(target.id);
                         wobble.variant = target.type_id as i32;
                         state.spawn_actor(wobble)
@@ -490,7 +488,7 @@ pub(crate) fn cast_ability(
             }
             let sign = state.rng.draw_sign(45.0);
             let heading = fround(authority.character.heading_degrees + sign);
-            let direction = native_leviathan_heading_vector(heading);
+            let direction = leviathan_heading_vector(heading);
             let requested = Vec2::new(
                 fround(origin.x + fround(direction.x * 100.0)),
                 fround(origin.y + fround(direction.y * 100.0)),
@@ -502,10 +500,10 @@ pub(crate) fn cast_ability(
             let rotation = normalize_radians((heading + 180.0) * std::f64::consts::PI / 180.0);
             let mut geometry =
                 GolemWorld { world, owner, world_key: authority.world_key, origin: position };
-            let golem = NativeSecondaryGolemState::new(
+            let golem = SecondaryGolemState::new(
                 position,
                 rotation,
-                NativeGolemBirthStats {
+                GolemBirthStats {
                     health: value("mHP"),
                     damage_maximum: value("mDamage2"),
                     iron: authority.golem_iron,
@@ -517,7 +515,7 @@ pub(crate) fn cast_ability(
             let mut summon = make(Kind::Golem, position);
             summon.damage = value("mDamage1");
             summon.golem = Some(golem);
-            summon.lifetime_ticks = MAX_NATIVE_TICKS;
+            summon.lifetime_ticks = MAX_TICKS;
             summon.quantity = value("mHP");
             summon.radius = 30.0;
             summon.rotation_radians = rotation;
@@ -525,8 +523,7 @@ pub(crate) fn cast_ability(
             state.spawn_actor(summon);
         }
         Ability::Stoneskin => {
-            state.stoneskin_warp =
-                Some(super::motion::create_native_stoneskin_warp(&mut state.rng));
+            state.stoneskin_warp = Some(super::motion::create_stoneskin_warp(&mut state.rng));
             state.spawn_stoneskin_burst(
                 owner,
                 origin,
@@ -605,14 +602,14 @@ pub(crate) fn cast_ability(
                 stable_targets(world.targets(authority.world_key, aim, hypot(210.0, 168.0)))
             {
                 if inside_rectangle(aim, target.position, 210.0, 168.0) {
-                    apply_native_secondary_target_effect(
+                    apply_secondary_target_effect(
                         &mut state.target_effects,
                         authority.world_key,
                         target.id,
-                        NativeSecondaryTargetEffectPatch {
+                        SecondaryTargetEffectPatch {
                             circle_slow_factor: Some((1.0 - value("mSlow") / 100.0).max(0.0)),
                             circle_slow_ticks: Some(20),
-                            ..NativeSecondaryTargetEffectPatch::default()
+                            ..SecondaryTargetEffectPatch::default()
                         },
                     );
                 }
@@ -623,7 +620,7 @@ pub(crate) fn cast_ability(
             let base = magic_trap_base_damage(authority.skill_book, selector, &mut state.rng);
             let mut trap = make(Kind::MagicTrap, aim);
             trap.damage = fround(base * fround(value("mDamage")));
-            trap.lifetime_ticks = MAX_NATIVE_TICKS;
+            trap.lifetime_ticks = MAX_TICKS;
             trap.phase = 3.0;
             trap.quantity = authority.fire_burn_damage;
             trap.radius = 65.0;
@@ -652,10 +649,9 @@ pub(crate) fn cast_ability(
             }
             result.player.cast_spin_ticks_remaining = 73;
             for projectile in candidates.projectiles {
-                let flyout =
-                    create_native_dampened_spell(origin, projectile.position, &mut state.rng);
+                let flyout = create_dampened_spell(origin, projectile.position, &mut state.rng);
                 let mut effect = make(Kind::DampenedProjectile, projectile.position);
-                effect.lifetime_ticks = MAX_NATIVE_TICKS;
+                effect.lifetime_ticks = MAX_TICKS;
                 effect.phase = flyout.phase_degrees;
                 effect.rotation_radians = -std::f64::consts::PI / 180.0;
                 effect.target_id = Some(projectile.id);
@@ -715,7 +711,7 @@ pub(crate) fn cast_ability(
                 let phase = state.rng.draw_scaled_float(32.0, false);
                 let mirror = state.rng.draw_sign(1.0);
                 let radius = state.rng.draw_scaled_float(10.0, false);
-                let jitter = native_unit_vector(&mut state.rng);
+                let jitter = unit_vector(&mut state.rng);
                 let position = Vec2::new(
                     fround(aim.x + normal.x * offset + jitter.x * radius),
                     fround(aim.y + normal.y * offset + jitter.y * radius),
@@ -796,22 +792,22 @@ pub(crate) fn cast_ability(
                 {
                     continue;
                 }
-                result.target_heading_changes.push(super::NativeSecondaryTargetHeadingChange {
+                result.target_heading_changes.push(super::SecondaryTargetHeadingChange {
                     degrees: crate::heading::heading_degrees_from_vector(
                         target.position.x - origin.x,
                         target.position.y - origin.y,
                     ),
-                    mode: super::NativeSecondaryHeadingMode::Absolute,
+                    mode: super::SecondaryHeadingMode::Absolute,
                     target_id: target.id,
                 });
-                apply_native_secondary_target_effect(
+                apply_secondary_target_effect(
                     &mut state.target_effects,
                     authority.world_key,
                     target.id,
-                    NativeSecondaryTargetEffectPatch {
+                    SecondaryTargetEffectPatch {
                         flee_ticks: Some((value("mFlee") * 100.0 + 0.5).floor() as u64),
                         weaken_factor: Some((1.0 - value("mWeaken") / 100.0).max(0.0)),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }
@@ -894,7 +890,7 @@ pub(crate) fn magic_trap_screen_flash(
     selector: usize,
     decay: f64,
     point: bool,
-) -> super::NativeSecondaryScreenFlashState {
+) -> super::SecondaryScreenFlashState {
     let colors = [
         [1.0, 0.1, 1.0],
         [1.0, 0.35, 0.1],
@@ -913,16 +909,12 @@ fn magic_trap_primary_cue(selector: usize) -> Cue {
     [Cue::MagicMissile, Cue::ThrowFire, Cue::LightningStart, Cue::IceStart, Cue::StartBoulder]
         [selector]
 }
-fn magic_trap_selector(
-    authority: &NativeSecondaryPlayerAuthority<'_>,
-    rng: &mut NativeRng,
-) -> usize {
+fn magic_trap_selector(authority: &SecondaryPlayerAuthority<'_>, rng: &mut Rng) -> usize {
     let ids = [8, 16, 24, 32, 40];
     let primary = if authority.skill_book.primary_skill_id == 52 {
-        let build = native_weld_build(
-            authority.skill_book.weld_build_id.expect("selected Weld has its build"),
-        )
-        .expect("selected Weld build exists");
+        let build =
+            weld_build(authority.skill_book.weld_build_id.expect("selected Weld has its build"))
+                .expect("selected Weld build exists");
         build.primary_skill_ids[rng.draw_integer(2) as usize]
     } else {
         authority.skill_book.primary_skill_id
@@ -932,37 +924,33 @@ fn magic_trap_selector(
         .expect("selected primary has a native Magic Trap selector")
 }
 fn magic_trap_base_damage(
-    book: &crate::profile::NativeSkillBookState,
+    book: &crate::profile::SkillBookState,
     selector: usize,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> f64 {
     let id = [8, 16, 24, 32, 40][selector];
     let rank = book.effective_ranks[id];
     assert!(
-        rank > 0 && rank <= NATIVE_SKILL_CATALOG[id].maximum_level,
+        rank > 0 && rank <= SKILL_CATALOG[id].maximum_level,
         "trap component has a valid primary rank"
     );
-    let shared = native_skill_stat(id, "mDamage", rank);
+    let shared = skill_stat(id, "mDamage", rank);
     let minimum =
-        shared.or_else(|| native_skill_stat(id, "mDamage1", rank)).expect("primary minimum exists");
+        shared.or_else(|| skill_stat(id, "mDamage1", rank)).expect("primary minimum exists");
     let maximum =
-        shared.or_else(|| native_skill_stat(id, "mDamage2", rank)).expect("primary maximum exists");
+        shared.or_else(|| skill_stat(id, "mDamage2", rank)).expect("primary maximum exists");
     assert!(minimum > 0.0 && maximum >= minimum, "trap primary damage range is valid");
     if selector == 0 { rng.draw_float_range(minimum, maximum) } else { fround(maximum) }
 }
-fn dampened_variant(
-    kind: NativeSecondaryDampenProjectileKind,
-    payload: NativeSecondaryDampenPayload,
-) -> i32 {
+fn dampened_variant(kind: SecondaryDampenProjectileKind, payload: SecondaryDampenPayload) -> i32 {
     if matches!(
         kind,
-        NativeSecondaryDampenProjectileKind::SkullMissile
-            | NativeSecondaryDampenProjectileKind::DarkFireball
+        SecondaryDampenProjectileKind::SkullMissile | SecondaryDampenProjectileKind::DarkFireball
     ) {
         3
-    } else if kind == NativeSecondaryDampenProjectileKind::Firebolt {
+    } else if kind == SecondaryDampenProjectileKind::Firebolt {
         0
-    } else if payload == NativeSecondaryDampenPayload::Poison {
+    } else if payload == SecondaryDampenPayload::Poison {
         1
     } else {
         2

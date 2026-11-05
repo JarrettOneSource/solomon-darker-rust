@@ -9,7 +9,7 @@ use crate::boneyard::world::BoneyardWorldTickResult;
 use crate::enemies::EnemySpawnIntent;
 use crate::enemies::model::EnemyDamageRequest;
 use crate::game_run::GameRunPhase;
-use crate::secondary::NativeSecondaryTickResult;
+use crate::secondary::SecondaryTickResult;
 use crate::spells::air_water::finalize_air_water_player_visual_actors;
 use crate::spells::contacts::BoneyardSpellCombatResult;
 use crate::spells::model::PrimarySpellTickResult;
@@ -29,7 +29,7 @@ pub struct GameSessionTickResult {
     pub tick: u64,
     pub world: Option<BoneyardWorldTickResult>,
     pub primary: Option<PrimarySpellTickResult>,
-    pub secondary: Option<NativeSecondaryTickResult>,
+    pub secondary: Option<SecondaryTickResult>,
     pub primary_contacts: Option<BoneyardSpellCombatResult>,
     pub audio_events: Vec<AudioEvent>,
 }

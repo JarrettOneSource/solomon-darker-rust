@@ -7,14 +7,13 @@ mod weld;
 use std::collections::{BTreeMap, BTreeSet};
 
 use solomon_sim::painter::PainterRegistration;
-use solomon_sim::spells::ether::NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS;
+use solomon_sim::spells::ether::ETHER_BLAST_PARTICLE_LIFETIME_TICKS;
 use solomon_sim::spells::fire::{
-    NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS, NATIVE_FIRE_IMPACT_LIFETIME_TICKS,
-    native_fire_particle_lifetime_ticks,
+    FIRE_EXPLOSION_LIFETIME_TICKS, FIRE_IMPACT_LIFETIME_TICKS, fire_particle_lifetime_ticks,
 };
 use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellTransient, SpellState};
 use solomon_sim::spells::water::water_frost_jet_lifetime_ticks;
-use solomon_sim::spells::weld::NativeWeldWorldActor;
+use solomon_sim::spells::weld::WeldWorldActor;
 
 use super::PresentationClocks;
 use super::math::{interpolate_projected_members, lerp, lerp_option, lerp_vec};
@@ -176,11 +175,11 @@ fn projectile(
             output.frost_turn_degrees =
                 lerp_option(first.frost_turn_degrees, next.frost_turn_degrees, blend);
             let age = lerp_option(
-                first.ground_spark_native_age_ticks.map(|age| age as f64),
-                next.ground_spark_native_age_ticks.map(|age| age as f64),
+                first.ground_spark_age_ticks.map(|age| age as f64),
+                next.ground_spark_age_ticks.map(|age| age as f64),
                 blend,
             );
-            output.ground_spark_native_age_ticks = age.map(|age| age.floor() as u64);
+            output.ground_spark_age_ticks = age.map(|age| age.floor() as u64);
             if let Some(age) = age {
                 clocks.primary_ground_spark.insert(output.common.id, age);
             }
@@ -218,7 +217,7 @@ fn retain_hail(
     let age =
         snapshot_tick.checked_sub(hail.birth_tick).expect("Hail was born before its snapshot");
     hail.common.age_ticks = age;
-    hail.life = solomon_sim::spells::air_water::native_water_hail_life_at_age(age);
+    hail.life = solomon_sim::spells::air_water::water_hail_life_at_age(age);
     clocks.primary.insert(hail.common.id, age as f64);
 }
 
@@ -248,7 +247,7 @@ fn fixed_timing(effect: &PrimarySpellTransient, snapshot_tick: u64) -> Option<Fi
     let (birth, lifetime, first) = match effect {
         PrimarySpellTransient::Air(effect) => (
             effect.birth_tick as f64,
-            solomon_sim::spells::air::native_air_contact_lifetime_ticks(
+            solomon_sim::spells::air::air_contact_lifetime_ticks(
                 effect.underpowered,
                 effect.chained,
                 effect.enhanced_effects,
@@ -260,19 +259,19 @@ fn fixed_timing(effect: &PrimarySpellTransient, snapshot_tick: u64) -> Option<Fi
         }
         PrimarySpellTransient::EtherImpact(effect) => (effect.birth_tick as f64, 19.0, 0.0),
         PrimarySpellTransient::EtherBlast(effect) => {
-            (effect.birth_tick as f64, NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS as f64, 0.0)
+            (effect.birth_tick as f64, ETHER_BLAST_PARTICLE_LIFETIME_TICKS as f64, 0.0)
         }
         PrimarySpellTransient::EtherPierceStreak(_) => (inferred_birth, 10.0, 0.0),
         PrimarySpellTransient::FireParticle(effect) => (
             inferred_birth,
-            native_fire_particle_lifetime_ticks(effect.common.id, effect.enhanced_effects) as f64,
+            fire_particle_lifetime_ticks(effect.common.id, effect.enhanced_effects) as f64,
             0.0,
         ),
         PrimarySpellTransient::FireExplosion(_) => {
-            (inferred_birth, NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS as f64, 0.0)
+            (inferred_birth, FIRE_EXPLOSION_LIFETIME_TICKS as f64, 0.0)
         }
         PrimarySpellTransient::FireImpact(_) => {
-            (inferred_birth, NATIVE_FIRE_IMPACT_LIFETIME_TICKS as f64, 0.0)
+            (inferred_birth, FIRE_IMPACT_LIFETIME_TICKS as f64, 0.0)
         }
         PrimarySpellTransient::Water(effect) => {
             (inferred_birth, water_frost_jet_lifetime_ticks(effect.common.id) as f64, 1.0)
@@ -280,15 +279,15 @@ fn fixed_timing(effect: &PrimarySpellTransient, snapshot_tick: u64) -> Option<Fi
         PrimarySpellTransient::WaterAura(effect) => {
             (effect.birth_tick as f64, effect.duration_ticks as f64, 0.0)
         }
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::BlizzardChainFrost(effect)) => (
+        PrimarySpellTransient::Weld(WeldWorldActor::BlizzardChainFrost(effect)) => (
             effect.common.birth_tick as f64,
             water_frost_jet_lifetime_ticks(effect.common.owner.id) as f64,
             0.0,
         ),
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::BlizzardGlow(effect)) => {
+        PrimarySpellTransient::Weld(WeldWorldActor::BlizzardGlow(effect)) => {
             (effect.common.birth_tick as f64, 1.0, 0.0)
         }
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::FrostFade(effect)) => (
+        PrimarySpellTransient::Weld(WeldWorldActor::FrostFade(effect)) => (
             effect.common.birth_tick as f64,
             if effect.common.build_id == 1004 { 3.0 } else { 20.0 },
             0.0,

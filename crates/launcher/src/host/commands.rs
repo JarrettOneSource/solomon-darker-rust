@@ -2,7 +2,7 @@
 //! `host/game-host.ts` command branches and `core-server/game-simulation.ts` commands.
 
 use solomon_protocol::{GameCommand, HostErrorCode, PauseSource, ResumeGraceReason, ServerMessage};
-use solomon_sim::belt::NativeBeltCommand;
+use solomon_sim::belt::BeltCommand;
 use solomon_sim::economy::{HubEconomyResult, HubInventoryAction};
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::modding::extensions::GameSimulationExtensions;
@@ -280,10 +280,10 @@ pub(super) fn surface_allows_command(
                 )
         }
         GameCommand::ActivateBeltSlot { .. } => pause.source == PauseSource::Inventory,
-        GameCommand::BindBelt { command: NativeBeltCommand::BindItem { .. } } => {
+        GameCommand::BindBelt { command: BeltCommand::BindItem { .. } } => {
             pause.source == PauseSource::Inventory
         }
-        GameCommand::BindBelt { command: NativeBeltCommand::BindSkill { skill_id, .. } } => {
+        GameCommand::BindBelt { command: BeltCommand::BindSkill { skill_id, .. } } => {
             pause.source == PauseSource::SkillBook
                 || (pause.source == PauseSource::Inventory && skill_id.is_none())
         }

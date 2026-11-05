@@ -4,12 +4,12 @@ use crate::HubWizard;
 use crate::combat::PlayerCombatState;
 use crate::economy::{HubEconomyState, HubInventoryItem};
 use crate::enemies::targeting::boneyard_enemy_collision_radius;
-use crate::loot::{NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS, NativeLootDropKind};
-use crate::secondary::{NativeSecondaryAbilityId, NativeSecondaryPlayerState};
+use crate::loot::{LOOT_CARRIER_PLACEMENT_RADIUS, LootDropKind};
+use crate::secondary::{SecondaryAbilityId, SecondaryPlayerState};
 
 use super::super::tutorial::{
-    NativeTutorialTickInput, NativeTutorialTickResult, native_tutorial_camera_lock_safety_clear,
-    native_tutorial_forced_velocity,
+    TutorialTickInput, TutorialTickResult, tutorial_camera_lock_safety_clear,
+    tutorial_forced_velocity,
 };
 use super::BoneyardWorld;
 
@@ -18,7 +18,7 @@ pub struct BoneyardTutorialPlayer<'a> {
     pub economy: &'a HubEconomyState,
     pub level: u32,
     pub level_up_pending: bool,
-    pub secondary: Option<&'a NativeSecondaryPlayerState>,
+    pub secondary: Option<&'a SecondaryPlayerState>,
 }
 
 impl BoneyardWorld {
@@ -30,9 +30,9 @@ impl BoneyardWorld {
         wizard: &mut HubWizard,
         player: BoneyardTutorialPlayer<'_>,
         tick: u64,
-    ) -> Option<NativeTutorialTickResult> {
+    ) -> Option<TutorialTickResult> {
         let tutorial = self.tutorial.as_mut()?;
-        if let Some(velocity) = native_tutorial_forced_velocity(tutorial) {
+        if let Some(velocity) = tutorial_forced_velocity(tutorial) {
             wizard.velocity = velocity;
         }
         let mut safety_bodies = Vec::new();
@@ -44,21 +44,21 @@ impl BoneyardWorld {
         }
         let mut ground_sack_count = 0;
         for actor in self.loot.actors.iter() {
-            if actor.kind == NativeLootDropKind::Sack {
+            if actor.kind == LootDropKind::Sack {
                 ground_sack_count += 1;
-                safety_bodies.push((actor.position, NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS));
+                safety_bodies.push((actor.position, LOOT_CARRIER_PLACEMENT_RADIUS));
             }
         }
         Some(
-            tutorial.step(NativeTutorialTickInput {
+            tutorial.step(TutorialTickInput {
                 acid_rain_cast_sequence: player
                     .secondary
                     .map_or(0, |secondary| secondary.cast_sequence),
                 acid_rain_last_skill_id: player
                     .secondary
                     .and_then(|secondary| secondary.last_skill_id)
-                    .map(NativeSecondaryAbilityId::skill_id),
-                camera_lock_safety_clear: native_tutorial_camera_lock_safety_clear(&safety_bodies),
+                    .map(SecondaryAbilityId::skill_id),
+                camera_lock_safety_clear: tutorial_camera_lock_safety_clear(&safety_bodies),
                 current_health: player.combat.current_health,
                 enemy_count: self.enemies.actors.len(),
                 ground_sack_count,
@@ -66,7 +66,7 @@ impl BoneyardWorld {
                     .economy
                     .backpack
                     .iter()
-                    .any(|item| item.native_type_id != 7001),
+                    .any(|item| item.type_id != 7001),
                 health_potion_count: count_health_potions(&player.economy.backpack),
                 level: player.level,
                 level_up_pending: player.level_up_pending,
@@ -89,7 +89,7 @@ impl BoneyardWorld {
 fn count_health_potions(items: &[HubInventoryItem]) -> usize {
     let mut count = 0;
     for item in items {
-        if item.native_type_id == 7001 && item.native_subtype == Some(0) {
+        if item.type_id == 7001 && item.subtype == Some(0) {
             count += item.quantity as usize;
         }
         if let Some(contents) = &item.contents {

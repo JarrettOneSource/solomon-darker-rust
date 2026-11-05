@@ -10,21 +10,21 @@ use std::collections::BTreeMap;
 
 use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::shadows::NativeShadowRecord;
+use solomon_sim::boneyard::shadows::ShadowRecord;
 use solomon_sim::enemies::actor_presentation::{
     EnemyArtAtlas, EnemyArtBlend, EnemySegmentLayer, EnemySpriteLayer,
 };
 use solomon_sim::enemies::death_presentation::EnemyBanishGradient;
 use solomon_sim::enemies::model::{EnemyActor, EnemyDeathEffect, EnemyEvent};
-use solomon_sim::enemies::rain_presentation::NativeRainCloud;
+use solomon_sim::enemies::rain_presentation::RainCloud;
 use solomon_sim::enemies::tendrils::HeartmongerTendrils;
 use solomon_sim::enemies::underlay::EnemyUnderlayLayer;
 use solomon_sim::enemies::web_presentation::EnemyWebMesh;
 use solomon_sim::enemies::world::EnemyWorld;
 use solomon_sim::hub::painter::PainterLayer;
 
+use crate::beam_mesh::MeshVertex;
 use crate::courtyard::Camera;
-use crate::native_mesh::NativeMeshVertex;
 use solomon_graphics::{Renderer, Texture};
 
 pub struct EnemyViewPlayer<'a> {
@@ -34,7 +34,7 @@ pub struct EnemyViewPlayer<'a> {
 }
 
 pub struct EnemyViewShadow {
-    pub records: Vec<NativeShadowRecord>,
+    pub records: Vec<ShadowRecord>,
     pub light_scalar: f64,
 }
 
@@ -100,7 +100,7 @@ enum EnemyDraw {
     AtlasMesh {
         atlas: EnemyArtAtlas,
         entry: usize,
-        triangles: Vec<[NativeMeshVertex; 3]>,
+        triangles: Vec<[MeshVertex; 3]>,
         alpha: f64,
         tint: u32,
         blend: EnemyArtBlend,
@@ -123,7 +123,7 @@ pub struct EnemyView {
     pre_world: Vec<EnemyDrawGroup>,
     post_world: Vec<EnemyDrawGroup>,
     late_world: Vec<EnemyDrawGroup>,
-    rain_clouds: BTreeMap<usize, NativeRainCloud>,
+    rain_clouds: BTreeMap<usize, RainCloud>,
     tendrils: BTreeMap<usize, HeartmongerTendrils>,
     attack_origins: BTreeMap<usize, Vec2>,
     pending_events: Vec<EnemyEvent>,

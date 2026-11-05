@@ -8,7 +8,7 @@ use super::config::ArrowType;
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RangedFamily {
@@ -23,10 +23,10 @@ pub struct RangedAttackRange {
 }
 
 #[must_use]
-pub fn construct_native_ranged_attack_range(
+pub fn construct_ranged_attack_range(
     family: RangedFamily,
     mode: u8,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> RangedAttackRange {
     let (base, maximum) = match family {
         RangedFamily::Archer => (280.0, 170.0),
@@ -34,13 +34,13 @@ pub fn construct_native_ranged_attack_range(
     };
     let native_base = fround(base + rng.draw_scaled_float(maximum, false));
     RangedAttackRange {
-        range: apply_native_ranged_range_mode(native_base, mode),
+        range: apply_ranged_range_mode(native_base, mode),
         range_easy_pending: mode == 3,
     }
 }
 
 #[must_use]
-pub fn apply_native_ranged_range_mode(range: f64, mode: u8) -> f64 {
+pub fn apply_ranged_range_mode(range: f64, mode: u8) -> f64 {
     let range = fround(range);
     match mode {
         0 => range,
@@ -50,7 +50,7 @@ pub fn apply_native_ranged_range_mode(range: f64, mode: u8) -> f64 {
     }
 }
 
-pub fn restore_native_range_easy_after_volley(range: &mut RangedAttackRange) {
+pub fn restore_range_easy_after_volley(range: &mut RangedAttackRange) {
     if range.range_easy_pending {
         range.range_easy_pending = false;
         range.range = fround(fround(range.range) * 1.8);
@@ -89,7 +89,7 @@ pub struct ArcherVolley {
 
 /// `nativeArcherFanOffset`: centre, then alternating left/right rays ten degrees apart.
 #[must_use]
-pub fn native_archer_fan_offset(index: usize) -> f64 {
+pub fn archer_fan_offset(index: usize) -> f64 {
     if index == 0 {
         return 0.0;
     }
@@ -99,10 +99,7 @@ pub fn native_archer_fan_offset(index: usize) -> f64 {
 
 /// `buildNativeArcherVolley`, including leading/scatter/random aim and fan gate draws.
 #[must_use]
-pub fn build_native_archer_volley(
-    request: ArcherVolleyRequest,
-    shared_rng: &mut NativeRng,
-) -> ArcherVolley {
+pub fn build_archer_volley(request: ArcherVolleyRequest, shared_rng: &mut Rng) -> ArcherVolley {
     assert!(request.extra_arrows <= 8, "Archer extra-arrow count must be within 0..8");
     assert!(
         request.private_seed < 1_000_000,
@@ -114,7 +111,7 @@ pub fn build_native_archer_volley(
     } else {
         request.accuracy_mode
     };
-    let mut private_rng = NativeRng::new(i64::from(request.private_seed));
+    let mut private_rng = Rng::new(i64::from(request.private_seed));
     let dx = fround(request.origin.x - request.target_position.x);
     let dy = fround(request.origin.y - request.target_position.y);
     let source_target_distance = fround(hypot(dx, dy));
@@ -150,7 +147,7 @@ pub fn build_native_archer_volley(
     ));
     let mut arrows = Vec::with_capacity(extra_arrow_count + 1);
     for index in 0..=extra_arrow_count {
-        let fan_offset = native_archer_fan_offset(index);
+        let fan_offset = archer_fan_offset(index);
         let jittered = if fan_offset == 0.0 {
             0.0
         } else {
@@ -185,7 +182,7 @@ pub fn build_native_archer_volley(
 }
 
 #[must_use]
-pub fn native_enemy_projectile_velocity(heading_deg: f64, speed: f64) -> Vec2 {
+pub fn enemy_projectile_velocity(heading_deg: f64, speed: f64) -> Vec2 {
     let direction = heading_vector(heading_deg);
     Vec2::new(fround(direction.x * speed), fround(direction.y * speed))
 }

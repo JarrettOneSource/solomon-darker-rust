@@ -68,7 +68,7 @@ pub fn boneyard_puppet_target(
             heading_degrees: None,
             id,
             kind: PrimarySpellTargetKind::Projectile,
-            native_priority: 0,
+            priority: 0,
             pending_remove: false,
             position,
             query_lane,
@@ -91,7 +91,7 @@ impl EnemyWorld {
             .collect();
         ordered.sort_by_key(|target| target.target.registration_order);
         for target in ordered {
-            self.bind_native_query_target(
+            self.bind_query_target(
                 &target.target.id,
                 target.target.grid_position.unwrap_or(target.target.position),
             );

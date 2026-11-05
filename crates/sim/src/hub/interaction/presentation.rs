@@ -2,7 +2,7 @@
 //! Stock rows and responses delegate to the same authored native tables.
 
 use super::{
-    HubNpcChatContent, HubNpcChatNext, HubNpcListSelector, NATIVE_BOAST_INSTRUCTION, NATIVE_BOASTS,
+    BOAST_INSTRUCTION, BOASTS, HubNpcChatContent, HubNpcChatNext, HubNpcListSelector,
     hub_npc_selector_action, hub_npc_selector_response, hub_npc_selector_rows,
 };
 use crate::economy::{BoastSelection, BoastState, HubInventoryAction, NativeHubNpcState};
@@ -108,7 +108,7 @@ pub fn hub_boast_instruction<'a>(
     mods: Option<&'a ModContentProjection>,
 ) -> Option<&'a str> {
     match selection? {
-        BoastSelection::Native(_) => Some(NATIVE_BOAST_INSTRUCTION),
+        BoastSelection::Native(_) => Some(BOAST_INSTRUCTION),
         BoastSelection::Mod(selection) => Some(&mods?.boast(selection)?.instruction),
     }
 }
@@ -122,7 +122,7 @@ pub fn hub_boast_failure_text(
         return None;
     }
     let label = match state.selected.as_ref()? {
-        BoastSelection::Native(id) => NATIVE_BOASTS.iter().find(|boast| boast.id == *id)?.label,
+        BoastSelection::Native(id) => BOASTS.iter().find(|boast| boast.id == *id)?.label,
         BoastSelection::Mod(selection) => &mods?.boast(selection)?.name,
     };
     if label.is_empty() {

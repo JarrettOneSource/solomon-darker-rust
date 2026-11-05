@@ -2,7 +2,7 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeTutorialSurfaceAction {
+pub enum TutorialSurfaceAction {
     InventoryOpened,
     InventoryClosed,
     SkillsOpened,
@@ -11,7 +11,7 @@ pub enum NativeTutorialSurfaceAction {
     ConcentrationASelectorOpened,
 }
 
-impl NativeTutorialSurfaceAction {
+impl TutorialSurfaceAction {
     pub const ALL: [Self; 6] = [
         Self::InventoryOpened,
         Self::InventoryClosed,

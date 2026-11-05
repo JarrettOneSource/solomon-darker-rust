@@ -2,13 +2,13 @@
 //! `primary-spell-fire-effects.ts`. Family modules own the rules; these rows retain
 //! identity, painter ownership and the fields shared with rendering and contacts.
 
-use super::earth_debris::NativeWeldBoulderDebrisParticleState;
-use super::weld::{NativeFlameLashFactoryInput, NativeWeldProjectileState, NativeWeldWorldActor};
-use crate::enemies::path::NativeEnemyPathState;
-use crate::harden_effects::NativeHardenEffect;
+use super::earth_debris::WeldBoulderDebrisParticleState;
+use super::weld::{FlameLashFactoryInput, WeldProjectileState, WeldWorldActor};
+use crate::enemies::path::EnemyPathState;
+use crate::harden_effects::HardenEffect;
 use crate::painter::PainterRegistration;
-use crate::profile::primary::{NativePrimarySkillProfile, NativeSpentEmber};
-use crate::{NativeRng, Vec2};
+use crate::profile::primary::{PrimarySkillProfile, SpentEmber};
+use crate::{Rng, Vec2};
 
 pub use super::transient_storage::PrimaryTransients;
 
@@ -85,14 +85,14 @@ pub struct PrimarySpellFireProjectile {
     pub explode_damage: f64,
     pub explode_radius: f64,
     pub private_seed: i32,
-    pub spent_ember: NativeSpentEmber,
+    pub spent_ember: SpentEmber,
     pub underpowered: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PrimarySpellProjectile {
-    Weld(NativeWeldProjectileState),
+    Weld(WeldProjectileState),
     Earth(PrimarySpellEarthProjectile),
     Ether(PrimarySpellEtherProjectile),
     Fire(PrimarySpellFireProjectile),
@@ -183,7 +183,7 @@ const fn default_earth_impact_enhanced_effects() -> bool {
 pub struct PrimarySpellEarthBoulderBit {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,
-    pub debris: NativeWeldBoulderDebrisParticleState,
+    pub debris: WeldBoulderDebrisParticleState,
     pub origin: Vec2,
     pub position: Vec2,
 }
@@ -242,7 +242,7 @@ pub struct PrimarySpellEtherBlast {
     pub birth_tick: u64,
     pub charges: u32,
     pub origin: Vec2,
-    pub presentation_rng: NativeRng,
+    pub presentation_rng: Rng,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -265,7 +265,7 @@ pub struct PrimarySpellFireEmber {
     pub life: f64,
     pub phase: f64,
     pub position: Vec2,
-    pub spent_ember: NativeSpentEmber,
+    pub spent_ember: SpentEmber,
     pub vertical_velocity: f64,
 }
 
@@ -314,7 +314,7 @@ pub struct PrimarySpellFireGoodImp {
     pub heading_degrees: f64,
     pub light_glow: f64,
     pub next_target_refresh_tick: u64,
-    pub path: NativeEnemyPathState,
+    pub path: EnemyPathState,
     pub position: Vec2,
     pub remaining_ticks: u64,
     pub target_id: Option<String>,
@@ -361,7 +361,7 @@ pub struct PrimarySpellAirHurricane {
     pub damage_maximum: f64,
     pub damage_minimum: f64,
     pub enhanced_effects: bool,
-    pub lanes: [crate::hurricane::NativeHurricaneLane; 8],
+    pub lanes: [crate::hurricane::HurricaneLane; 8],
     pub phase_degrees: f64,
     pub position: Vec2,
 }
@@ -404,9 +404,9 @@ pub enum PrimarySpellTransient {
     AirHurricane(PrimarySpellAirHurricane),
     WaterAura(PrimarySpellWaterAura),
     WaterHail(PrimarySpellWaterHail),
-    Harden(NativeHardenEffect),
-    Staff(crate::spells::staff::NativePlayerStaffTransient),
-    Weld(NativeWeldWorldActor),
+    Harden(HardenEffect),
+    Staff(crate::spells::staff::PlayerStaffTransient),
+    Weld(WeldWorldActor),
     EarthBoulderBit(PrimarySpellEarthBoulderBit),
     Air(PrimarySpellAirTransient),
     Water(PrimarySpellWaterTransient),
@@ -488,7 +488,7 @@ pub struct PrimarySpellFlameLashPresentation {
     pub camera_displacement: Option<Option<Vec2>>,
     pub midpoint: Option<Vec2>,
     pub target_id: Option<String>,
-    pub native_geometry: Option<NativeFlameLashFactoryInput>,
+    pub native_geometry: Option<FlameLashFactoryInput>,
     pub preclip_endpoint: Option<Vec2>,
     pub creator_registration: Option<PainterRegistration>,
 }
@@ -504,7 +504,7 @@ pub struct PrimarySpellChannelEmission {
     pub mana_cost: f64,
     pub origin: Vec2,
     pub owner_id: String,
-    pub primary_skill: NativePrimarySkillProfile,
+    pub primary_skill: PrimarySkillProfile,
     pub query_origin: Vec2,
     pub terrain_contact: bool,
     pub underpowered: bool,
@@ -554,7 +554,7 @@ impl Default for SpellState {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PrimarySpellTickResult {
-    pub frost_missile_world_contacts: Vec<NativeWeldProjectileState>,
+    pub frost_missile_world_contacts: Vec<WeldProjectileState>,
     pub channel_emissions: Vec<PrimarySpellChannelEmission>,
     pub fire_actor_contacts: Vec<FireActorContact>,
     pub mana_spent: f64,

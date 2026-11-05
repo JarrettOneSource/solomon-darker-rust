@@ -1,33 +1,33 @@
 //! Lightning ribbon geometry and corona factories from `core-kernels/native-air-presentation.ts`.
 //! Cosmetic samples own a semantic stream; they never advance the world's native RNG.
 
-use super::presentation::{NativeSpellSprite, SpellBlend};
+use super::presentation::{SpellBlend, SpellSprite};
 use crate::Vec2;
 use crate::float;
 use crate::float::{atan2, fround, hypot};
-use crate::random_domain::{native_random_float_from_word, native_random_int_from_word};
+use crate::random_domain::{random_float_from_word, random_int_from_word};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeAirMesh {
+pub struct AirMesh {
     pub indices: Vec<u32>,
     pub uvs: Vec<Vec2>,
     pub vertices: Vec<Vec2>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeAirBranchPlan {
+pub struct AirBranchPlan {
     pub geometry_record: usize,
     pub mirror_x: bool,
     pub scale: f64,
     pub texture_record: usize,
-    pub mesh: NativeAirMesh,
+    pub mesh: AirMesh,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeAirRibbonLayer {
+pub struct AirRibbonLayer {
     pub alpha: f64,
-    pub branch: Option<NativeAirBranchPlan>,
-    pub mesh: NativeAirMesh,
+    pub branch: Option<AirBranchPlan>,
+    pub mesh: AirMesh,
     pub parameter_samples: Vec<f64>,
     pub phase_degrees: f64,
     pub phase_offset: f64,
@@ -37,15 +37,15 @@ pub struct NativeAirRibbonLayer {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeAirCoronaPlan {
+pub struct AirCoronaPlan {
     pub alpha: f64,
     pub center: Vec2,
-    pub draws: Vec<NativeSpellSprite>,
+    pub draws: Vec<SpellSprite>,
 }
 
 /// Source-shaped corona input shared by Lightning and the Weld compositors.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeAirCoronaInput {
+pub struct AirCoronaInput {
     pub alpha: f64,
     pub angle: f64,
     pub center: Vec2,
@@ -55,18 +55,18 @@ pub struct NativeAirCoronaInput {
 }
 
 #[must_use]
-pub fn build_native_air_corona_plan(input: NativeAirCoronaInput) -> NativeAirCoronaPlan {
+pub fn build_air_corona_plan(input: AirCoronaInput) -> AirCoronaPlan {
     build_corona(
         input.center,
         input.alpha,
         input.scale,
         input.angle,
-        NativeAirPresentationRandom::new(input.seed, input.random_salt),
+        AirPresentationRandom::new(input.seed, input.random_salt),
     )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeAirLightPlan {
+pub struct AirLightPlan {
     pub casts_directional_shadow: bool,
     pub intensity: f64,
     pub position: Vec2,
@@ -74,18 +74,18 @@ pub struct NativeAirLightPlan {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeAirLightningPlan {
-    pub body: Option<Vec<NativeAirRibbonLayer>>,
-    pub contact_corona: NativeAirCoronaPlan,
-    pub contact_light: Option<NativeAirLightPlan>,
+pub struct AirLightningPlan {
+    pub body: Option<Vec<AirRibbonLayer>>,
+    pub contact_corona: AirCoronaPlan,
+    pub contact_light: Option<AirLightPlan>,
     pub endpoint: Vec2,
     pub midpoint: Vec2,
     pub source: Vec2,
-    pub source_corona: Option<NativeAirCoronaPlan>,
+    pub source_corona: Option<AirCoronaPlan>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeAirLightningInput {
+pub struct AirLightningInput {
     pub chained: bool,
     pub enhanced_effects: bool,
     pub age_ticks: u64,
@@ -98,14 +98,12 @@ pub struct NativeAirLightningInput {
 
 /// Common native Air body factory. ElectricBurn owns its contact flare separately.
 #[must_use]
-pub fn build_native_air_lightning_body(
-    input: NativeAirLightningInput,
-) -> Option<Vec<NativeAirRibbonLayer>> {
+pub fn build_air_lightning_body(input: AirLightningInput) -> Option<Vec<AirRibbonLayer>> {
     let points = [Vec2::ZERO, input.midpoint, input.endpoint];
     if input.age_ticks < 2 {
         let (width, tint, alpha) =
             if input.underpowered { (0.75, 0x80ffff, 0.5) } else { (1.0, 0xffffff, 1.0) };
-        let ribbon = NativeAirRibbonInput {
+        let ribbon = AirRibbonInput {
             points,
             id: input.id,
             birth_tick: input.birth_tick,
@@ -117,11 +115,11 @@ pub fn build_native_air_lightning_body(
             dark: false,
             taper_scale: 1.0,
             enhanced_effects: input.enhanced_effects,
-            ribbon_family: NativeAirRibbonFamily::Air,
+            ribbon_family: AirRibbonFamily::Air,
         };
         Some(vec![
-            build_native_air_ribbon_with_style(ribbon),
-            build_native_air_ribbon_with_style(NativeAirRibbonInput {
+            build_air_ribbon_with_style(ribbon),
+            build_air_ribbon_with_style(AirRibbonInput {
                 width: width * 0.75,
                 phase_offset: 15.0,
                 tint: 0x00ffff,
@@ -135,10 +133,10 @@ pub fn build_native_air_lightning_body(
 }
 
 #[must_use]
-pub fn build_native_air_lightning_plan(input: NativeAirLightningInput) -> NativeAirLightningPlan {
-    let body = build_native_air_lightning_body(input);
+pub fn build_air_lightning_plan(input: AirLightningInput) -> AirLightningPlan {
+    let body = build_air_lightning_body(input);
     let source_corona = if input.age_ticks == 0 {
-        let mut random = NativeAirPresentationRandom::new(input.id, 0x534f5552);
+        let mut random = AirPresentationRandom::new(input.id, 0x534f5552);
         let scale = fround(1.0 + random.float(0.5));
         let angle = random.float(std::f64::consts::PI * 2.0);
         Some(build_corona(
@@ -146,7 +144,7 @@ pub fn build_native_air_lightning_plan(input: NativeAirLightningInput) -> Native
             1.0,
             scale,
             angle,
-            NativeAirPresentationRandom::new(input.id, 0x474c4f57),
+            AirPresentationRandom::new(input.id, 0x474c4f57),
         ))
     } else {
         None
@@ -166,9 +164,9 @@ pub fn build_native_air_lightning_plan(input: NativeAirLightningInput) -> Native
         alpha,
         contact.scale,
         angle,
-        NativeAirPresentationRandom::new(input.id, 0x46414445 ^ input.age_ticks as u32),
+        AirPresentationRandom::new(input.id, 0x46414445 ^ input.age_ticks as u32),
     );
-    NativeAirLightningPlan {
+    AirLightningPlan {
         body,
         contact_corona,
         contact_light: contact_light(
@@ -188,7 +186,7 @@ pub fn build_native_air_lightning_plan(input: NativeAirLightningInput) -> Native
 
 /// World-space ZAnimLit source; the collector owns its registration and translation.
 #[must_use]
-pub fn build_native_air_contact_light_source(
+pub fn build_air_contact_light_source(
     id: u64,
     age_ticks: u64,
     endpoint: Vec2,
@@ -196,7 +194,7 @@ pub fn build_native_air_contact_light_source(
     underpowered: bool,
     chained: bool,
     enhanced_effects: bool,
-) -> Option<NativeAirLightPlan> {
+) -> Option<AirLightPlan> {
     let samples = contact_samples(id);
     let position = Vec2::new(
         endpoint.x + float::cos(samples.offset_angle) * samples.offset_radius,
@@ -212,7 +210,7 @@ pub fn build_native_air_contact_light_source(
 }
 
 #[must_use]
-pub fn build_native_air_path_light_sources(
+pub fn build_air_path_light_sources(
     id: u64,
     birth_tick: u64,
     origin: Vec2,
@@ -220,9 +218,8 @@ pub fn build_native_air_path_light_sources(
     endpoint: Vec2,
     weak_cast: bool,
     enhanced_effects: bool,
-) -> Vec<NativeAirLightPlan> {
-    let mut random =
-        NativeAirPresentationRandom::new(id, semantic_seed(id, birth_tick, 0x4d495343));
+) -> Vec<AirLightPlan> {
+    let mut random = AirPresentationRandom::new(id, semantic_seed(id, birth_tick, 0x4d495343));
     let jitter = fround(random.float(1.0) * 0.75);
     let intensity = fround(fround(0.25 + jitter) * if weak_cast { 0.25 } else { 1.0 });
     let mut result = Vec::new();
@@ -260,8 +257,8 @@ pub fn build_native_air_path_light_sources(
 }
 
 fn append_path_light(
-    result: &mut Vec<NativeAirLightPlan>,
-    random: &mut NativeAirPresentationRandom,
+    result: &mut Vec<AirLightPlan>,
+    random: &mut AirPresentationRandom,
     point: Vec2,
     origin: Vec2,
     intensity: f64,
@@ -272,7 +269,7 @@ fn append_path_light(
     if fround(dx * dx + dy * dy) < 220.0 * 220.0 {
         return;
     }
-    result.push(NativeAirLightPlan {
+    result.push(AirLightPlan {
         casts_directional_shadow: enhanced_effects,
         intensity,
         position: Vec2::new(fround(point.x), fround(point.y + 35.0)),
@@ -287,8 +284,8 @@ fn contact_light(
     underpowered: bool,
     chained: bool,
     enhanced_effects: bool,
-) -> Option<NativeAirLightPlan> {
-    if age >= native_air_contact_lifetime_ticks(underpowered, chained, enhanced_effects) {
+) -> Option<AirLightPlan> {
+    if age >= air_contact_lifetime_ticks(underpowered, chained, enhanced_effects) {
         return None;
     }
     let maximum: f64 = if underpowered { 0.5 } else { 1.0 };
@@ -296,7 +293,7 @@ fn contact_light(
     for _ in 0..age {
         intensity = fround(intensity - 0.05_f32 as f64);
     }
-    Some(NativeAirLightPlan {
+    Some(AirLightPlan {
         casts_directional_shadow: false,
         intensity: intensity.min(maximum),
         position,
@@ -306,7 +303,7 @@ fn contact_light(
 
 /// First contacts always use .2 decay; only coarse chained contacts use .4.
 #[must_use]
-pub fn native_air_contact_lifetime_ticks(
+pub fn air_contact_lifetime_ticks(
     underpowered: bool,
     chained: bool,
     enhanced_effects: bool,
@@ -328,14 +325,14 @@ fn contact_alpha_levels(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeAirRibbonFamily {
+pub enum AirRibbonFamily {
     Air,
     FlameLash,
 }
 
 /// Source ribbon inputs shared by Lightning, Weld and Faculty Dark Lightning.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeAirRibbonInput {
+pub struct AirRibbonInput {
     pub points: [Vec2; 3],
     pub id: u64,
     pub birth_tick: u64,
@@ -347,12 +344,12 @@ pub struct NativeAirRibbonInput {
     pub dark: bool,
     pub taper_scale: f64,
     pub enhanced_effects: bool,
-    pub ribbon_family: NativeAirRibbonFamily,
+    pub ribbon_family: AirRibbonFamily,
 }
 
 #[must_use]
-pub fn build_native_air_ribbon_with_style(input: NativeAirRibbonInput) -> NativeAirRibbonLayer {
-    let NativeAirRibbonInput {
+pub fn build_air_ribbon_with_style(input: AirRibbonInput) -> AirRibbonLayer {
+    let AirRibbonInput {
         points,
         id,
         birth_tick,
@@ -370,8 +367,8 @@ pub fn build_native_air_ribbon_with_style(input: NativeAirRibbonInput) -> Native
         30.0
     } else {
         match ribbon_family {
-            NativeAirRibbonFamily::Air => 15.0,
-            NativeAirRibbonFamily::FlameLash => 7.0,
+            AirRibbonFamily::Air => 15.0,
+            AirRibbonFamily::FlameLash => 7.0,
         }
     };
     let samples = parameter_samples(points[0], points[1], spacing);
@@ -420,17 +417,17 @@ pub fn build_native_air_ribbon_with_style(input: NativeAirRibbonInput) -> Native
         let left = (segment * 2) as u32;
         indices.extend_from_slice(&[left, left + 1, left + 2, left + 1, left + 3, left + 2]);
     }
-    NativeAirRibbonLayer {
+    AirRibbonLayer {
         alpha,
         branch: build_branch(
             points,
-            NativeAirPresentationRandom::new(
+            AirPresentationRandom::new(
                 id,
                 semantic_seed(id, birth_tick, 0x4252414e ^ phase_offset as u32),
             ),
             dark,
         ),
-        mesh: NativeAirMesh { indices, uvs, vertices },
+        mesh: AirMesh { indices, uvs, vertices },
         parameter_samples: samples,
         phase_degrees: phase,
         phase_offset,
@@ -454,9 +451,9 @@ fn ribbon_random_sample(state: u32) -> (f64, f64, u32) {
 
 fn build_branch(
     points: [Vec2; 3],
-    mut random: NativeAirPresentationRandom,
+    mut random: AirPresentationRandom,
     dark: bool,
-) -> Option<NativeAirBranchPlan> {
+) -> Option<AirBranchPlan> {
     if random.integer(2) != 1 {
         return None;
     }
@@ -514,12 +511,12 @@ fn build_branch(
             fround(attachment.y + x * float::sin(angle) + y * float::cos(angle)),
         ));
     }
-    Some(NativeAirBranchPlan {
+    Some(AirBranchPlan {
         geometry_record: if dark { 373 } else { 375 } + geometry_index,
         mirror_x,
         scale,
         texture_record: if dark { 373 } else { 375 } + texture_index,
-        mesh: NativeAirMesh {
+        mesh: AirMesh {
             indices: vec![0, 1, 2, 1, 3, 2],
             uvs: vec![
                 Vec2::new(0.0, 0.0),
@@ -592,8 +589,8 @@ fn build_corona(
     alpha: f64,
     scale: f64,
     angle: f64,
-    mut random: NativeAirPresentationRandom,
-) -> NativeAirCoronaPlan {
+    mut random: AirPresentationRandom,
+) -> AirCoronaPlan {
     let pulse_scale = (float::sin(angle * 15.0).abs() * 0.15 + 3.5) * scale;
     let first_fork = random.integer(4) as usize;
     let second_fork = 3 - first_fork;
@@ -604,24 +601,24 @@ fn build_corona(
         (0.5, pulse_scale * 0.5),
         (0.25, pulse_scale * fround(0.2 + random.float(0.2))),
     ] {
-        draws.push(NativeSpellSprite {
+        draws.push(SpellSprite {
             alpha: opacity,
             blend: SpellBlend::Add,
             tint: 0x80bfbf,
-            ..NativeSpellSprite::new(110, circle_scale)
+            ..SpellSprite::new(110, circle_scale)
         });
     }
-    draws.push(NativeSpellSprite {
+    draws.push(SpellSprite {
         blend: SpellBlend::Add,
         rotation: angle,
-        ..NativeSpellSprite::new(1836 + first_fork, scale * fround(0.75 + random.float(0.25)))
+        ..SpellSprite::new(1836 + first_fork, scale * fround(0.75 + random.float(0.25)))
     });
-    draws.push(NativeSpellSprite {
+    draws.push(SpellSprite {
         blend: SpellBlend::Add,
         rotation: angle + std::f64::consts::PI / 2.0,
-        ..NativeSpellSprite::new(1836 + second_fork, scale)
+        ..SpellSprite::new(1836 + second_fork, scale)
     });
-    NativeAirCoronaPlan { alpha, center, draws }
+    AirCoronaPlan { alpha, center, draws }
 }
 
 struct ContactSamples {
@@ -632,7 +629,7 @@ struct ContactSamples {
     light_radius: f64,
 }
 fn contact_samples(id: u64) -> ContactSamples {
-    let mut random = NativeAirPresentationRandom::new(id, 0x434f4e54);
+    let mut random = AirPresentationRandom::new(id, 0x434f4e54);
     ContactSamples {
         offset_radius: random.float(10.0),
         offset_angle: random.float(std::f64::consts::PI * 2.0),
@@ -642,10 +639,10 @@ fn contact_samples(id: u64) -> ContactSamples {
     }
 }
 
-pub struct NativeAirPresentationRandom {
+pub struct AirPresentationRandom {
     value: u32,
 }
-impl NativeAirPresentationRandom {
+impl AirPresentationRandom {
     #[must_use]
     pub fn new(id: u64, salt: u32) -> Self {
         Self { value: mix32(id as u32 ^ salt) }
@@ -657,10 +654,10 @@ impl NativeAirPresentationRandom {
         self.value
     }
     pub fn float(&mut self, maximum: f64) -> f64 {
-        native_random_float_from_word(self.word(), maximum)
+        random_float_from_word(self.word(), maximum)
     }
     fn integer(&mut self, bound: u32) -> u32 {
-        native_random_int_from_word(self.word(), bound)
+        random_int_from_word(self.word(), bound)
     }
 }
 fn radians(degrees: f64) -> f64 {

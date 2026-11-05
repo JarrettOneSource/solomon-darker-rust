@@ -1,11 +1,11 @@
 //! The ordinary Bouncer births from `native-secondary-abilities.ts`:
 //! `spawnStoneskinBurst` and `spawnStoneskinChip` share the secondary RNG.
 
-use super::{NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondarySimulationState};
+use super::{SecondaryActorKind, SecondaryActorState, SecondarySimulationState};
 use crate::Vec2;
 use crate::float::{cos, fround, sin};
 
-impl NativeSecondarySimulationState {
+impl SecondarySimulationState {
     pub(super) fn spawn_stoneskin_burst(
         &mut self,
         owner_id: &str,
@@ -57,9 +57,9 @@ impl NativeSecondarySimulationState {
         if burst_heading.is_none() {
             self.rng.draw_scaled_float(0.2, true); // Separate physical-contact audio owner.
         }
-        let mut chip = NativeSecondaryActorState::new(
+        let mut chip = SecondaryActorState::new(
             0,
-            NativeSecondaryActorKind::StoneskinChip,
+            SecondaryActorKind::StoneskinChip,
             owner_id.into(),
             world_key.into(),
             Some(46),

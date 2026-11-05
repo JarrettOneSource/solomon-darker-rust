@@ -3,9 +3,7 @@
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::{BoneyardLootParticipant, BoneyardLootStore};
 use solomon_sim::economy::HubEconomyState;
-use solomon_sim::loot::{
-    NativeLootDropKind, NativeLootDropSource, NativeLootDropSpec, NativeLootModifiers,
-};
+use solomon_sim::loot::{LootDropKind, LootDropSource, LootDropSpec, LootModifiers};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::profile::WizardElement;
 
@@ -14,14 +12,13 @@ fn retired_pickups_do_not_reorder_survivors_or_lose_saved_contents() {
     let mut store = BoneyardLootStore::new("loot-order", &[]);
     let mut order = WorldPainterOrder::default();
     let item = HubEconomyState::new(77, WizardElement::Air).backpack[0].clone();
-    let drop =
-        |kind, id| NativeLootDropSpec::new(kind, id, Vec2::ZERO, NativeLootDropSource::Script);
-    let mut gold = drop(NativeLootDropKind::Gold, 1);
+    let drop = |kind, id| LootDropSpec::new(kind, id, Vec2::ZERO, LootDropSource::Script);
+    let mut gold = drop(LootDropKind::Gold, 1);
     gold.activation_delay_ticks = 0;
     gold.amount = Some(7);
-    let mut expired = drop(NativeLootDropKind::Orb, 2);
+    let mut expired = drop(LootDropKind::Orb, 2);
     expired.value = Some(0.0);
-    let mut sack = drop(NativeLootDropKind::Sack, 3);
+    let mut sack = drop(LootDropKind::Sack, 3);
     sack.activation_delay_ticks = 0;
     sack.item = Some(item.clone());
     assert_eq!(store.spawn_specs(vec![gold.clone(), expired, sack], 0, &mut order), 0);
@@ -50,7 +47,7 @@ fn retired_pickups_do_not_reorder_survivors_or_lose_saved_contents() {
         connected: true,
         heading_index: 0,
         level: 1,
-        modifiers: NativeLootModifiers::default(),
+        modifiers: LootModifiers::default(),
         owned_recipe_indexes: &[],
         player_id: "wizard",
         position: Vec2::ZERO,

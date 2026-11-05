@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::BoneyardLootEventType;
 use solomon_sim::enemies::model::EnemyLifeState;
-use solomon_sim::harden_effects::NativeHardenEffect;
-use solomon_sim::loot::NativeLootDropKind;
+use solomon_sim::harden_effects::HardenEffect;
+use solomon_sim::loot::LootDropKind;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::session::GameSession;
 use solomon_sim::spells::model::PrimarySpellTransient;
@@ -28,8 +28,8 @@ fn registration(registration: PainterRegistration) -> Value {
 
 fn transient_kind(effect: &PrimarySpellTransient) -> &'static str {
     match effect {
-        PrimarySpellTransient::Harden(NativeHardenEffect::Shard { .. }) => "harden-shard",
-        PrimarySpellTransient::Harden(NativeHardenEffect::Burst { .. }) => "harden-burst",
+        PrimarySpellTransient::Harden(HardenEffect::Shard { .. }) => "harden-shard",
+        PrimarySpellTransient::Harden(HardenEffect::Burst { .. }) => "harden-burst",
         PrimarySpellTransient::Staff(actor) => actor.kind(),
         PrimarySpellTransient::Weld(_) => unreachable!("these journeys cast the five elements"),
         PrimarySpellTransient::AirHurricane(_) => "air-hurricane",
@@ -147,10 +147,10 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
         .iter()
         .map(|actor| {
             let kind = match actor.kind {
-                NativeLootDropKind::Bonus => "bonus",
-                NativeLootDropKind::Gold => "gold",
-                NativeLootDropKind::Orb => "orb",
-                NativeLootDropKind::Sack => "sack",
+                LootDropKind::Bonus => "bonus",
+                LootDropKind::Gold => "gold",
+                LootDropKind::Orb => "orb",
+                LootDropKind::Sack => "sack",
             };
             json!([
                 actor.id,
@@ -158,7 +158,7 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
                 point(actor.position),
                 actor.age_ticks,
                 actor.amount,
-                actor.item.as_ref().map(|item| item.native_type_id)
+                actor.item.as_ref().map(|item| item.type_id)
             ])
         })
         .collect();
@@ -179,7 +179,7 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
         "events":world.enemy_events.iter().map(|event|json!([event.event_id,event.kind.id(),
             event.actor_id,event.deflect_pitch,event.target_player_id])).collect::<Vec<_>>(),
         "counters":[enemies.next_actor_id,enemies.next_event_id,enemies.next_projectile_id,
-            enemies.next_death_effect_id,enemies.next_native_cell_binding_order,enemies.next_native_registration_order],
+            enemies.next_death_effect_id,enemies.next_cell_binding_order,enemies.next_registration_order],
         "enemyRng":[json!(enemies.rng_state),player_snapshot::rng_snapshot(&enemies.steering_rng),
             player_snapshot::rng_snapshot(&enemies.locomotion_rng),player_snapshot::rng_snapshot(&enemies.head_facing_rng)],
         "loot":{"rng":player_snapshot::rng_snapshot(&loot.shared_rng),"nextActorId":loot.next_actor_id,

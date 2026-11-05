@@ -56,8 +56,8 @@ fn assert_source(actual: &Value, expected: &Value, path: &str) {
 }
 
 use serde_json::json;
-use solomon_sim::NativeRng;
-use solomon_sim::enemies::actor_presentation::NativeMaggotState;
+use solomon_sim::Rng;
+use solomon_sim::enemies::actor_presentation::MaggotState;
 use solomon_sim::enemies::effects::{
     DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec,
 };
@@ -69,9 +69,9 @@ use solomon_sim::enemies::projectiles::{
     EnemyProjectile, EnemyProjectileEffect, EnemyProjectileEffectKind, EnemyProjectileEffectState,
     EnemyProjectilePayload, EnemyProjectileState, MageLightningContact,
 };
-use solomon_sim::enemies::silk::{EnemySilkActor, create_native_silk};
-use solomon_sim::enemies::silk_force::{NativeFadeLineActor, NativeFadeLineState};
-use solomon_sim::enemies::spider_remains::{SpiderDecal, SpiderRemains, create_native_dead_spider};
+use solomon_sim::enemies::silk::{EnemySilkActor, create_silk};
+use solomon_sim::enemies::silk_force::{FadeLineActor, FadeLineState};
+use solomon_sim::enemies::spider_remains::{SpiderDecal, SpiderRemains, create_dead_spider};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
 fn number(value: &Value, field: &str) -> f64 {
@@ -113,7 +113,7 @@ fn projectile(value: &Value) -> EnemyProjectile {
         light_registration: None,
         lifetime_ticks: 100,
         minimum_speed: 0.0,
-        native_type_id: match kind {
+        type_id: match kind {
             "arrow" => EnemyProjectileKind::Arrow,
             "guided-missile" => EnemyProjectileKind::GuidedMissile,
             "demon-bomb" => EnemyProjectileKind::DemonBomb,
@@ -121,7 +121,7 @@ fn projectile(value: &Value) -> EnemyProjectile {
             "poison-pool" => EnemyProjectileKind::PoisonPool,
             _ => panic!("unknown source projectile"),
         }
-        .native_type_id(),
+        .type_id(),
         native_cell_binding_order: 0,
         native_registration_order: 0,
         owner_actor_id: 1,
@@ -156,8 +156,8 @@ fn projectile(value: &Value) -> EnemyProjectile {
     }
 }
 
-fn maggot(value: &Value) -> NativeMaggotPresentationInput {
-    NativeMaggotPresentationInput {
+fn maggot(value: &Value) -> MaggotPresentationInput {
+    MaggotPresentationInput {
         alpha: number(value, "alpha"),
         current_health: number(value, "currentHealth"),
         death_tick: number(value, "deathTick"),
@@ -170,8 +170,8 @@ fn maggot(value: &Value) -> NativeMaggotPresentationInput {
         vertical_offset: number(value, "verticalOffset"),
         visual_scale: number(value, "visualScale"),
         state: match value["state"].as_str().unwrap() {
-            "emerging" => NativeMaggotState::Emerging,
-            "death" => NativeMaggotState::Death,
+            "emerging" => MaggotState::Emerging,
+            "death" => MaggotState::Death,
             _ => panic!("fixture Maggot state"),
         },
     }
@@ -259,10 +259,9 @@ fn world(value: &Value) -> EnemyWorld {
     }
     for source in value["spiderSilks"].as_array().unwrap() {
         let value = &source["state"];
-        let mut rng = NativeRng::new(1);
+        let mut rng = Rng::new(1);
         let mut state =
-            create_native_silk(Vec2::ZERO, Vec2::new(100.0, 100.0), Vec2::ZERO, 1.0, &mut rng)
-                .state;
+            create_silk(Vec2::ZERO, Vec2::new(100.0, 100.0), Vec2::ZERO, 1.0, &mut rng).state;
         state.age_ticks = number(value, "ageTicks") as u64;
         state.phase = number(value, "phase");
         state.height = number(value, "height");
@@ -283,10 +282,10 @@ fn world(value: &Value) -> EnemyWorld {
     }
     for source in value["silkFragments"].as_array().unwrap() {
         let value = &source["state"];
-        world.silk_fragments.push(NativeFadeLineActor {
+        world.silk_fragments.push(FadeLineActor {
             id: id(source),
             spawn_tick: 0,
-            state: NativeFadeLineState {
+            state: FadeLineState {
                 start: sample_json::point(&value["start"]),
                 middle: sample_json::point(&value["middle"]),
                 end: sample_json::point(&value["end"]),
@@ -298,7 +297,7 @@ fn world(value: &Value) -> EnemyWorld {
     }
     for source in value["spiderRemains"].as_array().unwrap() {
         let value = &source["state"];
-        let mut state = create_native_dead_spider(sample_json::point(&value["position"]), 0.0);
+        let mut state = create_dead_spider(sample_json::point(&value["position"]), 0.0);
         state.life = number(value, "life");
         state.frame = number(value, "frame");
         state.decal = Some(SpiderDecal {
@@ -442,7 +441,7 @@ fn source_entity_births_projectiles_spiders_and_lightning_merge_without_authorit
             "emergencePhase":sample.emergence_phase,"emergenceTick":sample.emergence_tick,"headingDeg":sample.heading_deg,
             "hitFlash":sample.hit_flash,"pose":sample.pose,"position":sample_json::point_json(sample.position),
             "verticalOffset":sample.vertical_offset,"visualScale":sample.visual_scale,
-            "state":if sample.state==NativeMaggotState::Emerging {"emerging"} else {"death"}});
+            "state":if sample.state==MaggotState::Emerging {"emerging"} else {"death"}});
         let mut expected_maggot = expected["maggots"][0].clone();
         // The flat Maggot input contains only animation. Its actor registration stays
         // in the selected EnemyMaggotActor outside this source animation helper.
@@ -454,8 +453,7 @@ fn source_entity_births_projectiles_spiders_and_lightning_merge_without_authorit
 #[test]
 fn source_attack_flashes_use_fractional_age_through_their_lifetime_boundaries() {
     use solomon_sim::enemies::attack_presentation::{
-        EnemyRawFireBurstKind, native_enemy_raw_fire_burst_sample_at_age,
-        native_imp_landing_flare_sample_at_age,
+        EnemyRawFireBurstKind, enemy_raw_fire_burst_sample_at_age, imp_landing_flare_sample_at_age,
     };
     let source = fixture();
     let records = source["attacks"].as_array().unwrap();
@@ -464,7 +462,7 @@ fn source_attack_flashes_use_fractional_age_through_their_lifetime_boundaries() 
         let event_id = record["eventId"].as_u64().unwrap() as usize;
         let age = number(record, "ageTicks");
         let actual = if record["kind"] == "imp-landing" {
-            json!(native_imp_landing_flare_sample_at_age(event_id,age).map(|sample| json!({
+            json!(imp_landing_flare_sample_at_age(event_id,age).map(|sample| json!({
                 "alpha":sample.alpha,"green":sample.green,"scaleX":sample.scale_x,"scaleY":sample.scale_y,
             })))
         } else {
@@ -473,7 +471,7 @@ fn source_attack_flashes_use_fractional_age_through_their_lifetime_boundaries() 
             } else {
                 EnemyRawFireBurstKind::DemonBombMuzzle
             };
-            json!(native_enemy_raw_fire_burst_sample_at_age(kind,event_id,age).map(|sample| json!({
+            json!(enemy_raw_fire_burst_sample_at_age(kind,event_id,age).map(|sample| json!({
                 "frameEntry":sample.frame_entry,"frameRotationRadians":sample.frame_rotation_radians,
                 "glowAlpha":sample.glow_alpha,"scale":sample.scale,"verticalOffset":sample.vertical_offset,
             })))

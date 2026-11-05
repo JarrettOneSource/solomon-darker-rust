@@ -5,15 +5,13 @@ use super::notices::PlayerPanelNotice;
 use super::{DyeSelection, PlayerPanelAction, PlayerPanelSnapshot, PlayerPanels, Target};
 use crate::gpu_ui::UiFrame;
 use solomon_sim::economy::{
-    HubEconomyResult, HubInventoryAction, NativeDyeLayer, NativeUnforgeOutcome,
-    NativeUnforgeOutcomeKind, native_dye_mixed_tint, project_inventory_root_slots,
+    DyeLayer, HubEconomyResult, HubInventoryAction, UnforgeOutcome, UnforgeOutcomeKind,
+    dye_mixed_tint, project_inventory_root_slots,
 };
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextSpec};
-use solomon_sim::player_panels::dye::{
-    native_dye_modal_opacity, native_dye_selected_pulse, native_dye_swatch_rect,
-};
+use solomon_sim::player_panels::dye::{dye_modal_opacity, dye_selected_pulse, dye_swatch_rect};
 use solomon_sim::player_panels::inventory_slot_rect;
+use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 pub(super) const DYE_MODAL_SCOPE: &str = "fabric-dye";
 
 impl PlayerPanels {
@@ -132,24 +130,24 @@ impl PlayerPanels {
         self.unforge_item = Some(item_id);
         self.notice = Some(PlayerPanelNotice::UnforgeConfirmation);
     }
-    pub fn show_unforge_result(&mut self, outcome: &NativeUnforgeOutcome) {
+    pub fn show_unforge_result(&mut self, outcome: &UnforgeOutcome) {
         let amount = outcome.amount.unwrap_or(0.0);
         let body = match outcome.kind {
-            NativeUnforgeOutcomeKind::Experience => format!("+{amount}% faster experience gain"),
-            NativeUnforgeOutcomeKind::Fizzle => "No bonus".into(),
-            NativeUnforgeOutcomeKind::FullRejuvenation => "Full rejuvenation".into(),
-            NativeUnforgeOutcomeKind::Gold => format!("Transmuted to {amount} gold coins"),
-            NativeUnforgeOutcomeKind::ManaCost => format!("-{amount} mana cost for all spells"),
-            NativeUnforgeOutcomeKind::MaximumHealth => format!("+{amount} to maximum health"),
-            NativeUnforgeOutcomeKind::MaximumMana => format!("+{amount} to maximum mana"),
-            NativeUnforgeOutcomeKind::MindDredge => {
+            UnforgeOutcomeKind::Experience => format!("+{amount}% faster experience gain"),
+            UnforgeOutcomeKind::Fizzle => "No bonus".into(),
+            UnforgeOutcomeKind::FullRejuvenation => "Full rejuvenation".into(),
+            UnforgeOutcomeKind::Gold => format!("Transmuted to {amount} gold coins"),
+            UnforgeOutcomeKind::ManaCost => format!("-{amount} mana cost for all spells"),
+            UnforgeOutcomeKind::MaximumHealth => format!("+{amount} to maximum health"),
+            UnforgeOutcomeKind::MaximumMana => format!("+{amount} to maximum mana"),
+            UnforgeOutcomeKind::MindDredge => {
                 "Transmuted to Mind Dredge (+1 skill points at next level)".into()
             }
-            NativeUnforgeOutcomeKind::OffensiveDamage => {
+            UnforgeOutcomeKind::OffensiveDamage => {
                 format!("+{amount} damage for all offensive spells")
             }
         };
-        let failed = outcome.kind == NativeUnforgeOutcomeKind::Fizzle;
+        let failed = outcome.kind == UnforgeOutcomeKind::Fizzle;
         let title = if failed {
             "FAILED UNFORGING!".into()
         } else {
@@ -200,11 +198,8 @@ impl PlayerPanels {
             }
             Target::DyeCloth | Target::DyeTrim => {
                 if let Some(target_item_id) = dye.target_item_id {
-                    let layer = if target == Target::DyeCloth {
-                        NativeDyeLayer::Cloth
-                    } else {
-                        NativeDyeLayer::Trim
-                    };
+                    let layer =
+                        if target == Target::DyeCloth { DyeLayer::Cloth } else { DyeLayer::Trim };
                     self.actions.push(PlayerPanelAction::Inventory(HubInventoryAction::Dye {
                         session_id: dye.session_id.clone(),
                         target_item_id,
@@ -235,7 +230,7 @@ impl PlayerPanels {
     }
     fn dye_canvas<'a, 'gpu>(&self, c: &PanelCanvas<'a, 'gpu>) -> PanelCanvas<'a, 'gpu> {
         let dye = self.dye.as_ref().expect("dye owner");
-        c.faded(native_dye_modal_opacity(dye.opened_at, dye.closing_at, self.now) as f32)
+        c.faded(dye_modal_opacity(dye.opened_at, dye.closing_at, self.now) as f32)
             .admitted(!dye.pending && dye.closing_at.is_none())
     }
     fn dye_swatch(&self, c: &PanelCanvas<'_, '_>, row: usize, r: HudRect) -> Result<(), String> {
@@ -245,12 +240,12 @@ impl PlayerPanels {
             .button(&format!("dye-swatch:{row}"), &format!("Add dye color {}", row + 1), r);
         swatch.fill(
             HudRect::new(0.0, 0.0, r.width, r.height),
-            native_dye_mixed_tint(&[row]).expect("native swatch"),
+            dye_mixed_tint(&[row]).expect("native swatch"),
             1.0,
         );
         swatch.stroke(HudRect::new(0.0, 0.0, r.width, r.height), 0x201c13, 2.0);
         if dye.selected_row == Some(row) {
-            c.faded(native_dye_selected_pulse(dye.selected_at, self.now) as f32).stroke(
+            c.faded(dye_selected_pulse(dye.selected_at, self.now) as f32).stroke(
                 HudRect::new(r.x - 4.0, r.y - 4.0, r.width + 8.0, r.height + 8.0),
                 0xffffff,
                 3.0,
@@ -272,29 +267,24 @@ impl PlayerPanels {
             box_rect,
             &dye_presentation(dye, self.now),
         );
-        c.text(&NativeUiTextSpec {
+        c.text(&UiTextSpec {
             tint: 0xe4c56d,
-            ..NativeUiTextSpec::new(NativeUiFontName::Menu, "FABRIC DYE", 800.0, 121.0)
+            ..UiTextSpec::new(UiFontName::Menu, "FABRIC DYE", 800.0, 121.0)
         });
-        c.text(&NativeUiTextSpec::new(
-            NativeUiFontName::Medium,
-            dye_instruction(dye),
-            800.0,
-            151.0,
-        ));
+        c.text(&UiTextSpec::new(UiFontName::Medium, dye_instruction(dye), 800.0, 151.0));
         for row in 0..18 {
-            self.dye_swatch(&c, row, native_dye_swatch_rect(row))?;
+            self.dye_swatch(&c, row, dye_swatch_rect(row))?;
         }
         let tub = HudRect::new(960.0, 198.0, 96.0, 96.0);
         c.fill(
             tub,
-            native_dye_mixed_tint(&dye.swatch_rows).unwrap_or(0xffffff),
+            dye_mixed_tint(&dye.swatch_rows).unwrap_or(0xffffff),
             if dye.swatch_rows.is_empty() { 0.2 } else { 1.0 },
         );
         c.stroke(tub, 0xeadab3, 3.0);
-        c.text(&NativeUiTextSpec {
+        c.text(&UiTextSpec {
             tint: 0xe4c56d,
-            ..NativeUiTextSpec::new(NativeUiFontName::Medium, "DYE TUB", 1008.0, 319.0)
+            ..UiTextSpec::new(UiFontName::Medium, "DYE TUB", 1008.0, 319.0)
         });
         let items =
             solomon_sim::economy::inventory_items_at_sack_path(&s.economy.backpack, &dye.path)
@@ -325,12 +315,7 @@ impl PlayerPanels {
                     );
                     target.fill(HudRect::new(0.0, 0.0, r.width, height), 0, 0.38);
                     target.stroke(HudRect::new(0.0, 0.0, r.width, height), 0xffffff, 2.0);
-                    target.text(&NativeUiTextSpec::new(
-                        NativeUiFontName::Body,
-                        label,
-                        36.0,
-                        baseline,
-                    ));
+                    target.text(&UiTextSpec::new(UiFontName::Body, label, 36.0, baseline));
                 }
             } else if !dye.swatch_rows.is_empty() && dye.target_item_id.is_none() {
                 c.button(
@@ -348,7 +333,7 @@ impl PlayerPanels {
         );
         cancel.fill(HudRect::new(0.0, 0.0, 220.0, 44.0), 0x191916, 1.0);
         cancel.stroke(HudRect::new(0.0, 0.0, 220.0, 44.0), 0xd8ba70, 2.0);
-        cancel.text(&NativeUiTextSpec::new(NativeUiFontName::Menu, label, 110.0, 31.0));
+        cancel.text(&UiTextSpec::new(UiFontName::Menu, label, 110.0, 31.0));
         Ok(())
     }
     fn draw_compact_dye(
@@ -400,18 +385,13 @@ impl PlayerPanels {
                     HudRect::new(0.0, 0.0, width, height),
                     &dye_presentation(dye, self.now),
                 );
-                sheet.text(&NativeUiTextSpec {
+                sheet.text(&UiTextSpec {
                     tint: 0xe4c56d,
-                    ..NativeUiTextSpec::new(NativeUiFontName::Menu, "FABRIC DYE", center, 48.0)
+                    ..UiTextSpec::new(UiFontName::Menu, "FABRIC DYE", center, 48.0)
                 });
-                sheet.text(&NativeUiTextSpec {
+                sheet.text(&UiTextSpec {
                     max_width: Some(width - 36.0),
-                    ..NativeUiTextSpec::new(
-                        NativeUiFontName::Medium,
-                        dye_instruction(dye),
-                        center,
-                        88.0,
-                    )
+                    ..UiTextSpec::new(UiFontName::Medium, dye_instruction(dye), center, 88.0)
                 });
                 for row in 0..18 {
                     self.dye_swatch(
@@ -428,13 +408,13 @@ impl PlayerPanels {
                 let tub = HudRect::new(center - 36.0, 294.0, 72.0, 72.0);
                 sheet.fill(
                     tub,
-                    native_dye_mixed_tint(&dye.swatch_rows).unwrap_or(0xffffff),
+                    dye_mixed_tint(&dye.swatch_rows).unwrap_or(0xffffff),
                     if dye.swatch_rows.is_empty() { 0.2 } else { 1.0 },
                 );
                 sheet.stroke(tub, 0xeadab3, 3.0);
-                sheet.text(&NativeUiTextSpec {
+                sheet.text(&UiTextSpec {
                     tint: 0xe4c56d,
-                    ..NativeUiTextSpec::new(NativeUiFontName::Medium, "DYE TUB", center, 390.0)
+                    ..UiTextSpec::new(UiFontName::Medium, "DYE TUB", center, 390.0)
                 });
                 for (index, entry) in items.iter().enumerate() {
                     let r = HudRect::new(
@@ -495,7 +475,7 @@ fn dye_presentation(dye: &DyeSelection, now: f64) -> String {
     };
     serde_json::json!({
         "phase": phase,
-        "opacity": native_dye_modal_opacity(dye.opened_at, dye.closing_at, now),
+        "opacity": dye_modal_opacity(dye.opened_at, dye.closing_at, now),
     })
     .to_string()
 }

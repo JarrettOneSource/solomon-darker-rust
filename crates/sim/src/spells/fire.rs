@@ -2,58 +2,52 @@
 //! `core-kernels/primary-spell-fire-effects.ts`. The shared enemy path kernel owns routing.
 
 use super::model::*;
-use super::targeting::{PrimarySpellTarget, native_primary_target_eligible};
+use super::targeting::{PrimarySpellTarget, primary_target_eligible};
 use crate::enemies::path::{
-    EnemyNavigation, EnemyPathGoalRequest, EnemySteeringRequest, NativeEnemyPathState,
-    PathRecoveryRequest, RadialDirection, TangentDirection, build_native_enemy_steering,
-    native_enemy_steering_goal, native_enemy_target_refresh_ticks, resolve_native_enemy_path_goal,
+    EnemyNavigation, EnemyPathGoalRequest, EnemyPathState, EnemySteeringRequest,
+    PathRecoveryRequest, RadialDirection, TangentDirection, build_enemy_steering,
+    enemy_steering_goal, enemy_target_refresh_ticks, resolve_enemy_path_goal,
 };
 use crate::float;
 use crate::float::{cos, fround, hypot, sin};
 use crate::painter::{PainterRegistration, WorldManagerLane};
-use crate::profile::primary::NativeSpentEmber;
+use crate::profile::primary::SpentEmber;
 use crate::random_domain::{
-    native_random_float_from_word, native_random_int_from_word,
-    native_signed_random_float_from_words,
+    random_float_from_word, random_int_from_word, signed_random_float_from_words,
 };
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_FIRE_IMPACT_LIFETIME_TICKS: u64 = 16;
-pub const NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS: u64 = 37;
+pub const FIRE_IMPACT_LIFETIME_TICKS: u64 = 16;
+pub const FIRE_EXPLOSION_LIFETIME_TICKS: u64 = 37;
 
 #[must_use]
-pub fn native_fire_particle_fade_step(id: u64, enhanced_effects: bool) -> f64 {
-    let base = 0.05 + native_fire_presentation_random(id, 0, 5, 0.05);
+pub fn fire_particle_fade_step(id: u64, enhanced_effects: bool) -> f64 {
+    let base = 0.05 + fire_presentation_random(id, 0, 5, 0.05);
     if enhanced_effects { base * 0.5 } else { base }
 }
 #[must_use]
-pub fn native_fire_particle_lifetime_ticks(id: u64, enhanced_effects: bool) -> u64 {
-    (1.0 / native_fire_particle_fade_step(id, enhanced_effects)).floor() as u64 + 1
+pub fn fire_particle_lifetime_ticks(id: u64, enhanced_effects: bool) -> u64 {
+    (1.0 / fire_particle_fade_step(id, enhanced_effects)).floor() as u64 + 1
 }
 #[must_use]
-pub fn native_fire_particle_variant(id: u64) -> u32 {
-    native_fire_presentation_random_int(id, 0, 6, 4)
+pub fn fire_particle_variant(id: u64) -> u32 {
+    fire_presentation_random_int(id, 0, 6, 4)
 }
 #[must_use]
-pub fn native_fire_impact_pitch(id: u64) -> f64 {
-    0.9 + native_fire_presentation_random(id, 0, 12, 0.2)
+pub fn fire_impact_pitch(id: u64) -> f64 {
+    0.9 + fire_presentation_random(id, 0, 12, 0.2)
 }
 #[must_use]
-pub fn native_fire_presentation_random(id: u64, sample: u64, channel: u32, maximum: f64) -> f64 {
-    native_random_float_from_word(fire_presentation_word(id, sample, channel), maximum)
+pub fn fire_presentation_random(id: u64, sample: u64, channel: u32, maximum: f64) -> f64 {
+    random_float_from_word(fire_presentation_word(id, sample, channel), maximum)
 }
 #[must_use]
-pub fn native_fire_presentation_random_int(id: u64, sample: u64, channel: u32, bound: u32) -> u32 {
-    native_random_int_from_word(fire_presentation_word(id, sample, channel), bound)
+pub fn fire_presentation_random_int(id: u64, sample: u64, channel: u32, bound: u32) -> u32 {
+    random_int_from_word(fire_presentation_word(id, sample, channel), bound)
 }
 #[must_use]
-pub fn native_fire_presentation_signed_random(
-    id: u64,
-    sample: u64,
-    channel: u32,
-    maximum: f64,
-) -> f64 {
-    native_signed_random_float_from_words(
+pub fn fire_presentation_signed_random(id: u64, sample: u64, channel: u32, maximum: f64) -> f64 {
+    signed_random_float_from_words(
         fire_presentation_word(id, sample, channel),
         fire_presentation_word(id, sample, channel ^ 0x7f4a_7c15),
         maximum,
@@ -68,17 +62,17 @@ fn fire_presentation_word(id: u64, sample: u64, channel: u32) -> u32 {
     value ^ (value >> 15)
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFireProjectilePayload {
+pub struct FireProjectilePayload {
     pub burn_damage: f64,
     pub ember_damage: f64,
     pub ember_fragments: u32,
     pub explode_damage: f64,
     pub explode_radius: f64,
     pub private_seed: i32,
-    pub spent_ember: NativeSpentEmber,
+    pub spent_ember: SpentEmber,
 }
 
-impl From<&PrimarySpellFireProjectile> for NativeFireProjectilePayload {
+impl From<&PrimarySpellFireProjectile> for FireProjectilePayload {
     fn from(spell: &PrimarySpellFireProjectile) -> Self {
         Self {
             burn_damage: spell.burn_damage,
@@ -94,7 +88,7 @@ impl From<&PrimarySpellFireProjectile> for NativeFireProjectilePayload {
 
 /// The native explosion has no manager id until its caller enrolls the effect.
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeFireExplosionState {
+pub struct FireExplosionState {
     pub burn_damage: f64,
     pub damage: f64,
     pub footprint_dimension: f64,
@@ -106,9 +100,9 @@ pub struct NativeFireExplosionState {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum NativeFireEmberRetirement {
+pub enum FireEmberRetirement {
     None,
-    Immolate(NativeFireExplosionState),
+    Immolate(FireExplosionState),
     Imp {
         burn_damage: f64,
         damage: f64,
@@ -120,21 +114,21 @@ pub enum NativeFireEmberRetirement {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeFireEmberStep {
+pub struct FireEmberStep {
     pub retained: bool,
-    pub retirement: NativeFireEmberRetirement,
+    pub retirement: FireEmberRetirement,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeFireDetonation {
+pub struct FireDetonation {
     pub contacts: Vec<FireRadialContact>,
     pub embers: Vec<PrimarySpellFireEmber>,
-    pub explosion: Option<NativeFireExplosionState>,
+    pub explosion: Option<FireExplosionState>,
     pub next_id: u64,
     pub sound_pitch: f64,
 }
 
-pub struct CreateNativeFirePatchOptions {
+pub struct CreateFirePatchOptions {
     pub atlas_phase_step: Option<f64>,
     pub burn_damage: f64,
     pub damage: f64,
@@ -153,7 +147,7 @@ pub struct CreateNativeFirePatchOptions {
     pub world_key: String,
 }
 
-pub struct SpawnNativeFireGoodImpOptions {
+pub struct SpawnFireGoodImpOptions {
     pub burn_damage: f64,
     pub damage: f64,
     pub id: u64,
@@ -163,20 +157,20 @@ pub struct SpawnNativeFireGoodImpOptions {
     pub world_key: String,
 }
 
-pub struct NativeFireGoodImpStepContext<'a> {
+pub struct FireGoodImpStepContext<'a> {
     pub can_occupy: &'a dyn Fn(Vec2) -> bool,
     pub navigation: Option<&'a dyn EnemyNavigation>,
     pub targets: &'a [PrimarySpellTarget],
 }
 
-pub struct NativeFireGoodImpStep {
+pub struct FireGoodImpStep {
     pub contact: Option<FireTargetContact>,
     pub retained: bool,
 }
 
 #[must_use]
-pub fn create_native_fire_patch(
-    options: CreateNativeFirePatchOptions,
+pub fn create_fire_patch(
+    options: CreateFirePatchOptions,
     atlas_phase: f64,
     horizontal_sign: f64,
 ) -> PrimarySpellFirePatch {
@@ -225,17 +219,17 @@ pub fn create_native_fire_patch(
 
 #[must_use]
 pub fn spawn_native_fire_patch(
-    options: CreateNativeFirePatchOptions,
-    rng: &mut NativeRng,
+    options: CreateFirePatchOptions,
+    rng: &mut Rng,
 ) -> PrimarySpellFirePatch {
     let phase = rng.draw_scaled_float(32.0, false);
     let sign = rng.draw_sign(1.0);
-    create_native_fire_patch(options, phase, sign)
+    create_fire_patch(options, phase, sign)
 }
 
 /// Returns retention and this tick's contact; a retiring patch can still deal damage.
 #[must_use]
-pub fn step_native_fire_patch(
+pub fn step_fire_patch(
     patch: &mut PrimarySpellFirePatch,
     global_tick: u64,
 ) -> (bool, Option<FireRadialContact>) {
@@ -273,9 +267,9 @@ pub fn step_native_fire_patch(
 
 /// Native Badguy → Imp → GoodImp constructor order. Discarded draws remain authoritative.
 #[must_use]
-pub fn spawn_native_fire_good_imp(
-    options: SpawnNativeFireGoodImpOptions,
-    rng: &mut NativeRng,
+pub fn spawn_fire_good_imp(
+    options: SpawnFireGoodImpOptions,
+    rng: &mut Rng,
 ) -> PrimarySpellFireGoodImp {
     require_nonnegative(options.burn_damage, "GoodImp Burn damage");
     require_nonnegative(options.damage, "GoodImp damage");
@@ -283,7 +277,7 @@ pub fn spawn_native_fire_good_imp(
         options.id > 0 && options.lifetime_ticks > 0,
         "GoodImp id and lifetime must be positive"
     );
-    let path = NativeEnemyPathState::new(rng);
+    let path = EnemyPathState::new(rng);
     rng.draw_word();
     let body_scale = fround(0.98_f32 as f64 + rng.draw_scaled_float(0.05_f32 as f64, true));
     for _ in 0..6 {
@@ -326,11 +320,11 @@ pub fn spawn_native_fire_good_imp(
 }
 
 #[must_use]
-pub fn step_native_fire_good_imp(
+pub fn step_fire_good_imp(
     actor: &mut PrimarySpellFireGoodImp,
-    context: NativeFireGoodImpStepContext<'_>,
-    rng: &mut NativeRng,
-) -> NativeFireGoodImpStep {
+    context: FireGoodImpStepContext<'_>,
+    rng: &mut Rng,
+) -> FireGoodImpStep {
     let (target, next_refresh) = refresh_good_imp_target(actor, context.targets);
     if target.map(|target| target.id.as_str()) != actor.target_id.as_deref() {
         actor.path.clear_route();
@@ -355,9 +349,9 @@ pub fn step_native_fire_good_imp(
             target_heading_deg: target.and_then(|target| target.heading_degrees).unwrap_or(0.0),
             target_position: target.map(|target| target.position),
         };
-        let mut goal = native_enemy_steering_goal(&actor.path, &request);
+        let mut goal = enemy_steering_goal(&actor.path, &request);
         if let Some(navigation) = context.navigation {
-            let routed = resolve_native_enemy_path_goal(
+            let routed = resolve_enemy_path_goal(
                 actor.path,
                 EnemyPathGoalRequest {
                     actor_position: actor.position,
@@ -366,7 +360,7 @@ pub fn step_native_fire_good_imp(
                     navigation_clearance: 25.0,
                     raw_goal: goal,
                     target_position: target.map(|target| target.position),
-                    target_refresh_ticks: native_enemy_target_refresh_ticks(1),
+                    target_refresh_ticks: enemy_target_refresh_ticks(1),
                 },
                 navigation,
             );
@@ -378,7 +372,7 @@ pub fn step_native_fire_good_imp(
             goal = routed.goal;
         }
         request.goal_position = Some(goal);
-        let steering = build_native_enemy_steering(actor.path, request);
+        let steering = build_enemy_steering(actor.path, request);
         let old_position = actor.position;
         let requested = Vec2::new(
             fround(old_position.x + steering.delta.x),
@@ -463,21 +457,21 @@ pub fn step_native_fire_good_imp(
     actor.remaining_ticks =
         actor.remaining_ticks.saturating_sub(if target.is_none() { 2 } else { 1 });
     if actor.remaining_ticks == 0 {
-        return NativeFireGoodImpStep { contact, retained: false };
+        return FireGoodImpStep { contact, retained: false };
     }
     actor.common.age_ticks += 1;
     actor.light_glow = fround(actor.light_glow + 0.01).min(1.0);
     actor.next_target_refresh_tick = next_refresh;
     actor.target_id = target.map(|target| target.id.clone());
-    NativeFireGoodImpStep { contact, retained: true }
+    FireGoodImpStep { contact, retained: true }
 }
 
-pub fn draw_native_fire_private_seed(rng: &mut NativeRng) -> i32 {
+pub fn draw_fire_private_seed(rng: &mut Rng) -> i32 {
     rng.draw_integer(1_000_001)
 }
 
 #[must_use]
-pub fn native_fire_direct_damage(base_damage: f64, explode_damage: f64) -> f64 {
+pub fn fire_direct_damage(base_damage: f64, explode_damage: f64) -> f64 {
     require_nonnegative(base_damage, "Fireball base damage");
     require_nonnegative(explode_damage, "Fireball explosion damage");
     (if explode_damage > 0.0 { base_damage - explode_damage } else { base_damage }).max(0.0)
@@ -486,39 +480,39 @@ pub fn native_fire_direct_damage(base_damage: f64, explode_damage: f64) -> f64 {
 /// The constructor fan is resumable at the Source observer boundaries: explosion,
 /// Ember registration, then each of its ten immediate receiver contacts. It owns
 /// only private fan state; the caller still passes the one shared gameplay RNG.
-pub struct NativeFireEmberFan<'a> {
+pub struct FireEmberFan<'a> {
     first_id: u64,
     index: u32,
-    payload: NativeFireProjectilePayload,
+    payload: FireProjectilePayload,
     origin: Vec2,
     owner_id: &'a str,
     world_key: &'a str,
-    private_rng: NativeRng,
+    private_rng: Rng,
     start_heading: f64,
     heading_step: f64,
 }
 
-pub struct NativeFireDetonationBirth<'a> {
-    pub explosion: Option<NativeFireExplosionState>,
+pub struct FireDetonationBirth<'a> {
+    pub explosion: Option<FireExplosionState>,
     pub sound_pitch: f64,
-    pub fan: NativeFireEmberFan<'a>,
+    pub fan: FireEmberFan<'a>,
 }
 
-pub fn begin_native_fire_detonation<'a>(
+pub fn begin_fire_detonation<'a>(
     first_id: u64,
-    payload: NativeFireProjectilePayload,
+    payload: FireProjectilePayload,
     origin: Vec2,
     owner_id: &'a str,
     world_key: &'a str,
-    rng: &mut NativeRng,
-) -> NativeFireDetonationBirth<'a> {
+    rng: &mut Rng,
+) -> FireDetonationBirth<'a> {
     assert!(first_id > 0, "Fire detonation first id must be positive");
-    let mut private_rng = NativeRng::new(i64::from(payload.private_seed));
+    let mut private_rng = Rng::new(i64::from(payload.private_seed));
     let sound_pitch = fround(1.0 + rng.draw_scaled_float(0.1, true));
     let start_heading = private_rng.draw_scaled_float(360.0, false);
     let explosion = if payload.explode_radius > 0.0 && payload.explode_damage > 0.0 {
         let visual_scale = fround((payload.explode_radius - 10.0) * 0.18 + 1.0);
-        Some(NativeFireExplosionState {
+        Some(FireExplosionState {
             burn_damage: payload.burn_damage,
             damage: payload.explode_damage * 0.5,
             footprint_dimension: visual_scale * 110.0,
@@ -531,10 +525,10 @@ pub fn begin_native_fire_detonation<'a>(
     } else {
         None
     };
-    NativeFireDetonationBirth {
+    FireDetonationBirth {
         explosion,
         sound_pitch,
-        fan: NativeFireEmberFan {
+        fan: FireEmberFan {
             first_id,
             index: 0,
             payload,
@@ -552,8 +546,8 @@ pub fn begin_native_fire_detonation<'a>(
     }
 }
 
-impl NativeFireEmberFan<'_> {
-    pub fn next_ember(&mut self, rng: &mut NativeRng) -> Option<PrimarySpellFireEmber> {
+impl FireEmberFan<'_> {
+    pub fn next_ember(&mut self, rng: &mut Rng) -> Option<PrimarySpellFireEmber> {
         if self.index >= self.payload.ember_fragments {
             return None;
         }
@@ -596,32 +590,31 @@ impl NativeFireEmberFan<'_> {
 }
 
 #[must_use]
-pub fn create_native_fire_detonation(
+pub fn create_fire_detonation(
     first_id: u64,
-    payload: NativeFireProjectilePayload,
+    payload: FireProjectilePayload,
     origin: Vec2,
     owner_id: &str,
     world_key: &str,
-    rng: &mut NativeRng,
-) -> NativeFireDetonation {
-    let mut birth =
-        begin_native_fire_detonation(first_id, payload, origin, owner_id, world_key, rng);
+    rng: &mut Rng,
+) -> FireDetonation {
+    let mut birth = begin_fire_detonation(first_id, payload, origin, owner_id, world_key, rng);
     let mut embers = Vec::with_capacity(payload.ember_fragments as usize);
     let mut contacts = Vec::new();
     while let Some(mut ember) = birth.fan.next_ember(rng) {
         for _ in 0..10 {
             assert!(
-                step_native_fire_ember(&mut ember).retained,
+                step_fire_ember(&mut ember).retained,
                 "a newborn Ember survives its ten native pre-ticks"
             );
             if ember.contact_due {
-                contacts.push(native_fire_ember_contact(&ember));
+                contacts.push(fire_ember_contact(&ember));
             }
         }
         ember.contact_due = false;
         embers.push(ember);
     }
-    NativeFireDetonation {
+    FireDetonation {
         contacts,
         embers,
         explosion: birth.explosion,
@@ -631,7 +624,7 @@ pub fn create_native_fire_detonation(
 }
 
 #[must_use]
-pub fn step_native_fire_ember(ember: &mut PrimarySpellFireEmber) -> NativeFireEmberStep {
+pub fn step_fire_ember(ember: &mut PrimarySpellFireEmber) -> FireEmberStep {
     if ember.vertical_velocity != 0.0 {
         let movement_factor = ember.vertical_velocity.abs().min(1.0);
         ember.position = Vec2::new(
@@ -664,22 +657,20 @@ pub fn step_native_fire_ember(ember: &mut PrimarySpellFireEmber) -> NativeFireEm
     }
     ember.common.age_ticks += 1;
     if ember.vertical_velocity != 0.0 || ember.life >= 1.0 {
-        return NativeFireEmberStep { retained: true, retirement: NativeFireEmberRetirement::None };
+        return FireEmberStep { retained: true, retirement: FireEmberRetirement::None };
     }
     let retirement = match ember.spent_ember {
-        NativeSpentEmber::Immolate { damage } => {
-            NativeFireEmberRetirement::Immolate(NativeFireExplosionState {
-                burn_damage: ember.burn_damage,
-                damage: damage * 0.5,
-                footprint_dimension: 110.0,
-                origin: ember.position,
-                owner_id: ember.common.owner_id.clone(),
-                presentation: FireExplosionPresentation::Fire,
-                visual_scale: 1.0,
-                world_key: ember.common.world_key.clone(),
-            })
-        }
-        NativeSpentEmber::Imp { damage, lifetime_ticks } => NativeFireEmberRetirement::Imp {
+        SpentEmber::Immolate { damage } => FireEmberRetirement::Immolate(FireExplosionState {
+            burn_damage: ember.burn_damage,
+            damage: damage * 0.5,
+            footprint_dimension: 110.0,
+            origin: ember.position,
+            owner_id: ember.common.owner_id.clone(),
+            presentation: FireExplosionPresentation::Fire,
+            visual_scale: 1.0,
+            world_key: ember.common.world_key.clone(),
+        }),
+        SpentEmber::Imp { damage, lifetime_ticks } => FireEmberRetirement::Imp {
             burn_damage: ember.burn_damage,
             damage: damage * 0.5,
             lifetime_ticks,
@@ -687,14 +678,14 @@ pub fn step_native_fire_ember(ember: &mut PrimarySpellFireEmber) -> NativeFireEm
             position: ember.position,
             world_key: ember.common.world_key.clone(),
         },
-        NativeSpentEmber::None => NativeFireEmberRetirement::None,
+        SpentEmber::None => FireEmberRetirement::None,
     };
-    let retired = !matches!(retirement, NativeFireEmberRetirement::None) || ember.life <= 0.0;
-    NativeFireEmberStep { retained: !retired, retirement }
+    let retired = !matches!(retirement, FireEmberRetirement::None) || ember.life <= 0.0;
+    FireEmberStep { retained: !retired, retirement }
 }
 
 #[must_use]
-pub fn native_fire_ember_contact(ember: &PrimarySpellFireEmber) -> FireRadialContact {
+pub fn fire_ember_contact(ember: &PrimarySpellFireEmber) -> FireRadialContact {
     FireRadialContact {
         amount: ember.damage,
         burn_damage: ember.burn_damage,
@@ -711,9 +702,7 @@ fn refresh_good_imp_target<'a>(
     targets: &'a [PrimarySpellTarget],
 ) -> (Option<&'a PrimarySpellTarget>, u64) {
     let current = source.target_id.as_ref().and_then(|id| {
-        targets
-            .iter()
-            .find(|target| target.id == *id && native_primary_target_eligible(target, 0x2))
+        targets.iter().find(|target| target.id == *id && primary_target_eligible(target, 0x2))
     });
     if current.is_some() && source.common.age_ticks < source.next_target_refresh_tick {
         return (current, source.next_target_refresh_tick);
@@ -721,7 +710,7 @@ fn refresh_good_imp_target<'a>(
     let mut selected: Option<&PrimarySpellTarget> = None;
     let mut selected_distance = f64::INFINITY;
     for target in targets {
-        if !native_primary_target_eligible(target, 0x2) {
+        if !primary_target_eligible(target, 0x2) {
             continue;
         }
         let distance =
@@ -735,7 +724,7 @@ fn refresh_good_imp_target<'a>(
             selected_distance = distance;
         }
     }
-    (selected, source.common.age_ticks + native_enemy_target_refresh_ticks(1))
+    (selected, source.common.age_ticks + enemy_target_refresh_ticks(1))
 }
 
 fn transient_base(id: u64, owner_id: String, world_key: String) -> PrimarySpellTransientBase {

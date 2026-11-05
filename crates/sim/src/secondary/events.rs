@@ -5,7 +5,7 @@ use crate::float::fround;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeSecondaryAudioCue {
+pub enum SecondaryAudioCue {
     LeviathanRoar,
     PlanewalkerOn,
     PlanewalkerOff,
@@ -64,7 +64,7 @@ pub enum NativeSecondaryAudioCue {
     ElectricLoop,
 }
 
-impl NativeSecondaryAudioCue {
+impl SecondaryAudioCue {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -130,7 +130,7 @@ impl NativeSecondaryAudioCue {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeSecondaryEventKind {
+pub enum SecondaryEventKind {
     Cast,
     Fizzle,
     Impact,
@@ -145,7 +145,7 @@ pub enum NativeSecondaryEventKind {
     Whistle,
 }
 
-impl NativeSecondaryEventKind {
+impl SecondaryEventKind {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -167,7 +167,7 @@ impl NativeSecondaryEventKind {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryScreenFlashState {
+pub struct SecondaryScreenFlashState {
     pub alpha: f64,
     pub blue: f64,
     pub decay_per_tick: f64,
@@ -176,7 +176,7 @@ pub struct NativeSecondaryScreenFlashState {
     pub red: f64,
 }
 
-impl NativeSecondaryScreenFlashState {
+impl SecondaryScreenFlashState {
     #[must_use]
     pub fn new(
         red: f64,
@@ -199,31 +199,26 @@ impl NativeSecondaryScreenFlashState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryEventState {
+pub struct SecondaryEventState {
     pub actor_id: Option<u64>,
     pub camera_displacement: Option<Vec2>,
     pub camera_magnitude: f64,
-    pub cue: Option<NativeSecondaryAudioCue>,
+    pub cue: Option<SecondaryAudioCue>,
     pub event_id: u64,
     pub gain: f64,
-    pub kind: NativeSecondaryEventKind,
+    pub kind: SecondaryEventKind,
     pub owner_id: String,
     pub pitch: f64,
     pub position: Vec2,
-    pub screen_flash: Option<NativeSecondaryScreenFlashState>,
+    pub screen_flash: Option<SecondaryScreenFlashState>,
     pub skill_id: Option<usize>,
     pub tick: u64,
     pub world_key: String,
 }
 
-impl NativeSecondaryEventState {
+impl SecondaryEventState {
     #[must_use]
-    pub fn new(
-        kind: NativeSecondaryEventKind,
-        owner_id: String,
-        world_key: String,
-        tick: u64,
-    ) -> Self {
+    pub fn new(kind: SecondaryEventKind, owner_id: String, world_key: String, tick: u64) -> Self {
         Self {
             actor_id: None,
             camera_displacement: None,

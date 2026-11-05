@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 use solomon_sim::hub::painter::HUB_FIXED_ACTOR_PAINTER_COUNT;
 use solomon_sim::painter::{WorldManagerLane, WorldPainterOrder};
-use solomon_sim::secondary::{NativeSecondaryActorKind, native_secondary_painter_manager_lane};
+use solomon_sim::secondary::{SecondaryActorKind, secondary_painter_manager_lane};
 
 use super::super::super::contract::record;
 use super::super::super::value::{decode, encode};
@@ -113,9 +113,9 @@ pub(super) fn migrate(value: &mut Value, loaded: &Value) -> Result<(), String> {
     for actor in &mut actors {
         record(actor, "legacy secondary actor")?;
         if actor.get("painterRegistrations").is_none() {
-            let kind: NativeSecondaryActorKind = decode(actor["kind"].clone())?;
+            let kind: SecondaryActorKind = decode(actor["kind"].clone())?;
             actor["painterRegistrations"] =
-                registrations(&mut order, native_secondary_painter_manager_lane(kind), 1)?;
+                registrations(&mut order, secondary_painter_manager_lane(kind), 1)?;
         }
     }
     value["secondaryAbilities"]["actors"] = Value::Array(actors);

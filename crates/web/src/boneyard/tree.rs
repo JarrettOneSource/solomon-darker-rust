@@ -6,12 +6,11 @@ use std::collections::BTreeMap;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::boneyard::scenery::{
-    NativeTreeActorPoses, NativeTreeOcclusionFrame, NativeTreeOcclusionPresentation,
-    native_tree_actor_positions,
+    TreeActorPoses, TreeOcclusionFrame, TreeOcclusionPresentation, tree_actor_positions,
 };
 use solomon_sim::boneyard::world::boneyard_camera_origin;
 
-use crate::presentation::NativePresentationTimeline;
+use crate::presentation::PresentationTimeline;
 
 #[derive(Clone, PartialEq)]
 struct TreeCameraEpoch {
@@ -34,18 +33,18 @@ pub(crate) struct TreeFrameSource<'a> {
     pub local_player_id: &'a str,
     pub focus_player_id: Option<&'a str>,
     pub display_tick: f64,
-    pub actor_poses: &'a NativeTreeActorPoses,
+    pub actor_poses: &'a TreeActorPoses,
     pub camera_bounds: BoneyardBounds,
     pub camera_limits: BoneyardBounds,
     pub viewport: Vec2,
     pub zoom: f64,
-    pub timeline: Option<&'a NativePresentationTimeline>,
+    pub timeline: Option<&'a PresentationTimeline>,
 }
 
 impl TreeFrameHistory {
     pub(super) fn update(
         &mut self,
-        trees: &mut NativeTreeOcclusionPresentation,
+        trees: &mut TreeOcclusionPresentation,
         source: &TreeFrameSource<'_>,
     ) {
         let tick = source.display_tick.floor() as u64;
@@ -63,11 +62,8 @@ impl TreeFrameHistory {
         }
         let start = self.epoch_start_tick.max(self.last_tick + 1);
         self.last_tick = tick;
-        let current = NativeTreeOcclusionFrame {
-            actor_positions: native_tree_actor_positions(
-                source.actor_poses,
-                source.local_player_id,
-            ),
+        let current = TreeOcclusionFrame {
+            actor_positions: tree_actor_positions(source.actor_poses, source.local_player_id),
             camera_bounds: source.camera_bounds,
         };
         let (Some(timeline), Some(focus_id)) = (source.timeline, source.focus_player_id) else {
@@ -87,11 +83,8 @@ impl TreeFrameHistory {
                         source.viewport,
                         source.zoom,
                     );
-                    Some(NativeTreeOcclusionFrame {
-                        actor_positions: native_tree_actor_positions(
-                            &actors,
-                            source.local_player_id,
-                        ),
+                    Some(TreeOcclusionFrame {
+                        actor_positions: tree_actor_positions(&actors, source.local_player_id),
                         camera_bounds: BoneyardBounds::new(
                             origin.x,
                             origin.y,

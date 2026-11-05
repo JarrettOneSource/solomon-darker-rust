@@ -1,16 +1,14 @@
 //! Private eligibility and biased category choice, retail `0x0047C070`.
 //! Reference: Website `core-kernels/native-loot-selection.ts`.
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::float::fround;
 
-use super::{NativeLootCategory, NativeLootPolicy, NativeLootSelectionInput};
+use super::{LootCategory, LootPolicy, LootSelectionInput};
 
 #[must_use]
-pub fn select_native_loot_candidate(
-    input: &NativeLootSelectionInput<'_>,
-) -> (Option<NativeLootCategory>, NativeRng) {
-    let mut rng = NativeRng::new(i64::from(input.actor_seed));
+pub fn select_loot_candidate(input: &LootSelectionInput<'_>) -> (Option<LootCategory>, Rng) {
+    let mut rng = Rng::new(i64::from(input.actor_seed));
     let mut candidates = Vec::with_capacity(6);
     if input.arena.disable_mask & (1 << 4) == 0
         && input.key.current <= input.key.level
@@ -18,14 +16,14 @@ pub fn select_native_loot_candidate(
     {
         let key_bound = (((input.arena.level - 20) / 5).max(0) + 10) * 100;
         if rng.draw_integer(key_bound) == 2 {
-            candidates.push(NativeLootCategory::Key);
+            candidates.push(LootCategory::Key);
         }
     }
     let policies = input.policies;
     let modifiers = input.participant.modifiers;
     append(
         &mut candidates,
-        NativeLootCategory::Orb,
+        LootCategory::Orb,
         policies.orb,
         input.arena.disable_mask & (1 << 3) != 0,
         Some(policy_bound(policies.orb, 8.0, 16.0, 4.0, modifiers.orb_chance)),
@@ -33,11 +31,11 @@ pub fn select_native_loot_candidate(
     );
     append(
         &mut candidates,
-        NativeLootCategory::Gold,
+        LootCategory::Gold,
         policies.gold,
         input.arena.disable_mask & 1 != 0
             || input.arena.special_suppression
-            || policies.gold == NativeLootPolicy::GoldScatter,
+            || policies.gold == LootPolicy::GoldScatter,
         Some(policy_bound(policies.gold, 22.0, 44.0, 11.0, modifiers.gold_chance)),
         &mut rng,
     );
@@ -52,13 +50,13 @@ pub fn select_native_loot_candidate(
     item_bound = fround(item_bound * modifiers.item_chance);
     append(
         &mut candidates,
-        NativeLootCategory::Item,
+        LootCategory::Item,
         policies.item,
         input.arena.disable_mask & (1 << 5) != 0 || input.arena.special_suppression,
         Some(item_bound),
         &mut rng,
     );
-    if policies.potion == NativeLootPolicy::Forced
+    if policies.potion == LootPolicy::Forced
         && input.scene_forces_health_potion
         && input.arena.disable_mask & (1 << 1) == 0
     {
@@ -66,7 +64,7 @@ pub fn select_native_loot_candidate(
     }
     append(
         &mut candidates,
-        NativeLootCategory::Potion,
+        LootCategory::Potion,
         policies.potion,
         input.arena.disable_mask & (1 << 1) != 0,
         Some(policy_bound(policies.potion, 400.0, 800.0, 200.0, 1.0)),
@@ -79,15 +77,15 @@ pub fn select_native_loot_candidate(
         let bases = [75.0, 75.0, 77.0, 82.0, 92.0, 102.0, 117.0, 137.0];
         let base = bases[(input.participant.level as usize / 5).min(bases.len() - 1)];
         let scale = match policies.powerup {
-            NativeLootPolicy::Reduced => 2.0,
-            NativeLootPolicy::Increased => 0.5,
+            LootPolicy::Reduced => 2.0,
+            LootPolicy::Increased => 0.5,
             _ => 1.0,
         };
         Some(fround(fround(fround(base * scale) * 9.0) * modifiers.powerup_chance))
     };
     append(
         &mut candidates,
-        NativeLootCategory::Powerup,
+        LootCategory::Powerup,
         policies.powerup,
         input.arena.disable_mask & (1 << 2) != 0,
         powerup_bound,
@@ -101,17 +99,17 @@ pub fn select_native_loot_candidate(
 }
 
 fn append(
-    candidates: &mut Vec<NativeLootCategory>,
-    category: NativeLootCategory,
-    policy: NativeLootPolicy,
+    candidates: &mut Vec<LootCategory>,
+    category: LootCategory,
+    policy: LootPolicy,
     disabled: bool,
     bound: Option<f64>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) {
-    if disabled || policy == NativeLootPolicy::Disabled {
+    if disabled || policy == LootPolicy::Disabled {
         return;
     }
-    if policy == NativeLootPolicy::Forced || bound.is_some_and(|bound| bound.trunc() <= 0.0) {
+    if policy == LootPolicy::Forced || bound.is_some_and(|bound| bound.trunc() <= 0.0) {
         candidates.push(category);
         return;
     }
@@ -123,15 +121,15 @@ fn append(
 }
 
 fn policy_bound(
-    policy: NativeLootPolicy,
+    policy: LootPolicy,
     ordinary: f64,
     reduced: f64,
     increased: f64,
     modifier: f64,
 ) -> f64 {
     let base = match policy {
-        NativeLootPolicy::Reduced => reduced,
-        NativeLootPolicy::Increased => increased,
+        LootPolicy::Reduced => reduced,
+        LootPolicy::Increased => increased,
         _ => ordinary,
     };
     fround(fround(base) * fround(modifier))

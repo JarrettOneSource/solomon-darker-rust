@@ -5,18 +5,14 @@ use crate::player_panels::chrome::{color, rect};
 use solomon_sim::audio::{AudioCue, AudioEvent, AudioOptions};
 use solomon_sim::float;
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{NativeUiFontName as Font, NativeUiTextSpec as TextSpec};
-use solomon_sim::player_panels::skill_hover::{
-    native_skill_hover_box_layout, skill_picker_detail_lines,
-};
-use solomon_sim::player_panels::skill_text::{
-    native_skill_page_text_height, native_skill_page_wrapped_lines,
-};
+use solomon_sim::player_panels::skill_hover::{skill_hover_box_layout, skill_picker_detail_lines};
+use solomon_sim::player_panels::skill_text::{skill_page_text_height, skill_page_wrapped_lines};
 use solomon_sim::profile::{PlayerSkillChoice, PlayerSkillOffer};
 use solomon_sim::skill_picker::{
     SkillPickerReveal, skill_picker_card, skill_picker_centers, skill_picker_close,
     skill_picker_panel, skill_picker_reveal,
 };
+use solomon_sim::ui_text::{UiFontName as Font, UiTextSpec as TextSpec};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SkillPickerAction {
     Choose(PlayerSkillChoice),
@@ -592,15 +588,15 @@ impl SkillPicker {
                     egui::Color32::WHITE.gamma_multiply(panel_alpha * (pulse - 1.0) as f32),
                 )?;
             }
-            let names = native_skill_page_wrapped_lines(&card.name);
-            let descriptions = native_skill_page_wrapped_lines(card.quick_description);
+            let names = skill_page_wrapped_lines(&card.name);
+            let descriptions = skill_page_wrapped_lines(card.quick_description);
             let text_tint = if option.insight { 0xd9ba70 } else { card.root_tint };
             for (font, source, baseline) in [
                 (Font::Medium, names.join("\n"), top + 150.0),
                 (
                     Font::SkillUppercase,
                     card.family_label.to_owned(),
-                    top + 150.0 + native_skill_page_text_height(&names),
+                    top + 150.0 + skill_page_text_height(&names),
                 ),
             ] {
                 let line_height = (font == Font::Medium).then_some(17.0);
@@ -638,7 +634,7 @@ impl SkillPicker {
                         Font::Medium,
                         &descriptions.join("\n"),
                         x,
-                        top + 230.0 - native_skill_page_text_height(&descriptions) / 2.0,
+                        top + 230.0 - skill_page_text_height(&descriptions) / 2.0,
                     )
                 },
             );
@@ -736,7 +732,7 @@ impl SkillPicker {
         let Some(offer) = &self.displayed else { return Ok(()) };
         let Some(option) = offer.options.get(index) else { return Ok(()) };
         let lines = skill_picker_detail_lines(option);
-        let layout = native_skill_hover_box_layout(
+        let layout = skill_hover_box_layout(
             &lines,
             solomon_sim::Vec2::new(skill_picker_centers(offer.options.len())[index], 382.5),
         );

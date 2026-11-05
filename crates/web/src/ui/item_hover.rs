@@ -2,13 +2,11 @@
 use super::sack_name::gpu_sack_name;
 use crate::gpu_ui::UiFrame;
 use solomon_sim::Vec2;
-use solomon_sim::native_ui_text::{
-    NativeUiTextAlign, NativeUiTextSpec, layout_native_ui_text, native_ui_font,
-};
 use solomon_sim::player_panels::item_text::{
     HUB_TOOLTIP_CONTENT_MARGIN, HUB_TOOLTIP_LINE_GAP, HubContextualHoverLayout, HubTooltipLine,
     hub_contextual_hover_layout,
 };
+use solomon_sim::ui_text::{UiTextAlign, UiTextSpec, layout_ui_text, ui_font};
 pub(crate) fn item_hover_layout(
     frame: &UiFrame<'_>,
     lines: &[HubTooltipLine],
@@ -55,11 +53,11 @@ pub(crate) fn paint_item_hover_box(
                 scale,
             );
         } else {
-            let text = layout_native_ui_text(&NativeUiTextSpec {
-                align: NativeUiTextAlign::Left,
+            let text = layout_ui_text(&UiTextSpec {
+                align: UiTextAlign::Left,
                 tint: line.tint,
-                line_height: Some(native_ui_font(line.font).metrics[0]),
-                ..NativeUiTextSpec::new(
+                line_height: Some(ui_font(line.font).metrics[0]),
+                ..UiTextSpec::new(
                     line.font,
                     &rendered.sources.join("\n"),
                     HUB_TOOLTIP_CONTENT_MARGIN,

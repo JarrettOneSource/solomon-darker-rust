@@ -13,7 +13,7 @@ use crate::painter::WorldPainterOrder;
 impl EnemyWorld {
     /// The source contact caller ignores these returned spawn events. Keep its current
     /// tick queues intact while retaining the actor, RNG draws and consumed event IDs.
-    pub fn add_native_cocoon(
+    pub fn add_cocoon(
         &mut self,
         owner: &str,
         position: Vec2,

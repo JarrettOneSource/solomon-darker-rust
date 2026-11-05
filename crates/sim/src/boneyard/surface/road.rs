@@ -4,7 +4,7 @@ use crate::Vec2;
 use crate::boneyard::BoneyardRoad;
 use crate::float::fround;
 
-use super::{NativeBoneyardSurfaceMesh, NativeRoadMeshPlan};
+use super::{BoneyardSurfaceMesh, RoadMeshPlan};
 
 struct RoadStyle {
     edge_inset: f64,
@@ -27,7 +27,7 @@ struct RoadVertex {
 }
 
 #[must_use]
-pub fn native_road_endpoint_alphas(link_mask: u8) -> [f64; 2] {
+pub fn road_endpoint_alphas(link_mask: u8) -> [f64; 2] {
     if link_mask == 0 {
         [1.0, 1.0]
     } else {
@@ -37,7 +37,7 @@ pub fn native_road_endpoint_alphas(link_mask: u8) -> [f64; 2] {
     }
 }
 
-pub fn native_road_mesh_plan(road: &BoneyardRoad) -> Result<NativeRoadMeshPlan, String> {
+pub fn road_mesh_plan(road: &BoneyardRoad) -> Result<RoadMeshPlan, String> {
     let style = road.style.unwrap_or(0) as usize;
     let program = ROAD_STYLES
         .get(style)
@@ -47,10 +47,10 @@ pub fn native_road_mesh_plan(road: &BoneyardRoad) -> Result<NativeRoadMeshPlan, 
     {
         [quad[0], quad[1], quad[2], quad[3]].map(stored_point)
     } else {
-        native_road_quad(road, program.half_width)?
+        road_quad(road, program.half_width)?
     };
     let [start_left, start_right, end_left, end_right] = outer;
-    let [start_alpha, end_alpha] = native_road_endpoint_alphas(road.link_mask);
+    let [start_alpha, end_alpha] = road_endpoint_alphas(road.link_mask);
     let [inner_start_left, inner_start_right] =
         inset_pair(start_left, start_right, program.edge_inset);
     let [inner_end_left, inner_end_right] = inset_pair(end_left, end_right, program.edge_inset);
@@ -78,7 +78,7 @@ pub fn native_road_mesh_plan(road: &BoneyardRoad) -> Result<NativeRoadMeshPlan, 
         vertex(end_right, 0),
     ];
     let mut unique = Vec::new();
-    let mut mesh = NativeBoneyardSurfaceMesh::default();
+    let mut mesh = BoneyardSurfaceMesh::default();
     for vertex in source {
         let index = if let Some(index) = unique.iter().position(|value| *value == vertex) {
             index
@@ -95,10 +95,10 @@ pub fn native_road_mesh_plan(road: &BoneyardRoad) -> Result<NativeRoadMeshPlan, 
         };
         mesh.indices.push(index);
     }
-    Ok(NativeRoadMeshPlan { mesh, style })
+    Ok(RoadMeshPlan { mesh, style })
 }
 
-fn native_road_quad(road: &BoneyardRoad, half_width: f64) -> Result<[Vec2; 4], String> {
+fn road_quad(road: &BoneyardRoad, half_width: f64) -> Result<[Vec2; 4], String> {
     if road.points.len() < 2 {
         return Err(format!("Road {} requires four outer points", road.eid));
     }

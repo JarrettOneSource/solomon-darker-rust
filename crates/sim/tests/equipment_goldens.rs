@@ -2,16 +2,15 @@
 
 use serde_json::{Value, json};
 use solomon_sim::equipment::{
-    NATIVE_EQUIPMENT_RECIPES, NATIVE_EQUIPMENT_SETS, NativeEquipmentEffect,
-    NativeEquipmentEffectSource, NativeEquipmentModifiers, NativeEquipmentScalarTransform,
-    resolve_native_equipment_effects,
+    EQUIPMENT_RECIPES, EQUIPMENT_SETS, EquipmentEffect, EquipmentEffectSource, EquipmentModifiers,
+    EquipmentScalarTransform, resolve_equipment_effects,
 };
 
-fn transform(value: NativeEquipmentScalarTransform) -> Value {
+fn transform(value: EquipmentScalarTransform) -> Value {
     json!({"offset":value.offset,"scale":value.scale})
 }
 
-fn modifiers(value: &NativeEquipmentModifiers) -> Value {
+fn modifiers(value: &EquipmentModifiers) -> Value {
     json!({
         "castSpeedFlat":value.cast_speed_flat,"castSpeedMultiplier":value.cast_speed_multiplier,
         "classCastSpeedFlat":value.class_cast_speed_flat,"classCastSpeedMultiplier":value.class_cast_speed_multiplier,
@@ -57,13 +56,13 @@ fn authored_equipment_sets_and_all_native_stat_lanes_replay_the_website() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/equipment-goldens.json")).unwrap();
     for (actual, expected) in
-        NATIVE_EQUIPMENT_RECIPES.iter().zip(fixture["catalog"]["items"].as_array().unwrap())
+        EQUIPMENT_RECIPES.iter().zip(fixture["catalog"]["items"].as_array().unwrap())
     {
         assert_eq!(actual.name, expected["name"].as_str().unwrap());
         assert_eq!(actual.description, expected["description"].as_str().unwrap());
     }
     for (actual, expected) in
-        NATIVE_EQUIPMENT_SETS.iter().zip(fixture["catalog"]["sets"].as_array().unwrap())
+        EQUIPMENT_SETS.iter().zip(fixture["catalog"]["sets"].as_array().unwrap())
     {
         assert_eq!(actual.name, expected["name"].as_str().unwrap());
         assert_eq!(
@@ -89,12 +88,12 @@ fn authored_equipment_sets_and_all_native_stat_lanes_replay_the_website() {
             .as_array()
             .unwrap()
             .iter()
-            .map(|source| NativeEquipmentEffectSource {
+            .map(|source| EquipmentEffectSource {
                 effects: source["effects"]
                     .as_array()
                     .unwrap()
                     .iter()
-                    .map(|effect| NativeEquipmentEffect {
+                    .map(|effect| EquipmentEffect {
                         kind: effect["kind"].as_u64().unwrap() as u32,
                         magnitude: effect["magnitude"].as_f64().unwrap(),
                         operator: effect["operator"].as_u64().unwrap() as u32,
@@ -110,7 +109,7 @@ fn authored_equipment_sets_and_all_native_stat_lanes_replay_the_website() {
             .iter()
             .map(|value| value.as_u64().unwrap() as u32)
             .collect();
-        let actual = resolve_native_equipment_effects(&ranks, &sources, &owned);
+        let actual = resolve_equipment_effects(&ranks, &sources, &owned);
         assert_snapshot(
             &json!({"effectiveRanks":&actual.effective_ranks[..],"grantedSkillOrder":actual.granted_skill_order,"modifiers":modifiers(&actual.modifiers)}),
             &case["result"],

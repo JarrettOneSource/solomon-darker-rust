@@ -57,10 +57,10 @@ fn current_enemy_quality_preserves_actual_births_rng_and_painter_order() {
             roll_loot_seed: None,
             native_visibility: None,
             projected_point_visible: None,
-            native_view_bounds: None,
+            view_bounds: None,
             puppet_targets: &[],
             light_at: None,
-            native_movement_view: None,
+            movement_view: None,
         };
         let mut retained = None;
         match program {
@@ -180,7 +180,7 @@ fn current_enemy_quality_preserves_actual_births_rng_and_painter_order() {
                 }
                 let id = input["id"].as_u64().unwrap() as usize;
                 world.next_projectile_id = id + 1;
-                world.boss_spells.push(solomon_sim::enemies::boss_spell::NativeBossSpell {
+                world.boss_spells.push(solomon_sim::enemies::boss_spell::BossSpell {
                     owner: solomon_sim::enemies::boss_spell::BossSpellOwner {
                         age_ticks: input["ageTicks"].as_u64().unwrap(),
                         damage: number(input, "damage"),

@@ -4,7 +4,7 @@ use solomon_assets::website_save::{self, CreateSaveOptions, SaveIntegrity, SaveM
 use solomon_sim::modding::LuaObject;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionOptions, GameSessionTickContext};
-use solomon_sim::spells::hand_cast::NativeHandCast1;
+use solomon_sim::spells::hand_cast::HandCast1;
 use std::collections::BTreeMap;
 
 fn document() -> Value {
@@ -17,7 +17,7 @@ fn document() -> Value {
         },
         GameSessionOptions::default(),
     );
-    let hand = NativeHandCast1::new(0.095_f32 as f64, 0, &mut session.combat_rng);
+    let hand = HandCast1::new(0.095_f32 as f64, 0, &mut session.combat_rng);
     {
         let participant = session.participants.get_mut("local").unwrap();
         participant.player.economy.equipment.weapon = None;

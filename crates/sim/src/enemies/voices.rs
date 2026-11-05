@@ -2,7 +2,7 @@
 //! `native-faculty-voices.ts`. These pure clocks advance steering RNG even when no audio
 //! device is attached, because the same stream also drives enemy decisions.
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::float::fround;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -155,14 +155,14 @@ pub struct FacultyVoiceStep {
 
 impl FacultyVoiceController {
     #[must_use]
-    pub fn new(rng: &mut NativeRng) -> Self {
+    pub fn new(rng: &mut Rng) -> Self {
         Self { line: 0, ticks_remaining: 200 + rng.draw_integer(500) as u64 }
     }
 
     /// `stepNativeFacultyVoices`: members are the living Faculty in world order, with
     /// `true` selecting the female bank. Membership ends on the first dying tick.
     #[must_use]
-    pub fn step(mut self, rng: &mut NativeRng, members: &[bool], busy: bool) -> FacultyVoiceStep {
+    pub fn step(mut self, rng: &mut Rng, members: &[bool], busy: bool) -> FacultyVoiceStep {
         if members.is_empty() {
             return FacultyVoiceStep { cues: Vec::new(), state: None };
         }
@@ -238,7 +238,7 @@ impl FacultyVoiceController {
 
 fn enqueue_voice(
     cues: &mut Vec<BossStreamCue>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     male: bool,
     female: bool,
     male_cue: BossStreamCue,

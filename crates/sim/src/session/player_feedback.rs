@@ -9,7 +9,7 @@ use crate::enemies::model::{
 use crate::enemies::world::EnemyWorld;
 use crate::float::fround;
 use crate::spells::targeting::direction_from_heading;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 pub(crate) struct PlayerRescueFeedbackInput<'a> {
     pub player_id: &'a str,
@@ -24,9 +24,9 @@ pub(crate) struct PlayerRescueFeedbackInput<'a> {
 /// These returned semantic events are retained by the caller at its source phase.
 pub(crate) fn materialize_player_rescue_feedback(
     world: &mut crate::boneyard::BoneyardWorld,
-    secondary: &mut crate::secondary::NativeSecondarySimulationState,
+    secondary: &mut crate::secondary::SecondarySimulationState,
     order: &mut crate::painter::WorldPainterOrder,
-    flashes: &mut crate::screen_flash::NativeScreenFlashWriter,
+    flashes: &mut crate::screen_flash::ScreenFlashWriter,
     input: PlayerRescueFeedbackInput<'_>,
 ) -> Vec<EnemyEvent> {
     let mut events = Vec::new();
@@ -45,11 +45,11 @@ pub(crate) fn materialize_player_rescue_feedback(
         events.push(event);
     }
     if input.received.cheat_death_triggered {
-        flashes.write(crate::screen_flash::NativeScreenFlashInput {
+        flashes.write(crate::screen_flash::ScreenFlashInput {
             tick: input.tick,
             world_key: input.world_key.into(),
             position: input.position,
-            flash: crate::secondary::NativeSecondaryScreenFlashState::new(
+            flash: crate::secondary::SecondaryScreenFlashState::new(
                 1.0,
                 1.0,
                 1.0,
@@ -60,7 +60,7 @@ pub(crate) fn materialize_player_rescue_feedback(
             only_if_clear: false,
         });
         secondary.spawn_player_rescue_shockwave(
-            crate::secondary::NativePlayerRescueInput {
+            crate::secondary::PlayerRescueInput {
                 light_registration: input.light_registration,
                 owner_id: input.player_id,
                 position: input.position,
@@ -89,7 +89,7 @@ pub struct PlayerStatusBurstRequest<'a> {
 pub fn emit_player_status_burst(
     world: &mut EnemyWorld,
     request: PlayerStatusBurstRequest<'_>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> EnemyEvent {
     let (tint, damping, role, sound) = match request.status {
         PlayerStatusKind::Cold => {
@@ -191,7 +191,7 @@ pub struct PlayerDamageSoundResult {
 pub fn emit_boneyard_player_damage_sound(
     world: &mut EnemyWorld,
     request: PlayerDamageSoundRequest<'_>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> PlayerDamageSoundResult {
     let delay = rng.draw_integer(41);
     let sound = match rng.draw_integer(3) {
@@ -223,7 +223,7 @@ pub fn emit_boneyard_player_damage_sound(
 }
 
 #[must_use]
-pub const fn native_wizard_ouch_cooldown_ready(tick: u64, deadline_tick: u64) -> bool {
+pub const fn wizard_ouch_cooldown_ready(tick: u64, deadline_tick: u64) -> bool {
     tick > deadline_tick
 }
 

@@ -1,9 +1,9 @@
 //! Source `native-ui/native-ui-notebox.ts`: one timed instruction/failure notice.
 
-use crate::native_ui_text::{NativeUiFontName, NativeUiTextSpec, layout_native_ui_text};
+use crate::ui_text::{UiFontName, UiTextSpec, layout_ui_text};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeNoteboxKind {
+pub enum NoteboxKind {
     Failure,
     Instruction,
 }
@@ -11,7 +11,7 @@ pub enum NativeNoteboxKind {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
-pub struct NativeNoteboxLayout {
+pub struct NoteboxLayout {
     pub panel_height: f64,
     pub panel_left: f64,
     pub panel_top: f64,
@@ -23,22 +23,18 @@ pub struct NativeNoteboxLayout {
 }
 
 #[must_use]
-pub const fn native_notebox_duration_ms(kind: NativeNoteboxKind) -> f64 {
+pub const fn notebox_duration_ms(kind: NoteboxKind) -> f64 {
     match kind {
-        NativeNoteboxKind::Failure => 5200.0,
-        NativeNoteboxKind::Instruction => 10200.0,
+        NoteboxKind::Failure => 5200.0,
+        NoteboxKind::Instruction => 10200.0,
     }
 }
 
 #[must_use]
-pub fn native_notebox_opacity(
-    kind: NativeNoteboxKind,
-    elapsed_ms: f64,
-    dismissed_at_ms: Option<f64>,
-) -> f64 {
+pub fn notebox_opacity(kind: NoteboxKind, elapsed_ms: f64, dismissed_at_ms: Option<f64>) -> f64 {
     let elapsed = elapsed_ms.max(0.0);
     let reveal = (elapsed / 100.0).min(1.0);
-    let normal_fade = ((native_notebox_duration_ms(kind) - elapsed) / 200.0).clamp(0.0, 1.0);
+    let normal_fade = ((notebox_duration_ms(kind) - elapsed) / 200.0).clamp(0.0, 1.0);
     let dismissed_fade = match dismissed_at_ms {
         None => 1.0,
         Some(dismissed) if elapsed <= dismissed => 1.0,
@@ -48,12 +44,11 @@ pub fn native_notebox_opacity(
 }
 
 #[must_use]
-pub fn native_notebox_layout(text: &str) -> NativeNoteboxLayout {
-    let text =
-        layout_native_ui_text(&NativeUiTextSpec::new(NativeUiFontName::Menu, text, 0.0, 0.0));
+pub fn notebox_layout(text: &str) -> NoteboxLayout {
+    let text = layout_ui_text(&UiTextSpec::new(UiFontName::Menu, text, 0.0, 0.0));
     let panel_width = text.width + 70.0;
     let panel_height = text.height + 70.0;
-    NativeNoteboxLayout {
+    NoteboxLayout {
         panel_height,
         panel_left: 800.0 - panel_width / 2.0,
         panel_top: 250.0 - panel_height / 2.0,

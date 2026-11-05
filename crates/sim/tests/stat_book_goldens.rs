@@ -3,11 +3,11 @@
 #[cfg(feature = "persistence")]
 #[test]
 fn stock_stat_book_and_player_overrides_retain_their_source_rows() {
-    use solomon_sim::profile::{NativeSkillStatBookValue, PlayerStatBookComponent};
+    use solomon_sim::profile::{PlayerStatBookComponent, SkillStatBookValue};
 
     let fixture: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/website/profile-goldens.json")).unwrap();
-    let expected: Vec<solomon_sim::profile::NativeSkillStatBookEntry> =
+    let expected: Vec<solomon_sim::profile::SkillStatBookEntry> =
         serde_json::from_value(fixture["statBook"].clone()).unwrap();
     let mut book = PlayerStatBookComponent::default();
     assert_eq!(book.entries.as_ref(), expected);
@@ -19,10 +19,8 @@ fn stock_stat_book_and_player_overrides_retain_their_source_rows() {
     entries[8].description = "Authored missile damage".into();
     entries[8]
         .numeric_properties
-        .insert("mDamage1".into(), NativeSkillStatBookValue::Ranks(vec![0.0, 17.25, 31.5]));
-    entries[8]
-        .numeric_properties
-        .insert("mManaCost".into(), NativeSkillStatBookValue::Scalar(0.75));
+        .insert("mDamage1".into(), SkillStatBookValue::Ranks(vec![0.0, 17.25, 31.5]));
+    entries[8].numeric_properties.insert("mManaCost".into(), SkillStatBookValue::Scalar(0.75));
     assert_eq!(book.stat(8, "mDamage1", 1), Some(17.25));
     assert_eq!(book.stat(8, "mDamage1", 20), Some(31.5));
     assert_eq!(book.stat(8, "mManaCost", 0), Some(0.75));

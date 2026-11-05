@@ -6,8 +6,7 @@ mod support;
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::economy::{
-    FOMENTIUS_STOCK_DEFINITIONS, HubInventoryAction, NativeDyeLayer,
-    create_fomentius_inventory_item,
+    DyeLayer, FOMENTIUS_STOCK_DEFINITIONS, HubInventoryAction, create_fomentius_inventory_item,
 };
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::session::{
@@ -80,11 +79,7 @@ fn action(value: &Value) -> HubInventoryAction {
         "dye" => HubInventoryAction::Dye {
             session_id: session(),
             target_item_id: value["targetItemId"].as_u64().unwrap(),
-            layer: if value["layer"] == "cloth" {
-                NativeDyeLayer::Cloth
-            } else {
-                NativeDyeLayer::Trim
-            },
+            layer: if value["layer"] == "cloth" { DyeLayer::Cloth } else { DyeLayer::Trim },
             swatch_rows: value["swatchRows"]
                 .as_array()
                 .unwrap()

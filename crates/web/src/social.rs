@@ -18,7 +18,7 @@ use std::rc::Rc;
 
 use egui::{Color32, Id, Order};
 use solomon_sim::settings::GameControlBindings;
-use solomon_sim::social::party_ui::NativePartyMenuTab as PartyTab;
+use solomon_sim::social::party_ui::PartyMenuTab as PartyTab;
 use solomon_sim::social::{
     AllyHudRow, GameChatChannel, GameChatRejection, GameChatSender, GameChatWorldKind,
     PartyActionRejection, SocialAction, SocialSnapshot, available_game_chat_channels,
@@ -392,9 +392,7 @@ impl SocialUi {
                         self.paint_party_invitation(frame, ui)?;
                     } else {
                         match self.surface.clone() {
-                            Some(Surface::Party(tab)) => {
-                                self.paint_native_party_menu(frame, ui, tab)?
-                            }
+                            Some(Surface::Party(tab)) => self.paint_party_menu(frame, ui, tab)?,
                             Some(Surface::Card(_) | Surface::HubPlayer(_)) => {
                                 self.paint_card(frame)?
                             }
@@ -654,7 +652,7 @@ impl SocialUi {
                         accept: false,
                     });
                 } else if let Some(visibility) = action.strip_prefix("visibility:").and_then(|id| {
-                    solomon_sim::social::party_ui::NATIVE_PARTY_VISIBILITIES.into_iter().find(
+                    solomon_sim::social::party_ui::PARTY_VISIBILITIES.into_iter().find(
                         |visibility| {
                             solomon_sim::social::party_ui::visibility_id(*visibility) == id
                         },

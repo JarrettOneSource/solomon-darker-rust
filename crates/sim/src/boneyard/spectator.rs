@@ -222,26 +222,26 @@ fn enemy_count_label(count: usize, state: &str) -> String {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSpectatorHudRail {
+pub struct SpectatorHudRail {
     pub bounds: BoneyardBounds,
     pub record: usize,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSpectatorHudCorner {
+pub struct SpectatorHudCorner {
     pub center: Vec2,
     pub record: usize,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSpectatorHudLayout {
+pub struct SpectatorHudLayout {
     pub surface: BoneyardBounds,
     pub text: Vec2,
-    pub horizontal_rails: [NativeSpectatorHudRail; 2],
-    pub vertical_rails: [NativeSpectatorHudRail; 2],
-    pub corners: [NativeSpectatorHudCorner; 4],
+    pub horizontal_rails: [SpectatorHudRail; 2],
+    pub vertical_rails: [SpectatorHudRail; 2],
+    pub corners: [SpectatorHudCorner; 4],
 }
 
 #[must_use]
-pub fn native_spectator_hud_layout(viewport: Vec2) -> NativeSpectatorHudLayout {
+pub fn spectator_hud_layout(viewport: Vec2) -> SpectatorHudLayout {
     assert!(
         viewport.x.is_finite() && viewport.y.is_finite() && viewport.x > 0.0 && viewport.y > 0.0,
         "spectator HUD viewport must be positive and finite"
@@ -258,18 +258,18 @@ pub fn native_spectator_hud_layout(viewport: Vec2) -> NativeSpectatorHudLayout {
         (37.0, surface.height - 37.0),
         (surface.width - 37.0, surface.height - 37.0),
     ];
-    NativeSpectatorHudLayout {
+    SpectatorHudLayout {
         surface,
         text: Vec2::new(18.0, 20.0),
-        horizontal_rails: [-2.0, surface.height - 15.0].map(|y| NativeSpectatorHudRail {
+        horizontal_rails: [-2.0, surface.height - 15.0].map(|y| SpectatorHudRail {
             record: 10,
             bounds: BoneyardBounds::new(10.0, y, surface.width - 20.0, 19.0),
         }),
-        vertical_rails: [0.0, surface.width - 17.0].map(|x| NativeSpectatorHudRail {
+        vertical_rails: [0.0, surface.width - 17.0].map(|x| SpectatorHudRail {
             record: 79,
             bounds: BoneyardBounds::new(x, 10.0, 21.0, surface.height - 20.0),
         }),
-        corners: std::array::from_fn(|index| NativeSpectatorHudCorner {
+        corners: std::array::from_fn(|index| SpectatorHudCorner {
             center: Vec2::new(centers[index].0, centers[index].1),
             record: 107 + index,
         }),

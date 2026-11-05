@@ -32,7 +32,7 @@ fn snapshot(session: &GameSession) -> Value {
     let world = if let Some(world) = &session.boneyard {
         let baseline = session.participants.get("local").expect("participant exists").tutorial_profile_economy.as_ref().map(|economy| json!({
             "gold":economy.gold, "revision":economy.revision,"collegeIntroPending":economy.college_intro_pending,
-            "inventory":economy.backpack.iter().map(|item|[item.id,u64::from(item.native_type_id),u64::from(item.quantity)]).collect::<Vec<_>>(),
+            "inventory":economy.backpack.iter().map(|item|[item.id,u64::from(item.type_id),u64::from(item.quantity)]).collect::<Vec<_>>(),
             "equippedTints":[economy.equipment.hat.as_ref().and_then(|item|item.icon_tints),economy.equipment.robe.as_ref().and_then(|item|item.icon_tints)],
             "rng":player_snapshot::rng_snapshot(&economy.rng)
         }));

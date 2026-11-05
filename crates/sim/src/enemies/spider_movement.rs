@@ -1,11 +1,11 @@
 //! Spider's native movement-call state machine from `core-kernels/native-spider.ts`.
 //! Cadence belongs to the actor wrapper; one call owns its precise random draw order.
 use super::model::SpiderBrain;
-use super::silk::{NativeSilkCreation, create_native_silk};
+use super::silk::{SilkCreation, create_silk};
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::direction_from_heading;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpiderTarget {
@@ -44,7 +44,7 @@ pub struct SpiderMovementResult {
     pub goal: Vec2,
     pub bite: bool,
     pub suck: bool,
-    pub silk: Option<NativeSilkCreation>,
+    pub silk: Option<SilkCreation>,
     pub bite_sounds: Option<[usize; 2]>,
     pub shared_spit_ticks_remaining: u64,
 }
@@ -55,18 +55,18 @@ struct MovementWork<'rng, 'route> {
     goal: Vec2,
     bite: bool,
     suck: bool,
-    silk: Option<NativeSilkCreation>,
+    silk: Option<SilkCreation>,
     bite_sounds: Option<[usize; 2]>,
     shared_spit_ticks_remaining: u64,
-    rng: &'rng mut NativeRng,
+    rng: &'rng mut Rng,
     request: SpiderMovementRequest<'route>,
 }
 
 #[must_use]
-pub fn move_native_spider(
+pub fn move_spider(
     source: &SpiderBrain,
     request: SpiderMovementRequest<'_>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> SpiderMovementResult {
     let mut work = MovementWork {
         state: source.clone(),
@@ -353,7 +353,7 @@ impl MovementWork<'_, '_> {
     fn spit(&mut self, target: SpiderTarget) {
         let mut position = offset(self.position, self.heading_deg, 20.0);
         position.y += 10.0;
-        let silk = create_native_silk(
+        let silk = create_silk(
             position,
             target.position,
             target.velocity_per_tick,

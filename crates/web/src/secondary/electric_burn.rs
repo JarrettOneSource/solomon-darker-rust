@@ -1,10 +1,10 @@
 //! NativeElectricBurnArcView's body-only, independently masked painter bands.
 use super::SecondaryView;
 use super::draws::rgba;
+use crate::beam_mesh::clip_to_bands;
 use crate::courtyard::Camera;
-use crate::native_mesh::clip_native_mesh;
 use solomon_graphics::{BlendMode, Renderer, Vertex};
-use solomon_sim::secondary::presentation::NativeSecondaryAtlas;
+use solomon_sim::secondary::presentation::SecondaryAtlas;
 
 impl SecondaryView {
     pub(super) fn draw_electric_burn_arc_band(
@@ -23,9 +23,9 @@ impl SecondaryView {
                 .chain(layer.branch.iter().map(|branch| (&branch.mesh, branch.texture_record)));
             let color = rgba(layer.tint, layer.alpha, tint);
             for (mesh, entry) in meshes {
-                let record = self.record(NativeSecondaryAtlas::BadGuys, entry);
+                let record = self.record(SecondaryAtlas::BadGuys, entry);
                 let [top_left, _, bottom_right, _] = super::draws::texels(&record);
-                let triangles = clip_native_mesh(
+                let triangles = clip_to_bands(
                     mesh,
                     actor.plan.root,
                     band.clip_y,

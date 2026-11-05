@@ -4,17 +4,17 @@
 use crate::appearance::equipment::PlayerWeaponAppearance;
 use crate::float::{cos, fround, sin};
 use crate::painter::PainterRegistration;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_GOLEM_DEATH_MAX_AGE_ENHANCED: u64 = 710;
-pub const NATIVE_GOLEM_DEATH_MAX_AGE_BASIC: u64 = 177;
-pub const NATIVE_GOLEM_DEATH_FRAGMENT_COUNT: usize = 30;
-pub const NATIVE_GOLEM_DEATH_PAINTER_COUNT: usize = NATIVE_GOLEM_DEATH_FRAGMENT_COUNT + 1;
-pub const NATIVE_GOLEM_DEATH_STAR_TICKS: u64 = 15;
+pub const GOLEM_DEATH_MAX_AGE_ENHANCED: u64 = 710;
+pub const GOLEM_DEATH_MAX_AGE_BASIC: u64 = 177;
+pub const GOLEM_DEATH_FRAGMENT_COUNT: usize = 30;
+pub const GOLEM_DEATH_PAINTER_COUNT: usize = GOLEM_DEATH_FRAGMENT_COUNT + 1;
+pub const GOLEM_DEATH_STAR_TICKS: u64 = 15;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeBouncerMotion {
+pub struct BouncerMotion {
     pub bounce_velocity: f64,
     pub height: f64,
     pub position: Vec2,
@@ -26,11 +26,11 @@ pub struct NativeBouncerMotion {
 
 /// The native motion kernel borrows its actual owner's stream. Enemy world effects
 /// use xorshift; Golem fragments and player weapons use the secondary native RNG.
-pub trait NativeBouncerRandom {
+pub trait BouncerRandom {
     fn float(&mut self, maximum: f64) -> f64;
     fn integer(&mut self, maximum: u32) -> u32;
 }
-impl NativeBouncerRandom for NativeRng {
+impl BouncerRandom for Rng {
     fn float(&mut self, maximum: f64) -> f64 {
         self.draw_scaled_float(maximum, false)
     }
@@ -41,10 +41,10 @@ impl NativeBouncerRandom for NativeRng {
 
 /// Returns whether airborne motion skipped this application-parity tick. A grounded
 /// fragment still runs its owner's lifetime subtraction, without another random draw.
-pub fn step_native_bouncer_motion(
-    motion: &mut NativeBouncerMotion,
+pub fn step_bouncer_motion(
+    motion: &mut BouncerMotion,
     tick: u64,
-    rng: &mut impl NativeBouncerRandom,
+    rng: &mut impl BouncerRandom,
 ) -> bool {
     if motion.height == 0.0 {
         return false;
@@ -82,27 +82,27 @@ pub fn step_native_bouncer_motion(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeDeathFragment {
+pub struct DeathFragment {
     pub life: f64,
     #[cfg_attr(feature = "persistence", serde(flatten))]
-    pub motion: NativeBouncerMotion,
+    pub motion: BouncerMotion,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeGolemDeathAnimation {
-    pub fragments: Vec<Option<NativeDeathFragment>>,
+pub struct GolemDeathAnimation {
+    pub fragments: Vec<Option<DeathFragment>>,
     pub star_rotation_degrees: f64,
     pub star_step_degrees: f64,
 }
 
 #[must_use]
-pub fn create_native_golem_death_animation(
-    rng: &mut NativeRng,
+pub fn create_golem_death_animation(
+    rng: &mut Rng,
     position: Vec2,
     enhanced: bool,
-) -> NativeGolemDeathAnimation {
-    let mut angles: [f64; NATIVE_GOLEM_DEATH_FRAGMENT_COUNT] =
+) -> GolemDeathAnimation {
+    let mut angles: [f64; GOLEM_DEATH_FRAGMENT_COUNT] =
         std::array::from_fn(|index| index as f64 * 18.0);
     for index in 0..angles.len() {
         let selected = rng.draw_integer(angles.len() as i32) as usize;
@@ -120,9 +120,9 @@ pub fn create_native_golem_death_animation(
         let radians = angle * std::f64::consts::PI / 180.0;
         let velocity =
             Vec2::new(fround(sin(radians) * magnitude), fround(-cos(radians) * magnitude));
-        fragments.push(Some(NativeDeathFragment {
+        fragments.push(Some(DeathFragment {
             life: if enhanced { 10.0 } else { 2.0 },
-            motion: NativeBouncerMotion {
+            motion: BouncerMotion {
                 bounce_velocity,
                 height,
                 position: Vec2::new(
@@ -139,21 +139,17 @@ pub fn create_native_golem_death_animation(
     let star_rotation_degrees = rng.draw_scaled_float(360.0, false);
     let star_pitch = rng.draw_scaled_float(5.0, false);
     let star_sample = rng.draw_integer(10);
-    NativeGolemDeathAnimation {
+    GolemDeathAnimation {
         fragments,
         star_rotation_degrees,
         star_step_degrees: fround((f64::from(star_sample) + star_pitch) * 0.5),
     }
 }
 
-pub fn step_native_golem_death_animation(
-    animation: &mut NativeGolemDeathAnimation,
-    tick: u64,
-    rng: &mut NativeRng,
-) {
+pub fn step_golem_death_animation(animation: &mut GolemDeathAnimation, tick: u64, rng: &mut Rng) {
     for slot in &mut animation.fragments {
         let Some(fragment) = slot else { continue };
-        let skipped = step_native_bouncer_motion(&mut fragment.motion, tick, rng);
+        let skipped = step_bouncer_motion(&mut fragment.motion, tick, rng);
         if !skipped {
             fragment.life = fround(fragment.life - 0.015);
         }
@@ -165,19 +161,19 @@ pub fn step_native_golem_death_animation(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeDeathWeaponActor {
+pub struct DeathWeaponActor {
     pub age_ticks: u64,
     pub birth_tick: u64,
     pub death_epoch: u64,
     pub id: u64,
     pub life: f64,
-    pub motion: NativeBouncerMotion,
+    pub motion: BouncerMotion,
     pub owner_id: String,
     pub painter_registration: PainterRegistration,
     pub weapon: PlayerWeaponAppearance,
 }
 
-pub struct NativeDeathWeaponBirth<'a> {
+pub struct DeathWeaponBirth<'a> {
     pub death_epoch: u64,
     pub heading_index: usize,
     pub id: u64,
@@ -189,10 +185,7 @@ pub struct NativeDeathWeaponBirth<'a> {
 }
 
 #[must_use]
-pub fn create_native_death_weapon_actor(
-    options: NativeDeathWeaponBirth<'_>,
-    rng: &mut NativeRng,
-) -> NativeDeathWeaponActor {
+pub fn create_death_weapon_actor(options: DeathWeaponBirth<'_>, rng: &mut Rng) -> DeathWeaponActor {
     let bounce_velocity = fround(-(2.0 + rng.draw_scaled_float(3.0, false)));
     let height = fround(-rng.draw_scaled_float(20.0, false));
     let rotation_degrees = rng.draw_scaled_float(360.0, false);
@@ -201,13 +194,13 @@ pub fn create_native_death_weapon_actor(
     // The native dropped-weapon recipe deliberately uses the body bank, not +0x6C.
     let radians = options.heading_index as f64 * 15.0 * std::f64::consts::PI / 180.0;
     let velocity = Vec2::new(fround(sin(radians) * 1.5), fround(-cos(radians) * 1.5));
-    NativeDeathWeaponActor {
+    DeathWeaponActor {
         age_ticks: 0,
         birth_tick: options.tick,
         death_epoch: options.death_epoch,
         id: options.id,
         life: 99999.0,
-        motion: NativeBouncerMotion {
+        motion: BouncerMotion {
             bounce_velocity,
             height,
             position: Vec2::new(
@@ -225,13 +218,9 @@ pub fn create_native_death_weapon_actor(
     }
 }
 
-pub fn step_native_death_weapon_actors(
-    actors: &mut Vec<NativeDeathWeaponActor>,
-    tick: u64,
-    rng: &mut NativeRng,
-) {
+pub fn step_death_weapon_actors(actors: &mut Vec<DeathWeaponActor>, tick: u64, rng: &mut Rng) {
     actors.retain_mut(|actor| {
-        let skipped = step_native_bouncer_motion(&mut actor.motion, tick, rng);
+        let skipped = step_bouncer_motion(&mut actor.motion, tick, rng);
         if !skipped {
             actor.life = fround(actor.life - 0.015);
         }

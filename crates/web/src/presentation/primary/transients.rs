@@ -1,10 +1,8 @@
 //! Field selection from `client/primary-spell-transient-interpolation.ts`.
 
-use solomon_sim::harden_effects::NativeHardenEffect;
+use solomon_sim::harden_effects::HardenEffect;
 use solomon_sim::spells::model::PrimarySpellTransient;
-use solomon_sim::spells::staff::{
-    NativePlayerStaffAction, NativePlayerStaffTransient, NativePlayerStaffVfx,
-};
+use solomon_sim::spells::staff::{PlayerStaffAction, PlayerStaffTransient, PlayerStaffVfx};
 
 use crate::presentation::PresentationClocks;
 use crate::presentation::math::{lerp, lerp_degrees, lerp_forward_cycle, lerp_vec};
@@ -169,25 +167,20 @@ fn same_kind(first: &PrimarySpellTransient, next: &PrimarySpellTransient) -> boo
     }
 }
 
-fn harden(
-    output: &mut NativeHardenEffect,
-    first: &NativeHardenEffect,
-    next: &NativeHardenEffect,
-    blend: f64,
-) {
+fn harden(output: &mut HardenEffect, first: &HardenEffect, next: &HardenEffect, blend: f64) {
     match (output, first, next) {
         (
-            NativeHardenEffect::Burst { alpha, position, .. },
-            NativeHardenEffect::Burst { alpha: first_alpha, position: first_position, .. },
-            NativeHardenEffect::Burst { alpha: next_alpha, position: next_position, .. },
+            HardenEffect::Burst { alpha, position, .. },
+            HardenEffect::Burst { alpha: first_alpha, position: first_position, .. },
+            HardenEffect::Burst { alpha: next_alpha, position: next_position, .. },
         ) => {
             *alpha = lerp(*first_alpha, *next_alpha, blend);
             *position = lerp_vec(*first_position, *next_position, blend);
         }
         (
-            NativeHardenEffect::Shard { body, .. },
-            NativeHardenEffect::Shard { body: first, .. },
-            NativeHardenEffect::Shard { body: next, .. },
+            HardenEffect::Shard { body, .. },
+            HardenEffect::Shard { body: first, .. },
+            HardenEffect::Shard { body: next, .. },
         ) => {
             body.height = lerp(first.height, next.height, blend);
             body.life = lerp(first.life, next.life, blend);
@@ -201,16 +194,16 @@ fn harden(
 }
 
 fn staff(
-    output: &mut NativePlayerStaffTransient,
-    first: &NativePlayerStaffTransient,
-    next: &NativePlayerStaffTransient,
+    output: &mut PlayerStaffTransient,
+    first: &PlayerStaffTransient,
+    next: &PlayerStaffTransient,
     blend: f64,
 ) {
     match (output, first, next) {
         (
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Melee(out)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Melee(first)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Melee(next)),
+            PlayerStaffTransient::Action(PlayerStaffAction::Melee(out)),
+            PlayerStaffTransient::Action(PlayerStaffAction::Melee(first)),
+            PlayerStaffTransient::Action(PlayerStaffAction::Melee(next)),
         ) => {
             out.base.heading_degrees =
                 lerp_degrees(first.base.heading_degrees, next.base.heading_degrees, blend);
@@ -218,9 +211,9 @@ fn staff(
             out.progress = lerp(first.progress, next.progress, blend);
         }
         (
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Spin(out)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Spin(first)),
-            NativePlayerStaffTransient::Action(NativePlayerStaffAction::Spin(next)),
+            PlayerStaffTransient::Action(PlayerStaffAction::Spin(out)),
+            PlayerStaffTransient::Action(PlayerStaffAction::Spin(first)),
+            PlayerStaffTransient::Action(PlayerStaffAction::Spin(next)),
         ) => {
             out.base.heading_degrees =
                 lerp_degrees(first.base.heading_degrees, next.base.heading_degrees, blend);
@@ -228,21 +221,21 @@ fn staff(
             out.countdown = lerp(first.countdown, next.countdown, blend);
         }
         (
-            NativePlayerStaffTransient::Contact(out),
-            NativePlayerStaffTransient::Contact(first),
-            NativePlayerStaffTransient::Contact(next),
+            PlayerStaffTransient::Contact(out),
+            PlayerStaffTransient::Contact(first),
+            PlayerStaffTransient::Contact(next),
         ) => out.origin = lerp_vec(first.origin, next.origin, blend),
         (
-            NativePlayerStaffTransient::Knockback(out),
-            NativePlayerStaffTransient::Knockback(first),
-            NativePlayerStaffTransient::Knockback(next),
+            PlayerStaffTransient::Knockback(out),
+            PlayerStaffTransient::Knockback(first),
+            PlayerStaffTransient::Knockback(next),
         ) => {
             out.remaining_distance = lerp(first.remaining_distance, next.remaining_distance, blend)
         }
         (
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::Smoke(out)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::Smoke(first)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::Smoke(next)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::Smoke(out)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::Smoke(first)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::Smoke(next)),
         ) => {
             out.alpha = lerp(first.alpha, next.alpha, blend);
             out.position = lerp_vec(first.position, next.position, blend);
@@ -250,18 +243,18 @@ fn staff(
                 lerp_degrees(first.rotation_degrees, next.rotation_degrees, blend);
         }
         (
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::MoveFade(out)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::MoveFade(first)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::MoveFade(next)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::MoveFade(out)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::MoveFade(first)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::MoveFade(next)),
         ) => {
             out.alpha = lerp(first.alpha, next.alpha, blend);
             out.position = lerp_vec(first.position, next.position, blend);
             out.velocity = lerp_vec(first.velocity, next.velocity, blend);
         }
         (
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::PerspectiveFade(out)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::PerspectiveFade(first)),
-            NativePlayerStaffTransient::Vfx(NativePlayerStaffVfx::PerspectiveFade(next)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::PerspectiveFade(out)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::PerspectiveFade(first)),
+            PlayerStaffTransient::Vfx(PlayerStaffVfx::PerspectiveFade(next)),
         ) => out.alpha = lerp(first.alpha, next.alpha, blend),
         _ => {}
     }

@@ -1,10 +1,10 @@
 //! Full Website actor rows shared by the single and multi-participant primary replays.
 use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::profile::primary::NativeSpentEmber;
+use solomon_sim::profile::primary::SpentEmber;
 use solomon_sim::spells::model::PrimarySpellTransient;
 use solomon_sim::spells::model::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 pub fn point(point: Vec2) -> [f64; 2] {
     [point.x, point.y]
@@ -16,7 +16,7 @@ pub fn registration(value: PainterRegistration) -> Value {
     };
     json!([lane, value.registration_ordinal])
 }
-pub fn random_state(rng: &NativeRng) -> Value {
+pub fn random_state(rng: &Rng) -> Value {
     json!({ "indexA": rng.index_a, "indexB": rng.index_b, "words": rng.words.as_slice() })
 }
 pub fn projectile_row(projectile: &PrimarySpellProjectile) -> Value {
@@ -39,11 +39,11 @@ pub fn projectile_row(projectile: &PrimarySpellProjectile) -> Value {
         ),
         PrimarySpellProjectile::Fire(spell) => {
             let spent = match spell.spent_ember {
-                NativeSpentEmber::None => json!({ "kind": "none" }),
-                NativeSpentEmber::Immolate { damage } => {
+                SpentEmber::None => json!({ "kind": "none" }),
+                SpentEmber::Immolate { damage } => {
                     json!({ "kind": "immolate", "damage": damage })
                 }
-                NativeSpentEmber::Imp { damage, lifetime_ticks } => {
+                SpentEmber::Imp { damage, lifetime_ticks } => {
                     json!({ "kind": "imp", "damage": damage, "lifetimeTicks": lifetime_ticks })
                 }
             };

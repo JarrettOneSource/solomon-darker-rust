@@ -13,12 +13,12 @@ use solomon_sim::boneyard::{
 };
 use solomon_sim::combat::PlayerCombatState;
 use solomon_sim::combat::PlayerLifeState;
-use solomon_sim::death_animations::NativeDeathWeaponActor;
+use solomon_sim::death_animations::DeathWeaponActor;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::player_presentation::{PlayerDeathBurstCrossingTracker, PlayerDeathObservation};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionOptions, GameSessionTickContext};
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 
 fn loaded() -> LoadedBoneyard {
     LoadedBoneyard {
@@ -53,11 +53,11 @@ fn registration(value: PainterRegistration) -> Value {
     },"registrationOrdinal":value.registration_ordinal})
 }
 
-fn weapon(actor: &NativeDeathWeaponActor) -> Value {
+fn weapon(actor: &DeathWeaponActor) -> Value {
     let mut value = serde_json::to_value(actor).unwrap();
     value["weapon"]["kind"] = json!(match actor.weapon.kind {
-        NativePlayerWeaponKind::Staff => "staff",
-        NativePlayerWeaponKind::Wand => "wand",
+        PlayerWeaponKind::Staff => "staff",
+        PlayerWeaponKind::Wand => "wand",
     });
     value["painter_registration"] =
         native_bits::source_value(&registration(actor.painter_registration));

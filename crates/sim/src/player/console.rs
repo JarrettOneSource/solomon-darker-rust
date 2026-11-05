@@ -3,7 +3,7 @@
 use super::*;
 
 impl PlayerState {
-    pub fn grant_skill_ranks(&mut self, skill_id: usize, ranks: u32, rng: &mut NativeRng) {
+    pub fn grant_skill_ranks(&mut self, skill_id: usize, ranks: u32, rng: &mut Rng) {
         let previous = self.book.clone();
         self.book.grant_ranks(skill_id, ranks);
         let acquired =
@@ -16,7 +16,7 @@ impl PlayerState {
         self.refresh_console_skill_offer(rng);
     }
 
-    pub fn grant_weld_build(&mut self, build_id: u32, rng: &mut NativeRng) {
+    pub fn grant_weld_build(&mut self, build_id: u32, rng: &mut Rng) {
         let previous = self.book.clone();
         self.book.grant_weld_build(build_id);
         let mut acquired = 0;
@@ -28,7 +28,7 @@ impl PlayerState {
         self.refresh_console_skill_offer(rng);
     }
 
-    fn refresh_console_skill_offer(&mut self, rng: &mut NativeRng) {
+    fn refresh_console_skill_offer(&mut self, rng: &mut Rng) {
         let Some(offer) = &self.progression.pending_offer else {
             return;
         };

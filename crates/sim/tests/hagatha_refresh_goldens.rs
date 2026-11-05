@@ -3,14 +3,14 @@
 mod support;
 
 use serde_json::{Value, json};
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::player::PlayerState;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 
 #[path = "support/player_snapshot.rs"]
 mod player_snapshot;
 
-fn snapshot(player: &PlayerState, rng: &NativeRng, granted: Option<usize>) -> Value {
+fn snapshot(player: &PlayerState, rng: &Rng, granted: Option<usize>) -> Value {
     let book = &player.book;
     let progression = &player.progression;
     json!({
@@ -51,7 +51,7 @@ fn owned_hagatha_refresh_matches_source_without_replaying_purchase_charges() {
         serde_json::from_str(include_str!("fixtures/website/hagatha-refresh-goldens.json"))
             .unwrap();
     for case in fixture["cases"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let mut player = PlayerState::new(
             NewGameSelection {
                 name: "Retained".into(),
@@ -93,7 +93,7 @@ fn replacing_a_loadout_retains_unlocks_and_rearms_owned_charges() {
         serde_json::from_str(include_str!("fixtures/website/hagatha-refresh-goldens.json"))
             .unwrap();
     for (index, case) in fixture["loadouts"].as_array().unwrap().iter().enumerate() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let mut player = PlayerState::new(
             NewGameSelection {
                 name: "Retained".into(),

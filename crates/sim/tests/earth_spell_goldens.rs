@@ -68,7 +68,7 @@ struct Goldens {
 #[test]
 fn no_bind_boulder_contact_exhausts_the_pool_for_lethal_and_nonlethal_targets() {
     for (target_health, damage) in [(1.0, 1.0), (2.0, 2.0), (20.0, 2.0)] {
-        let result = consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+        let result = consume_earth_boulder_contact(EarthBoulderContactInput {
             release_base_damage: 8.0,
             release_charge: 0.5,
             remaining_pool: 2.0,
@@ -77,7 +77,7 @@ fn no_bind_boulder_contact_exhausts_the_pool_for_lethal_and_nonlethal_targets() 
         });
         assert_eq!(
             result,
-            NativeEarthBoulderContactResult {
+            EarthBoulderContactResult {
                 charge: 0.32499998807907104,
                 continue_traversal: false,
                 damage,
@@ -93,7 +93,7 @@ fn boulder_contact_rejects_negative_and_nonfinite_toughness() {
     for toughness in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert!(
             std::panic::catch_unwind(|| {
-                consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+                consume_earth_boulder_contact(EarthBoulderContactInput {
                     release_base_damage: 8.0,
                     release_charge: 0.5,
                     remaining_pool: 2.0,
@@ -112,14 +112,14 @@ fn boulder_growth_pool_orientation_and_lit_fragments_match_the_website() {
         serde_json::from_str(include_str!("fixtures/website/earth-spell-goldens.json")).unwrap();
     assert_eq!(fixture.source_revision, "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     for [charge, growth, maximum, speed, expected] in fixture.growth {
-        assert_eq!(advance_native_earth_boulder_charge(charge, growth, maximum, speed), expected);
+        assert_eq!(advance_earth_boulder_charge(charge, growth, maximum, speed), expected);
     }
     for [damage, charge, factor, expected] in fixture.release {
-        assert_eq!(native_earth_boulder_released_damage(damage, charge, factor), expected);
+        assert_eq!(earth_boulder_released_damage(damage, charge, factor), expected);
     }
     for sample in fixture.contacts {
         let input = sample.input;
-        let result = consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+        let result = consume_earth_boulder_contact(EarthBoulderContactInput {
             release_base_damage: input.release_base_damage,
             release_charge: input.release_charge,
             remaining_pool: input.remaining_pool,

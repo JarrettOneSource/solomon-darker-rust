@@ -1,13 +1,13 @@
 //! Child constructors used during the ordered actor loop. Draw order and the few
 //! constructor pre-ticks are observable through the shared native RNG.
 
-use super::leviathan::native_leviathan_heading_vector;
+use super::leviathan::leviathan_heading_vector;
 use super::program::*;
-use super::{NativeSecondaryActorKind as Kind, NativeSecondarySimulationState as State};
+use super::{SecondaryActorKind as Kind, SecondarySimulationState as State};
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorState;
 
 pub(super) enum EtherFadePresentation {
     Muzzle,
@@ -58,7 +58,7 @@ pub(super) fn planewalker_mote(
 
 pub(super) fn ether_fade(
     state: &mut State,
-    parent: &NativeSecondaryActorState,
+    parent: &SecondaryActorState,
     position: Vec2,
     presentation: EtherFadePresentation,
     tick: u64,
@@ -84,17 +84,13 @@ pub(super) fn ether_fade(
     state.spawn_actor(child);
 }
 
-pub(super) fn leviathan_mote(
-    state: &mut State,
-    parent: &NativeSecondaryActorState,
-    current_scale: f64,
-) {
+pub(super) fn leviathan_mote(state: &mut State, parent: &SecondaryActorState, current_scale: f64) {
     let heading = state.rng.draw_scaled_float(360.0, false);
     let vertical = state.rng.draw_scaled_float(5.0, false);
     let scale = state.rng.draw_scaled_float(0.5, false);
     let speed = state.rng.draw_scaled_float(3.0, false);
     let life = state.rng.draw_scaled_float(0.15, false);
-    let direction = native_leviathan_heading_vector(heading);
+    let direction = leviathan_heading_vector(heading);
     let velocity = Vec2::new(fround(speed * direction.x), fround(speed * direction.y));
     let decrement = fround((0.1_f32 as f64) * fround(2.0 + life));
     let birth = Vec2::new(
@@ -129,8 +125,8 @@ pub(super) fn plane_orb_birth(state: &mut State, owner: &str, world_key: &str, o
         let scale = state.rng.draw_scaled_float(4.0, false);
         let speed = state.rng.draw_scaled_float(5.0, false);
         let life = state.rng.draw_scaled_float(0.05, false);
-        let direction = native_leviathan_heading_vector(heading + jitter);
-        let velocity_direction = native_leviathan_heading_vector(heading);
+        let direction = leviathan_heading_vector(heading + jitter);
+        let velocity_direction = leviathan_heading_vector(heading);
         let mut child = actor(
             Kind::PlaneOrbParticle,
             owner,
@@ -158,7 +154,7 @@ pub(super) fn plane_orb_birth(state: &mut State, owner: &str, world_key: &str, o
             let green = state.rng.draw_scaled_float(0.8, false);
             let speed = state.rng.draw_scaled_float(5.0, false);
             let life = state.rng.draw_scaled_float(0.25, false);
-            let direction = native_leviathan_heading_vector(heading + jitter);
+            let direction = leviathan_heading_vector(heading + jitter);
             let mut child = actor(
                 Kind::PlaneOrbParticle,
                 owner,
@@ -185,13 +181,13 @@ pub(super) fn plane_orb_birth(state: &mut State, owner: &str, world_key: &str, o
     }
 }
 
-pub(super) fn plane_orb_mote(state: &mut State, parent: &NativeSecondaryActorState) {
+pub(super) fn plane_orb_mote(state: &mut State, parent: &SecondaryActorState) {
     let heading = state.rng.draw_scaled_float(360.0, false);
     let vertical = state.rng.draw_scaled_float(5.0, false);
     let scale = state.rng.draw_scaled_float(0.5, false);
     let speed = state.rng.draw_scaled_float(3.0, false);
     let life = state.rng.draw_scaled_float(0.15, false);
-    let direction = native_leviathan_heading_vector(heading);
+    let direction = leviathan_heading_vector(heading);
     let distance = fround(parent.scale * 20.0);
     let mut child = actor(
         Kind::PlaneOrbParticle,
@@ -214,14 +210,14 @@ pub(super) fn plane_orb_mote(state: &mut State, parent: &NativeSecondaryActorSta
     state.spawn_actor(child);
 }
 
-pub(super) fn drain_cloud(state: &mut State, parent: &NativeSecondaryActorState) {
+pub(super) fn drain_cloud(state: &mut State, parent: &SecondaryActorState) {
     let scale = state.rng.draw_scaled_float(1.5, false);
     let rotation = state.rng.draw_scaled_float(360.0, false);
     let alpha = state.rng.draw_scaled_float(0.15_f32 as f64, false);
     let speed = state.rng.draw_scaled_float(3.0, false);
     let record = state.rng.draw_integer(2);
     let distance = state.rng.draw_scaled_float(100.0, false);
-    let radial = native_unit_vector(&mut state.rng);
+    let radial = unit_vector(&mut state.rng);
     let position = Vec2::new(
         fround(parent.position.x + radial.x * distance),
         fround(parent.position.y + radial.y * distance),
@@ -250,7 +246,7 @@ pub(super) fn drain_cloud(state: &mut State, parent: &NativeSecondaryActorState)
     state.spawn_actor(child);
 }
 
-pub(super) fn quake(state: &mut State, parent: &NativeSecondaryActorState, intensity: f64) {
+pub(super) fn quake(state: &mut State, parent: &SecondaryActorState, intensity: f64) {
     let rotation = state.rng.draw_scaled_float(360.0, false);
     let selector = state.rng.draw_integer(4);
     let scale = fround(2.0 + f64::from(selector));
@@ -270,7 +266,7 @@ pub(super) fn quake(state: &mut State, parent: &NativeSecondaryActorState, inten
     state.spawn_actor(child);
 }
 
-pub(super) fn advance_dust(child: &mut NativeSecondaryActorState) {
+pub(super) fn advance_dust(child: &mut SecondaryActorState) {
     child.phase = fround(child.phase + 0.5);
     child.alpha =
         fround(float::sin(child.phase * std::f64::consts::PI / 180.0).abs() * child.quantity);
@@ -280,17 +276,13 @@ pub(super) fn advance_dust(child: &mut NativeSecondaryActorState) {
     );
 }
 
-pub(super) fn dust(
-    state: &mut State,
-    parent: &NativeSecondaryActorState,
-    scenery: &NativeSecondaryActorState,
-) {
+pub(super) fn dust(state: &mut State, parent: &SecondaryActorState, scenery: &SecondaryActorState) {
     let speed = state.rng.draw_scaled_float(0.25, false);
     let magnitude = state.rng.draw_scaled_float(0.5, false);
     let rotation = state.rng.draw_scaled_float(360.0, false);
     let scale = state.rng.draw_scaled_float(2.0, false);
     let distance = state.rng.draw_scaled_float(30.0, false);
-    let direction = native_unit_vector(&mut state.rng);
+    let direction = unit_vector(&mut state.rng);
     let mut child = actor(
         Kind::EarthquakeDust,
         &parent.owner_id,
@@ -313,7 +305,7 @@ pub(super) fn dust(
     state.spawn_actor(child);
 }
 
-pub(super) fn quake_debris(state: &mut State, parent: &NativeSecondaryActorState) {
+pub(super) fn quake_debris(state: &mut State, parent: &SecondaryActorState) {
     let heading = state.rng.draw_scaled_float(360.0, false);
     let bounce = state.rng.draw_scaled_float(3.0, false);
     state.rng.draw_scaled_float(50.0, false);
@@ -321,7 +313,7 @@ pub(super) fn quake_debris(state: &mut State, parent: &NativeSecondaryActorState
     let rotation_step = state.rng.draw_scaled_float(10.0, false);
     let record = state.rng.draw_integer(3);
     let radius = state.rng.draw_scaled_float(300.0, false);
-    let direction = native_leviathan_heading_vector(heading);
+    let direction = leviathan_heading_vector(heading);
     let bounce = fround(-(2.0 + bounce));
     let vertical_factor = state.rng.draw_scaled_float(1.5, false);
     let vertical = fround(fround(fround(vertical_factor + 0.75) * bounce) * 0.5);
@@ -352,7 +344,7 @@ pub(super) fn quake_debris(state: &mut State, parent: &NativeSecondaryActorState
     child.alpha = if parent.enhanced { 10.0 } else { 2.0 };
     child.enhanced = parent.enhanced;
     child.endpoint = Vec2::new(vertical, fround(1.0 + rotation_step));
-    child.lifetime_ticks = MAX_NATIVE_TICKS;
+    child.lifetime_ticks = MAX_TICKS;
     child.phase = fround(-height);
     child.quantity = bounce;
     child.rotation_radians = rotation * std::f64::consts::PI / 180.0;

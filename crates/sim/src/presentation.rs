@@ -9,14 +9,14 @@ use std::f64::consts::PI;
 use crate::collision::Vec2;
 use crate::combat::PlayerCombatState;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryPlayerState;
+use crate::secondary::SecondaryPlayerState;
 
 /// `renderer/player-material.ts`: modifier insertion order changes overlapping
 /// poison/cold colours; Stoneskin composes afterwards, before equipment dye.
 #[must_use]
-pub fn native_player_material_tint(
+pub fn player_material_tint(
     world_tint: u32,
-    secondary: Option<&NativeSecondaryPlayerState>,
+    secondary: Option<&SecondaryPlayerState>,
     status: &PlayerCombatState,
 ) -> u32 {
     let poison = ([0.1_f32 as f64, 0.5, 0.1_f32 as f64], status.poison_ticks_remaining > 0);
@@ -44,7 +44,7 @@ pub fn native_player_material_tint(
 
 /// Native packed material colours round each multiplied byte before submission.
 #[must_use]
-pub fn multiply_native_tints(first: u32, second: u32) -> u32 {
+pub fn multiply_tints(first: u32, second: u32) -> u32 {
     let channel = |shift: u32| {
         (f64::from((first >> shift) & 255) * f64::from((second >> shift) & 255) / 255.0).round()
             as u32
@@ -62,8 +62,8 @@ pub fn native_puppet_hit_tint(complex_lighting: bool, main_tint: u32) -> u32 {
 
 /// `selectedPrimaryId === -1` uses generic attachment pose 4 and the native robe's pose 13
 /// (`NATIVE_UNSELECTED_PRIMARY_*` in `player-character-presentation.ts`).
-pub const NATIVE_UNSELECTED_PRIMARY_ATTACHMENT_POSE: usize = 4;
-pub const NATIVE_UNSELECTED_PRIMARY_ROBE_FIXED_POSE: usize = 13;
+pub const UNSELECTED_PRIMARY_ATTACHMENT_POSE: usize = 4;
+pub const UNSELECTED_PRIMARY_ROBE_FIXED_POSE: usize = 13;
 
 /// The living College wizard's layer selection before a primary spell is selected.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -85,8 +85,8 @@ pub fn wizard_draw_plan(
     gait_degrees: f64,
 ) -> WizardDrawPlan {
     WizardDrawPlan {
-        attachment_pose: NATIVE_UNSELECTED_PRIMARY_ATTACHMENT_POSE,
-        fixed_robe_pose: NATIVE_UNSELECTED_PRIMARY_ROBE_FIXED_POSE,
+        attachment_pose: UNSELECTED_PRIMARY_ATTACHMENT_POSE,
+        fixed_robe_pose: UNSELECTED_PRIMARY_ROBE_FIXED_POSE,
         robe_pose: walk_cycle_primary.trunc() as usize,
         fixed_robe_offset: fixed_robe_offset(gait_degrees),
         front_attachment_offset: front_attachment_offset(gait_degrees),

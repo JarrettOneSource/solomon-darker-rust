@@ -1,17 +1,13 @@
 //! Legacy projectile steering, Arrow velocity and retired cosmetic effect migrations.
 
 use serde_json::{Value, json};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 use super::super::super::contract::record;
 use super::super::super::value::{decode, encode};
 use super::super::{array, finite};
 
-pub(super) fn normalize(
-    value: &Value,
-    version: u64,
-    rng: &mut NativeRng,
-) -> Result<Vec<Value>, String> {
+pub(super) fn normalize(value: &Value, version: u64, rng: &mut Rng) -> Result<Vec<Value>, String> {
     let mut result = Vec::new();
     for (index, value) in array(value, "game save Boneyard enemy projectiles")?.iter().enumerate() {
         let mut projectile =
@@ -61,7 +57,7 @@ pub(super) fn normalize(
         };
         if value["kind"].as_str() == Some("arrow") {
             let velocity: Vec2 = if version < 32 {
-                solomon_sim::enemies::ranged::native_enemy_projectile_velocity(
+                solomon_sim::enemies::ranged::enemy_projectile_velocity(
                     finite(&value["headingDeg"], "saved Arrow heading")?,
                     finite(&value["speed"], "saved Arrow speed")?,
                 )

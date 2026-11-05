@@ -14,7 +14,7 @@ use super::collision::{
 use super::encounter::{
     SOLOMON_COLLISION_RADIUS, SOLOMON_ESCAPE_PATH_MARGIN,
     SOLOMON_ESCAPE_ROUTE_ARRIVAL_DISTANCE_SQUARED, SOLOMON_NAVIGATION_CLEARANCE, SolomonEncounter,
-    SolomonPhase, native_solomon_escape_path_target, native_solomon_escape_target,
+    SolomonPhase, solomon_escape_path_target, solomon_escape_target,
 };
 use super::navigation::{NavigationSet, RouteRequest};
 
@@ -25,9 +25,9 @@ pub fn prepare_solomon_escape_navigation(
     navigation_collision: &BoneyardCollisionWorld,
     navigation: &NavigationSet,
 ) {
-    let target = source.escape_target.unwrap_or_else(|| {
-        native_solomon_escape_target(source.position, source.heading_degrees, bounds)
-    });
+    let target = source
+        .escape_target
+        .unwrap_or_else(|| solomon_escape_target(source.position, source.heading_degrees, bounds));
     if source.escape_target.is_none() {
         source.escape_collision_source_ids = boneyard_body_collision_source_ids(
             source.position,
@@ -35,7 +35,7 @@ pub fn prepare_solomon_escape_navigation(
             SOLOMON_COLLISION_RADIUS,
         );
     }
-    let path_target = native_solomon_escape_path_target(source.position, target, bounds);
+    let path_target = solomon_escape_path_target(source.position, target, bounds);
     let traversal_bounds = solomon_escape_traversal_bounds(bounds);
     let ignored: Vec<&str> =
         source.escape_collision_source_ids.iter().map(String::as_str).collect();
@@ -97,7 +97,7 @@ pub fn resolve_solomon_escape_movement(
 ) {
     let path_target = source
         .escape_target
-        .map(|target| native_solomon_escape_path_target(source.position, target, bounds));
+        .map(|target| solomon_escape_path_target(source.position, target, bounds));
     let target_reached = path_target.is_some_and(|target| {
         let dx = source.position.x - target.x;
         let dy = source.position.y - target.y;

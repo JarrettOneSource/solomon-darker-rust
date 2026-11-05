@@ -9,7 +9,7 @@ use crate::enemies::model::{EnemyBrain, EnemyDamageRequest, EnemyLifeState};
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::painter::WorldManagerLane;
 use crate::profile::runtime::{PlayerStaffAttackOutcome, PlayerStaffDamageLane};
-use crate::profile::{WizardElement, native_hagatha_boss_damage_factor, player_staff_damage};
+use crate::profile::{WizardElement, hagatha_boss_damage_factor, player_staff_damage};
 use crate::spells::model::PrimarySpellTransient;
 use crate::spells::staff::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Default)]
 pub(super) struct StaffTickResult {
     pub acting_player_ids: BTreeSet<String>,
-    pub camera_displacements: Vec<crate::secondary::NativeSecondaryCameraDisplacement>,
+    pub camera_displacements: Vec<crate::secondary::SecondaryCameraDisplacement>,
     pub displacements: Vec<(usize, Vec2)>,
     pub dazzle_requests: Vec<(usize, u64)>,
     pub heading_perturbations: Vec<(usize, f64)>,
@@ -25,14 +25,14 @@ pub(super) struct StaffTickResult {
 }
 
 struct StaffCombatTarget {
-    row: NativeStaffTarget,
+    row: StaffTarget,
     actor_id: usize,
     heading_degrees: f64,
-    native_type_id: u16,
+    type_id: u16,
     pike: bool,
 }
-impl AsRef<NativeStaffTarget> for StaffCombatTarget {
-    fn as_ref(&self) -> &NativeStaffTarget {
+impl AsRef<StaffTarget> for StaffCombatTarget {
+    fn as_ref(&self) -> &StaffTarget {
         &self.row
     }
 }
@@ -41,7 +41,7 @@ struct StaffKnockbackWorld<'world, 'player> {
     world: &'world mut BoneyardWorld,
     players: &'world [crate::boneyard::world::BoneyardPlayerBody<'player>],
 }
-impl crate::knockback::NativeKnockbackAreaWorld<String> for StaffKnockbackWorld<'_, '_> {
+impl crate::knockback::KnockbackAreaWorld<String> for StaffKnockbackWorld<'_, '_> {
     fn position(&self, id: &String) -> Option<Vec2> {
         staff_targets(self.world)
             .into_iter()
@@ -76,49 +76,46 @@ impl GameSession {
                 return true;
             };
             match actor {
-                NativePlayerStaffTransient::Contact(event) => {
-                    if let Some(event) = step_native_staff_contact_event(event) {
-                        *stored = PrimarySpellTransient::Staff(
-                            NativePlayerStaffTransient::Contact(event),
-                        );
+                PlayerStaffTransient::Contact(event) => {
+                    if let Some(event) = step_staff_contact_event(event) {
+                        *stored =
+                            PrimarySpellTransient::Staff(PlayerStaffTransient::Contact(event));
                         return true;
                     }
                 }
-                NativePlayerStaffTransient::ContactKnockback(actor) => {
+                PlayerStaffTransient::ContactKnockback(actor) => {
                     let id = enemy_id(&actor.target_id);
                     let exists = id.is_some_and(|id| {
                         staff_targets(self.boneyard.as_ref().unwrap())
                             .iter()
                             .any(|target| target.actor_id == id)
                     });
-                    let stepped = step_native_staff_contact_knockback(actor, exists);
+                    let stepped = step_staff_contact_knockback(actor, exists);
                     if let (Some(id), Some(delta)) = (id, stepped.displacement) {
                         self.boneyard.as_mut().unwrap().enemies.release_skeleton_pike(id);
                         output.displacements.push((id, delta));
                     }
                     if let Some(actor) = stepped.actor {
                         *stored = PrimarySpellTransient::Staff(
-                            NativePlayerStaffTransient::ContactKnockback(actor),
+                            PlayerStaffTransient::ContactKnockback(actor),
                         );
                         return true;
                     }
                 }
-                NativePlayerStaffTransient::PikeBreak(vfx) => {
-                    if let Some(vfx) = step_native_staff_pike_break_vfx(vfx) {
-                        *stored = PrimarySpellTransient::Staff(
-                            NativePlayerStaffTransient::PikeBreak(vfx),
-                        );
-                        return true;
-                    }
-                }
-                NativePlayerStaffTransient::Vfx(vfx) => {
-                    if let Some(vfx) = step_native_player_staff_vfx(vfx) {
+                PlayerStaffTransient::PikeBreak(vfx) => {
+                    if let Some(vfx) = step_staff_pike_break_vfx(vfx) {
                         *stored =
-                            PrimarySpellTransient::Staff(NativePlayerStaffTransient::Vfx(vfx));
+                            PrimarySpellTransient::Staff(PlayerStaffTransient::PikeBreak(vfx));
                         return true;
                     }
                 }
-                NativePlayerStaffTransient::Knockback(actor) => {
+                PlayerStaffTransient::Vfx(vfx) => {
+                    if let Some(vfx) = step_player_staff_vfx(vfx) {
+                        *stored = PrimarySpellTransient::Staff(PlayerStaffTransient::Vfx(vfx));
+                        return true;
+                    }
+                }
+                PlayerStaffTransient::Knockback(actor) => {
                     let bodies = super::secondary::boneyard_player_bodies(
                         &self.participants,
                         &self.participant_order,
@@ -128,10 +125,9 @@ impl GameSession {
                         world: self.boneyard.as_mut().unwrap(),
                         players: &bodies,
                     };
-                    let stepped =
-                        step_native_staff_knockback(actor, &mut world, &mut self.secondary.rng);
+                    let stepped = step_staff_knockback(actor, &mut world, &mut self.secondary.rng);
                     output.camera_displacements.push(
-                        crate::secondary::NativeSecondaryCameraDisplacement {
+                        crate::secondary::SecondaryCameraDisplacement {
                             displacement: stepped.camera_displacement,
                             tick,
                             world_key: actor.common.world_key.clone(),
@@ -139,7 +135,7 @@ impl GameSession {
                     );
                     for target in stepped.dazzled_target_ids {
                         if let Some(id) = enemy_id(&target) {
-                            output.dazzle_requests.push((id, NATIVE_STAFF_KNOCKBACK_DAZZLE_TICKS));
+                            output.dazzle_requests.push((id, STAFF_KNOCKBACK_DAZZLE_TICKS));
                         }
                     }
                     for perturbation in stepped.heading_perturbations {
@@ -148,30 +144,27 @@ impl GameSession {
                         }
                     }
                     if let Some(actor) = stepped.actor {
-                        *stored = PrimarySpellTransient::Staff(
-                            NativePlayerStaffTransient::Knockback(actor),
-                        );
+                        *stored =
+                            PrimarySpellTransient::Staff(PlayerStaffTransient::Knockback(actor));
                         return true;
                     }
                 }
-                NativePlayerStaffTransient::Action(action) => {
+                PlayerStaffTransient::Action(action) => {
                     let owner = action.common().owner_id.clone();
                     let Some(participant) = self.participants.get_mut(&owner) else {
                         return false;
                     };
                     existing_actions.insert(owner.clone());
                     output.acting_player_ids.insert(owner);
-                    let stepped =
-                        step_native_player_staff_action(action, participant.wizard.position);
+                    let stepped = step_player_staff_action(action, participant.wizard.position);
                     participant.wizard.set_facing(stepped.sample.base().heading_degrees);
                     if stepped.contact {
                         self.apply_staff_contact(&stepped.sample, tick, &mut spawned, &mut output);
                     }
                     // A retiring Spin still emitted the contact from its sampled terminal frame.
                     if let Some(action) = stepped.action {
-                        *stored = PrimarySpellTransient::Staff(NativePlayerStaffTransient::Action(
-                            action,
-                        ));
+                        *stored =
+                            PrimarySpellTransient::Staff(PlayerStaffTransient::Action(action));
                         return true;
                     }
                 }
@@ -207,8 +200,8 @@ impl GameSession {
             let has_target = if movement.contacts.is_empty() {
                 let targets = staff_targets(world);
                 let rows: Vec<_> = targets.iter().map(|target| target.row.clone()).collect();
-                native_staff_admission_target(
-                    &NativeStaffPlayer {
+                staff_admission_target(
+                    &StaffPlayer {
                         collision_radius: 25.0,
                         heading_degrees: participant.wizard.heading_degrees,
                         position: participant.wizard.position,
@@ -228,8 +221,8 @@ impl GameSession {
                 PlayerStaffDamageLane::Primary
             };
             let world_key = format!("boneyard:{}", world.loaded.run_id);
-            let action = create_native_player_staff_action(
-                NativePlayerStaffActionInput {
+            let action = create_player_staff_action(
+                PlayerStaffActionInput {
                     derived: &derived,
                     heading_degrees: participant.wizard.heading_degrees,
                     id: self.spells.next_id,
@@ -241,11 +234,11 @@ impl GameSession {
                 &mut self.secondary.rng,
             );
             self.spells.next_id += 1;
-            if matches!(action, NativePlayerStaffAction::Melee(_)) {
+            if matches!(action, PlayerStaffAction::Melee(_)) {
                 player.skill_runtime.staff_melee_alternate =
                     !player.skill_runtime.staff_melee_alternate;
             }
-            spawned.push(PrimarySpellTransient::Staff(NativePlayerStaffTransient::Action(action)));
+            spawned.push(PrimarySpellTransient::Staff(PlayerStaffTransient::Action(action)));
             output.acting_player_ids.insert(id);
         }
         retained.extend(spawned);
@@ -255,7 +248,7 @@ impl GameSession {
 
     fn apply_staff_contact(
         &mut self,
-        action: &NativePlayerStaffAction,
+        action: &PlayerStaffAction,
         tick: u64,
         spawned: &mut Vec<PrimarySpellTransient>,
         output: &mut StaffTickResult,
@@ -274,7 +267,7 @@ impl GameSession {
         // All physical and Knockback candidates are captured before damage. A lethal hit
         // cannot remove its body from this same callback's constructor/RNG sequence.
         let before = staff_targets(self.boneyard.as_ref().unwrap());
-        let mut selected = native_staff_damage_targets(action, &before);
+        let mut selected = staff_damage_targets(action, &before);
         if !matches!(
             action.base().outcome,
             PlayerStaffAttackOutcome::CriticalHit | PlayerStaffAttackOutcome::Whirl
@@ -286,13 +279,10 @@ impl GameSession {
         }
         let physical_rows: Vec<_> = before
             .iter()
-            .map(|target| NativeStaffPhysicalTarget {
-                target: target.row.clone(),
-                pike: target.pike,
-            })
+            .map(|target| StaffPhysicalTarget { target: target.row.clone(), pike: target.pike })
             .collect();
-        let physical = native_staff_physical_contact_targets(
-            &NativeStaffPlayer {
+        let physical = staff_physical_contact_targets(
+            &StaffPlayer {
                 collision_radius: 25.0,
                 heading_degrees: action.base().heading_degrees,
                 position: action.base().origin,
@@ -300,7 +290,7 @@ impl GameSession {
             &physical_rows,
         );
         let physical: Vec<_> = physical.into_iter().cloned().collect();
-        let impacts = resolve_native_staff_physical_contacts(
+        let impacts = resolve_staff_physical_contacts(
             action,
             &physical,
             element,
@@ -326,7 +316,7 @@ impl GameSession {
                 {
                     pike_sounds.push(pitches.len() - 1);
                     output.pike_break_feedback.push((owner.clone(), target.row.position));
-                    let effect = create_native_staff_pike_break_vfx(
+                    let effect = create_staff_pike_break_vfx(
                         self.spells.next_id,
                         action,
                         &target.row,
@@ -335,7 +325,7 @@ impl GameSession {
                         self.enhanced_effects,
                     );
                     self.spells.next_id += 1;
-                    self.push_staff_birth(NativePlayerStaffTransient::PikeBreak(effect), spawned);
+                    self.push_staff_birth(PlayerStaffTransient::PikeBreak(effect), spawned);
                 }
             }
             if let Some(delta) = impact.contact_knockback_delta {
@@ -343,31 +333,28 @@ impl GameSession {
                     crate::float::fround(delta.x * derived.push_strength_factor),
                     crate::float::fround(delta.y * derived.push_strength_factor),
                 );
-                let effect = create_native_staff_contact_knockback(
+                let effect = create_staff_contact_knockback(
                     self.spells.next_id,
                     action,
                     &impact.target_id,
                     delta,
                 );
                 self.spells.next_id += 1;
-                self.push_staff_birth(
-                    NativePlayerStaffTransient::ContactKnockback(effect),
-                    spawned,
-                );
+                self.push_staff_birth(PlayerStaffTransient::ContactKnockback(effect), spawned);
             }
         }
         let mut accepted = Vec::new();
         // The source damage host returns on an empty selection. Physical contacts
         // above still run, and the positive-count kernel must not receive zero.
         if !selected.is_empty() {
-            let damage = native_staff_contact_damage_per_target(
+            let damage = staff_contact_damage_per_target(
                 total,
                 selected.len(),
                 action.base().outcome == PlayerStaffAttackOutcome::Whirl,
             );
             for target in selected {
                 let amount = damage
-                    * native_hagatha_boss_damage_factor(
+                    * hagatha_boss_damage_factor(
                         &self
                             .participants
                             .get(owner)
@@ -375,7 +362,7 @@ impl GameSession {
                             .player
                             .economy
                             .owned_perk_selectors,
-                        u32::from(target.native_type_id),
+                        u32::from(target.type_id),
                     );
                 let result = self.damage_enemy(EnemyDamageRequest {
                     enhanced_effects: Some(self.enhanced_effects),
@@ -404,7 +391,7 @@ impl GameSession {
         }
         if !accepted.is_empty() {
             let world = self.boneyard.as_ref().unwrap();
-            let targets = native_staff_knockback_targets(action, &before);
+            let targets = staff_knockback_targets(action, &before);
             let ids: Vec<_> = targets
                 .into_iter()
                 .filter(|target| {
@@ -420,14 +407,14 @@ impl GameSession {
                 })
                 .map(|target| target.row.id.clone())
                 .collect();
-            if let Some(effect) = create_native_staff_knockback(
+            if let Some(effect) = create_staff_knockback(
                 self.spells.next_id,
                 action,
                 &ids,
                 derived.push_strength_factor,
             ) {
                 self.spells.next_id += 1;
-                self.push_staff_birth(NativePlayerStaffTransient::Knockback(effect), spawned);
+                self.push_staff_birth(PlayerStaffTransient::Knockback(effect), spawned);
             }
         }
         let target_mean = if accepted.is_empty() {
@@ -441,8 +428,8 @@ impl GameSession {
             Vec2::new(sum.x / accepted.len() as f64, sum.y / accepted.len() as f64)
         };
         let target_ids: Vec<_> = accepted.iter().map(|target| target.row.id.clone()).collect();
-        let presentation = create_native_staff_contact_presentation(
-            NativeStaffContactPresentationInput {
+        let presentation = create_staff_contact_presentation(
+            StaffContactPresentationInput {
                 first_id: self.spells.next_id,
                 action,
                 target_ids: &target_ids,
@@ -455,20 +442,17 @@ impl GameSession {
         );
         self.spells.next_id = presentation.next_id;
         for effect in presentation.vfx {
-            self.push_staff_birth(NativePlayerStaffTransient::Vfx(effect), spawned);
+            self.push_staff_birth(PlayerStaffTransient::Vfx(effect), spawned);
         }
-        self.push_staff_birth(NativePlayerStaffTransient::Contact(presentation.event), spawned);
+        self.push_staff_birth(PlayerStaffTransient::Contact(presentation.event), spawned);
     }
 
     fn push_staff_birth(
         &mut self,
-        mut actor: NativePlayerStaffTransient,
+        mut actor: PlayerStaffTransient,
         output: &mut Vec<PrimarySpellTransient>,
     ) {
-        if matches!(
-            actor,
-            NativePlayerStaffTransient::PikeBreak(_) | NativePlayerStaffTransient::Vfx(_)
-        ) {
+        if matches!(actor, PlayerStaffTransient::PikeBreak(_) | PlayerStaffTransient::Vfx(_)) {
             actor.common_mut().painter_registrations =
                 vec![self.painter_order.register(WorldManagerLane::Actor)];
         }
@@ -484,14 +468,14 @@ fn staff_targets(world: &BoneyardWorld) -> Vec<StaffCombatTarget> {
         }
         rows.push(StaffCombatTarget {
             actor_id: actor.id,
-            row: NativeStaffTarget {
+            row: StaffTarget {
                 collision_radius: boneyard_enemy_collision_radius(actor),
                 id: format!("enemy:{}", actor.id),
                 position: actor.position,
                 registration_order: Some(actor.native_registration_order),
             },
             heading_degrees: actor.heading_deg,
-            native_type_id: actor.config.native_type_id,
+            type_id: actor.config.type_id,
             pike: matches!(actor.brain, EnemyBrain::Skeleton(_))
                 && actor.config.flags.contains(&EnemyFlag::Pike),
         });
@@ -502,14 +486,14 @@ fn staff_targets(world: &BoneyardWorld) -> Vec<StaffCombatTarget> {
         }
         rows.push(StaffCombatTarget {
             actor_id: actor.id,
-            row: NativeStaffTarget {
+            row: StaffTarget {
                 collision_radius: actor.collision_radius,
                 id: format!("enemy:{}", actor.id),
                 position: actor.position,
                 registration_order: Some(actor.native_registration_order),
             },
             heading_degrees: actor.heading_deg,
-            native_type_id: 0,
+            type_id: 0,
             pike: false,
         });
     }

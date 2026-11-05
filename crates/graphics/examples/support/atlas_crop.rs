@@ -20,7 +20,7 @@ pub fn probe(renderer: &mut Renderer) -> Result<String, String> {
     let result = (|| {
         let mut cases = Vec::new();
         for centers in [false, true] {
-            renderer.set_native_world_pixel_centers(centers);
+            renderer.set_world_pixel_centers(centers);
             for filtered in [false, true] {
                 for (scale, offset) in [(1.2, 0.2), (3.5, 0.7), (0.7, 0.3)] {
                     let mut observations = Vec::new();
@@ -92,7 +92,7 @@ pub fn probe(renderer: &mut Renderer) -> Result<String, String> {
         }
         Ok(format!("[{}]", cases.join(",")))
     })();
-    renderer.set_native_world_pixel_centers(false);
+    renderer.set_world_pixel_centers(false);
     renderer.destroy_render_target(&target);
     renderer.destroy_texture(&atlas);
     renderer.destroy_texture(&isolated);

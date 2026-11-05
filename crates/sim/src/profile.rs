@@ -10,28 +10,27 @@ pub mod runtime;
 pub mod seeker;
 mod stat_book;
 
-pub use stat_book::{NativeSkillStatBookEntry, NativeSkillStatBookValue, PlayerStatBookComponent};
+pub use stat_book::{PlayerStatBookComponent, SkillStatBookEntry, SkillStatBookValue};
 
 pub use hagatha::{
-    NATIVE_HAGATHA_FACTORS, NATIVE_HAGATHA_LAST_WORD_DEATH_TICK, NativeHagathaDerivedModifiers,
-    NativeHagathaFactors, native_hagatha_boss_damage_factor, native_hagatha_derived_modifiers,
-    native_hagatha_drinker_should_use_health_potion, native_hagatha_drinker_should_use_mana_potion,
-    native_hagatha_revelation_rank,
+    HAGATHA_FACTORS, HAGATHA_LAST_WORD_DEATH_TICK, HagathaDerivedModifiers, HagathaFactors,
+    hagatha_boss_damage_factor, hagatha_derived_modifiers,
+    hagatha_drinker_should_use_health_potion, hagatha_drinker_should_use_mana_potion,
+    hagatha_revelation_rank,
 };
 pub use progression::{
-    MAX_PLAYER_EXPERIENCE, MAX_PLAYER_LEVEL, NATIVE_LEVEL_THRESHOLDS, NativeHagathaRuntimeState,
-    NativePotionKind, PlayerProgressionState, PlayerSkillChoice, PlayerSkillOffer,
-    PlayerSkillOfferOption, SharedPlayerLevelMilestone, boneyard_enemy_experience_award,
-    build_player_skill_offer, draw_native_player_creation_offer_seed,
-    native_skill_passes_offer_eligibility,
+    HagathaRuntimeState, LEVEL_THRESHOLDS, MAX_PLAYER_EXPERIENCE, MAX_PLAYER_LEVEL,
+    PlayerProgressionState, PlayerSkillChoice, PlayerSkillOffer, PlayerSkillOfferOption,
+    PotionKind, SharedPlayerLevelMilestone, boneyard_enemy_experience_award,
+    build_player_skill_offer, draw_player_creation_offer_seed, skill_passes_offer_eligibility,
 };
 pub use runtime::{
-    CONCENTRATABLE_SKILL_IDS, NativeHardenChannel, NativeHardenState, NativeHurricaneChargeTick,
+    CONCENTRATABLE_SKILL_IDS, HardenChannel, HardenState, HurricaneChargeTick,
     PlayerConcentrationSlot, PlayerSkillActivity, PlayerSkillDerivedStats, PlayerSkillRuntimeState,
     PlayerSkillRuntimeTickResult, PlayerStaffAttackOutcome, PlayerStaffAttackResult,
     effective_skill_numeric_value, effective_skill_numeric_value_with_stat_book,
-    interpolate_native_harden_coating, native_harden_break_angle_step,
-    native_hurricane_charge_tick, player_poison_duration_seconds, player_skill_derived_stats,
+    harden_break_angle_step, hurricane_charge_tick, interpolate_harden_coating,
+    player_poison_duration_seconds, player_skill_derived_stats,
     player_skill_derived_stats_with_stat_book, player_staff_damage,
     refresh_player_combat_from_skill_stats, resolve_player_staff_attack,
 };
@@ -39,8 +38,8 @@ pub mod offensive;
 pub mod primary;
 pub mod weld;
 
-pub use catalog::{NATIVE_SKILL_CATALOG, NATIVE_SKILL_RULES, NATIVE_WELD_BUILDS};
-pub use class_title::native_wizard_class_title;
+pub use catalog::{SKILL_CATALOG, SKILL_RULES, WELD_BUILDS};
+pub use class_title::wizard_class_title;
 
 use crate::appearance::StarterColorOwner;
 
@@ -159,11 +158,11 @@ pub struct NewGameSelection {
     pub discipline: WizardDiscipline,
 }
 
-pub const NATIVE_SKILL_ROW_COUNT: usize = 83;
+pub const SKILL_ROW_COUNT: usize = 83;
 pub const SPELL_WELDING_SKILL_ID: usize = 52;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeSkillRule {
+pub struct SkillRule {
     pub skill_id: usize,
     pub minimum_level: u32,
     pub root: usize,
@@ -174,30 +173,30 @@ pub struct NativeSkillRule {
 }
 
 #[must_use]
-pub fn native_skill_rule(skill_id: usize) -> Option<&'static NativeSkillRule> {
-    NATIVE_SKILL_RULES.get(skill_id.checked_sub(8)?)
+pub fn skill_rule(skill_id: usize) -> Option<&'static SkillRule> {
+    SKILL_RULES.get(skill_id.checked_sub(8)?)
 }
 
 #[must_use]
-pub fn native_skill_root(skill_id: usize) -> Option<usize> {
+pub fn skill_root(skill_id: usize) -> Option<usize> {
     if skill_id == 80 {
         return Some(0);
     }
-    native_skill_rule(skill_id).map(|rule| rule.root)
+    skill_rule(skill_id).map(|rule| rule.root)
 }
 
 #[must_use]
-pub fn native_skill_category(skill_id: usize) -> Option<u32> {
-    native_skill_rule(skill_id).map(|rule| rule.category)
+pub fn skill_category(skill_id: usize) -> Option<u32> {
+    skill_rule(skill_id).map(|rule| rule.category)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum NativeSkillValue {
+pub enum SkillValue {
     Scalar(f64),
     Ranks(&'static [f64]),
 }
 
-impl NativeSkillValue {
+impl SkillValue {
     /// Native rank tables include row zero; ranks beyond a short table retain its last row.
     #[must_use]
     pub fn at_rank(self, rank: u32) -> Option<f64> {
@@ -211,14 +210,14 @@ impl NativeSkillValue {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSkillProperty {
+pub struct SkillProperty {
     pub name: &'static str,
-    pub value: NativeSkillValue,
+    pub value: SkillValue,
 }
 
 /// The complete numeric stat row and authored description of one native skill.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSkillDefinition {
+pub struct SkillDefinition {
     pub id: usize,
     pub name: &'static str,
     pub family: &'static str,
@@ -230,10 +229,10 @@ pub struct NativeSkillDefinition {
     /// Authored tooltip templates retain the native `%d:property%` formatting tokens.
     pub stat_lines: &'static [&'static str],
     pub bonus_lines: &'static [&'static str],
-    pub numeric_properties: &'static [NativeSkillProperty],
+    pub numeric_properties: &'static [SkillProperty],
 }
 
-impl NativeSkillDefinition {
+impl SkillDefinition {
     #[must_use]
     pub fn stat(&self, property: &str, rank: u32) -> Option<f64> {
         self.numeric_properties
@@ -245,12 +244,12 @@ impl NativeSkillDefinition {
 
 /// Looks up an authored numeric property without inventing a missing-stat default.
 #[must_use]
-pub fn native_skill_stat(skill_id: usize, property: &str, rank: u32) -> Option<f64> {
-    NATIVE_SKILL_CATALOG.get(skill_id)?.stat(property, rank)
+pub fn skill_stat(skill_id: usize, property: &str, rank: u32) -> Option<f64> {
+    SKILL_CATALOG.get(skill_id)?.stat(property, rank)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeWeldBuild {
+pub struct WeldBuild {
     pub color_roots: [usize; 2],
     pub component_skill_ids: [usize; 6],
     pub id: u32,
@@ -261,29 +260,29 @@ pub struct NativeWeldBuild {
 }
 
 #[must_use]
-pub fn native_weld_build(build_id: u32) -> Option<&'static NativeWeldBuild> {
+pub fn weld_build(build_id: u32) -> Option<&'static WeldBuild> {
     let index = build_id.checked_sub(1000)? as usize;
-    NATIVE_WELD_BUILDS.get(index)
+    WELD_BUILDS.get(index)
 }
 
 /// Permanent acquisition and equipment-adjusted ranks share one canonical skillbook.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSkillBookState {
+pub struct SkillBookState {
     pub advanced_unlocks: [bool; 8],
     pub discipline_root: usize,
     #[cfg_attr(feature = "persistence", serde(with = "crate::persistence::fixed_array"))]
-    pub effective_ranks: [u32; NATIVE_SKILL_ROW_COUNT],
+    pub effective_ranks: [u32; SKILL_ROW_COUNT],
     pub element_root: usize,
     pub learned_skill_order: Vec<usize>,
     #[cfg_attr(feature = "persistence", serde(with = "crate::persistence::fixed_array"))]
-    pub permanent_ranks: [u32; NATIVE_SKILL_ROW_COUNT],
+    pub permanent_ranks: [u32; SKILL_ROW_COUNT],
     pub primary_skill_id: usize,
     pub weld_build_id: Option<u32>,
     pub weld_component_ranks: Option<[u32; 6]>,
 }
 
-impl NativeSkillBookState {
+impl SkillBookState {
     /// `createPlayerSkillBook`: root rows and exactly two element-owned starter skills.
     #[must_use]
     pub fn new(element: WizardElement, discipline: WizardDiscipline) -> Self {
@@ -295,7 +294,7 @@ impl NativeSkillBookState {
             WizardElement::Earth => (4, 40, 45),
         };
         let discipline_root = discipline.root();
-        let mut ranks = [0; NATIVE_SKILL_ROW_COUNT];
+        let mut ranks = [0; SKILL_ROW_COUNT];
         ranks[..8].fill(1);
         ranks[primary] = 1;
         ranks[secondary] = 1;
@@ -328,7 +327,7 @@ impl NativeSkillBookState {
             (8..=79).contains(&skill_id) && skill_id != SPELL_WELDING_SKILL_ID,
             "grant ordinary native skills separately from a Weld build"
         );
-        let maximum = NATIVE_SKILL_CATALOG[skill_id].maximum_level;
+        let maximum = SKILL_CATALOG[skill_id].maximum_level;
         assert!(maximum > 0, "a grantable native skill has an authored maximum rank");
         let current = self.permanent_ranks[skill_id];
         let target = maximum.min(current.saturating_add(ranks));
@@ -348,7 +347,7 @@ impl NativeSkillBookState {
 
     /// `grantPlayerWeldBuild`: acquire its missing components before the synthetic skill.
     pub fn grant_weld_build(&mut self, build_id: u32) {
-        let build = native_weld_build(build_id).expect("an authored native Weld build");
+        let build = weld_build(build_id).expect("an authored native Weld build");
         for skill_id in build.component_skill_ids {
             if self.permanent_ranks[skill_id] < 1 {
                 self.grant_ranks(skill_id, 1);
@@ -382,11 +381,11 @@ impl NativeSkillBookState {
     #[must_use]
     pub fn skill_icon_record(&self, skill_id: usize) -> usize {
         if skill_id != SPELL_WELDING_SKILL_ID {
-            return NATIVE_SKILL_CATALOG[skill_id].icon_record;
+            return SKILL_CATALOG[skill_id].icon_record;
         }
         match self.weld_build_id {
-            Some(id) => native_weld_build(id).expect("the learned native Weld build").icon_record,
-            None => NATIVE_SKILL_CATALOG[skill_id].icon_record,
+            Some(id) => weld_build(id).expect("the learned native Weld build").icon_record,
+            None => SKILL_CATALOG[skill_id].icon_record,
         }
     }
 }

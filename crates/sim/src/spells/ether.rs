@@ -2,26 +2,26 @@
 //! `core-kernels/native-ether-blast.ts`. The live actor saves its starting RNG;
 //! rendering can reconstruct the particles without consuming world randomness.
 
-pub use super::casting::{NATIVE_ETHER_BLAST_WEAPON_PULSE, NATIVE_PLAYER_WEAPON_PULSE_DECAY};
+pub use super::casting::{ETHER_BLAST_WEAPON_PULSE, PLAYER_WEAPON_PULSE_DECAY};
 use super::targeting::direction_from_heading;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_ETHER_BLAST_CHARGE_PER_TICK: f64 = 0.007_f32 as f64;
-pub const NATIVE_ETHER_BLAST_CONTACT_RADIUS: f64 = 175.0;
-pub const NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS: u64 = 100;
-pub const NATIVE_ETHER_BLAST_PRESENTATION_RNG_WORDS: usize = 720;
-pub const NATIVE_ETHER_BLAST_SCREEN_FLASH_DECAY: f64 = 0.025_f32 as f64;
+pub const ETHER_BLAST_CHARGE_PER_TICK: f64 = 0.007_f32 as f64;
+pub const ETHER_BLAST_CONTACT_RADIUS: f64 = 175.0;
+pub const ETHER_BLAST_PARTICLE_LIFETIME_TICKS: u64 = 100;
+pub const ETHER_BLAST_PRESENTATION_RNG_WORDS: usize = 720;
+pub const ETHER_BLAST_SCREEN_FLASH_DECAY: f64 = 0.025_f32 as f64;
 pub const NATIVE_ETHER_BLAST_SCREEN_GREEN: f64 = 0.25;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEtherBlastChargeStep {
+pub struct EtherBlastChargeStep {
     pub charge: f64,
     pub crossed_integer: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEtherBlastParticle {
+pub struct EtherBlastParticle {
     pub alpha_loss: f64,
     pub blue: f64,
     pub damping: f64,
@@ -35,39 +35,38 @@ pub struct NativeEtherBlastParticle {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEtherBlastParticleFrame {
-    pub particle: NativeEtherBlastParticle,
+pub struct EtherBlastParticleFrame {
+    pub particle: EtherBlastParticle,
     pub alpha: f64,
     pub position: Vec2,
 }
 
 #[must_use]
-pub fn advance_native_ether_blast_charge(
+pub fn advance_ether_blast_charge(
     source: f64,
     capacity: u32,
     full_mana_available: bool,
     plane_active: bool,
-) -> NativeEtherBlastChargeStep {
+) -> EtherBlastChargeStep {
     assert!(source.is_finite() && source >= 0.0, "Ether Blast charge must be nonnegative");
     if plane_active || !full_mana_available {
-        return NativeEtherBlastChargeStep { charge: 0.0, crossed_integer: false };
+        return EtherBlastChargeStep { charge: 0.0, crossed_integer: false };
     }
     if capacity == 0 {
-        return NativeEtherBlastChargeStep { charge: fround(source), crossed_integer: false };
+        return EtherBlastChargeStep { charge: fround(source), crossed_integer: false };
     }
-    let charge =
-        fround(fround(source) + NATIVE_ETHER_BLAST_CHARGE_PER_TICK).min(f64::from(capacity));
-    NativeEtherBlastChargeStep { charge, crossed_integer: charge.floor() > source.floor() }
+    let charge = fround(fround(source) + ETHER_BLAST_CHARGE_PER_TICK).min(f64::from(capacity));
+    EtherBlastChargeStep { charge, crossed_integer: charge.floor() > source.floor() }
 }
 
 #[must_use]
-pub fn native_ether_blast_release_charges(charge: f64) -> u32 {
+pub fn ether_blast_release_charges(charge: f64) -> u32 {
     assert!(charge.is_finite() && charge >= 0.0, "Ether Blast charge must be nonnegative");
     fround(charge).round() as u32
 }
 
 #[must_use]
-pub fn native_ether_blast_pulse_origin(player_position: Vec2, direction: Vec2) -> Vec2 {
+pub fn ether_blast_pulse_origin(player_position: Vec2, direction: Vec2) -> Vec2 {
     Vec2::new(
         fround(player_position.x + direction.x * 100.0),
         fround(player_position.y + direction.y * 100.0),
@@ -75,7 +74,7 @@ pub fn native_ether_blast_pulse_origin(player_position: Vec2, direction: Vec2) -
 }
 
 #[must_use]
-pub fn native_ether_blast_damage(charges: u32, current_health: f64) -> f64 {
+pub fn ether_blast_damage(charges: u32, current_health: f64) -> f64 {
     assert!(charges > 0, "Ether Blast damage requires at least one charge");
     assert!(
         current_health.is_finite() && current_health >= 0.0,
@@ -86,9 +85,7 @@ pub fn native_ether_blast_damage(charges: u32, current_health: f64) -> f64 {
 }
 
 #[must_use]
-pub fn create_native_ether_blast_particle_program(
-    rng: &mut NativeRng,
-) -> Vec<NativeEtherBlastParticle> {
+pub fn create_ether_blast_particle_program(rng: &mut Rng) -> Vec<EtherBlastParticle> {
     let mut particles = Vec::with_capacity(108);
     for heading in (0..720).step_by(20) {
         particles.push(create_particle(rng, f64::from(heading), 11));
@@ -100,10 +97,10 @@ pub fn create_native_ether_blast_particle_program(
 }
 
 #[must_use]
-pub fn native_ether_blast_particle_frame(
-    particle: NativeEtherBlastParticle,
+pub fn ether_blast_particle_frame(
+    particle: EtherBlastParticle,
     age_ticks: f64,
-) -> NativeEtherBlastParticleFrame {
+) -> EtherBlastParticleFrame {
     assert!(age_ticks.is_finite() && age_ticks >= 0.0, "particle age must be nonnegative");
     let whole_ticks = age_ticks.floor() as u64;
     let fraction = age_ticks - whole_ticks as f64;
@@ -118,18 +115,14 @@ pub fn native_ether_blast_particle_frame(
         fround(position.x + velocity.x * fraction),
         fround(position.y + velocity.y * fraction),
     );
-    NativeEtherBlastParticleFrame {
+    EtherBlastParticleFrame {
         particle,
         alpha: fround(1.0 - age_ticks * particle.alpha_loss).max(0.0),
         position,
     }
 }
 
-fn create_particle(
-    rng: &mut NativeRng,
-    heading: f64,
-    sprite_record: usize,
-) -> NativeEtherBlastParticle {
+fn create_particle(rng: &mut Rng, heading: f64, sprite_record: usize) -> EtherBlastParticle {
     let radial_distance = rng.draw_scaled_float(200.0, false);
     let heading_jitter = rng.draw_scaled_float(10.0, true);
     let scale_jitter = rng.draw_scaled_float(4.0, false);
@@ -144,7 +137,7 @@ fn create_particle(
     let position_direction = direction_from_heading(heading + heading_jitter);
     let velocity_direction = direction_from_heading(heading);
     let speed = if sprite_record == 11 { speed_jitter } else { fround(5.0 + speed_jitter) };
-    NativeEtherBlastParticle {
+    EtherBlastParticle {
         alpha_loss: fround(0.1_f32 as f64 * fround(alpha_floor + alpha_jitter)),
         blue: 1.0,
         damping: 0.95_f32 as f64,

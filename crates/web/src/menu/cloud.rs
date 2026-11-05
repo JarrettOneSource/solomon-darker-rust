@@ -17,9 +17,9 @@ use detail::ModDetailView;
 use egui::{Align2, Color32, Rect, Ui, Vec2};
 use images::CloudImages;
 use layouts::LayoutsView;
-use solomon_sim::menu::dark_cloud::{DarkCloudTab as Tab, native_dark_cloud_tab_strip};
+use solomon_sim::menu::dark_cloud::{DarkCloudTab as Tab, dark_cloud_tab_strip};
 use solomon_sim::menu::party_directory::{DirectoryPartyAction, directory_party_action};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign};
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Sort {
     Newest,
@@ -861,22 +861,22 @@ impl CloudView {
             frame,
             ui,
             "THE DARK CLOUD",
-            NativeUiFontName::Heading,
+            UiFontName::Heading,
             egui::pos2(view.center().x, view.top() + 50.0 * title_scale),
             title_scale,
             0xd9ba70,
-            NativeUiTextAlign::Center,
+            UiTextAlign::Center,
         );
         if !phone {
             widgets::native(
                 frame,
                 ui,
                 "beta",
-                NativeUiFontName::Menu,
+                UiFontName::Menu,
                 egui::pos2(view.center().x + 235.0 * title_scale, view.top() + 50.0 * title_scale),
                 title_scale,
                 0xd9ba70,
-                NativeUiTextAlign::Center,
+                UiTextAlign::Center,
             );
         }
         let admitted = enabled && !self.modal_open();
@@ -905,22 +905,22 @@ impl CloudView {
                 frame,
                 ui,
                 &label,
-                NativeUiFontName::Menu,
+                UiFontName::Menu,
                 egui::pos2(rect.center().x, rect.top() + 25.0),
                 scale,
                 0xd9ba70,
-                NativeUiTextAlign::Center,
+                UiTextAlign::Center,
             );
             if self.account.is_none() {
                 widgets::native(
                     frame,
                     ui,
                     "To change this, click here.",
-                    NativeUiFontName::Menu,
+                    UiFontName::Menu,
                     egui::pos2(rect.center().x, rect.top() + 25.0 + 18.0 * scale),
                     scale,
                     0xd9ba70,
-                    NativeUiTextAlign::Center,
+                    UiTextAlign::Center,
                 );
                 ui.painter().line_segment(
                     [
@@ -952,7 +952,7 @@ impl CloudView {
             egui::pos2(view.center().x - tabs_width / 2.0, view.top() + heading_height),
             Vec2::new(tabs_width, tab_height),
         );
-        let strip = native_dark_cloud_tab_strip(f64::from(tabs.width()), f64::from(tabs.height()));
+        let strip = dark_cloud_tab_strip(f64::from(tabs.width()), f64::from(tabs.height()));
         frame.record_rect("cloud-tabs", "Dark Cloud sections", "region", tabs, admitted);
         let mut child = ui.new_child(egui::UiBuilder::new().id_salt("cloud-tabs").max_rect(tabs));
         child.set_clip_rect(tabs);
@@ -1175,16 +1175,7 @@ impl CloudView {
             );
             frame.record_rect("cloud-list-status", &label, "status", label_rect, false);
             frame.record_value("cloud-list-status", &label, None);
-            rows::ink(
-                frame,
-                ui,
-                &label,
-                NativeUiFontName::Medium,
-                0.85,
-                0xd9ba70,
-                label_rect,
-                false,
-            )?;
+            rows::ink(frame, ui, &label, UiFontName::Medium, 0.85, 0xd9ba70, label_rect, false)?;
             let mut right = status.right();
             if self.tab == Tab::Parties {
                 let r = Rect::from_min_size(
@@ -1300,16 +1291,7 @@ impl CloudView {
                         actions.push("cloud-refresh".to_owned());
                     }
                 } else {
-                    rows::ink(
-                        frame,
-                        ui,
-                        caption,
-                        NativeUiFontName::Menu,
-                        1.0,
-                        0xd9ba70,
-                        r,
-                        index > 0,
-                    )?;
+                    rows::ink(frame, ui, caption, UiFontName::Menu, 1.0, 0xd9ba70, r, index > 0)?;
                 }
                 x += width + gap;
             }
@@ -1558,16 +1540,7 @@ impl CloudView {
             };
             frame.record_rect("cloud-list-status", &label, "status", count_rect, false);
             frame.record_value("cloud-list-status", &label, None);
-            rows::ink(
-                frame,
-                ui,
-                &label,
-                NativeUiFontName::Medium,
-                0.85,
-                0xd9ba70,
-                count_rect,
-                false,
-            )?;
+            rows::ink(frame, ui, &label, UiFontName::Medium, 0.85, 0xd9ba70, count_rect, false)?;
             if !self.query.is_empty() {
                 let r = Rect::from_min_size(
                     egui::pos2(status.right() - 120.0, status.top()),
@@ -1650,11 +1623,11 @@ impl CloudView {
             frame,
             ui,
             title,
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             panel.min + Vec2::new(40.0, 42.0),
             1.0,
             0xd9ba70,
-            NativeUiTextAlign::Left,
+            UiTextAlign::Left,
         );
         if let Some(Sheet::Search { input }) = &mut self.sheet {
             let body =
@@ -1670,20 +1643,17 @@ impl CloudView {
                 Vec2::new(body.width(), if phone { 88.0 } else { 44.0 }),
             );
             widgets::control_panel(frame, ui, &self.art.controls, row, false)?;
-            let caption_width = solomon_sim::native_ui_text::measure_native_ui_text(
-                caption,
-                NativeUiFontName::Medium,
-                1.0,
-            ) as f32;
+            let caption_width =
+                solomon_sim::ui_text::measure_ui_text(caption, UiFontName::Medium, 1.0) as f32;
             widgets::native(
                 frame,
                 ui,
                 caption,
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 row.min + Vec2::new(10.0, if phone { 24.0 } else { 28.0 }),
                 1.0,
                 0xd9ba70,
-                NativeUiTextAlign::Left,
+                UiTextAlign::Left,
             );
             let field = if phone {
                 Rect::from_min_size(
@@ -1761,11 +1731,11 @@ impl CloudView {
                 frame,
                 ui,
                 "SEARCH NOW",
-                NativeUiFontName::Medium,
+                UiFontName::Medium,
                 button.min + Vec2::new(10.0, 28.0),
                 1.0,
                 0xd9ba70,
-                NativeUiTextAlign::Left,
+                UiTextAlign::Left,
             );
             if response.clicked() {
                 actions.push("cloud-search-submit".to_owned());
@@ -1800,11 +1770,11 @@ impl CloudView {
                     frame,
                     ui,
                     label,
-                    NativeUiFontName::Medium,
+                    UiFontName::Medium,
                     rect.min + Vec2::new(10.0, 28.0),
                     1.0,
                     if self.sort == sort { 0xbfffbf } else { 0xd9ba70 },
-                    NativeUiTextAlign::Left,
+                    UiTextAlign::Left,
                 );
             }
         }

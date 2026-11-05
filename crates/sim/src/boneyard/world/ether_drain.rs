@@ -4,8 +4,8 @@ use super::*;
 use crate::actor_physics::ActorPhysicsWorld;
 use crate::boneyard::collision::resolve_boneyard_movement;
 use crate::float::fround;
-use crate::secondary::ether_drain::{NativeEtherDrainContact, NativeEtherDrainTargetRef};
-use crate::secondary::{NativeSecondaryActorKind, NativeSecondarySimulationState};
+use crate::secondary::ether_drain::{EtherDrainContact, EtherDrainTargetRef};
+use crate::secondary::{SecondaryActorKind, SecondarySimulationState};
 
 pub struct BoneyardEtherDrainForces {
     pub consumed_field_actor_ids: Vec<u64>,
@@ -15,9 +15,9 @@ pub struct BoneyardEtherDrainForces {
 impl BoneyardWorld {
     pub fn apply_ether_drain_forces(
         &mut self,
-        contacts: &[NativeEtherDrainContact],
+        contacts: &[EtherDrainContact],
         players: &[BoneyardPlayerBody<'_>],
-        secondary: &mut NativeSecondarySimulationState,
+        secondary: &mut SecondarySimulationState,
     ) -> BoneyardEtherDrainForces {
         let mut consumed_field_actor_ids = Vec::new();
         let mut bodies = self.combat_bodies(players);
@@ -27,7 +27,7 @@ impl BoneyardWorld {
         };
         for contact in contacts {
             match &contact.target {
-                NativeEtherDrainTargetRef::Loot { id, registration_ordinal } => {
+                EtherDrainTargetRef::Loot { id, registration_ordinal } => {
                     self.loot.actors.retain_mut(|actor| {
                         if actor.id as u64 != *id
                             || actor.painter_registration.registration_ordinal
@@ -44,10 +44,12 @@ impl BoneyardWorld {
                         true
                     });
                 }
-                NativeEtherDrainTargetRef::Golem { id } => {
-                    let Some(actor) = secondary.actors.iter_mut().find(|actor| {
-                        actor.id == *id && actor.kind == NativeSecondaryActorKind::Golem
-                    }) else {
+                EtherDrainTargetRef::Golem { id } => {
+                    let Some(actor) = secondary
+                        .actors
+                        .iter_mut()
+                        .find(|actor| actor.id == *id && actor.kind == SecondaryActorKind::Golem)
+                    else {
                         continue;
                     };
                     let Some(golem) = actor.golem.as_mut() else { continue };
@@ -70,14 +72,14 @@ impl BoneyardWorld {
                 }
                 reference => {
                     let mover = match reference {
-                        NativeEtherDrainTargetRef::Enemy { id, .. } => format!("enemy-{id}"),
-                        NativeEtherDrainTargetRef::Player { id } => format!("player-{id}"),
+                        EtherDrainTargetRef::Enemy { id, .. } => format!("enemy-{id}"),
+                        EtherDrainTargetRef::Player { id } => format!("player-{id}"),
                         _ => unreachable!("loose objects and Golems have their own force paths"),
                     };
                     if !bodies.iter().any(|body| body.id == mover) {
                         continue;
                     }
-                    if let NativeEtherDrainTargetRef::Enemy { id, .. } = reference {
+                    if let EtherDrainTargetRef::Enemy { id, .. } = reference {
                         self.enemies.release_skeleton_pike(*id as usize);
                     }
                     for body in &mut bodies {

@@ -5,10 +5,10 @@ use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
 use egui::{
     Align2, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
-use solomon_sim::native_ui_text::buttons::{
-    NATIVE_UI_BUTTON_LABEL_Y_OFFSET, NATIVE_UI_BUTTON_PRESSED_OFFSET, fit_native_ui_button_label,
+use solomon_sim::ui_text::buttons::{
+    UI_BUTTON_LABEL_Y_OFFSET, UI_BUTTON_PRESSED_OFFSET, fit_ui_button_label,
 };
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec};
 use unicode_segmentation::UnicodeSegmentation;
 
 pub(super) const GOLD: Color32 = Color32::from_rgb(217, 186, 112);
@@ -159,20 +159,20 @@ pub(super) fn native(
     frame: &UiFrame<'_>,
     ui: &Ui,
     text: &str,
-    font: NativeUiFontName,
+    font: UiFontName,
     position: Pos2,
     scale: f32,
     tint: u32,
-    align: NativeUiTextAlign,
+    align: UiTextAlign,
 ) {
     native_text(
         frame,
         ui.painter(),
-        &NativeUiTextSpec {
+        &UiTextSpec {
             align,
             scale: f64::from(scale),
             tint,
-            ..NativeUiTextSpec::new(font, text, f64::from(position.x), f64::from(position.y))
+            ..UiTextSpec::new(font, text, f64::from(position.x), f64::from(position.y))
         },
     );
 }
@@ -261,17 +261,17 @@ pub(crate) fn stock_button_label_spec(
     text_scale: f64,
     pressed: bool,
     opacity: f64,
-) -> NativeUiTextSpec<'_> {
-    let mut spec = fit_native_ui_button_label(
-        NativeUiTextSpec {
+) -> UiTextSpec<'_> {
+    let mut spec = fit_ui_button_label(
+        UiTextSpec {
             scale: text_scale,
             alpha: opacity,
             tint: 0xd9ba70,
-            ..NativeUiTextSpec::new(
-                NativeUiFontName::Menu,
+            ..UiTextSpec::new(
+                UiFontName::Menu,
                 text,
                 f64::from(rect.center().x),
-                f64::from(rect.center().y) + NATIVE_UI_BUTTON_LABEL_Y_OFFSET * text_scale,
+                f64::from(rect.center().y) + UI_BUTTON_LABEL_Y_OFFSET * text_scale,
             )
         },
         solomon_sim::hud::HudRect::new(
@@ -282,9 +282,9 @@ pub(crate) fn stock_button_label_spec(
         ),
         f64::from(scale),
     );
-    let press = if pressed { NATIVE_UI_BUTTON_PRESSED_OFFSET * f64::from(scale) } else { 0.0 };
+    let press = if pressed { UI_BUTTON_PRESSED_OFFSET * f64::from(scale) } else { 0.0 };
     spec.x += press;
-    spec.y = f64::from(rect.center().y) + NATIVE_UI_BUTTON_LABEL_Y_OFFSET * spec.scale + press;
+    spec.y = f64::from(rect.center().y) + UI_BUTTON_LABEL_Y_OFFSET * spec.scale + press;
     spec
 }
 pub(crate) fn stock_button_pressed(ui: &Ui, response: &Response) -> bool {
@@ -383,11 +383,11 @@ pub(super) fn stone_button(
         frame,
         ui,
         text,
-        NativeUiFontName::ControlPanel,
+        UiFontName::ControlPanel,
         rect.center() + Vec2::new(0.0, 4.0),
         1.15,
         0xf2f0dc,
-        NativeUiTextAlign::Center,
+        UiTextAlign::Center,
     );
     focus_outline(frame, ui, &response, 2.0, 3.0, alpha(0xefd17d, 0.9));
     Ok(response)
@@ -630,7 +630,7 @@ pub(crate) fn radial_gradient(
 mod button_label_tests {
     use super::stock_button_label_spec;
     use egui::{Rect, pos2, vec2};
-    use solomon_sim::native_ui_text::{layout_native_ui_text, native_ui_glyph_ink_bounds};
+    use solomon_sim::ui_text::{layout_ui_text, ui_glyph_ink_bounds};
 
     #[test]
     fn shared_gpu_labels_fit_transformed_buttons_without_changing_text_or_press_size() {
@@ -647,9 +647,9 @@ mod button_label_tests {
                 assert!((pressed.x - idle.x - press).abs() < 1e-9);
                 assert!((pressed.y - idle.y - press).abs() < 1e-9);
                 for spec in [idle, pressed] {
-                    let layout = layout_native_ui_text(&spec);
+                    let layout = layout_ui_text(&spec);
                     for glyph in &layout.glyphs {
-                        let ink = native_ui_glyph_ink_bounds(glyph);
+                        let ink = ui_glyph_ink_bounds(glyph);
                         let inset = 44.0 * f64::from(scale);
                         assert!(ink.left >= f64::from(rect.left()) + inset - 1e-4);
                         assert!(ink.left + ink.width <= f64::from(rect.right()) - inset + 1e-4);

@@ -5,41 +5,41 @@ use std::collections::BTreeMap;
 
 use crate::belt::PlayerBeltComponent;
 use crate::float::fround;
-use crate::profile::offensive::{NativeOffensiveSpellFactors, resolve_native_skill_damage_value};
-use crate::profile::{NativeSkillBookState, PlayerSkillDerivedStats, PlayerStatBookComponent};
-use crate::spells::casting::NativePlayerWeaponKind;
-use crate::{HubWizard, NativeRng, Vec2};
+use crate::profile::offensive::{OffensiveSpellFactors, resolve_skill_damage_value};
+use crate::profile::{PlayerSkillDerivedStats, PlayerStatBookComponent, SkillBookState};
+use crate::spells::casting::PlayerWeaponKind;
+use crate::{HubWizard, Rng, Vec2};
 
 use super::{
-    NativeSecondaryDamageContact, NativeSecondaryKnockbackContact, NativeSecondaryTarget,
-    NativeSecondaryTargetHeadingChange,
+    SecondaryDamageContact, SecondaryKnockbackContact, SecondaryTarget,
+    SecondaryTargetHeadingChange,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct NativeSecondaryInput {
+pub struct SecondaryInput {
     pub aim: Option<Vec2>,
     pub primary: bool,
     pub quickbar: Option<usize>,
 }
 
-pub struct NativeSecondaryPlayerSnapshot<'a> {
+pub struct SecondaryPlayerSnapshot<'a> {
     pub alive: bool,
     pub action_time_factor: f64,
-    pub weapon_kind: Option<NativePlayerWeaponKind>,
+    pub weapon_kind: Option<PlayerWeaponKind>,
     pub belt: &'a PlayerBeltComponent,
     pub character: &'a HubWizard,
     pub current_mana: f64,
     pub maximum_mana: f64,
     pub eligible: bool,
-    pub input: NativeSecondaryInput,
-    pub skill_book: &'a NativeSkillBookState,
+    pub input: SecondaryInput,
+    pub skill_book: &'a SkillBookState,
     pub world_key: &'a str,
 }
 
-pub struct NativeSecondaryPlayerAuthority<'a> {
+pub struct SecondaryPlayerAuthority<'a> {
     pub alive: bool,
     pub action_time_factor: f64,
-    pub weapon_kind: Option<NativePlayerWeaponKind>,
+    pub weapon_kind: Option<PlayerWeaponKind>,
     pub belt: &'a PlayerBeltComponent,
     pub character: &'a HubWizard,
     pub cold_slow_factor: f64,
@@ -54,7 +54,7 @@ pub struct NativeSecondaryPlayerAuthority<'a> {
     pub golem_iron: bool,
     pub golem_raw_mana_cost: f64,
     pub golem_reflect_factor: f64,
-    pub input: NativeSecondaryInput,
+    pub input: SecondaryInput,
     pub maximum_mana: f64,
     pub magic_storm_duration_bonus_ticks: u64,
     pub magic_storm_frequency_factor: f64,
@@ -65,18 +65,18 @@ pub struct NativeSecondaryPlayerAuthority<'a> {
     pub maximum_ring_of_fire: bool,
     pub maximum_ring_of_ice: bool,
     pub mana_recovery_per_tick: f64,
-    pub offensive_factors: NativeOffensiveSpellFactors,
+    pub offensive_factors: OffensiveSpellFactors,
     pub secondary_recharge_factor: f64,
-    pub skill_book: &'a NativeSkillBookState,
+    pub skill_book: &'a SkillBookState,
     pub world_key: &'a str,
 }
 
-impl<'a> NativeSecondaryPlayerAuthority<'a> {
+impl<'a> SecondaryPlayerAuthority<'a> {
     #[must_use]
     pub fn from_snapshot(
-        snapshot: NativeSecondaryPlayerSnapshot<'a>,
+        snapshot: SecondaryPlayerSnapshot<'a>,
         derived: &PlayerSkillDerivedStats,
-        offensive_factors: NativeOffensiveSpellFactors,
+        offensive_factors: OffensiveSpellFactors,
     ) -> Self {
         Self::from_snapshot_with_stat_book(
             snapshot,
@@ -90,10 +90,10 @@ impl<'a> NativeSecondaryPlayerAuthority<'a> {
     /// `game-simulation.ts`. The ability's own base rank table remains shared.
     #[must_use]
     pub fn from_snapshot_with_stat_book(
-        snapshot: NativeSecondaryPlayerSnapshot<'a>,
+        snapshot: SecondaryPlayerSnapshot<'a>,
         stat_book: &PlayerStatBookComponent,
         derived: &PlayerSkillDerivedStats,
-        offensive_factors: NativeOffensiveSpellFactors,
+        offensive_factors: OffensiveSpellFactors,
     ) -> Self {
         let book = snapshot.skill_book;
         let ranked =
@@ -107,7 +107,7 @@ impl<'a> NativeSecondaryPlayerAuthority<'a> {
                 .is_some_and(|equipment| equipment.feature_bits & bit != 0)
         };
         let fire_burn_damage =
-            resolve_native_skill_damage_value(22, effective(22, "mDamage"), &offensive_factors);
+            resolve_skill_damage_value(22, effective(22, "mDamage"), &offensive_factors);
         // Raw mana additions intentionally retain the authored rank-zero row. The
         // unlearned Iron Golem upgrade still contributes Raise Golem's base addition.
         Self {
@@ -147,13 +147,13 @@ impl<'a> NativeSecondaryPlayerAuthority<'a> {
     }
 }
 
-pub struct NativeSecondaryTickContext<'a> {
+pub struct SecondaryTickContext<'a> {
     pub enhanced_effects: Option<bool>,
-    pub players: &'a BTreeMap<String, NativeSecondaryPlayerAuthority<'a>>,
+    pub players: &'a BTreeMap<String, SecondaryPlayerAuthority<'a>>,
     pub tick: u64,
 }
 
-impl NativeSecondaryTickContext<'_> {
+impl SecondaryTickContext<'_> {
     #[must_use]
     pub fn enhanced_effects_for(&self, owner_id: &str) -> bool {
         self.enhanced_effects
@@ -163,7 +163,7 @@ impl NativeSecondaryTickContext<'_> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondarySceneryTarget {
+pub struct SecondarySceneryTarget {
     pub id: usize,
     pub position: Vec2,
     pub type_id: u32,
@@ -171,34 +171,34 @@ pub struct NativeSecondarySceneryTarget {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSecondaryDampenProjectileKind {
+pub enum SecondaryDampenProjectileKind {
     Firebolt,
     GuidedMissile,
     SkullMissile,
     DarkFireball,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSecondaryDampenPayload {
+pub enum SecondaryDampenPayload {
     Cold,
     Fire,
     Poison,
     Dark,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryDampenProjectileCandidate {
+pub struct SecondaryDampenProjectileCandidate {
     pub id: usize,
-    pub kind: NativeSecondaryDampenProjectileKind,
-    pub payload: NativeSecondaryDampenPayload,
+    pub kind: SecondaryDampenProjectileKind,
+    pub payload: SecondaryDampenPayload,
     pub position: Vec2,
 }
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeSecondaryDampenCandidates {
+pub struct SecondaryDampenCandidates {
     pub caster_target_ids: Vec<usize>,
-    pub projectiles: Vec<NativeSecondaryDampenProjectileCandidate>,
+    pub projectiles: Vec<SecondaryDampenProjectileCandidate>,
     pub shield_target_ids: Vec<usize>,
 }
 
-pub trait NativeSecondaryWorld {
+pub trait SecondaryWorld {
     /// Source requires this callback only when an actual Golem area moves a target.
     fn knockback_area_movement(
         &mut self,
@@ -209,7 +209,7 @@ pub trait NativeSecondaryWorld {
     ) -> Vec<usize> {
         panic!("Golem Knockback requires the native world movement owner")
     }
-    fn dampen_candidates(&self, world_key: &str, origin: Vec2) -> NativeSecondaryDampenCandidates;
+    fn dampen_candidates(&self, world_key: &str, origin: Vec2) -> SecondaryDampenCandidates;
     fn phasing_destination(&self, player_id: &str, origin: Vec2, direction: Vec2) -> Option<Vec2>;
     fn golem_movement(
         &self,
@@ -224,14 +224,14 @@ pub trait NativeSecondaryWorld {
         player_id: &str,
         world_key: &str,
         requested: Vec2,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
     ) -> Vec2;
-    fn teleport_destination(&self, player_id: &str, rng: &mut NativeRng) -> Vec2;
+    fn teleport_destination(&self, player_id: &str, rng: &mut Rng) -> Vec2;
     /// Actor destruction ends an owned modifier. Retained dying or inactive rows
     /// still exist even when `target` excludes them from combat queries.
     fn target_exists(&self, world_key: &str, target_id: usize) -> bool;
-    fn target(&self, world_key: &str, target_id: usize) -> Option<NativeSecondaryTarget>;
-    fn targets(&self, world_key: &str, center: Vec2, radius: f64) -> Vec<NativeSecondaryTarget>;
+    fn target(&self, world_key: &str, target_id: usize) -> Option<SecondaryTarget>;
+    fn targets(&self, world_key: &str, center: Vec2, radius: f64) -> Vec<SecondaryTarget>;
 
     // These callbacks are optional in the source contract. Their defaults preserve its
     // absent-callback behavior; the live world supplies its actual bounds and visibility.
@@ -256,13 +256,13 @@ pub trait NativeSecondaryWorld {
     fn ether_drain_targets(
         &self,
         _world_key: &str,
-    ) -> Option<Vec<super::ether_drain::NativeEtherDrainTarget>> {
+    ) -> Option<Vec<super::ether_drain::EtherDrainTarget>> {
         None
     }
     fn ether_drain_world_animations(
         &self,
         _world_key: &str,
-    ) -> Vec<super::ether_drain::NativeEtherDrainWorldAnimationTarget> {
+    ) -> Vec<super::ether_drain::EtherDrainWorldAnimationTarget> {
         Vec::new()
     }
     fn scenery_targets(
@@ -270,27 +270,27 @@ pub trait NativeSecondaryWorld {
         _world_key: &str,
         _center: Vec2,
         _radius: f64,
-    ) -> Vec<NativeSecondarySceneryTarget> {
+    ) -> Vec<SecondarySceneryTarget> {
         Vec::new()
     }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeSecondaryTickResult {
+pub struct SecondaryTickResult {
     pub dampened_caster_target_ids: Vec<usize>,
-    pub damage: Vec<NativeSecondaryDamageContact>,
+    pub damage: Vec<SecondaryDamageContact>,
     pub dispelled_shield_target_ids: Vec<usize>,
-    pub ether_drain_contacts: Vec<super::ether_drain::NativeEtherDrainContact>,
+    pub ether_drain_contacts: Vec<super::ether_drain::EtherDrainContact>,
     pub ether_drain_world_animation_contacts:
-        Vec<super::ether_drain::NativeEtherDrainWorldAnimationContact>,
+        Vec<super::ether_drain::EtherDrainWorldAnimationContact>,
     pub disrupted_target_ids: Vec<usize>,
     pub mana_recovered: BTreeMap<String, f64>,
     pub mana_underflow_player_ids: Vec<String>,
     pub mana_spent: BTreeMap<String, f64>,
     pub health_recovered: BTreeMap<String, f64>,
-    pub target_heading_changes: Vec<NativeSecondaryTargetHeadingChange>,
+    pub target_heading_changes: Vec<SecondaryTargetHeadingChange>,
     pub facing_heading_degrees_by_player: BTreeMap<String, f64>,
-    pub knockbacks: Vec<NativeSecondaryKnockbackContact>,
+    pub knockbacks: Vec<SecondaryKnockbackContact>,
     pub relocated_players: BTreeMap<String, Vec2>,
     pub removed_projectile_ids: Vec<usize>,
     pub overloaded_player_ids: Vec<String>,

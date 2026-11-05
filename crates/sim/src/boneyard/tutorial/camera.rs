@@ -5,20 +5,19 @@ use crate::boneyard::BoneyardBounds;
 use crate::float::fround;
 use crate::hub::{HubSegment, nearest_point_on_segment};
 
-use super::NativeTutorialState;
+use super::TutorialState;
 
-pub const NATIVE_TUTORIAL_CAMERA_TRIGGER: BoneyardBounds =
+pub const TUTORIAL_CAMERA_TRIGGER: BoneyardBounds =
     BoneyardBounds::new(-77.77447509765625, -55.6324462890625, 2099.2255859375, 887.3675537109375);
-pub const NATIVE_TUTORIAL_LEVEL_BOUNDS: BoneyardBounds =
-    BoneyardBounds::new(0.0, 0.0, 2043.0, 2053.0);
-pub const NATIVE_TUTORIAL_CAMERA_TARGET: BoneyardBounds =
+pub const TUTORIAL_LEVEL_BOUNDS: BoneyardBounds = BoneyardBounds::new(0.0, 0.0, 2043.0, 2053.0);
+pub const TUTORIAL_CAMERA_TARGET: BoneyardBounds =
     BoneyardBounds::new(0.0, 0.0, 2043.0, 849.91796875);
-pub const NATIVE_TUTORIAL_CAMERA_CLEANUP_TICKS: u64 = 300;
-pub const NATIVE_TUTORIAL_CAMERA_LOCK_INITIAL_BLEND: f64 = 0.01_f32 as f64;
-pub const NATIVE_TUTORIAL_CAMERA_LOCK_BLEND_GROWTH: f64 = 1.01;
-pub const NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS: usize = 464;
+pub const TUTORIAL_CAMERA_CLEANUP_TICKS: u64 = 300;
+pub const TUTORIAL_CAMERA_LOCK_INITIAL_BLEND: f64 = 0.01_f32 as f64;
+pub const TUTORIAL_CAMERA_LOCK_BLEND_GROWTH: f64 = 1.01;
+pub const TUTORIAL_CAMERA_LOCK_SETTLE_TICKS: usize = 464;
 
-pub const NATIVE_TUTORIAL_ENTRANCE_FENCE_CHAIN: [Vec2; 17] = [
+pub const TUTORIAL_ENTRANCE_FENCE_CHAIN: [Vec2; 17] = [
     Vec2::new(4.150634765625, 1627.25146484375),
     Vec2::new(149.150634765625, 1623.25146484375),
     Vec2::new(311.150634765625, 1620.25146484375),
@@ -38,21 +37,20 @@ pub const NATIVE_TUTORIAL_ENTRANCE_FENCE_CHAIN: [Vec2; 17] = [
     Vec2::new(2044.150634765625, 1605.25146484375),
 ];
 
-const CAMERA_BOUNDS: [BoneyardBounds; NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS + 1] =
+const CAMERA_BOUNDS: [BoneyardBounds; TUTORIAL_CAMERA_LOCK_SETTLE_TICKS + 1] =
     build_camera_bounds();
 
 /// The source's immutable camera table is compiled into the program, outside checkpoints.
 #[must_use]
-pub fn native_tutorial_camera_bounds(state: &NativeTutorialState) -> Option<BoneyardBounds> {
+pub fn tutorial_camera_bounds(state: &TutorialState) -> Option<BoneyardBounds> {
     if !state.camera_lock_triggered {
         return None;
     }
-    let age =
-        state.camera_lock_age_ticks.clamp(0.0, NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS as f64);
+    let age = state.camera_lock_age_ticks.clamp(0.0, TUTORIAL_CAMERA_LOCK_SETTLE_TICKS as f64);
     let whole_age = age.floor() as usize;
     let current = CAMERA_BOUNDS[whole_age];
     let fraction = age - whole_age as f64;
-    if fraction == 0.0 || whole_age == NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS {
+    if fraction == 0.0 || whole_age == TUTORIAL_CAMERA_LOCK_SETTLE_TICKS {
         return Some(current);
     }
     let next = CAMERA_BOUNDS[whole_age + 1];
@@ -64,13 +62,13 @@ pub fn native_tutorial_camera_bounds(state: &NativeTutorialState) -> Option<Bone
     ))
 }
 
-const fn build_camera_bounds() -> [BoneyardBounds; NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS + 1] {
-    let mut bounds = [NATIVE_TUTORIAL_LEVEL_BOUNDS; NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS + 1];
-    let mut current = NATIVE_TUTORIAL_LEVEL_BOUNDS;
-    let target = NATIVE_TUTORIAL_CAMERA_TARGET;
-    let mut blend = NATIVE_TUTORIAL_CAMERA_LOCK_INITIAL_BLEND;
+const fn build_camera_bounds() -> [BoneyardBounds; TUTORIAL_CAMERA_LOCK_SETTLE_TICKS + 1] {
+    let mut bounds = [TUTORIAL_LEVEL_BOUNDS; TUTORIAL_CAMERA_LOCK_SETTLE_TICKS + 1];
+    let mut current = TUTORIAL_LEVEL_BOUNDS;
+    let target = TUTORIAL_CAMERA_TARGET;
+    let mut blend = TUTORIAL_CAMERA_LOCK_INITIAL_BLEND;
     let mut age = 1;
-    while age <= NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS {
+    while age <= TUTORIAL_CAMERA_LOCK_SETTLE_TICKS {
         current = BoneyardBounds::new(
             fround(current.x + (target.x - current.x) * blend),
             fround(current.y + (target.y - current.y) * blend),
@@ -78,7 +76,7 @@ const fn build_camera_bounds() -> [BoneyardBounds; NATIVE_TUTORIAL_CAMERA_LOCK_S
             fround(current.height + (target.height - current.height) * blend),
         );
         bounds[age] = current;
-        let grown_blend = blend * NATIVE_TUTORIAL_CAMERA_LOCK_BLEND_GROWTH;
+        let grown_blend = blend * TUTORIAL_CAMERA_LOCK_BLEND_GROWTH;
         blend = fround(if grown_blend < 1.0 { grown_blend } else { 1.0 });
         age += 1;
     }
@@ -86,11 +84,11 @@ const fn build_camera_bounds() -> [BoneyardBounds; NATIVE_TUTORIAL_CAMERA_LOCK_S
 }
 
 #[must_use]
-pub fn native_tutorial_enemy_camera_position_is_allowed(position: Vec2, radius: f64) -> bool {
+pub fn tutorial_enemy_camera_position_is_allowed(position: Vec2, radius: f64) -> bool {
     if !radius.is_finite() || radius <= 0.0 {
         return false;
     }
-    let bounds = NATIVE_TUTORIAL_CAMERA_TARGET;
+    let bounds = TUTORIAL_CAMERA_TARGET;
     position.x - radius >= bounds.x
         && position.y - radius >= bounds.y
         && position.x + radius <= bounds.x + bounds.width
@@ -98,14 +96,14 @@ pub fn native_tutorial_enemy_camera_position_is_allowed(position: Vec2, radius: 
 }
 
 #[must_use]
-pub fn native_tutorial_camera_lock_safety_clear(bodies: &[(Vec2, f64)]) -> bool {
-    bodies.iter().all(|(position, radius)| {
-        native_tutorial_enemy_camera_position_is_allowed(*position, *radius)
-    })
+pub fn tutorial_camera_lock_safety_clear(bodies: &[(Vec2, f64)]) -> bool {
+    bodies
+        .iter()
+        .all(|(position, radius)| tutorial_enemy_camera_position_is_allowed(*position, *radius))
 }
 
 #[must_use]
-pub fn native_tutorial_enemy_spawn_position_is_allowed(position: Vec2, radius: f64) -> bool {
+pub fn tutorial_enemy_spawn_position_is_allowed(position: Vec2, radius: f64) -> bool {
     if !radius.is_finite() || radius <= 0.0 {
         return false;
     }
@@ -113,7 +111,7 @@ pub fn native_tutorial_enemy_spawn_position_is_allowed(position: Vec2, radius: f
         return false;
     }
     let mut distance_squared = f64::INFINITY;
-    for points in NATIVE_TUTORIAL_ENTRANCE_FENCE_CHAIN.windows(2) {
+    for points in TUTORIAL_ENTRANCE_FENCE_CHAIN.windows(2) {
         let segment = HubSegment::new(points[0].x, points[0].y, points[1].x, points[1].y);
         let nearest = nearest_point_on_segment(position, &segment);
         let dx = position.x - nearest.x;
@@ -124,7 +122,7 @@ pub fn native_tutorial_enemy_spawn_position_is_allowed(position: Vec2, radius: f
 }
 
 fn entrance_fence_y(x: f64) -> f64 {
-    let chain = NATIVE_TUTORIAL_ENTRANCE_FENCE_CHAIN;
+    let chain = TUTORIAL_ENTRANCE_FENCE_CHAIN;
     if x <= chain[0].x {
         return chain[0].y;
     }

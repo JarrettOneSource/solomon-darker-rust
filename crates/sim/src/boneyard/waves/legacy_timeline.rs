@@ -6,7 +6,7 @@
 
 use super::timeline::WAVE_LABEL_TO_FIRST_SPAWN_TICKS;
 use super::{CompiledSpawnBurst, CompiledWaveEntry, CompiledWaveSection, WaveDef};
-use crate::NativeRng;
+use crate::Rng;
 use crate::enemies::{EnemyFlag, EnemyToken, SpawnLocationPolicy, SpawnPositionPolicy};
 
 /// `GenerateTimeline` consumes a group-cost budget and merges consecutive samples of the
@@ -15,7 +15,7 @@ use crate::enemies::{EnemyFlag, EnemyToken, SpawnLocationPolicy, SpawnPositionPo
 pub(super) fn compile_legacy_wave_section(
     wave: &WaveDef,
     wave_ordinal: usize,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> CompiledWaveSection {
     assert!(wave_ordinal > 0, "wave ordinal must be positive");
     let half_budget = wave.spawn / 2;
@@ -23,7 +23,7 @@ pub(super) fn compile_legacy_wave_section(
 
     // Parsed WAVEDELAY and the singleton selection are retained/dead graph values, but
     // skipping either draw changes every later group and spawn position.
-    let _retained_wave_delay = draw_native_range(rng, wave.wave_delay);
+    let _retained_wave_delay = draw_range(rng, wave.wave_delay);
     let _retained_singleton = rng.draw_integer(1);
 
     let mut bursts: Vec<CompiledSpawnBurst> = Vec::new();
@@ -75,7 +75,7 @@ pub(super) fn compile_legacy_wave_section(
 
         let mut spread_ticks = 0.0;
         for _ in 0..group_cost {
-            let delay = draw_native_range(rng, wave.spawn_delay);
+            let delay = draw_range(rng, wave.spawn_delay);
             spread_ticks += if coffin_mode { 25.0 } else { f64::from(delay) * 0.5 };
         }
         let location_policy = if coffin_mode {
@@ -128,6 +128,6 @@ pub(super) fn compile_legacy_wave_section(
     CompiledWaveSection { bursts, lull_threshold, release_threshold }
 }
 
-fn draw_native_range(rng: &mut NativeRng, range: [i32; 2]) -> i32 {
+fn draw_range(rng: &mut Rng, range: [i32; 2]) -> i32 {
     range[0] + rng.draw_integer(range[1] - range[0] + 1)
 }

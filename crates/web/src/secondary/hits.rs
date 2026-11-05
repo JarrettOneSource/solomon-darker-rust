@@ -5,10 +5,10 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
 use solomon_sim::Vec2;
-use solomon_sim::presentation::multiply_native_tints;
-use solomon_sim::secondary::NativeSecondaryActorKind;
+use solomon_sim::presentation::multiply_tints;
+use solomon_sim::secondary::SecondaryActorKind;
 use solomon_sim::secondary::presentation::{
-    NativeSecondaryBlend, NativeSecondarySpriteDraw, native_leviathan_composite_plan,
+    SecondaryBlend, SecondarySpriteDraw, leviathan_composite_plan,
 };
 
 use super::draws::TargetDraw;
@@ -26,7 +26,7 @@ impl SecondaryView {
     ) -> Result<(), String> {
         self.puppet_hits.clear();
         for actor in &self.actors {
-            if actor.kind != NativeSecondaryActorKind::Leviathan {
+            if actor.kind != SecondaryActorKind::Leviathan {
                 continue;
             }
             let Some(&hit) = hits.get(&actor.id) else {
@@ -52,7 +52,7 @@ impl SecondaryView {
                         self.draw_hit_sprite(renderer, &camera, actor.plan.root, &draw, [1.0; 3]);
                     }
                 }
-                let composite = native_leviathan_composite_plan(parent.scale);
+                let composite = leviathan_composite_plan(parent.scale);
                 self.draw_leviathan_mask(
                     renderer,
                     &camera,
@@ -90,7 +90,7 @@ impl SecondaryView {
             ((hit.tint >> 8) & 255) as f32 / 255.0 * tint[1],
             (hit.tint & 255) as f32 / 255.0 * tint[2],
         ];
-        for output in native_leviathan_composite_plan(actor.scale).outputs {
+        for output in leviathan_composite_plan(actor.scale).outputs {
             self.draw_target(
                 renderer,
                 camera,
@@ -99,7 +99,7 @@ impl SecondaryView {
                     center: Vec2::new(actor.plan.root.x - 0.5, actor.plan.root.y - 0.5),
                     scale: 1.0,
                     alpha: output.alpha * hit.alpha,
-                    blend: if output.blend == NativeSecondaryBlend::Add {
+                    blend: if output.blend == SecondaryBlend::Add {
                         BlendMode::Add
                     } else {
                         BlendMode::Normal
@@ -116,15 +116,12 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         root: Vec2,
-        draw: &NativeSecondarySpriteDraw,
+        draw: &SecondarySpriteDraw,
         tint: [f32; 3],
     ) {
         let (record, vertices) = self.sprite_vertices(camera, root, draw, tint);
-        let blend = if draw.blend == NativeSecondaryBlend::Add {
-            BlendMode::Add
-        } else {
-            BlendMode::Normal
-        };
+        let blend =
+            if draw.blend == SecondaryBlend::Add { BlendMode::Add } else { BlendMode::Normal };
         renderer.draw_triangles_with_color_mode(
             record.texture,
             &[[vertices[0], vertices[1], vertices[2]], [vertices[0], vertices[2], vertices[3]]],
@@ -134,13 +131,10 @@ impl SecondaryView {
     }
 }
 
-fn hit_sprite(
-    draw: &NativeSecondarySpriteDraw,
-    hit: SecondaryPuppetHit,
-) -> NativeSecondarySpriteDraw {
+fn hit_sprite(draw: &SecondarySpriteDraw, hit: SecondaryPuppetHit) -> SecondarySpriteDraw {
     let mut draw = draw.clone();
     draw.alpha *= hit.alpha;
-    draw.tint = multiply_native_tints(draw.tint, hit.tint);
+    draw.tint = multiply_tints(draw.tint, hit.tint);
     draw
 }
 

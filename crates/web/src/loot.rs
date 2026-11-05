@@ -13,9 +13,7 @@ use solomon_sim::boneyard::loot::presentation::*;
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::hub::painter::PainterLayer;
 use solomon_sim::modding::inventory::ModConsumableCatalogEntry;
-use solomon_sim::secondary::presentation::{
-    NativeSecondaryAtlas, NativeSecondaryBlend, NativeSecondarySpriteDraw,
-};
+use solomon_sim::secondary::presentation::{SecondaryAtlas, SecondaryBlend, SecondarySpriteDraw};
 use solomon_sim::spells::presentation::{SpellAtlas, SpellBlend};
 
 use crate::courtyard::Camera;
@@ -41,7 +39,7 @@ struct PreparedLoot {
 }
 
 enum LootLayers {
-    Native(Vec<NativeLootVisualLayer>),
+    Native(Vec<LootVisualLayer>),
     Mod { texture: ModSpriteTexture, bounce_height: f64 },
 }
 
@@ -99,14 +97,14 @@ impl LootView {
                     bounce_height: actor.bounce_height,
                 }
             } else {
-                let plan = native_loot_presentation_plan(actor, scatter.seed);
+                let plan = loot_presentation_plan(actor, scatter.seed);
                 scatter.seed = plan.next_scatter_seed;
                 LootLayers::Native(plan.layers)
             };
             self.prepared.push(PreparedLoot {
                 painter: LootPainter {
                     id: LootPainterId::Loot(actor.id),
-                    layer: native_loot_painter_layer(actor),
+                    layer: loot_painter_layer(actor),
                     position: actor.position,
                 },
                 layers,
@@ -126,10 +124,10 @@ impl LootView {
             self.prepared.push(PreparedLoot {
                 painter: LootPainter {
                     id: LootPainterId::Goodie(goodie.id),
-                    layer: native_goodie_painter_layer(goodie),
+                    layer: goodie_painter_layer(goodie),
                     position: goodie.position,
                 },
-                layers: LootLayers::Native(native_goodie_presentation_plan(
+                layers: LootLayers::Native(goodie_presentation_plan(
                     goodie,
                     tick,
                     hit_alpha,
@@ -176,15 +174,15 @@ impl LootView {
             LootLayers::Native(layers) => layers,
         };
         for layer in layers {
-            let draw = NativeSecondarySpriteDraw {
+            let draw = SecondarySpriteDraw {
                 alpha: layer.alpha,
                 atlas: match layer.atlas {
-                    SpellAtlas::BadGuys => NativeSecondaryAtlas::BadGuys,
-                    SpellAtlas::DeadHawg => NativeSecondaryAtlas::DeadHawg,
+                    SpellAtlas::BadGuys => SecondaryAtlas::BadGuys,
+                    SpellAtlas::DeadHawg => SecondaryAtlas::DeadHawg,
                 },
                 blend: match layer.blend {
-                    SpellBlend::Normal => NativeSecondaryBlend::Normal,
-                    SpellBlend::Add => NativeSecondaryBlend::Add,
+                    SpellBlend::Normal => SecondaryBlend::Normal,
+                    SpellBlend::Add => SecondaryBlend::Add,
                 },
                 color_mode: None,
                 clip: None,

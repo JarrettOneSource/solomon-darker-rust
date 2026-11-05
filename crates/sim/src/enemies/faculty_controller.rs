@@ -2,12 +2,12 @@
 //! `native-faculty-actions.ts`. The actor and spell producer own their world effects.
 
 use super::model::{BossPhase, FacultyAction, FacultyActionKind, FacultyBrain};
-use super::path::NativeEnemyPathState;
-use crate::NativeRng;
+use super::path::EnemyPathState;
+use crate::Rng;
 use crate::float::fround;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFacultyContext {
+pub struct FacultyContext {
     pub advance_action: bool,
     pub actor_time_scale: f64,
     pub line_of_sight: bool,
@@ -16,7 +16,7 @@ pub struct NativeFacultyContext {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeFacultyActionStep {
+pub struct FacultyActionStep {
     pub action: FacultyAction,
     pub body_pose: f64,
     pub complete: bool,
@@ -26,13 +26,13 @@ pub struct NativeFacultyActionStep {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFacultyStep {
+pub struct FacultyStep {
     pub marker: bool,
     pub dispatch: Option<FacultyActionKind>,
 }
 
 #[must_use]
-pub fn create_native_faculty(rng: &mut NativeRng) -> FacultyBrain {
+pub fn create_faculty(rng: &mut Rng) -> FacultyBrain {
     let orbit_sign = rng.draw_sign(1.0);
     let light_phase = rng.draw_scaled_float(360.0, false);
     let gait_phase = rng.draw_scaled_float(4.0, false);
@@ -57,7 +57,7 @@ pub fn create_native_faculty(rng: &mut NativeRng) -> FacultyBrain {
     }
 }
 
-pub fn register_native_faculty(brain: &mut FacultyBrain, rng: &mut NativeRng, member_count: usize) {
+pub fn register_faculty(brain: &mut FacultyBrain, rng: &mut Rng, member_count: usize) {
     brain.primary_poll = if member_count > 2 {
         rng.draw_integer(300) as u64
     } else {
@@ -71,11 +71,7 @@ pub fn register_native_faculty(brain: &mut FacultyBrain, rng: &mut NativeRng, me
     brain.secondary_cooldown += delay + rng.draw_integer(count) as i64;
 }
 
-pub fn advance_native_faculty_orbit(
-    path: &mut NativeEnemyPathState,
-    orbit_sign: f64,
-    rng: &mut NativeRng,
-) {
+pub fn advance_faculty_orbit(path: &mut EnemyPathState, orbit_sign: f64, rng: &mut Rng) {
     let angle = rng.draw_float_range(1.0, 2.0);
     let radius = rng.draw_scaled_float(2.0, true);
     path.flank_ticks_remaining = 100;
@@ -84,7 +80,7 @@ pub fn advance_native_faculty_orbit(
 }
 
 #[must_use]
-pub fn create_native_faculty_action(kind: FacultyActionKind, rng: &mut NativeRng) -> FacultyAction {
+pub fn create_faculty_action(kind: FacultyActionKind, rng: &mut Rng) -> FacultyAction {
     let hand = if rng.draw_integer(2) == 1 { 1 } else { 2 };
     let end =
         if kind == FacultyActionKind::Lightning { 19 + rng.draw_integer(10) as usize } else { 20 };
@@ -116,17 +112,14 @@ pub fn create_native_faculty_action(kind: FacultyActionKind, rng: &mut NativeRng
 }
 
 #[must_use]
-pub fn step_native_faculty_action(
-    source: &FacultyAction,
-    actor_time_scale: f64,
-) -> NativeFacultyActionStep {
+pub fn step_faculty_action(source: &FacultyAction, actor_time_scale: f64) -> FacultyActionStep {
     let progress = fround(source.progress + fround(source.rate * actor_time_scale));
     // Retail admits both marker endpoints, including a repeated exact-boundary hit.
     let marker =
         progress > source.progress && source.progress <= source.marker && progress >= source.marker;
     let mut action = source.clone();
     action.progress = progress;
-    NativeFacultyActionStep {
+    FacultyActionStep {
         body_pose: source.frames.get(progress.trunc() as usize).copied().unwrap_or(0.0),
         complete: progress > source.end,
         dispatch: if source.kind == FacultyActionKind::Lightning {
@@ -143,10 +136,10 @@ pub fn step_native_faculty_action(
 #[must_use]
 pub fn step_native_faculty(
     brain: &mut FacultyBrain,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     primary: u8,
-    context: NativeFacultyContext,
-) -> NativeFacultyStep {
+    context: FacultyContext,
+) -> FacultyStep {
     brain.gait_phase = fround(brain.gait_phase + 0.25);
     if brain.gait_phase >= 5.0 {
         brain.gait_phase = fround(brain.gait_phase - 5.0);
@@ -160,7 +153,7 @@ pub fn step_native_faculty(
     if let Some(source_action) = &brain.action
         && context.advance_action
     {
-        let step = step_native_faculty_action(source_action, context.actor_time_scale);
+        let step = step_faculty_action(source_action, context.actor_time_scale);
         marker = step.marker;
         dispatch = step.dispatch.then_some(source_action.kind);
         brain.lightning_active =
@@ -177,15 +170,10 @@ pub fn step_native_faculty(
     if brain.completed_dispatches > 0 {
         brain.secondary_cooldown -= 1;
     }
-    NativeFacultyStep { marker, dispatch }
+    FacultyStep { marker, dispatch }
 }
 
-fn poll_primary(
-    brain: &mut FacultyBrain,
-    rng: &mut NativeRng,
-    primary: u8,
-    context: NativeFacultyContext,
-) {
+fn poll_primary(brain: &mut FacultyBrain, rng: &mut Rng, primary: u8, context: FacultyContext) {
     let Some(distance_squared) = context.target_distance_squared else { return };
     if !context.tick.is_multiple_of(2) {
         return;
@@ -206,7 +194,7 @@ fn poll_primary(
         kind = FacultyActionKind::TwoHand;
         brain.secondary_cooldown = 1500 + rng.draw_integer(1001) as i64;
     }
-    let action = create_native_faculty_action(kind, rng);
+    let action = create_faculty_action(kind, rng);
     let range = rng.draw_scaled_float(250.0, false);
     brain.attack_range = fround(350.0 + range);
     brain.primary_poll = 300;

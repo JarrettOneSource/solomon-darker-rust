@@ -63,17 +63,14 @@ impl WizardView {
         let second = &self.records[676 + pose * HEADINGS + heading];
         let reference = self.records[316].points[0][1] as f64 + 15.0;
         let depth = f64::from(first.points[0][1].max(second.points[0][1]));
-        let native_pi = solomon_sim::boneyard::terrain_surface::NATIVE_GROUND_PI;
-        let radians = fround(native_pi * fround(2.0 * tick.floor()) / 180.0);
+        let pi = solomon_sim::boneyard::terrain_surface::GROUND_PI;
+        let radians = fround(pi * fround(2.0 * tick.floor()) / 180.0);
         let bob = fround(solomon_sim::float::sin(radians));
         let query = self.records[484 + heading].points[1];
         Some(BareElementPlan {
             socket: Vec2::new(first.points[1][0] as f64, fround(first.points[1][1] as f64 + bob)),
             scale: fround(0.8_f32 as f64 * (1.0 + 10.0 * state.overlay_effect_phase)),
-            angle: native_player_element_call_angle(
-                Vec2::new(query[0] as f64, query[1] as f64),
-                None,
-            ),
+            angle: player_element_call_angle(Vec2::new(query[0] as f64, query[1] as f64), None),
             front: depth <= reference,
             back: depth >= reference,
         })
@@ -114,7 +111,7 @@ impl WizardView {
             renderer,
             camera,
             position,
-            &native_selected_primary_element_vfx_plan(primary, tick, scale),
+            &selected_primary_element_vfx_plan(primary, tick, scale),
         );
     }
 

@@ -2,7 +2,7 @@
 //! unbind command; these GPU triangles only follow the native cosmetic plan.
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use solomon_sim::hud::belt_pull_off::{
-    NativeBeltPullOffBurstMember, NativeBeltPullOffStep, native_belt_pull_off_burst_members,
+    BeltPullOffBurstMember, BeltPullOffStep, belt_pull_off_burst_members,
 };
 use std::cell::Cell;
 thread_local! {
@@ -19,14 +19,14 @@ pub(crate) struct BeltPullOffBurst {
     sequence: u64,
     started_at: f64,
     reduced_motion: bool,
-    members: Vec<NativeBeltPullOffBurstMember>,
+    members: Vec<BeltPullOffBurstMember>,
 }
 impl BeltPullOffBurst {
     pub fn new(now: f64) -> Self {
         let step = if crate::platform::random_unit() < 0.5 {
-            NativeBeltPullOffStep::Degrees90
+            BeltPullOffStep::Degrees90
         } else {
-            NativeBeltPullOffStep::Degrees120
+            BeltPullOffStep::Degrees120
         };
         Self {
             sequence: NEXT_SEQUENCE.with(|next| {
@@ -36,7 +36,7 @@ impl BeltPullOffBurst {
             }),
             started_at: now,
             reduced_motion: crate::platform::reduced_motion(),
-            members: native_belt_pull_off_burst_members(step, &mut crate::platform::random_unit),
+            members: belt_pull_off_burst_members(step, &mut crate::platform::random_unit),
         }
     }
     pub fn sequence(&self) -> u64 {
@@ -45,7 +45,7 @@ impl BeltPullOffBurst {
     pub fn finished(&self, now: f64) -> bool {
         self.members.iter().all(|member| now - self.started_at >= self.duration(member))
     }
-    fn duration(&self, member: &NativeBeltPullOffBurstMember) -> f64 {
+    fn duration(&self, member: &BeltPullOffBurstMember) -> f64 {
         if self.reduced_motion { 1.0 } else { member.duration_ms }
     }
     pub fn paint(

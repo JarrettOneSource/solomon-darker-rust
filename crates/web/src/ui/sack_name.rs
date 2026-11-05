@@ -2,7 +2,7 @@
 //! Each platform shapes complete font runs; egui owns their GPU textures.
 use crate::gpu_ui::UiFrame;
 use solomon_sim::Vec2;
-use solomon_sim::native_ui_text::{NativeUiFontName, native_ui_font};
+use solomon_sim::ui_text::{UiFontName, ui_font};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
@@ -82,7 +82,7 @@ pub(crate) fn gpu_sack_name(
     }
     let (image, size, baseline_offset, scale, lines) = FONT_CANVAS.with(|slot| {
         let mut slot = slot.borrow_mut();
-        let font_size = native_ui_font(NativeUiFontName::Menu).metrics[0];
+        let font_size = ui_font(UiFontName::Menu).metrics[0];
         if slot.is_none() {
             *slot = Some(FontCanvas::new(font_size)?);
         }

@@ -8,9 +8,7 @@ use solomon_sim::economy::{
 };
 use solomon_sim::hub::interaction::HubInteractionId;
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
-};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, measure_ui_text};
 
 use super::chrome::PanelCanvas;
 use super::{PlayerPanel, PlayerPanelAction, PlayerPanelSnapshot, PlayerPanels, Target};
@@ -233,15 +231,12 @@ impl PlayerPanels {
         let dowsing = trader == HubTraderId::Shlorio;
         self.draw_shop_chrome(c, dowsing && s.economy.dowsing_rolled)?;
         let title = service_title(trader);
-        let font = if measure_native_ui_text(title, NativeUiFontName::Menu, 1.0) > 549.0 {
-            NativeUiFontName::Medium
+        let font = if measure_ui_text(title, UiFontName::Menu, 1.0) > 549.0 {
+            UiFontName::Medium
         } else {
-            NativeUiFontName::Menu
+            UiFontName::Menu
         };
-        c.text(&NativeUiTextSpec {
-            tint: 0xd9ba70,
-            ..NativeUiTextSpec::new(font, title, 800.0, 32.0)
-        });
+        c.text(&UiTextSpec { tint: 0xd9ba70, ..UiTextSpec::new(font, title, 800.0, 32.0) });
         c.semantic("panel:service", title, "dialog", HudRect::new(498.0, 0.0, 604.0, 420.0));
         if dowsing && !s.economy.dowsing_rolled {
             c.art(&self.ui, 15, [800.0, 75.0], [1.0, 1.0], 0.0, 0xffffff)?;
@@ -249,7 +244,7 @@ impl PlayerPanels {
             mirror.fill(HudRect::new(0.0, 0.0, 100.0, 149.0), 0, 1.0);
             if let Some(item) = self
                 .dowsing_reference_item
-                .and_then(|id| solomon_sim::belt::native_belt_owned_item(s.economy, id))
+                .and_then(|id| solomon_sim::belt::belt_owned_item(s.economy, id))
             {
                 self.draw_item(&mirror, item, 50.0, 74.5, 1, s.selection.element)?;
             }
@@ -259,10 +254,10 @@ impl PlayerPanels {
                 "DOWSE",
                 HudRect::new(675.0, 265.5, 250.0, 69.0),
             )?;
-            dowse.text(&NativeUiTextSpec {
+            dowse.text(&UiTextSpec {
                 tint: 0xd9ba70,
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::Medium,
+                ..UiTextSpec::new(
+                    UiFontName::Medium,
                     &format!("{} GOLD", s.economy.dowsing_fee),
                     125.0,
                     57.0,
@@ -369,7 +364,7 @@ impl PlayerPanels {
             "Done",
             HudRect::new(714.5, 358.0, 171.0, 58.0),
         );
-        done.text(&NativeUiTextSpec::new(NativeUiFontName::Menu, "DONE", 85.5, 34.0));
+        done.text(&UiTextSpec::new(UiFontName::Menu, "DONE", 85.5, 34.0));
         Ok(())
     }
     fn shop_slot<'a, 'gpu>(
@@ -389,10 +384,10 @@ impl PlayerPanels {
         Ok(cell)
     }
     fn shop_price(&self, c: &PanelCanvas<'_, '_>, amount: u64, unaffordable: bool) {
-        c.text(&NativeUiTextSpec {
-            align: NativeUiTextAlign::Right,
+        c.text(&UiTextSpec {
+            align: UiTextAlign::Right,
             tint: if unaffordable { 0xff8080 } else { 0xd9ba70 },
-            ..NativeUiTextSpec::new(NativeUiFontName::Body, &amount.to_string(), 67.0, 67.0)
+            ..UiTextSpec::new(UiFontName::Body, &amount.to_string(), 67.0, 67.0)
         });
     }
     fn draw_shop_selection(
@@ -451,9 +446,9 @@ impl PlayerPanels {
             0xffffff,
         )?;
         self.info_frame(&c, HudRect::new(138.0, 127.0, 230.0, 230.0))?;
-        c.text(&NativeUiTextSpec {
+        c.text(&UiTextSpec {
             tint: 0xd9ba70,
-            ..NativeUiTextSpec::new(NativeUiFontName::Medium, "CHARMS/CURSES", 253.0, 152.0)
+            ..UiTextSpec::new(UiFontName::Medium, "CHARMS/CURSES", 253.0, 152.0)
         });
         for index in 0..9 {
             let x = 193.0 + (index % 3) as f64 * 60.0;

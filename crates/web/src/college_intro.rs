@@ -3,7 +3,7 @@
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use solomon_sim::Vec2;
 use solomon_sim::hub::college_intro::{
-    NativeCollegeIntroPhase, NativeCollegeIntroState, native_college_title_presentation,
+    CollegeIntroPhase, CollegeIntroState, college_title_presentation,
 };
 use solomon_sim::viewport::game_viewport;
 
@@ -23,15 +23,14 @@ impl CollegeIntroOverlay {
 
     pub fn update(
         &mut self,
-        state: Option<&NativeCollegeIntroState>,
+        state: Option<&CollegeIntroState>,
         width: i32,
         height: i32,
     ) -> Result<(), String> {
         self.viewport = [width as f32, height as f32];
-        self.view = state
-            .filter(|state| state.phase == NativeCollegeIntroPhase::CourtyardWalk)
-            .map(|state| {
-                let view = native_college_title_presentation(state.title_cursor, state.cover_alpha);
+        self.view =
+            state.filter(|state| state.phase == CollegeIntroPhase::CourtyardWalk).map(|state| {
+                let view = college_title_presentation(state.title_cursor, state.cover_alpha);
                 (view.record, view.y, view.alpha, state.cover_alpha)
             });
         Ok(())

@@ -2,19 +2,19 @@
 
 use egui::{Color32, Id, Rect, Sense, Ui, vec2};
 use solomon_sim::hud::HudRect;
-use solomon_sim::native_ui_text::NativeUiTextSpec;
 use solomon_sim::social::party_ui::{
-    NATIVE_PARTY_MENU_FRAME, NATIVE_PARTY_MENU_VIEWPORT, NATIVE_PARTY_MENU_WHEEL_STEP,
-    NATIVE_PARTY_VISIBILITIES, NativePartyMenuMember, NativePartyMenuRequest, NativePartyMenuSpec,
-    NativePartyMenuTag, clamp_native_party_menu_scroll, plan_native_party_menu, visibility_id,
+    PARTY_MENU_FRAME, PARTY_MENU_VIEWPORT, PARTY_MENU_WHEEL_STEP, PARTY_VISIBILITIES,
+    PartyMenuMember, PartyMenuRequest, PartyMenuSpec, PartyMenuTag, clamp_party_menu_scroll,
+    plan_party_menu, visibility_id,
 };
 use solomon_sim::social::{party_member_display_name, party_menu_leave_label};
+use solomon_sim::ui_text::UiTextSpec;
 
 use super::super::{PartyTab, SocialUi, gpu};
 use crate::gpu_ui::{UiFrame, message_frame_scaled};
 
 impl SocialUi {
-    pub(in crate::social) fn paint_native_party_menu(
+    pub(in crate::social) fn paint_party_menu(
         &mut self,
         frame: &mut UiFrame<'_>,
         ui: &mut Ui,
@@ -30,15 +30,15 @@ impl SocialUi {
             .map(|id| {
                 let mut tags = Vec::new();
                 if *id == snapshot.local_player_id {
-                    tags.push(NativePartyMenuTag::You);
+                    tags.push(PartyMenuTag::You);
                 }
                 if *id == state.party.leader_player_id {
-                    tags.push(NativePartyMenuTag::Leader);
+                    tags.push(PartyMenuTag::Leader);
                 }
                 if state.party_roster.iter().any(|row| row.player_id == *id && !row.connected) {
-                    tags.push(NativePartyMenuTag::Offline);
+                    tags.push(PartyMenuTag::Offline);
                 }
-                NativePartyMenuMember {
+                PartyMenuMember {
                     id: id.clone(),
                     name: party_member_display_name(state, id).to_owned(),
                     removable: leader && *id != snapshot.local_player_id,
@@ -50,7 +50,7 @@ impl SocialUi {
             state
                 .join_requests
                 .iter()
-                .map(|request| NativePartyMenuRequest {
+                .map(|request| PartyMenuRequest {
                     id: request.id.clone(),
                     name: request.requester.display_name.clone(),
                 })
@@ -58,7 +58,7 @@ impl SocialUi {
         } else {
             Vec::new()
         };
-        let plan = plan_native_party_menu(&NativePartyMenuSpec {
+        let plan = plan_party_menu(&PartyMenuSpec {
             code: if leader { state.party.join_code.as_deref() } else { None },
             copied: self.party_ui.copied,
             error: self.party_status.as_deref(),
@@ -73,7 +73,7 @@ impl SocialUi {
             selected_tab: tab,
             visibility: state.party.visibility,
             visibility_options: if snapshot.directory_available {
-                &NATIVE_PARTY_VISIBILITIES
+                &PARTY_VISIBILITIES
             } else {
                 &[]
             },
@@ -81,11 +81,11 @@ impl SocialUi {
         let code = state.party.join_code.clone();
         let visibility = state.party.visibility;
         let (origin, scale) = gpu::stage(self.size);
-        let panel = gpu::rect(NATIVE_PARTY_MENU_FRAME, origin, scale);
+        let panel = gpu::rect(PARTY_MENU_FRAME, origin, scale);
         ui.interact(panel, Id::unique("social/party-panel-block"), egui::Sense::CLICK);
         message_frame_scaled(frame, ui.painter(), &self.ui, panel, scale)?;
         frame.record_rect("social/party-menu", "PARTY", "dialog", panel, true);
-        let viewport = gpu::rect(NATIVE_PARTY_MENU_VIEWPORT, origin, scale);
+        let viewport = gpu::rect(PARTY_MENU_VIEWPORT, origin, scale);
         let mut activated = None;
         for (index, candidate) in PartyTab::ALL.iter().enumerate() {
             let bounds = gpu::rect(
@@ -129,8 +129,8 @@ impl SocialUi {
             ] {
                 self.ui.paint_slice(frame, ui.painter(), 13, source, target, Color32::WHITE)?;
             }
-            let mut spec = NativeUiTextSpec::new(
-                solomon_sim::native_ui_text::NativeUiFontName::Menu,
+            let mut spec = UiTextSpec::new(
+                solomon_sim::ui_text::UiFontName::Menu,
                 candidate.label(),
                 554.0 + index as f64 * 246.0,
                 if selected { 235.0 } else { 243.0 },
@@ -167,7 +167,7 @@ impl SocialUi {
                 if scroll.hovered() { ui.input(|input| input.smooth_scroll_delta.y) } else { 0.0 };
             let mut requested = self.party_ui.scroll_y;
             if wheel != 0.0 {
-                requested -= f64::from(wheel.signum()) * NATIVE_PARTY_MENU_WHEEL_STEP;
+                requested -= f64::from(wheel.signum()) * PARTY_MENU_WHEEL_STEP;
             }
             if scroll.dragged() {
                 requested -= f64::from(scroll.drag_delta().y / scale);
@@ -175,19 +175,19 @@ impl SocialUi {
             if scroll.has_focus() {
                 requested += ui.input_mut(|input| {
                     if input.consume_key(egui::Modifiers::NONE, egui::Key::PageDown) {
-                        NATIVE_PARTY_MENU_VIEWPORT.height
+                        PARTY_MENU_VIEWPORT.height
                     } else if input.consume_key(egui::Modifiers::NONE, egui::Key::PageUp) {
-                        -NATIVE_PARTY_MENU_VIEWPORT.height
+                        -PARTY_MENU_VIEWPORT.height
                     } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
-                        NATIVE_PARTY_MENU_WHEEL_STEP
+                        PARTY_MENU_WHEEL_STEP
                     } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
-                        -NATIVE_PARTY_MENU_WHEEL_STEP
+                        -PARTY_MENU_WHEEL_STEP
                     } else {
                         0.0
                     }
                 });
             }
-            self.party_ui.scroll_y = clamp_native_party_menu_scroll(requested, plan.content_height);
+            self.party_ui.scroll_y = clamp_party_menu_scroll(requested, plan.content_height);
             let painter = ui.painter().with_clip_rect(viewport);
             for row in &plan.rows {
                 if row.visible_bounds.is_some() {
@@ -222,11 +222,11 @@ impl SocialUi {
             gpu::native_text(
                 frame,
                 &painter,
-                &NativeUiTextSpec {
+                &UiTextSpec {
                     align: text.align,
                     scale: text.scale,
                     tint: text.tint,
-                    ..NativeUiTextSpec::new(text.font, &text.text, text.x, text.y)
+                    ..UiTextSpec::new(text.font, &text.text, text.x, text.y)
                 },
                 origin,
                 scale,
@@ -265,10 +265,10 @@ impl SocialUi {
                     gpu::native_text(
                         frame,
                         ui.painter(),
-                        &NativeUiTextSpec {
+                        &UiTextSpec {
                             scale: label.scale,
                             tint: label.tint,
-                            ..NativeUiTextSpec::new(label.font, &label.text, label.x, label.y)
+                            ..UiTextSpec::new(label.font, &label.text, label.x, label.y)
                         },
                         origin,
                         scale,
@@ -291,12 +291,12 @@ impl SocialUi {
                         }
                     });
                     if direction != 0 {
-                        let index = NATIVE_PARTY_VISIBILITIES
+                        let index = PARTY_VISIBILITIES
                             .iter()
                             .position(|value| *value == visibility)
                             .unwrap_or(0);
-                        let next = NATIVE_PARTY_VISIBILITIES
-                            [(index as i32 + direction).rem_euclid(3) as usize];
+                        let next =
+                            PARTY_VISIBILITIES[(index as i32 + direction).rem_euclid(3) as usize];
                         activated = Some(format!("visibility:{}", visibility_id(next)));
                     }
                 }
@@ -316,7 +316,7 @@ impl SocialUi {
                         f64::from((bounds.bottom() - viewport.bottom()) / scale);
                 }
                 self.party_ui.scroll_y =
-                    clamp_native_party_menu_scroll(self.party_ui.scroll_y, plan.content_height);
+                    clamp_party_menu_scroll(self.party_ui.scroll_y, plan.content_height);
             }
             if action.id == "copy"
                 && !action.disabled
@@ -353,26 +353,17 @@ impl SocialUi {
         origin: egui::Pos2,
         scale: f32,
     ) -> Result<(), String> {
-        use solomon_sim::native_ui_text::{
-            NativeUiFontName, NativeUiTextAlign, measure_native_ui_text,
-        };
-        use solomon_sim::social::party_ui::{
-            fit_native_party_menu_text, native_party_menu_name_font,
-        };
-        let viewport = gpu::rect(NATIVE_PARTY_MENU_VIEWPORT, origin, scale);
+        use solomon_sim::social::party_ui::{fit_party_menu_text, party_menu_name_font};
+        use solomon_sim::ui_text::{UiFontName, UiTextAlign, measure_ui_text};
+        let viewport = gpu::rect(PARTY_MENU_VIEWPORT, origin, scale);
         let painter = ui.painter().with_clip_rect(viewport);
         if self.party_mods.is_empty() {
             gpu::native_text(
                 frame,
                 &painter,
-                &NativeUiTextSpec {
+                &UiTextSpec {
                     tint: 0xaaa2a6,
-                    ..NativeUiTextSpec::new(
-                        NativeUiFontName::Medium,
-                        "No active mods",
-                        800.0,
-                        318.0,
-                    )
+                    ..UiTextSpec::new(UiFontName::Medium, "No active mods", 800.0, 318.0)
                 },
                 origin,
                 scale,
@@ -391,7 +382,7 @@ impl SocialUi {
         let wheel =
             if scroll.hovered() { ui.input(|input| input.smooth_scroll_delta.y) } else { 0.0 };
         if wheel != 0.0 {
-            self.party_ui.scroll_y -= f64::from(wheel.signum()) * NATIVE_PARTY_MENU_WHEEL_STEP;
+            self.party_ui.scroll_y -= f64::from(wheel.signum()) * PARTY_MENU_WHEEL_STEP;
         }
         if scroll.dragged() {
             self.party_ui.scroll_y -= f64::from(scroll.drag_delta().y / scale);
@@ -403,16 +394,15 @@ impl SocialUi {
                 } else if input.consume_key(egui::Modifiers::NONE, egui::Key::PageUp) {
                     -367.0
                 } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
-                    NATIVE_PARTY_MENU_WHEEL_STEP
+                    PARTY_MENU_WHEEL_STEP
                 } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
-                    -NATIVE_PARTY_MENU_WHEEL_STEP
+                    -PARTY_MENU_WHEEL_STEP
                 } else {
                     0.0
                 }
             });
         }
-        self.party_ui.scroll_y =
-            clamp_native_party_menu_scroll(self.party_ui.scroll_y, content_height);
+        self.party_ui.scroll_y = clamp_party_menu_scroll(self.party_ui.scroll_y, content_height);
         for (index, package) in self.party_mods.iter().enumerate() {
             let y = 278.0 + index as f64 * 66.0 - self.party_ui.scroll_y;
             let bounds = gpu::rect(HudRect::new(460.0, y, 680.0, 56.0), origin, scale);
@@ -421,9 +411,9 @@ impl SocialUi {
             }
             gpu::brackets(frame, &painter, &self.ui, bounds, scale)?;
             let version = format!("v{}", package.version);
-            let version_width = measure_native_ui_text(&version, NativeUiFontName::Medium, 0.9);
-            let font = native_party_menu_name_font(&package.name);
-            let name = fit_native_party_menu_text(
+            let version_width = measure_ui_text(&version, UiFontName::Medium, 0.9);
+            let font = party_menu_name_font(&package.name);
+            let name = fit_party_menu_text(
                 &package.name,
                 font,
                 (628.0 - version_width - 20.0).max(1.0),
@@ -432,10 +422,10 @@ impl SocialUi {
             gpu::native_text(
                 frame,
                 &painter,
-                &NativeUiTextSpec {
-                    align: NativeUiTextAlign::Left,
+                &UiTextSpec {
+                    align: UiTextAlign::Left,
                     scale: 0.85,
-                    ..NativeUiTextSpec::new(font, &name, 486.0, y + 36.0)
+                    ..UiTextSpec::new(font, &name, 486.0, y + 36.0)
                 },
                 origin,
                 scale,
@@ -443,11 +433,11 @@ impl SocialUi {
             gpu::native_text(
                 frame,
                 &painter,
-                &NativeUiTextSpec {
-                    align: NativeUiTextAlign::Right,
+                &UiTextSpec {
+                    align: UiTextAlign::Right,
                     scale: 0.9,
                     tint: 0xd9ba70,
-                    ..NativeUiTextSpec::new(NativeUiFontName::Medium, &version, 1114.0, y + 36.0)
+                    ..UiTextSpec::new(UiFontName::Medium, &version, 1114.0, y + 36.0)
                 },
                 origin,
                 scale,

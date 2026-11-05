@@ -4,10 +4,10 @@
 
 use solomon_sim::boneyard::loot::{BoneyardGoodiePhase, BoneyardGoodieState};
 use solomon_sim::boneyard::scenery::{
-    NativeSceneryShadowRole, NativeSceneryShadowTexture, NativeScrubShadowState,
-    native_goodie_shadow_plan, native_scrub_shadow_plan,
+    SceneryShadowRole, SceneryShadowTexture, ScrubShadowState, goodie_shadow_plan,
+    scrub_shadow_plan,
 };
-use solomon_sim::boneyard::shadows::native_shadow_records;
+use solomon_sim::boneyard::shadows::shadow_records;
 
 use super::*;
 
@@ -18,8 +18,8 @@ pub(super) struct SceneryShadowGlyph {
 
 #[derive(Default)]
 pub(super) struct SceneryShadowPlans {
-    pub off: Vec<NativeSceneryShadowQuad>,
-    pub on: Vec<NativeSceneryShadowQuad>,
+    pub off: Vec<SceneryShadowQuad>,
+    pub on: Vec<SceneryShadowQuad>,
 }
 
 pub(super) struct ScrubDocument {
@@ -30,14 +30,14 @@ pub(super) struct ScrubDocument {
 }
 
 pub(super) struct ScrubView {
-    state: NativeScrubShadowState,
-    quads: Vec<NativeSceneryShadowQuad>,
+    state: ScrubShadowState,
+    quads: Vec<SceneryShadowQuad>,
 }
 
 impl ScrubView {
     pub fn new(document: &ScrubDocument, initial_tick: u64) -> Self {
         Self {
-            state: NativeScrubShadowState::new(document.main_layer_index, initial_tick),
+            state: ScrubShadowState::new(document.main_layer_index, initial_tick),
             quads: Vec::new(),
         }
     }
@@ -59,8 +59,8 @@ impl BoneyardView {
                 continue;
             }
             let records = if frame.complex_lighting && frame.complex_shadows {
-                native_shadow_records(
-                    &NativeShadowCaster {
+                shadow_records(
+                    &ShadowCaster {
                         id: scrub.id.clone(),
                         position: scrub.position,
                         outline: Vec::new(),
@@ -72,7 +72,7 @@ impl BoneyardView {
             } else {
                 Vec::new()
             };
-            view.quads = native_scrub_shadow_plan(
+            view.quads = scrub_shadow_plan(
                 scrub.entry,
                 self.document.shadow_glyphs[&scrub.entry].geometry,
                 scrub.position,
@@ -96,11 +96,8 @@ impl BoneyardView {
         let plan =
             if frame.complex_shadows { &layer.shadow_plans.on } else { &layer.shadow_plans.off };
         for quad in plan {
-            let alpha = if quad.role == NativeSceneryShadowRole::SceneryFlatShadow {
-                tree_alpha
-            } else {
-                1.0
-            };
+            let alpha =
+                if quad.role == SceneryShadowRole::SceneryFlatShadow { tree_alpha } else { 1.0 };
             self.draw_shadow_quad(renderer, frame.camera, quad, Vec2::ZERO, alpha);
         }
         if let Some(view) = self.scrubs.get(&index) {
@@ -132,7 +129,7 @@ impl BoneyardView {
         if !bounds.visible(frame) {
             return;
         }
-        for quad in native_goodie_shadow_plan(
+        for quad in goodie_shadow_plan(
             goodie.position,
             goodie.subtype,
             phase,
@@ -143,7 +140,7 @@ impl BoneyardView {
         }
         if frame.complex_lighting && frame.complex_shadows {
             assert_eq!(goodie.subtype, 0, "native Goodie complex-shadow subtype");
-            let caster = NativeShadowCaster {
+            let caster = ShadowCaster {
                 id: format!("goodie:{}", goodie.id),
                 position: goodie.position,
                 outline: self.document.goodie_shadow_outline.clone(),
@@ -152,7 +149,7 @@ impl BoneyardView {
             draw_shadow_edges(
                 renderer,
                 frame.camera,
-                &native_shadow_edges(&caster, frame.lights, frame.presentation_frame),
+                &shadow_edges(&caster, frame.lights, frame.presentation_frame),
             );
         }
     }
@@ -161,16 +158,16 @@ impl BoneyardView {
         &self,
         renderer: &mut Renderer,
         camera: &Camera,
-        quad: &NativeSceneryShadowQuad,
+        quad: &SceneryShadowQuad,
         position: Vec2,
         alpha: f64,
     ) {
         let texture = match quad.texture {
-            NativeSceneryShadowTexture::Glyph(entry) => {
+            SceneryShadowTexture::Glyph(entry) => {
                 Some(&self.textures[&self.document.shadow_glyphs[&entry].image])
             }
-            NativeSceneryShadowTexture::FenceGrate => Some(&self.textures["fencegrate.png"]),
-            NativeSceneryShadowTexture::White => None,
+            SceneryShadowTexture::FenceGrate => Some(&self.textures["fencegrate.png"]),
+            SceneryShadowTexture::White => None,
         };
         // Native batches first pack each color, then multiply its byte channels
         // by the owner's packed color. Multiplying unquantized alphas differs.

@@ -2,21 +2,21 @@
 //! constructors own their random programs; this phase owns only IDs, queue order
 //! and the player's shared cast clock.
 
-use crate::spells::weld::{NativeWeldPersistentActorState, NativeWeldWorldActor};
+use crate::spells::weld::{WeldPersistentActorState, WeldWorldActor};
 
 use super::*;
 use crate::float::fround;
 use crate::hub::HubWizard;
 use crate::painter::WorldPainterOrder;
 use crate::profile::WizardElement;
-use crate::profile::primary::NativePrimarySkillProfile;
+use crate::profile::primary::PrimarySkillProfile;
 use crate::spells::model::{PrimarySpellTickResult, PrimarySpellTransient, SpellState};
 use crate::spells::projectiles::emitter;
 use crate::spells::simulation::{
     PrimarySpellCastAuthority, PrimarySpellWorldContext, air_geometry, channel_emission,
 };
-use crate::spells::targeting::NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK;
-use crate::{NativeRng, Vec2};
+use crate::spells::targeting::PRIMARY_CAST_TERRAIN_EXCLUSION_MASK;
+use crate::{Rng, Vec2};
 
 impl SpellState {
     #[allow(clippy::too_many_arguments)]
@@ -25,18 +25,18 @@ impl SpellState {
         wizard: &mut HubWizard,
         authority: PrimarySpellCastAuthority<'_>,
         underpowered: bool,
-        native_selected_age: Option<u64>,
+        selected_age: Option<u64>,
         context: &PrimarySpellWorldContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
         result: &mut PrimarySpellTickResult,
     ) {
-        let NativePrimarySkillProfile::Weld(profile) = authority.primary_skill else {
+        let PrimarySkillProfile::Weld(profile) = authority.primary_skill else {
             unreachable!("Weld cast payload")
         };
         let direction = wizard.primary_cast.aim_direction;
         let origin = emitter(wizard, WizardElement::Fire, authority.weapon_kind);
-        let birth = NativeWeldActorBirth {
+        let birth = WeldActorBirth {
             build_id: profile.build_id,
             direction,
             id: self.next_id,
@@ -48,7 +48,7 @@ impl SpellState {
         };
         if matches!(profile.build_id, 1003..=1005) {
             let flame_camera = if profile.build_id == 1003 {
-                draw_native_flame_camera_displacement(rng, underpowered)
+                draw_flame_camera_displacement(rng, underpowered)
             } else {
                 None
             };
@@ -62,7 +62,7 @@ impl SpellState {
                     wizard.position,
                     view_endpoint,
                     None,
-                    NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+                    PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
                 );
                 endpoint = Some(obstruction.unwrap_or(view_endpoint));
                 terrain_contact = obstruction.is_some();
@@ -87,7 +87,7 @@ impl SpellState {
             }
             if let Some((endpoint, midpoint, target_id)) = &lightning {
                 emission.flame_lash_presentation = Some(
-                    native_flame_lash_main_presentation(NativeFlameMainPresentationInput {
+                    flame_lash_main_presentation(FlameMainPresentationInput {
                         origin,
                         aim: direction,
                         endpoint: *endpoint,
@@ -108,15 +108,10 @@ impl SpellState {
                 self.next_id += 1;
             } else if profile.build_id == 1005 {
                 let obstruction = |start, end| {
-                    (context.obstruction)(
-                        start,
-                        end,
-                        None,
-                        NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
-                    )
+                    (context.obstruction)(start, end, None, PRIMARY_CAST_TERRAIN_EXCLUSION_MASK)
                 };
-                if let Some(actor) = spawn_native_weld_steam_actor(
-                    SpawnNativeWeldSteamInput {
+                if let Some(actor) = spawn_weld_steam_actor(
+                    SpawnWeldSteamInput {
                         birth,
                         damage: channel_damage,
                         query_origin: wizard.position,
@@ -125,8 +120,7 @@ impl SpellState {
                     },
                     rng,
                 ) {
-                    self.transients
-                        .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(actor)));
+                    self.transients.push(PrimarySpellTransient::Weld(WeldWorldActor::Steam(actor)));
                     self.next_id += 1;
                 }
             } else {
@@ -139,7 +133,7 @@ impl SpellState {
                     })
                 });
                 let target_id = lightning.as_ref().and_then(|geometry| geometry.2.clone());
-                let actor = create_native_weld_channel_actor(NativeWeldChannelInput {
+                let actor = create_weld_channel_actor(WeldChannelInput {
                     birth,
                     endpoint,
                     midpoint,
@@ -148,17 +142,15 @@ impl SpellState {
                     enhanced_effects: context.enhanced_effects,
                     flame_visual: None,
                 });
-                self.transients
-                    .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::Channel(actor)));
+                self.transients.push(PrimarySpellTransient::Weld(WeldWorldActor::Channel(actor)));
                 self.next_id += 1;
-                let glows = create_native_weld_blizzard_source_glows(
-                    NativeWeldActorBirth { id: self.next_id, ..birth },
+                let glows = create_weld_blizzard_source_glows(
+                    WeldActorBirth { id: self.next_id, ..birth },
                     rng,
                 );
                 for glow in glows {
-                    self.transients.push(PrimarySpellTransient::Weld(
-                        NativeWeldWorldActor::BlizzardGlow(glow),
-                    ));
+                    self.transients
+                        .push(PrimarySpellTransient::Weld(WeldWorldActor::BlizzardGlow(glow)));
                     self.next_id += 1;
                 }
             }
@@ -169,15 +161,13 @@ impl SpellState {
             assert!(matches!(profile.build_id, 1006..=1008), "persistent Weld build");
             let mut meteor_program = None;
             if profile.build_id == 1007 {
-                let center = native_weld_meteor_target_point(wizard.position, direction);
-                let marker = spawn_native_weld_meteor_marker(
-                    NativeWeldActorBirth { origin: center, ..birth },
-                    rng,
-                );
+                let center = weld_meteor_target_point(wizard.position, direction);
+                let marker =
+                    spawn_weld_meteor_marker(WeldActorBirth { origin: center, ..birth }, rng);
                 self.transients
-                    .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::MeteorMarker(marker)));
+                    .push(PrimarySpellTransient::Weld(WeldWorldActor::MeteorMarker(marker)));
                 self.next_id += 1;
-                let damage = draw_native_weld_damage(
+                let damage = draw_weld_damage(
                     rng,
                     profile.common.damage_minimum,
                     profile.common.damage_maximum,
@@ -185,26 +175,25 @@ impl SpellState {
                 meteor_program = Some((center, damage));
             }
             let current = self.transients.iter().position(|effect| {
-                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect
-                else {
+                let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)) = effect else {
                     return false;
                 };
                 actor.common().owner.owner_id == context.owner_id
                     && actor.common().build_id == profile.build_id
                     && actor.held()
             });
-            let mut update = NativeWeldPersistentUpdate::default();
+            let mut update = WeldPersistentUpdate::default();
             let actor = if let Some(index) = current {
-                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) =
+                let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)) =
                     self.transients.get_mut(index).expect("selected persistent spell remains live")
                 else {
                     unreachable!()
                 };
-                update = update_native_weld_persistent_actor(
+                update = update_weld_persistent_actor(
                     actor,
                     origin,
                     direction,
-                    NativeWeldPersistentUpdateOptions {
+                    WeldPersistentUpdateOptions {
                         cast_progress_factor: authority.cast_progress_factor,
                         enhanced_effects: true,
                         underpowered,
@@ -213,8 +202,8 @@ impl SpellState {
                 );
                 actor.clone()
             } else {
-                let actor = create_native_weld_persistent_actor(
-                    NativeWeldActorBirth { id: self.next_id, ..birth },
+                let actor = create_weld_persistent_actor(
+                    WeldActorBirth { id: self.next_id, ..birth },
                     Some(order),
                 );
                 if matches!(profile.build_id, 1006 | 1008) {
@@ -222,13 +211,12 @@ impl SpellState {
                         Some(fround(1.5 - rng.draw_scaled_float(0.5_f32 as f64, false)));
                 }
                 self.next_id += 1;
-                self.transients.push(PrimarySpellTransient::Weld(
-                    NativeWeldWorldActor::Persistent(actor.clone()),
-                ));
+                self.transients
+                    .push(PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor.clone())));
                 actor
             };
             let common = actor.common();
-            let child_birth = NativeWeldActorBirth {
+            let child_birth = WeldActorBirth {
                 build_id: common.build_id,
                 direction: common.direction,
                 id: self.next_id,
@@ -239,27 +227,27 @@ impl SpellState {
                 world_key: &common.owner.world_key,
             };
             for debris in update.debris {
-                let child = create_native_weld_boulder_debris_actor(
-                    NativeWeldActorBirth { id: self.next_id, ..child_birth },
+                let child = create_weld_boulder_debris_actor(
+                    WeldActorBirth { id: self.next_id, ..child_birth },
                     debris,
                 );
                 self.transients
-                    .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(child)));
+                    .push(PrimarySpellTransient::Weld(WeldWorldActor::BoulderDebris(child)));
                 self.next_id += 1;
             }
             for fade in update.hail_rock_fades {
-                let child = create_native_weld_hail_rock_fade_actor(
-                    NativeWeldActorBirth { id: self.next_id, ..child_birth },
+                let child = create_weld_hail_rock_fade_actor(
+                    WeldActorBirth { id: self.next_id, ..child_birth },
                     fade.position,
                     fade.rotation_degrees,
                 );
                 self.transients
-                    .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::HailRockFade(child)));
+                    .push(PrimarySpellTransient::Weld(WeldWorldActor::HailRockFade(child)));
                 self.next_id += 1;
             }
             if update.release_requested {
                 let id = actor.common().owner.id;
-                let release = release_native_weld_persistent_actor(
+                let release = release_weld_persistent_actor(
                     actor,
                     self.next_id,
                     context.tick,
@@ -275,8 +263,8 @@ impl SpellState {
                 wizard.primary_cast.target_id = None;
             }
             if profile.build_id == 1007
-                && native_selected_age.is_some_and(|age| {
-                    age.is_multiple_of(native_weld_meteor_cadence_ticks(
+                && selected_age.is_some_and(|age| {
+                    age.is_multiple_of(weld_meteor_cadence_ticks(
                         authority.cast_progress_factor,
                         underpowered,
                     ))
@@ -287,7 +275,7 @@ impl SpellState {
                 let resolve = |candidate| {
                     (context.obstruction)(center, candidate, None, 0).unwrap_or(candidate)
                 };
-                let spawn = create_native_weld_meteor_spawn_program(
+                let spawn = create_weld_meteor_spawn_program(
                     direction,
                     center,
                     &resolve,
@@ -302,8 +290,8 @@ impl SpellState {
                     .enumerate()
                     .map(|(index, value)| if underpowered && index >= 5 { 0.0 } else { *value })
                     .collect();
-                let actor = create_native_weld_meteor(
-                    NativeWeldActorBirth {
+                let actor = create_weld_meteor(
+                    WeldActorBirth {
                         id: self.next_id,
                         origin: spawn.position,
                         vector: &vector,
@@ -314,8 +302,7 @@ impl SpellState {
                     underpowered,
                     Some(order),
                 );
-                self.transients
-                    .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(actor)));
+                self.transients.push(PrimarySpellTransient::Weld(WeldWorldActor::Meteor(actor)));
                 self.next_id += 1;
             }
         }
@@ -329,7 +316,7 @@ impl SpellState {
         &mut self,
         owner_id: &str,
         tick: u64,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
         targets: &[crate::spells::targeting::PrimarySpellTarget],
     ) {
@@ -337,8 +324,8 @@ impl SpellState {
             .transients
             .iter()
             .filter_map(|effect| {
-                if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                    NativeWeldPersistentActorState::Hailstones(hail),
+                if let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+                    WeldPersistentActorState::Hailstones(hail),
                 )) = effect
                     && hail.common.owner.owner_id == owner_id
                     && hail.phase == crate::spells::model::PrimarySpellProjectilePhase::Held
@@ -351,7 +338,7 @@ impl SpellState {
             .collect();
         let mut population = std::mem::take(&mut self.transients);
         population.advance(|effect| {
-            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::HailRockFade(fade)) = effect
+            if let PrimarySpellTransient::Weld(WeldWorldActor::HailRockFade(fade)) = effect
                 && fade.common.owner.owner_id == owner_id
                 && releasing_hail.iter().any(|(world, birth)| {
                     fade.common.owner.world_key == *world && fade.common.birth_tick >= *birth
@@ -359,15 +346,14 @@ impl SpellState {
             {
                 return (false, Vec::new());
             }
-            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect
-            else {
+            let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)) = effect else {
                 return (true, Vec::new());
             };
             if actor.common().owner.owner_id != owner_id || !actor.held() {
                 return (true, Vec::new());
             }
             let parent_id = actor.common().owner.id;
-            let release = release_native_weld_persistent_actor(
+            let release = release_weld_persistent_actor(
                 actor.clone(),
                 self.next_id,
                 tick,
@@ -380,32 +366,31 @@ impl SpellState {
             let retained = if let Some(parent) = actors.next() {
                 // Boulder and Hail retain their first released body and its painter identity.
                 assert_eq!(parent.common().owner.id, parent_id);
-                *effect = PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(parent));
+                *effect = PrimarySpellTransient::Weld(WeldWorldActor::Persistent(parent));
                 true
             } else {
                 false
             };
             let mut births: Vec<_> = actors
-                .map(|actor| PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)))
+                .map(|actor| PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)))
                 .collect();
             if let Some(fade) = release.frost_fade {
-                births.push(PrimarySpellTransient::Weld(NativeWeldWorldActor::FrostFade(fade)));
+                births.push(PrimarySpellTransient::Weld(WeldWorldActor::FrostFade(fade)));
             }
             (retained, births)
         });
         self.transients = population;
     }
 
-    fn append_weld_release(&mut self, release: NativeWeldPersistentRelease) {
+    fn append_weld_release(&mut self, release: WeldPersistentRelease) {
         self.transients.extend(
             release
                 .actors
                 .into_iter()
-                .map(|actor| PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor))),
+                .map(|actor| PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor))),
         );
         if let Some(fade) = release.frost_fade {
-            self.transients
-                .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::FrostFade(fade)));
+            self.transients.push(PrimarySpellTransient::Weld(WeldWorldActor::FrostFade(fade)));
         }
     }
 }

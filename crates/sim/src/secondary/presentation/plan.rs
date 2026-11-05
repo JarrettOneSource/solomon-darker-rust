@@ -4,39 +4,35 @@
 use super::bursts::*;
 use super::draws::*;
 use super::fields::{magic_circle_ring_draws_at_age, prismatic_wave_draws_at_age};
-use super::golem::{
-    native_golem_death_presentation_plan_at_age, native_golem_presentation_plan_at_age,
-};
+use super::golem::{golem_death_presentation_plan_at_age, golem_presentation_plan_at_age};
 use super::weather::{
     freeze_wave_visual_draws_at_age, storm_auxiliary_draws_at_age, storm_cloud_draws_at_age,
     storm_weather_composite_at_age,
 };
 use super::*;
 use crate::enemies::presentation::{
-    NativeEnemyProjectileKind, NativeEnemyProjectilePayload, NativeEnemyProjectileVisual,
-    native_death_magic_layers, native_enemy_projectile_plan,
+    EnemyProjectileVisual, NativeEnemyProjectileKind, NativeEnemyProjectilePayload,
+    death_magic_layers, enemy_projectile_plan,
 };
 use crate::float;
 use crate::float::{fround, hypot};
-use crate::secondary::NativeSecondaryActorKind as Kind;
-use crate::secondary::NativeSecondaryActorState;
-use crate::secondary::ether_drain::{NativeEtherDrainAnimation, NativeEtherDrainAtlas};
-use crate::secondary::leviathan::{
-    native_leviathan_appendage_local_root, native_leviathan_appendage_record,
-};
+use crate::secondary::SecondaryActorKind as Kind;
+use crate::secondary::SecondaryActorState;
+use crate::secondary::ether_drain::{EtherDrainAnimation, EtherDrainAtlas};
+use crate::secondary::leviathan::{leviathan_appendage_local_root, leviathan_appendage_record};
 use crate::spells::ether_presentation::ether_primary_compositor_plan;
-use crate::spells::fire_presentation::{native_fire_ember_plan, native_fire_explosion_plan};
+use crate::spells::fire_presentation::{fire_ember_plan, fire_explosion_plan};
 use crate::spells::model::FireExplosionPresentation;
-use crate::spells::presentation::{NativeSpellSprite, SpellAtlas, SpellBlend};
-use crate::{NativeRng, Vec2};
+use crate::spells::presentation::{SpellAtlas, SpellBlend, SpellSprite};
+use crate::{Rng, Vec2};
 
 #[must_use]
-pub fn native_secondary_presentation_plan(
-    actor: &NativeSecondaryActorState,
+pub fn secondary_presentation_plan(
+    actor: &SecondaryActorState,
     frame: f64,
     point_gain: f64,
-) -> NativeSecondaryPresentationPlan {
-    native_secondary_presentation_plan_at_age(
+) -> SecondaryPresentationPlan {
+    secondary_presentation_plan_at_age(
         actor,
         actor.age_ticks as f64,
         frame,
@@ -51,18 +47,18 @@ pub fn native_secondary_presentation_plan(
 /// The live quality argument is independent of retained actor birth fields;
 /// the ordinary snapshot wrapper uses Source's `actor.enhanced` default.
 #[must_use]
-pub fn native_secondary_presentation_plan_at_age(
-    actor: &NativeSecondaryActorState,
+pub fn secondary_presentation_plan_at_age(
+    actor: &SecondaryActorState,
     age_ticks: f64,
     frame: f64,
     point_gain: f64,
     enhanced_effects: bool,
-) -> NativeSecondaryPresentationPlan {
+) -> SecondaryPresentationPlan {
     let whole_age_ticks = age_ticks.trunc().max(0.0) as u64;
-    let mut plan = NativeSecondaryPresentationPlan::new(actor.position);
-    let make = |atlas, entry| NativeSecondarySpriteDraw::new(actor, atlas, entry);
-    use NativeSecondaryAtlas::{BadGuys, DeadHawg};
-    use NativeSecondaryBlend::Add;
+    let mut plan = SecondaryPresentationPlan::new(actor.position);
+    let make = |atlas, entry| SecondarySpriteDraw::new(actor, atlas, entry);
+    use SecondaryAtlas::{BadGuys, DeadHawg};
+    use SecondaryBlend::Add;
     match actor.kind {
         Kind::GolemKnockback => {}
         Kind::PlanewalkerMote => {
@@ -91,7 +87,7 @@ pub fn native_secondary_presentation_plan_at_age(
                 plan.background_draws.push(shadow);
             }
             plan.background_draws.push(chip);
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
         }
         Kind::GolemAssemblyDebris => {
             let mut rock = make(BadGuys, actor.frame as usize);
@@ -108,7 +104,7 @@ pub fn native_secondary_presentation_plan_at_age(
                 plan.draws.push(shadow);
             }
             plan.draws.push(rock);
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
             plan.sort_bias = -15.0;
         }
         Kind::Leviathan => {
@@ -124,25 +120,24 @@ pub fn native_secondary_presentation_plan_at_age(
             shimmer.alpha = 1.0;
             shimmer.role = "leviathan-plane-shimmer".into();
             plan.draws.extend([galaxy, shimmer]);
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
             plan.sort_bias = -0.11;
         }
         Kind::LeviathanAppendage => {
             let heading = actor.rotation_radians * 180.0 / std::f64::consts::PI;
-            let local = native_leviathan_appendage_local_root(
+            let local = leviathan_appendage_local_root(
                 actor.endpoint,
                 actor.midpoint,
                 actor.velocity.x,
                 actor.slow_factor,
             );
             let parent_y = actor.position.y - actor.scale * local.y;
-            let mut draw =
-                make(BadGuys, native_leviathan_appendage_record(actor.phase as u32, heading));
+            let mut draw = make(BadGuys, leviathan_appendage_record(actor.phase as u32, heading));
             draw.rotation_radians = degrees_to_radians(float::sin(actor.rotation_radians) * 5.0);
             draw.scale_x = actor.radius * actor.scale;
             draw.scale_y = draw.scale_x;
             plan.draws.push(draw);
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
             plan.sort_bias = parent_y + (actor.frame - 100.0) * 0.001 - actor.position.y;
         }
         Kind::LeviathanMote | Kind::PlaneOrbParticle => {
@@ -167,7 +162,7 @@ pub fn native_secondary_presentation_plan_at_age(
             plan.draws.push(draw);
         }
         Kind::EtherFade => {
-            let fade = native_ether_fade_scalar(actor.alpha, actor.slow_factor, frame);
+            let fade = ether_fade_scalar(actor.alpha, actor.slow_factor, frame);
             let source = ether_primary_compositor_plan(
                 actor.id,
                 (actor.quantity + frame).floor() as u64,
@@ -223,7 +218,7 @@ pub fn native_secondary_presentation_plan_at_age(
             draw.scale_x = scale * actor.quantity;
             draw.scale_y = scale;
             plan.draws.push(draw);
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
         }
         Kind::FireBurnFlame | Kind::EtherBurnFlare => {
             let range = if actor.kind == Kind::FireBurnFlame { (333, 342) } else { (246, 250) };
@@ -276,19 +271,18 @@ pub fn native_secondary_presentation_plan_at_age(
             }
         }
         Kind::StormStrike | Kind::ElectricBurnArc => {
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic
         }
         Kind::ElectricBurnFlare => {
-            let corona = crate::spells::air::build_native_air_corona_plan(
-                crate::spells::air::NativeAirCoronaInput {
+            let corona =
+                crate::spells::air::build_air_corona_plan(crate::spells::air::AirCoronaInput {
                     alpha: actor.alpha,
                     angle: actor.rotation_radians,
                     center: actor.position,
                     random_salt: 0x46414445 ^ actor.age_ticks as u32,
                     scale: actor.scale,
                     seed: actor.id,
-                },
-            );
+                });
             for sprite in corona.draws {
                 let mut draw = make(BadGuys, sprite.record);
                 draw.alpha = actor.alpha * sprite.alpha;
@@ -359,7 +353,7 @@ pub fn native_secondary_presentation_plan_at_age(
                     plan.draws.push(draw);
                 }
             }
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
         }
         Kind::EarthquakeQuake => {
             let mut draw = make(BadGuys, 62);
@@ -397,8 +391,8 @@ pub fn native_secondary_presentation_plan_at_age(
             plan.draws.push(draw);
             plan.sort_bias = -15.0;
         }
-        Kind::Golem => return native_golem_presentation_plan_at_age(actor, age_ticks, frame),
-        Kind::GolemDeath => return native_golem_death_presentation_plan_at_age(actor, age_ticks),
+        Kind::Golem => return golem_presentation_plan_at_age(actor, age_ticks, frame),
+        Kind::GolemDeath => return golem_death_presentation_plan_at_age(actor, age_ticks),
         Kind::TeleportBurst => {
             let mut draw = make(BadGuys, 90);
             draw.alpha = actor.alpha.min(1.0);
@@ -434,7 +428,7 @@ pub fn native_secondary_presentation_plan_at_age(
         Kind::DampenedSmoke => {
             let mut draw = make(BadGuys, actor.frame as usize);
             draw.alpha = actor.alpha * actor.phase;
-            draw.blend = if actor.variant == 3 { NativeSecondaryBlend::Normal } else { Add };
+            draw.blend = if actor.variant == 3 { SecondaryBlend::Normal } else { Add };
             draw.role = "dampened-smoke".into();
             draw.rotation_radians = actor.rotation_radians;
             draw.tint = actor.quantity as u32;
@@ -451,7 +445,7 @@ pub fn native_secondary_presentation_plan_at_age(
             plan.draws = shield_explosion_draws_at_age(actor, whole_age_ticks);
         }
         Kind::RingFireExplosion => {
-            let source = native_fire_explosion_plan(
+            let source = fire_explosion_plan(
                 age_ticks,
                 actor.position,
                 FireExplosionPresentation::Fire,
@@ -470,7 +464,7 @@ pub fn native_secondary_presentation_plan_at_age(
             }
         }
         Kind::RingFireFragment => {
-            let source = native_fire_ember_plan(
+            let source = fire_ember_plan(
                 actor.id,
                 actor.phase,
                 actor.alpha,
@@ -487,14 +481,14 @@ pub fn native_secondary_presentation_plan_at_age(
             for (draw, &role) in source.draws.into_iter().zip(roles) {
                 plan.draws.push(spell_draw(draw, role.into()));
             }
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
             if enhanced_effects && actor.phase < 0.0 {
                 let width = fround(38.0 * 0.75);
                 let height = fround(37.0 * (0.6_f32 as f64));
-                plan.quads.push(NativeSecondaryQuadDraw {
+                plan.quads.push(SecondaryQuadDraw {
                     alpha: fround((1.0 - actor.phase / -50.0 * 0.5) * 0.25),
                     atlas: Some(BadGuys),
-                    blend: NativeSecondaryBlend::Normal,
+                    blend: SecondaryBlend::Normal,
                     entry: Some(15),
                     role: "ring-fire-fragment-enhanced-ground-glow".into(),
                     tint: 0xff8040,
@@ -556,7 +550,7 @@ pub fn native_secondary_presentation_plan_at_age(
             draw.scale_x = 2.0;
             draw.scale_y = 2.0;
             plan.draws.push(draw);
-            plan.queue_family = NativeSecondaryQueueFamily::OrdinaryDynamic;
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
         }
         Kind::CometTrail => {
             let mut draw = make(BadGuys, 51);
@@ -608,16 +602,16 @@ pub fn native_secondary_presentation_plan_at_age(
     plan
 }
 
-fn spell_draw(draw: NativeSpellSprite, role: String) -> NativeSecondarySpriteDraw {
-    NativeSecondarySpriteDraw {
+fn spell_draw(draw: SpellSprite, role: String) -> SecondarySpriteDraw {
+    SecondarySpriteDraw {
         alpha: draw.alpha,
         atlas: match draw.atlas {
-            SpellAtlas::BadGuys => NativeSecondaryAtlas::BadGuys,
-            SpellAtlas::DeadHawg => NativeSecondaryAtlas::DeadHawg,
+            SpellAtlas::BadGuys => SecondaryAtlas::BadGuys,
+            SpellAtlas::DeadHawg => SecondaryAtlas::DeadHawg,
         },
         blend: match draw.blend {
-            SpellBlend::Normal => NativeSecondaryBlend::Normal,
-            SpellBlend::Add => NativeSecondaryBlend::Add,
+            SpellBlend::Normal => SecondaryBlend::Normal,
+            SpellBlend::Add => SecondaryBlend::Add,
         },
         color_mode: None,
         clip: None,
@@ -632,19 +626,19 @@ fn spell_draw(draw: NativeSpellSprite, role: String) -> NativeSecondarySpriteDra
 }
 
 fn dampened_projectile_draws(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age_ticks: f64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let layers = if actor.variant == 3 {
-        native_death_magic_layers(
+        death_magic_layers(
             Vec2::ZERO,
             1.25,
             actor.phase,
-            &mut NativeRng::new((actor.id + age_ticks.trunc() as u64) as i64),
+            &mut Rng::new((actor.id + age_ticks.trunc() as u64) as i64),
         )
     } else {
-        native_enemy_projectile_plan(
-            &NativeEnemyProjectileVisual {
+        enemy_projectile_plan(
+            &EnemyProjectileVisual {
                 age_ticks: 0,
                 heading_degrees: actor.rotation_radians * 180.0 / std::f64::consts::PI,
                 id: actor.target_id.map_or(actor.id, |id| id as u64),
@@ -672,14 +666,14 @@ fn dampened_projectile_draws(
     let mut draws = Vec::new();
     for layer in layers {
         let atlas = match layer.atlas {
-            SpellAtlas::BadGuys => NativeSecondaryAtlas::BadGuys,
-            SpellAtlas::DeadHawg => NativeSecondaryAtlas::DeadHawg,
+            SpellAtlas::BadGuys => SecondaryAtlas::BadGuys,
+            SpellAtlas::DeadHawg => SecondaryAtlas::DeadHawg,
         };
-        let mut draw = NativeSecondarySpriteDraw::new(actor, atlas, layer.entry);
+        let mut draw = SecondarySpriteDraw::new(actor, atlas, layer.entry);
         draw.alpha = layer.alpha;
         draw.blend = match layer.blend {
-            SpellBlend::Normal => NativeSecondaryBlend::Normal,
-            SpellBlend::Add => NativeSecondaryBlend::Add,
+            SpellBlend::Normal => SecondaryBlend::Normal,
+            SpellBlend::Add => SecondaryBlend::Add,
         };
         draw.offset = layer.offset;
         draw.role = format!(
@@ -696,10 +690,7 @@ fn dampened_projectile_draws(
     draws
 }
 
-fn magic_trap_draws(
-    actor: &NativeSecondaryActorState,
-    age_ticks: f64,
-) -> Vec<NativeSecondarySpriteDraw> {
+fn magic_trap_draws(actor: &SecondaryActorState, age_ticks: f64) -> Vec<SecondarySpriteDraw> {
     let radians = degrees_to_radians(age_ticks);
     let sine = float::sin(radians);
     let bob = fround(5.0 * sine - 12.0);
@@ -707,7 +698,7 @@ fn magic_trap_draws(
     let scale = fround(fround(0.5 + fround(0.5 * actor.scale)) * multiplier);
     let halo = fround(fround(0.5 - fround(0.125 * sine)) * multiplier);
     let selector = fround(fround(0.375 - fround(0.125 * sine)) * multiplier);
-    let mut shadow = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 15);
+    let mut shadow = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 15);
     shadow.alpha = 0.5;
     shadow.role = "magic-trap-shadow".into();
     shadow.scale_x = 0.75;
@@ -717,9 +708,9 @@ fn magic_trap_draws(
     for (entry, role, rotation) in
         [(111, "magic-trap-clockwise-halo", 2.0), (112, "magic-trap-counterclockwise-halo", -3.0)]
     {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, entry);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, entry);
         draw.alpha = halo;
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.offset = Vec2::new(0.0, bob);
         draw.role = role.into();
         draw.rotation_radians = degrees_to_radians(age_ticks * rotation);
@@ -727,15 +718,15 @@ fn magic_trap_draws(
         draw.scale_y = fround(scale * (0.8_f32 as f64));
         draws.push(draw);
     }
-    let mut glow = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 15);
+    let mut glow = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 15);
     glow.alpha = selector;
-    glow.blend = NativeSecondaryBlend::Add;
+    glow.blend = SecondaryBlend::Add;
     glow.role = "magic-trap-selector-glow".into();
     glow.scale_x = 2.0;
     glow.scale_y = 2.0;
     glow.tint = magic_trap_tint(actor.variant);
     draws.push(glow);
-    let mut body = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 85);
+    let mut body = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 85);
     body.alpha = 1.0;
     body.offset = Vec2::new(0.0, bob);
     body.role = "magic-trap-body".into();
@@ -745,19 +736,16 @@ fn magic_trap_draws(
     draws
 }
 
-fn acid_rain_plan(
-    actor: &NativeSecondaryActorState,
-    age_ticks: f64,
-) -> NativeSecondaryPresentationPlan {
+fn acid_rain_plan(actor: &SecondaryActorState, age_ticks: f64) -> SecondaryPresentationPlan {
     let scale = fround(actor.scale);
     let alpha = fround(actor.phase).clamp(0.0, 1.0);
     let phase = fround(actor.rotation_radians);
     let age = fround(age_ticks);
     let first = fround(scale * 5.0);
     let second = fround(fround(scale * 3.75) * 2.0);
-    let mut plan = NativeSecondaryPresentationPlan::new(actor.position);
+    let mut plan = SecondaryPresentationPlan::new(actor.position);
     if alpha > 0.0 {
-        let mut cloud = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 78);
+        let mut cloud = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 78);
         cloud.alpha = fround(alpha * 0.75);
         cloud.offset = Vec2::new(0.0, -175.0);
         cloud.role = "acid-rain-cloud-mottled-source-over".into();
@@ -766,12 +754,12 @@ fn acid_rain_plan(
         cloud.scale_y = fround(first * (0.8_f32 as f64));
         cloud.tint = 0x698c52;
         let mut additive = cloud.clone();
-        additive.blend = NativeSecondaryBlend::Add;
+        additive.blend = SecondaryBlend::Add;
         additive.role = "acid-rain-cloud-mottled-additive".into();
         plan.draws.extend([cloud, additive]);
-        let mut circle = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 10);
+        let mut circle = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 10);
         circle.alpha = alpha;
-        circle.blend = NativeSecondaryBlend::Add;
+        circle.blend = SecondaryBlend::Add;
         circle.offset = Vec2::new(0.0, fround(-175.0 + scale * -50.0));
         circle.role = "acid-rain-cloud-circle-additive".into();
         circle.rotation_radians = degrees_to_radians(fround(age * -0.5));
@@ -782,7 +770,7 @@ fn acid_rain_plan(
         plan.draws.push(circle);
     }
     if actor.alpha > 0.0 {
-        let mut residue = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::DeadHawg, 4);
+        let mut residue = SecondarySpriteDraw::new(actor, SecondaryAtlas::DeadHawg, 4);
         residue.alpha = actor.alpha.clamp(0.0, 1.0);
         residue.role = "acid-rain-ground-residue".into();
         residue.scale_x = 4.5;
@@ -794,10 +782,7 @@ fn acid_rain_plan(
     plan
 }
 
-fn ether_drain_draws(
-    actor: &NativeSecondaryActorState,
-    frame: f64,
-) -> Vec<NativeSecondarySpriteDraw> {
+fn ether_drain_draws(actor: &SecondaryActorState, frame: f64) -> Vec<SecondarySpriteDraw> {
     let mut draws = Vec::new();
     for (role, alpha, y, rotation, x_scale, y_scale, tint) in [
         (
@@ -837,9 +822,9 @@ fn ether_drain_draws(
             WHITE,
         ),
     ] {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 75);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 75);
         draw.alpha = alpha;
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.offset = Vec2::new(0.0, y);
         draw.role = role.into();
         draw.rotation_radians = rotation;
@@ -851,7 +836,7 @@ fn ether_drain_draws(
     let scale = actor.scale
         * 0.25
         * ((0.98_f32 as f64) + hash_unit(actor.id, frame.trunc() as u64) * 0.06999993324279785);
-    let mut shimmer = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 38);
+    let mut shimmer = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 38);
     shimmer.alpha = 1.0;
     shimmer.role = "ether-drain-shimmer".into();
     shimmer.scale_x = scale;
@@ -859,7 +844,7 @@ fn ether_drain_draws(
     shimmer.tint = 0xff4080;
     draws.push(shimmer);
     if actor.slow_factor > 0.0 {
-        let mut pulse = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 38);
+        let mut pulse = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 38);
         pulse.alpha = actor.slow_factor;
         pulse.role = "ether-drain-capture-pulse".into();
         pulse.scale_x = actor.slow_factor * actor.scale;
@@ -870,7 +855,7 @@ fn ether_drain_draws(
         // Retail private-manager draw follows the parent pulse. Anim_Sucked
         // 0x00455370 uses field opacity, unit scale and a field-local clip.
         let private = |atlas, entry, role: &str| {
-            let mut draw = NativeSecondarySpriteDraw::new(actor, atlas, entry);
+            let mut draw = SecondarySpriteDraw::new(actor, atlas, entry);
             draw.role = role.into();
             draw.scale_x = 1.0;
             draw.scale_y = 1.0;
@@ -878,11 +863,9 @@ fn ether_drain_draws(
         };
         for (index, animation) in field.animations.iter().enumerate() {
             match *animation {
-                NativeEtherDrainAnimation::Debris {
-                    position, rotation_degrees, variant, ..
-                } => {
+                EtherDrainAnimation::Debris { position, rotation_degrees, variant, .. } => {
                     let mut debris = private(
-                        NativeSecondaryAtlas::DeadHawg,
+                        SecondaryAtlas::DeadHawg,
                         177 + variant as usize,
                         &format!("ether-drain-private-debris-{index}"),
                     );
@@ -891,23 +874,17 @@ fn ether_drain_draws(
                     debris.rotation_radians = degrees_to_radians(rotation_degrees);
                     draws.push(debris);
                 }
-                NativeEtherDrainAnimation::Captured {
-                    alpha,
-                    atlas,
-                    entry,
-                    tint,
-                    body_y_offset,
-                } => {
+                EtherDrainAnimation::Captured { alpha, atlas, entry, tint, body_y_offset } => {
                     if alpha < 1.0 {
                         draws.push(private(
-                            NativeSecondaryAtlas::BadGuys,
+                            SecondaryAtlas::BadGuys,
                             9,
                             "ether-drain-capture-back-rim",
                         ));
                     }
                     let atlas = match atlas {
-                        NativeEtherDrainAtlas::BadGuys => NativeSecondaryAtlas::BadGuys,
-                        NativeEtherDrainAtlas::Demon => NativeSecondaryAtlas::Demon,
+                        EtherDrainAtlas::BadGuys => SecondaryAtlas::BadGuys,
+                        EtherDrainAtlas::Demon => SecondaryAtlas::Demon,
                     };
                     let mut image = private(atlas, entry, "ether-drain-captured-image");
                     image.offset.y =
@@ -918,11 +895,8 @@ fn ether_drain_draws(
                     }
                     draws.push(image);
                     if alpha < 1.0 {
-                        let mut front = private(
-                            NativeSecondaryAtlas::BadGuys,
-                            8,
-                            "ether-drain-capture-front-rim",
-                        );
+                        let mut front =
+                            private(SecondaryAtlas::BadGuys, 8, "ether-drain-capture-front-rim");
                         front.offset.y = -1.0;
                         draws.push(front);
                     }

@@ -6,42 +6,38 @@ use std::collections::BTreeMap;
 use solomon_sim::boneyard::BoneyardWorld;
 use solomon_sim::boneyard::arena::ArenaPhase;
 use solomon_sim::boneyard::lighting::{
-    NativeBoneyardLightIndex, NativeBoneyardLightManagerView, NativePlayerLightOwner,
-    native_boneyard_light_tint, native_lantern_light_source, native_player_light_source,
+    BoneyardLightIndex, BoneyardLightManagerView, PlayerLightOwner, boneyard_light_tint,
+    lantern_light_source, player_light_source,
 };
 use solomon_sim::boneyard::presentation::{
-    native_arena_displacement_cover, native_enemy_world_feedback_transform,
+    arena_displacement_cover, enemy_world_feedback_transform,
 };
-use solomon_sim::boneyard::shadows::{NativeShadowCaster, native_shadow_records};
+use solomon_sim::boneyard::shadows::{ShadowCaster, shadow_records};
 use solomon_sim::boneyard::solomon_presentation::{
-    SolomonPainterKind, SolomonSetPieceLighting, native_solomon_set_piece_lighting,
+    SolomonPainterKind, SolomonSetPieceLighting, solomon_set_piece_lighting,
 };
 use solomon_sim::boneyard::world_light::{
     BoneyardEntityLightPresentation, BoneyardLightEnvironment, WorldLightOwner, WorldLightPlayer,
-    collect_boneyard_entity_lights, native_region_point_gain, ordered_boneyard_light_sources,
+    collect_boneyard_entity_lights, ordered_boneyard_light_sources, region_point_gain,
 };
 use solomon_sim::combat::PlayerLifeState;
-use solomon_sim::crow_blindness::native_crow_blindness_frame;
+use solomon_sim::crow_blindness::crow_blindness_frame;
 use solomon_sim::enemies::EnemyToken;
 use solomon_sim::enemies::model::{EnemyActor, EnemyEvent};
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHitKind;
-use solomon_sim::enemies::underlay::native_enemy_directional_shadow_family;
+use solomon_sim::enemies::underlay::enemy_directional_shadow_family;
 use solomon_sim::hub::painter::PainterLayer;
 use solomon_sim::modding::inventory::{GameSimulationModEffect, ModConsumableCatalogEntry};
 use solomon_sim::painter::PainterRegistration;
 use solomon_sim::painter::overlays::PainterOwnerOverlay;
 use solomon_sim::player::PlayerState;
-use solomon_sim::player_presentation::NativeLevelUpPresentationFrame;
-use solomon_sim::presentation::{native_player_material_tint, native_puppet_hit_tint};
-use solomon_sim::screen_feedback::{
-    native_secondary_world_shake, present_native_secondary_screen_overlay,
-};
-use solomon_sim::secondary::presentation::{
-    NativeSecondaryAtlas, NativeSecondaryBlend, NativeSecondarySpriteDraw,
-};
+use solomon_sim::player_presentation::LevelUpPresentationFrame;
+use solomon_sim::presentation::{native_puppet_hit_tint, player_material_tint};
+use solomon_sim::screen_feedback::{present_secondary_screen_overlay, secondary_world_shake};
+use solomon_sim::secondary::presentation::{SecondaryAtlas, SecondaryBlend, SecondarySpriteDraw};
 use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondarySimulationState, native_secondary_target_effect,
-    native_secondary_target_material_tint,
+    SecondaryActorKind, SecondarySimulationState, secondary_target_effect,
+    secondary_target_material_tint,
 };
 use solomon_sim::settings::{GameSettings, game_light_quality};
 use solomon_sim::spells::model::SpellState;
@@ -57,9 +53,7 @@ use crate::loot::{LootPainterId, LootView};
 use crate::mod_consumable_effects::ModConsumableEffectsView;
 use crate::mod_presentation_assets::ModPresentationAssets;
 use crate::player_effects::{PlayerEffectPlayer, PlayerEffectsView};
-use crate::presentation::{
-    EnemyPresentationMetadata, NativePresentationTimeline, PresentationClocks,
-};
+use crate::presentation::{EnemyPresentationMetadata, PresentationClocks, PresentationTimeline};
 use crate::secondary::{SecondaryPuppetHit, SecondaryView};
 use crate::solomon::{SolomonView, SolomonViewFrame};
 use crate::spells::SpellView;
@@ -70,7 +64,7 @@ use solomon_graphics::Renderer;
 /// Scenery and its light target have the same lifetime as one loaded map.
 pub struct BattleScene {
     pub scenery: BoneyardView,
-    pub lights: NativeBoneyardLightIndex,
+    pub lights: BoneyardLightIndex,
     pub weather: BoneyardWeatherView,
     pub compact_masks: CompactMaskView,
     /// BoneyardWorldRenderer's retained draw count, independent of snapshot ticks.
@@ -86,10 +80,10 @@ pub struct BattleFrame<'a> {
     pub enemy_presentation: Option<&'a EnemyPresentationMetadata>,
     pub local_player_id: &'a str,
     pub camera_focus_player_id: Option<&'a str>,
-    pub scenery_timeline: Option<&'a NativePresentationTimeline>,
+    pub scenery_timeline: Option<&'a PresentationTimeline>,
     pub players: &'a [BattlePlayer<'a>],
     pub spells: &'a SpellState,
-    pub secondary: &'a NativeSecondarySimulationState,
+    pub secondary: &'a SecondarySimulationState,
     pub mod_effects: &'a [GameSimulationModEffect],
     pub mod_catalog: &'a [ModConsumableCatalogEntry],
     pub camera: &'a Camera,
@@ -111,7 +105,7 @@ pub struct BattlePlayer<'a> {
     pub drive_active: bool,
     pub materializing: bool,
     pub blindness_ticks_remaining: f64,
-    pub level_up: Option<&'a NativeLevelUpPresentationFrame>,
+    pub level_up: Option<&'a LevelUpPresentationFrame>,
 }
 
 /// Shared atlas uploads survive new runs. Every effect cache resets at a world replacement.
@@ -209,11 +203,9 @@ impl BattleViews {
         let viewport = frame.viewport;
         let actor_poses = crate::presentation::scenery_actor_poses(
             world,
-            frame.players.iter().map(|player| {
-                solomon_sim::boneyard::scenery::NativeTreePlayerPose {
-                    id: player.id.to_owned(),
-                    position: player.wizard.position,
-                }
+            frame.players.iter().map(|player| solomon_sim::boneyard::scenery::TreePlayerPose {
+                id: player.id.to_owned(),
+                position: player.wizard.position,
             }),
             frame.enemy_presentation,
         );
@@ -244,7 +236,7 @@ impl BattleViews {
             camera.origin.y + viewport.y / (2.0 * camera.scale),
         );
         let point_gain = |position| {
-            native_region_point_gain(
+            region_point_gain(
                 position,
                 camera_center,
                 viewport.x / camera.scale,
@@ -259,7 +251,7 @@ impl BattleViews {
             &world.enemies.puppet_hits,
             frame.clocks,
             frame.enhanced_effects,
-            Some(solomon_sim::spells::weld::NativeFlameLashBounds {
+            Some(solomon_sim::spells::weld::FlameLashBounds {
                 x: camera.origin.x,
                 y: camera.origin.y,
                 width: viewport.x / camera.scale,
@@ -319,8 +311,8 @@ impl BattleViews {
             },
         );
         for player in frame.players.iter().filter(|player| !player.materializing) {
-            if let Some(mut source) = native_player_light_source(
-                NativePlayerLightOwner {
+            if let Some(mut source) = player_light_source(
+                PlayerLightOwner {
                     id: player.id,
                     position: player.wizard.position,
                     heading_index: player.wizard.heading_index,
@@ -333,7 +325,7 @@ impl BattleViews {
                 if player.id == frame.local_player_id
                     && let Some(level_up) = player.level_up
                     && let Some(radius) =
-                        solomon_sim::player_presentation::native_level_up_player_light_radius(
+                        solomon_sim::player_presentation::level_up_player_light_radius(
                             player.overlay_effect_phase,
                             level_up,
                         )
@@ -351,7 +343,7 @@ impl BattleViews {
                 registration: world
                     .lantern_light_registration
                     .expect("active Lantern has its manager registration"),
-                sources: vec![native_lantern_light_source(
+                sources: vec![lantern_light_source(
                     position,
                     compact_frame,
                     frame.settings.multiple_shadows,
@@ -364,7 +356,7 @@ impl BattleViews {
         scene.lights.rebuild(
             &sources,
             &tail,
-            NativeBoneyardLightManagerView {
+            BoneyardLightManagerView {
                 camera_position: camera_center,
                 zoom: camera.scale,
                 viewport,
@@ -402,8 +394,8 @@ impl BattleViews {
         let player_ground_plans: Vec<_> = ground_players
             .iter()
             .map(|participant| {
-                solomon_sim::boneyard::ground_glyph::native_player_ground_glyph(
-                    solomon_sim::boneyard::ground_glyph::NativeGroundPlayer {
+                solomon_sim::boneyard::ground_glyph::player_ground_glyph(
+                    solomon_sim::boneyard::ground_glyph::GroundPlayer {
                         position: participant.wizard.position,
                         heading_degrees: participant.wizard.heading_degrees,
                         scale: 1.0,
@@ -434,7 +426,7 @@ impl BattleViews {
             compact_bounds,
             compact_frame as f64,
         )?;
-        let tint_at = |position| native_boneyard_light_tint(light_at(position));
+        let tint_at = |position| boneyard_light_tint(light_at(position));
         let effect_players: Vec<_> = frame
             .players
             .iter()
@@ -442,7 +434,7 @@ impl BattleViews {
                 id: participant.id,
                 player: participant.player,
                 wizard: participant.wizard,
-                material_tint: native_player_material_tint(
+                material_tint: player_material_tint(
                     tint_at(participant.wizard.position),
                     frame.secondary.players.get(participant.id),
                     &participant.player.combat,
@@ -457,23 +449,19 @@ impl BattleViews {
             &world.death_weapons,
         );
         let actor_tint = |actor: &EnemyActor| {
-            native_secondary_target_material_tint(
+            secondary_target_material_tint(
                 tint_at(actor.position),
-                native_secondary_target_effect(
-                    &frame.secondary.target_effects,
-                    &world_key,
-                    actor.id,
-                ),
+                secondary_target_effect(&frame.secondary.target_effects, &world_key, actor.id),
             )
         };
         let actor_shadows = |actor: &EnemyActor| {
-            let enabled = native_enemy_directional_shadow_family(actor.config.enemy_token)
+            let enabled = enemy_directional_shadow_family(actor.config.enemy_token)
                 && (frame.settings.complex_shadows
                     || actor.config.enemy_token == EnemyToken::Heartmonger);
             EnemyViewShadow {
                 records: if enabled {
-                    native_shadow_records(
-                        &NativeShadowCaster {
+                    shadow_records(
+                        &ShadowCaster {
                             id: format!("enemy:{}", actor.id),
                             position: actor.position,
                             outline: Vec::new(),
@@ -494,7 +482,7 @@ impl BattleViews {
             .map(|player| EnemyViewPlayer {
                 id: player.id,
                 position: player.wizard.position,
-                primary_tint: solomon_sim::profile::primary::native_primary_spell_tint(
+                primary_tint: solomon_sim::profile::primary::primary_spell_tint(
                     player.player.book.primary_skill_id,
                     player.player.book.weld_build_id,
                 ),
@@ -521,7 +509,7 @@ impl BattleViews {
         );
         let mut puppet_hits = BTreeMap::new();
         for actor in frame.secondary.actors.iter() {
-            if actor.world_key != world_key || actor.kind != NativeSecondaryActorKind::Leviathan {
+            if actor.world_key != world_key || actor.kind != SecondaryActorKind::Leviathan {
                 continue;
             }
             let target_id = format!("secondary:{}", actor.id);
@@ -555,7 +543,7 @@ impl BattleViews {
         )?;
         if let Some(dig) = &world.loaded.scene.solomon_dig {
             let lighting = if frame.settings.complex_lighting {
-                native_solomon_set_piece_lighting(
+                solomon_set_piece_lighting(
                     world.encounter.as_ref().map_or(dig.position, |encounter| encounter.position),
                     world.lantern_position.unwrap_or(dig.lantern_position),
                     &tint_at,
@@ -680,7 +668,7 @@ impl BattleViews {
             0.0
         };
         let displacement = if frame.settings.zoom_effects {
-            native_secondary_world_shake(
+            secondary_world_shake(
                 &frame.secondary.actors,
                 &world_key,
                 frame.screen_feedback.camera_displacement,
@@ -688,7 +676,7 @@ impl BattleViews {
         } else {
             Vec2::ZERO
         };
-        let transform = native_enemy_world_feedback_transform(
+        let transform = enemy_world_feedback_transform(
             camera_center,
             camera.scale,
             viewport,
@@ -702,14 +690,11 @@ impl BattleViews {
             ),
             scale: transform.scale,
         };
-        let cover = native_arena_displacement_cover(
-            displacement,
-            viewport,
-            frame.settings.complex_lighting,
-        );
+        let cover =
+            arena_displacement_cover(displacement, viewport, frame.settings.complex_lighting);
         let mut tree_wobbles = BTreeMap::new();
         for actor in frame.secondary.actors.iter() {
-            if actor.kind != NativeSecondaryActorKind::EarthquakeSceneryWobble
+            if actor.kind != SecondaryActorKind::EarthquakeSceneryWobble
                 || actor.world_key != world_key
             {
                 continue;
@@ -782,7 +767,7 @@ impl BattleViews {
                         frame.mod_effects,
                         frame.presentation_tick,
                         &|id| frame.players.iter().find(|player| player.id == id).map(|player| player.wizard.position),
-                        &|position| native_boneyard_light_tint(scene.lights.scalar_at(position)),
+                        &|position| boneyard_light_tint(scene.lights.scalar_at(position)),
                     );
                     self.mod_effects.draw(renderer, camera, spells);
                     self.enemies.draw_late_world(renderer, camera);
@@ -815,7 +800,7 @@ impl BattleViews {
                             let participant = &frame.players[*index];
                             let player = participant.player;
                             wizard.set_equipment(&equipment[*index]);
-                            wizard.set_material_tint(native_player_material_tint(
+                            wizard.set_material_tint(player_material_tint(
                                 tint_at(participant.wizard.position),
                                 frame.secondary.players.get(participant.id),
                                 &player.combat,
@@ -834,9 +819,9 @@ impl BattleViews {
                                 staff_action_pose: frame.spells.transients.iter().find_map(
                                     |effect| match effect {
                                         solomon_sim::spells::model::PrimarySpellTransient::Staff(
-                                            solomon_sim::spells::staff::NativePlayerStaffTransient::Action(action),
+                                            solomon_sim::spells::staff::PlayerStaffTransient::Action(action),
                                         ) if action.common().owner_id == participant.id => {
-                                            Some(solomon_sim::spells::staff::native_player_staff_action_pose(action))
+                                            Some(solomon_sim::spells::staff::player_staff_action_pose(action))
                                         }
                                         _ => None,
                                     },
@@ -894,7 +879,7 @@ impl BattleViews {
         );
         scene.weather.draw_streaks(renderer, camera);
         draw_world_overlays(renderer, camera);
-        if let Some(overlay) = present_native_secondary_screen_overlay(
+        if let Some(overlay) = present_secondary_screen_overlay(
             frame.screen_feedback.overlay,
             frame.settings.reduced_screen_flashes,
         ) {
@@ -908,7 +893,7 @@ impl BattleViews {
                 ],
             );
         }
-        if let Some(blindness) = native_crow_blindness_frame(
+        if let Some(blindness) = crow_blindness_frame(
             local.blindness_ticks_remaining,
             frame.application_time_ms,
             viewport,
@@ -921,10 +906,10 @@ impl BattleViews {
                 renderer,
                 &Camera { origin: Vec2::ZERO, scale: 1.0 },
                 blindness.stamp_position,
-                &NativeSecondarySpriteDraw {
+                &SecondarySpriteDraw {
                     alpha: blindness.stamp_alpha,
-                    atlas: NativeSecondaryAtlas::DeadHawg,
-                    blend: NativeSecondaryBlend::Normal,
+                    atlas: SecondaryAtlas::DeadHawg,
+                    blend: SecondaryBlend::Normal,
                     color_mode: None,
                     clip: None,
                     entry: 1,

@@ -174,13 +174,13 @@ fn apply_action(
             }
             let mod_sequence =
                 integer(arguments, "mod_offer_sequence", "mod skill offer is invalid")?;
-            let native_sequence =
+            let stock_sequence =
                 integer(arguments, "native_offer_sequence", "mod skill offer is invalid")?;
             world.runtime.choose_skill(
                 player_id,
                 target,
                 mod_sequence,
-                native_sequence,
+                stock_sequence,
                 world.state,
             )?;
         }

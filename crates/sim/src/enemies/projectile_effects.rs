@@ -3,7 +3,7 @@ use super::effects::DeathEffectOwner;
 use super::model::*;
 use super::projectiles::*;
 use super::world::EnemyWorld;
-use crate::NativeRng;
+use crate::Rng;
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
@@ -88,12 +88,10 @@ pub fn spawn_demon_bomb_particle(
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
-    use crate::spells::fire::{
-        native_fire_presentation_random, native_fire_presentation_random_int,
-    };
+    use crate::spells::fire::{fire_presentation_random, fire_presentation_random_int};
 
     let id = world.next_projectile_effect_id as u64;
-    let random = |channel, maximum| native_fire_presentation_random(id, 0, channel, maximum);
+    let random = |channel, maximum| fire_presentation_random(id, 0, channel, maximum);
     let scale = fround(fround(random(4, 1.0) + 0.5) * 1.25);
     let fade = fround(fround(fround(random(5, 0.1) + 0.1) * 0.5) * fround(0.4));
     let radius = random(1, projectile.visual_scale * 10.0);
@@ -112,7 +110,7 @@ pub fn spawn_demon_bomb_particle(
         tick,
         position,
         ProjectileEffectSpec {
-            entry: 267 + native_fire_presentation_random_int(id, 0, 6, 4) as usize,
+            entry: 267 + fire_presentation_random_int(id, 0, 6, 4) as usize,
             lifetime_ticks: (1.0 / fade).floor() as u64 + 2,
             registration_lane: WorldManagerLane::Transient,
         },
@@ -319,7 +317,7 @@ impl EnemyWorld {
         id: usize,
         direction: Vec2,
         tick: u64,
-        combat_rng: &mut NativeRng,
+        combat_rng: &mut Rng,
         painter_order: Option<&mut WorldPainterOrder>,
     ) -> bool {
         assert!(

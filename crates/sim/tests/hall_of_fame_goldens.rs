@@ -4,7 +4,7 @@ use solomon_sim::Vec2;
 use solomon_sim::hall_of_fame::presentation::*;
 use solomon_sim::hall_of_fame::*;
 use solomon_sim::hud::HudRect;
-use solomon_sim::profile::{WizardDiscipline, WizardElement, native_wizard_class_title};
+use solomon_sim::profile::{WizardDiscipline, WizardElement, wizard_class_title};
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/website/hall-of-fame-goldens.json")).unwrap()
@@ -86,7 +86,7 @@ fn hall_rankings_preserve_source_ties_and_the_complete_class_table() {
             .into_iter()
             .find(|discipline| discipline.as_str() == case["discipline"])
             .unwrap();
-        assert_eq!(native_wizard_class_title(element, discipline), case["title"].as_str().unwrap());
+        assert_eq!(wizard_class_title(element, discipline), case["title"].as_str().unwrap());
     }
 }
 

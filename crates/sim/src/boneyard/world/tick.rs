@@ -10,22 +10,22 @@ use crate::actor_physics::resolve_actor_motion;
 use crate::economy::HubInventoryItem;
 use crate::enemies::config::EnemyArenaScalars;
 use crate::enemies::model::{EnemyEvent, EnemyPlayerDamage, EnemyReward, EnemyTarget};
-use crate::enemies::world::NativeEnemyMovementView;
+use crate::enemies::world::EnemyMovementView;
 use crate::enemies::world::{EnemyAbilityEffect, EnemyStepContext};
 use crate::enemies::{EnemySpawnIntent, EnemyToken};
 use crate::hub::PLAYER_CHARACTER_RADIUS;
-use crate::loot::NativeLootModifiers;
+use crate::loot::LootModifiers;
 use crate::painter::{PainterRegistration, WorldPainterOrder};
-use crate::secondary::NativeSecondaryActorKind;
-use crate::secondary::golem::NATIVE_GOLEM_RADIUS;
+use crate::secondary::SecondaryActorKind;
+use crate::secondary::golem::GOLEM_RADIUS;
 use crate::{HubWizard, Vec2};
 
 use super::super::loot::{BoneyardLootParticipant, BoneyardLootStep};
 use super::super::navigation::NavigationSet;
 use super::super::projectile_world::BoneyardProjectileViewport;
 use super::super::tutorial::{
-    NATIVE_TUTORIAL_CAMERA_TARGET, native_tutorial_enemy_camera_position_is_allowed,
-    native_tutorial_enemy_spawn_position_is_allowed, native_tutorial_hostile_scene_paused,
+    TUTORIAL_CAMERA_TARGET, tutorial_enemy_camera_position_is_allowed,
+    tutorial_enemy_spawn_position_is_allowed, tutorial_hostile_scene_paused,
 };
 use super::super::waves::director::WaveTickContext;
 use super::super::world_geometry::{
@@ -49,7 +49,7 @@ pub struct BoneyardPlayerCombatStatus<'a> {
     pub advanced_unlocks: &'a [bool; 8],
     pub inventory_has_health_potion: bool,
     pub level: u32,
-    pub loot_modifiers: NativeLootModifiers,
+    pub loot_modifiers: LootModifiers,
     pub owned_recipe_indexes: &'a [usize],
 }
 
@@ -91,7 +91,7 @@ impl BoneyardWorld {
         painter_order: &mut WorldPainterOrder,
     ) -> BoneyardWorldTickResult {
         self.enemies.assert_painter_registrations_committed();
-        let paused = self.tutorial.as_ref().is_some_and(native_tutorial_hostile_scene_paused);
+        let paused = self.tutorial.as_ref().is_some_and(tutorial_hostile_scene_paused);
         let participants = context.participants;
         let light_camera_bounds = self.arena_camera_bounds();
         let movement = {
@@ -190,12 +190,12 @@ impl BoneyardWorld {
         let mut ability_effects = Vec::new();
         if let Some(secondary) = environment.secondary_abilities {
             for actor in secondary.actors.iter() {
-                if actor.kind == NativeSecondaryActorKind::Golem && actor.world_key == world_key {
+                if actor.kind == SecondaryActorKind::Golem && actor.world_key == world_key {
                     players.push(EnemyTarget {
                         id: format!("golem:{}", actor.id),
                         summoned: true,
                         alive: true,
-                        collision_radius: NATIVE_GOLEM_RADIUS,
+                        collision_radius: GOLEM_RADIUS,
                         connected: true,
                         eligible: true,
                         heading_deg: Some(0.0),
@@ -256,9 +256,8 @@ impl BoneyardWorld {
         let camera_locked =
             self.tutorial.as_ref().is_some_and(|tutorial| tutorial.camera_lock_triggered);
         let spawn_domain = |position, radius| {
-            native_tutorial_enemy_spawn_position_is_allowed(position, radius)
-                && (!camera_locked
-                    || native_tutorial_enemy_camera_position_is_allowed(position, radius))
+            tutorial_enemy_spawn_position_is_allowed(position, radius)
+                && (!camera_locked || tutorial_enemy_camera_position_is_allowed(position, radius))
         };
         let feedback = Cell::new(self.enemy_world_feedback);
         let spawn_camera_bounds =
@@ -278,7 +277,7 @@ impl BoneyardWorld {
                     world_light: &world_light,
                     spawn_policy_focuses: &focuses,
                     spawn_domain: if tutorial_present { Some(&spawn_domain) } else { None },
-                    spawn_retry_bounds: camera_locked.then_some(NATIVE_TUTORIAL_CAMERA_TARGET),
+                    spawn_retry_bounds: camera_locked.then_some(TUTORIAL_CAMERA_TARGET),
                     projectile_viewports: &projectile_viewports,
                     feedback: &feedback,
                 },
@@ -328,10 +327,10 @@ impl BoneyardWorld {
                     roll_loot_seed: Some(&mut roll_loot_seed),
                     native_visibility: Some(&native_visibility),
                     projected_point_visible: Some(&projected_point_visible),
-                    native_view_bounds: geometry.native_view_bounds(),
+                    view_bounds: geometry.view_bounds(),
                     puppet_targets: &puppet_targets,
                     light_at: Some(&light_at),
-                    native_movement_view: Some(NativeEnemyMovementView {
+                    movement_view: Some(EnemyMovementView {
                         arena_bounds: encounter.active_bounds,
                         cameras: &world_light.cameras,
                         enhanced_effects: context.enhanced_effects,

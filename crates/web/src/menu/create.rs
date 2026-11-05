@@ -8,7 +8,7 @@ use solomon_graphics::BlendMode;
 use solomon_sim::element_vfx::{self, ElementVfxBlend, ElementVfxDraw};
 use solomon_sim::menu::create_name::{finalize_create_wizard_name, validate_create_wizard_name};
 use solomon_sim::menu::{self, CreateHandPose};
-use solomon_sim::profile::create::NATIVE_CREATE_ENTRY_FADE_MS;
+use solomon_sim::profile::create::CREATE_ENTRY_FADE_MS;
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
 pub(super) struct CreateView {
@@ -190,9 +190,8 @@ impl CreateView {
             false,
         );
         let tick = if self.reduced_motion { 0.0 } else { (self.scene_elapsed / 10.0).floor() };
-        let enabled = admitted
-            && !self.finalizing
-            && self.scene_elapsed >= NATIVE_CREATE_ENTRY_FADE_MS as f64;
+        let enabled =
+            admitted && !self.finalizing && self.scene_elapsed >= CREATE_ENTRY_FADE_MS as f64;
         if self.selected.is_none() && motion.elements_visible {
             for (element, record) in [
                 (WizardElement::Earth, 13),
@@ -211,7 +210,7 @@ impl CreateView {
                     &self.bad_guys,
                     center,
                     scale,
-                    &element_vfx::native_element_vfx_plan(element, tick, 2.0),
+                    &element_vfx::element_vfx_plan(element, tick, 2.0),
                 )?;
                 let metrics = self.create.record(record)?;
                 let size = Vec2::new(metrics.width as f32, metrics.height as f32) * scale;
@@ -264,7 +263,7 @@ impl CreateView {
                 &self.bad_guys,
                 stage.at(held.position.x, held.position.y),
                 scale,
-                &element_vfx::native_element_vfx_plan(element, tick, held.scale * 2.0),
+                &element_vfx::element_vfx_plan(element, tick, held.scale * 2.0),
             )?;
         }
         hand(

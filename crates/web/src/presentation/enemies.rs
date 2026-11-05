@@ -7,13 +7,13 @@ use std::f64::consts::{PI, TAU};
 use solomon_sim::Vec2;
 use solomon_sim::enemies::EnemyToken;
 use solomon_sim::enemies::actor_presentation::{
-    EnemyActorAppearanceContext, NativeEnemyPresentationInput, NativeMaggotPresentationInput,
-    native_enemy_presentation_input, native_maggot_presentation_input,
+    EnemyActorAppearanceContext, EnemyPresentationInput, MaggotPresentationInput,
+    enemy_presentation_input, maggot_presentation_input,
 };
 use solomon_sim::enemies::model::{
     EnemyActor, EnemyBrain, EnemyDeathEffect, EnemyEvent, SpiderPhase,
 };
-use solomon_sim::enemies::presentation::NativeEnemyEffectPresentationInput;
+use solomon_sim::enemies::presentation::EnemyEffectPresentationInput;
 use solomon_sim::enemies::projectiles::{EnemyProjectile, EnemyProjectileKind, MageLightningPulse};
 use solomon_sim::enemies::world::EnemyWorld;
 
@@ -30,13 +30,13 @@ const GUIDED_MISSILE_VISUAL_PHASE_PERIOD: f64 = 720.0;
 pub struct EnemyPresentationMetadata {
     pub presentation_tick: f64,
     pub visible_event_ids: BTreeSet<usize>,
-    pub actors: BTreeMap<usize, NativeEnemyPresentationInput>,
-    pub maggots: BTreeMap<usize, NativeMaggotPresentationInput>,
+    pub actors: BTreeMap<usize, EnemyPresentationInput>,
+    pub maggots: BTreeMap<usize, MaggotPresentationInput>,
     pub projectile_age_ticks: BTreeMap<usize, f64>,
     pub projectile_heading_deg: BTreeMap<usize, f64>,
     pub projectile_visual_phase_deg: BTreeMap<usize, f64>,
-    pub projectile_effects: BTreeMap<usize, NativeEnemyEffectPresentationInput>,
-    pub death_effects: BTreeMap<usize, NativeEnemyEffectPresentationInput>,
+    pub projectile_effects: BTreeMap<usize, EnemyEffectPresentationInput>,
+    pub death_effects: BTreeMap<usize, EnemyEffectPresentationInput>,
     pub silk_age_ticks: BTreeMap<usize, f64>,
     pub crows: Vec<EnemyCrowPresentationInput>,
 }
@@ -67,13 +67,13 @@ pub(super) fn from_world(
         ..Default::default()
     };
     for actor in world.actors.iter().filter(|actor| visible_actor(actor)) {
-        let mut sample = native_enemy_presentation_input(actor, actor_context(actor));
+        let mut sample = enemy_presentation_input(actor, actor_context(actor));
         sample.presentation_tick = presentation_tick;
         metadata.actors.insert(actor.id, sample);
     }
     let tick = world.last_step_tick.unwrap_or(presentation_tick as u64);
     for maggot in world.maggots.iter() {
-        metadata.maggots.insert(maggot.id, native_maggot_presentation_input(maggot, tick));
+        metadata.maggots.insert(maggot.id, maggot_presentation_input(maggot, tick));
     }
     for projectile in world.projectiles.iter() {
         metadata
@@ -90,7 +90,7 @@ pub(super) fn from_world(
     for effect in &world.projectile_effects {
         metadata.projectile_effects.insert(
             effect.state.id,
-            NativeEnemyEffectPresentationInput {
+            EnemyEffectPresentationInput {
                 age_ticks: effect.state.age_ticks as f64,
                 rotation_radians: effect.state.rotation_deg * PI / 180.0,
             },
@@ -99,7 +99,7 @@ pub(super) fn from_world(
     for effect in &world.death_effects {
         metadata.death_effects.insert(
             effect.id,
-            NativeEnemyEffectPresentationInput {
+            EnemyEffectPresentationInput {
                 age_ticks: effect.age_ticks as f64,
                 rotation_radians: effect.rotation_deg * PI / 180.0,
             },
@@ -260,7 +260,7 @@ pub(super) fn interpolate(
             older_metadata.projectile_effects.get(&id),
             newer_metadata.projectile_effects.get(&id),
         ) {
-            (Some(first), Some(second)) => NativeEnemyEffectPresentationInput {
+            (Some(first), Some(second)) => EnemyEffectPresentationInput {
                 age_ticks: lerp(first.age_ticks, second.age_ticks, blend),
                 rotation_radians: lerp_cycle(
                     first.rotation_radians,
@@ -379,7 +379,7 @@ pub(crate) fn interpolate_death_effects<'a>(
     older: impl IntoIterator<Item = &'a EnemyDeathEffect>,
     newer: impl IntoIterator<Item = &'a EnemyDeathEffect> + Clone,
     blend: f64,
-) -> (Vec<EnemyDeathEffect>, BTreeMap<usize, NativeEnemyEffectPresentationInput>) {
+) -> (Vec<EnemyDeathEffect>, BTreeMap<usize, EnemyEffectPresentationInput>) {
     let mut ages = BTreeMap::new();
     let effects = interpolate_members(
         older,
@@ -390,7 +390,7 @@ pub(crate) fn interpolate_death_effects<'a>(
             let mut effect = endpoint(first, second, blend).clone();
             ages.insert(
                 effect.id,
-                NativeEnemyEffectPresentationInput {
+                EnemyEffectPresentationInput {
                     age_ticks: lerp(first.age_ticks as f64, second.age_ticks as f64, blend),
                     rotation_radians: lerp_cycle(
                         first.rotation_deg * PI / 180.0,
@@ -416,7 +416,7 @@ pub(crate) fn interpolate_death_effects<'a>(
         },
     );
     for effect in &effects {
-        ages.entry(effect.id).or_insert(NativeEnemyEffectPresentationInput {
+        ages.entry(effect.id).or_insert(EnemyEffectPresentationInput {
             age_ticks: effect.age_ticks as f64,
             rotation_radians: effect.rotation_deg * PI / 180.0,
         });
@@ -425,11 +425,11 @@ pub(crate) fn interpolate_death_effects<'a>(
 }
 
 fn interpolate_animation(
-    first: &NativeEnemyPresentationInput,
-    second: &NativeEnemyPresentationInput,
+    first: &EnemyPresentationInput,
+    second: &EnemyPresentationInput,
     blend: f64,
     token: EnemyToken,
-) -> NativeEnemyPresentationInput {
+) -> EnemyPresentationInput {
     let mut sample = endpoint(first, second, blend).clone();
     if first.state != second.state
         || first.action != second.action
@@ -530,10 +530,10 @@ fn interpolate_animation(
 }
 
 fn interpolate_maggot(
-    first: &NativeMaggotPresentationInput,
-    second: &NativeMaggotPresentationInput,
+    first: &MaggotPresentationInput,
+    second: &MaggotPresentationInput,
     blend: f64,
-) -> NativeMaggotPresentationInput {
+) -> MaggotPresentationInput {
     let mut sample = *endpoint(first, second, blend);
     sample.alpha = lerp(first.alpha, second.alpha, blend);
     sample.current_health = lerp(first.current_health, second.current_health, blend);

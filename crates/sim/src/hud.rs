@@ -6,8 +6,8 @@ pub mod mobile;
 pub mod quickbar;
 pub mod skill_selector;
 
-pub const NATIVE_HUD_BASE_HEALTH: f64 = 50.0;
-pub const NATIVE_HUD_BASE_MANA: f64 = 100.0;
+pub const HUD_BASE_HEALTH: f64 = 50.0;
+pub const HUD_BASE_MANA: f64 = 100.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HudRect {
@@ -88,7 +88,7 @@ impl HudItemIcon {
     ) -> Self {
         Self {
             records: item.icon_records.clone(),
-            tints: native_inventory_item_icon_tints(item, element),
+            tints: inventory_item_icon_tints(item, element),
             equipment_type: item.equipment_type,
         }
     }
@@ -97,7 +97,7 @@ impl HudItemIcon {
 /// `NativeBeltItemIcon` keeps explicit garment colors before recipe and element
 /// defaults. A missing tint lane is untinted texture, including Combinator trim.
 #[must_use]
-pub fn native_inventory_item_icon_tints(
+pub fn inventory_item_icon_tints(
     item: &crate::economy::HubInventoryItem,
     element: crate::profile::WizardElement,
 ) -> [u32; 2] {
@@ -112,7 +112,7 @@ pub fn native_inventory_item_icon_tints(
                 .map(|recipe| recipe.icon_tints)
         })
         .unwrap_or([
-            Some(crate::appearance::equipment::native_wizard_icon_primary_tint(element)),
+            Some(crate::appearance::equipment::wizard_icon_primary_tint(element)),
             Some(0xffffff),
         ])
         .map(|tint| tint.unwrap_or(0xffffff))
@@ -121,7 +121,7 @@ pub fn native_inventory_item_icon_tints(
 /// Inventory icon transforms from Website `HUB_ITEM_ICON_TRANSFORMS`, shared by
 /// the gameplay belt, Inventory and its companions, and the mobile HUD preview.
 #[must_use]
-pub const fn native_inventory_item_icon_transform(
+pub const fn inventory_item_icon_transform(
     equipment_type: Option<crate::economy::EquipmentType>,
 ) -> ([f64; 2], f64) {
     use crate::economy::EquipmentType;
@@ -158,10 +158,10 @@ impl HudState {
     #[must_use]
     pub const fn new_game() -> Self {
         Self {
-            current_health: NATIVE_HUD_BASE_HEALTH,
-            maximum_health: NATIVE_HUD_BASE_HEALTH,
-            current_mana: NATIVE_HUD_BASE_MANA,
-            maximum_mana: NATIVE_HUD_BASE_MANA,
+            current_health: HUD_BASE_HEALTH,
+            maximum_health: HUD_BASE_HEALTH,
+            current_mana: HUD_BASE_MANA,
+            maximum_mana: HUD_BASE_MANA,
             shield_current: 0.0,
             shield_maximum: 0.0,
             reserved_mana: 0.0,
@@ -187,7 +187,7 @@ impl HudState {
 /// `nativeHudControlLayout` and `nativeHudModalSlideLayout`. `None` is the resting writer;
 /// a modal writer at progress zero starts the belt half a pixel lower than the resting HUD.
 #[must_use]
-pub fn native_hud_control_layout(
+pub fn hud_control_layout(
     width: f64,
     height: f64,
     modal_progress: Option<f64>,
@@ -216,13 +216,13 @@ pub fn native_hud_control_layout(
 }
 
 #[must_use]
-pub fn native_health_hud_presentation(
+pub fn health_hud_presentation(
     current: f64,
     maximum: f64,
     shield_current: f64,
     shield_maximum: f64,
 ) -> HudHealthPresentation {
-    let core_width = 2.0 * (NATIVE_HUD_BASE_HEALTH + 0.25 * (maximum - NATIVE_HUD_BASE_HEALTH));
+    let core_width = 2.0 * (HUD_BASE_HEALTH + 0.25 * (maximum - HUD_BASE_HEALTH));
     let fill_progress = clamp_unit(current / maximum).powi(2);
     let shield_progress =
         if shield_maximum > 0.0 { clamp_unit(shield_current / shield_maximum) } else { 0.0 };
@@ -237,7 +237,7 @@ pub fn native_health_hud_presentation(
 }
 
 #[must_use]
-pub fn native_health_hud_layers(health: f64, shield: f64, poisoned: bool) -> Vec<HudHealthLayer> {
+pub fn health_hud_layers(health: f64, shield: f64, poisoned: bool) -> Vec<HudHealthLayer> {
     let record = if poisoned { 52 } else { 26 };
     let health =
         HudHealthLayer { kind: HudHealthLayerKind::Health, progress: clamp_unit(health), record };
@@ -250,12 +250,8 @@ pub fn native_health_hud_layers(health: f64, shield: f64, poisoned: bool) -> Vec
 }
 
 #[must_use]
-pub fn native_mana_hud_presentation(
-    current: f64,
-    maximum: f64,
-    reserved: f64,
-) -> HudManaPresentation {
-    let core_width = NATIVE_HUD_BASE_MANA + 0.25 * (maximum - NATIVE_HUD_BASE_MANA);
+pub fn mana_hud_presentation(current: f64, maximum: f64, reserved: f64) -> HudManaPresentation {
+    let core_width = HUD_BASE_MANA + 0.25 * (maximum - HUD_BASE_MANA);
     let fill_progress = clamp_unit(current / maximum);
     let reserve_progress = clamp_unit(reserved / maximum);
     HudManaPresentation {
@@ -283,8 +279,8 @@ mod tests {
 
     #[test]
     fn half_health_uses_quarter_fill_while_half_mana_uses_half_fill() {
-        assert_eq!(native_health_hud_presentation(25.0, 50.0, 0.0, 0.0).fill_width, 25.0);
-        assert_eq!(native_mana_hud_presentation(50.0, 100.0, 0.0).fill_width, 50.0);
+        assert_eq!(health_hud_presentation(25.0, 50.0, 0.0, 0.0).fill_width, 25.0);
+        assert_eq!(mana_hud_presentation(50.0, 100.0, 0.0).fill_width, 50.0);
     }
 
     #[test]
@@ -354,7 +350,7 @@ mod tests {
             (Some(EquipmentType::Wand), [0.0, 0.0], 45.0),
             (None, [0.0, 0.0], 0.0),
         ] {
-            assert_eq!(native_inventory_item_icon_transform(kind), (offset, rotation));
+            assert_eq!(inventory_item_icon_transform(kind), (offset, rotation));
         }
     }
 }

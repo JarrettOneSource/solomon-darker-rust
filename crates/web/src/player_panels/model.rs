@@ -4,7 +4,7 @@ use super::*;
 
 pub(super) struct PanelModel {
     selection: NewGameSelection,
-    book: NativeSkillBookState,
+    book: SkillBookState,
     stat_book: PlayerStatBookComponent,
     economy: HubEconomyState,
     mod_content: Option<ModContentProjection>,
@@ -12,7 +12,7 @@ pub(super) struct PanelModel {
     dye_session_id: Option<String>,
     progression: PlayerProgressionState,
     resources: PlayerCombatState,
-    offensive: NativeOffensiveSpellFactors,
+    offensive: OffensiveSpellFactors,
     attributes: InventoryAttributes,
     concentrations: [Option<usize>; 2],
     mind_chug_active: bool,

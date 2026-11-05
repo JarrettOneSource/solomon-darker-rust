@@ -3,8 +3,8 @@ use crate::spells::model::PrimarySpellTransient;
 
 use super::*;
 use crate::hurricane::{
-    NATIVE_HURRICANE_CONTACT_COOLDOWN, NATIVE_HURRICANE_DEFAULT_MOVEMENT_STEP,
-    draw_native_hurricane_damage, native_hurricane_movement_due, native_hurricane_orbit_force,
+    HURRICANE_CONTACT_COOLDOWN, HURRICANE_DEFAULT_MOVEMENT_STEP, draw_hurricane_damage,
+    hurricane_movement_due, hurricane_orbit_force,
 };
 
 impl ContactWork<'_, '_> {
@@ -27,10 +27,10 @@ impl ContactWork<'_, '_> {
         }
         for row in target_rows(self.enemies) {
             if !row.target.active
-                || !native_hurricane_movement_due(
+                || !hurricane_movement_due(
                     row.actor_id as u64,
                     self.context.tick,
-                    NATIVE_HURRICANE_DEFAULT_MOVEMENT_STEP,
+                    HURRICANE_DEFAULT_MOVEMENT_STEP,
                 )
             {
                 continue;
@@ -52,11 +52,11 @@ impl ContactWork<'_, '_> {
             let mut delta = Vec2::ZERO;
             let mut contact = None;
             for hurricane in &hurricanes {
-                let Some(force) = native_hurricane_orbit_force(
+                let Some(force) = hurricane_orbit_force(
                     hurricane.position,
                     row.target.position,
                     hurricane.contact_charge,
-                    NATIVE_HURRICANE_DEFAULT_MOVEMENT_STEP,
+                    HURRICANE_DEFAULT_MOVEMENT_STEP,
                 ) else {
                     continue;
                 };
@@ -82,7 +82,7 @@ impl ContactWork<'_, '_> {
             let Some(contact) = contact else {
                 continue;
             };
-            let damage = draw_native_hurricane_damage(
+            let damage = draw_hurricane_damage(
                 self.rng,
                 contact.contact_charge,
                 contact.damage_minimum,
@@ -116,29 +116,28 @@ impl ContactWork<'_, '_> {
                 }
             }
             // Even a suppressed/zero or rejected hit consumes the native contact timer.
-            self.enemies
-                .set_hurricane_contact_cooldown(row.actor_id, NATIVE_HURRICANE_CONTACT_COOLDOWN);
+            self.enemies.set_hurricane_contact_cooldown(row.actor_id, HURRICANE_CONTACT_COOLDOWN);
         }
         for effect in self.source.transients.iter() {
             let PrimarySpellTransient::FireGoodImp(actor) = effect else {
                 continue;
             };
             if actor.common.world_key != self.context.world_key
-                || !native_hurricane_movement_due(
+                || !hurricane_movement_due(
                     actor.common.id,
                     self.context.tick,
-                    NATIVE_HURRICANE_DEFAULT_MOVEMENT_STEP,
+                    HURRICANE_DEFAULT_MOVEMENT_STEP,
                 )
             {
                 continue;
             }
             let mut delta = Vec2::ZERO;
             for hurricane in &hurricanes {
-                if let Some(force) = native_hurricane_orbit_force(
+                if let Some(force) = hurricane_orbit_force(
                     hurricane.position,
                     actor.position,
                     hurricane.contact_charge,
-                    NATIVE_HURRICANE_DEFAULT_MOVEMENT_STEP,
+                    HURRICANE_DEFAULT_MOVEMENT_STEP,
                 ) {
                     delta.x = fround(delta.x + force.x);
                     delta.y = fround(delta.y + force.y);

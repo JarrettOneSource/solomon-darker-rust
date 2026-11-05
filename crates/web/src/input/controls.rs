@@ -175,22 +175,22 @@ mod tests {
         let mut stroke = key(&code, true);
         state.keyboard(
             &KeyboardEvent { stroke: &stroke, editing: false, default_prevented: false },
-            NATIVE_BELT_SLOT_COUNT,
+            BELT_SLOT_COUNT,
         );
-        assert_eq!(state.belt.current(), Some(NATIVE_BELT_SLOT_COUNT));
+        assert_eq!(state.belt.current(), Some(BELT_SLOT_COUNT));
         stroke.repeat = true;
         state.keyboard(
             &KeyboardEvent { stroke: &stroke, editing: false, default_prevented: false },
             0,
         );
-        assert_eq!(state.belt.current(), Some(NATIVE_BELT_SLOT_COUNT));
+        assert_eq!(state.belt.current(), Some(BELT_SLOT_COUNT));
         stroke.pressed = false;
         state.keyboard(
             &KeyboardEvent { stroke: &stroke, editing: false, default_prevented: false },
             0,
         );
         assert_eq!(state.belt.current(), None);
-        assert_eq!(state.belt_pressed, vec![NATIVE_BELT_SLOT_COUNT]);
+        assert_eq!(state.belt_pressed, vec![BELT_SLOT_COUNT]);
     }
 
     #[test]

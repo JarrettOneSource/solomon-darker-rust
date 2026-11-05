@@ -12,16 +12,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use solomon_assets::parse_bundle;
 use solomon_sim::Vec2;
 use solomon_sim::hub::painter::PainterLayer;
-use solomon_sim::secondary::electric_burn::{
-    NativeElectricBurnArcPlan, native_electric_burn_arc_plan,
-};
+use solomon_sim::secondary::electric_burn::{ElectricBurnArcPlan, electric_burn_arc_plan};
 use solomon_sim::secondary::presentation::*;
-use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryPlayerState,
-};
-use solomon_sim::spells::air::{
-    NativeAirLightningInput, NativeAirLightningPlan, build_native_air_lightning_plan,
-};
+use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState, SecondaryPlayerState};
+use solomon_sim::spells::air::{AirLightningInput, AirLightningPlan, build_air_lightning_plan};
 
 use crate::courtyard::Camera;
 use crate::spells::{SpellView, StockAtlas};
@@ -49,11 +43,11 @@ pub struct SecondaryPuppetHit {
 
 struct ActorPlan {
     id: u64,
-    kind: NativeSecondaryActorKind,
-    plan: NativeSecondaryPresentationPlan,
+    kind: SecondaryActorKind,
+    plan: SecondaryPresentationPlan,
     scale: f64,
-    lightning: Option<NativeAirLightningPlan>,
-    electric_arc: Option<NativeElectricBurnArcPlan>,
+    lightning: Option<AirLightningPlan>,
+    electric_arc: Option<ElectricBurnArcPlan>,
 }
 
 #[derive(Clone, Copy)]
@@ -128,7 +122,7 @@ impl SecondaryView {
     pub fn prepare<'a>(
         &mut self,
         renderer: &mut Renderer,
-        actors: impl Iterator<Item = &'a NativeSecondaryActorState> + Clone,
+        actors: impl Iterator<Item = &'a SecondaryActorState> + Clone,
         world_key: &str,
         presentation_frame: Option<f64>,
         presentation_ages: Option<&BTreeMap<u64, f64>>,
@@ -145,12 +139,12 @@ impl SecondaryView {
         let mut live_ids = BTreeSet::new();
         for actor in actors.clone() {
             if actor.world_key != world_key
-                || actor.kind == NativeSecondaryActorKind::EarthquakeSceneryWobble
+                || actor.kind == SecondaryActorKind::EarthquakeSceneryWobble
             {
                 continue;
             }
             live_ids.insert(actor.id);
-            let gain = if actor.kind == NativeSecondaryActorKind::RingFireExplosion {
+            let gain = if actor.kind == SecondaryActorKind::RingFireExplosion {
                 *self
                     .memory
                     .fire_explosion_point_gains
@@ -163,22 +157,22 @@ impl SecondaryView {
                 .and_then(|ages| ages.get(&actor.id))
                 .copied()
                 .unwrap_or(actor.age_ticks as f64);
-            if actor.kind == NativeSecondaryActorKind::GolemDeath {
-                use solomon_sim::death_animations::NATIVE_GOLEM_DEATH_PAINTER_COUNT;
+            if actor.kind == SecondaryActorKind::GolemDeath {
+                use solomon_sim::death_animations::GOLEM_DEATH_PAINTER_COUNT;
                 use solomon_sim::secondary::presentation::{
-                    NativeGolemDeathMember, native_golem_death_member_plan,
+                    GolemDeathMember, golem_death_member_plan,
                 };
                 indexes.insert(actor.id, self.actors.len());
-                for member_index in 0..NATIVE_GOLEM_DEATH_PAINTER_COUNT {
-                    let member = if member_index + 1 == NATIVE_GOLEM_DEATH_PAINTER_COUNT {
-                        NativeGolemDeathMember::Star
+                for member_index in 0..GOLEM_DEATH_PAINTER_COUNT {
+                    let member = if member_index + 1 == GOLEM_DEATH_PAINTER_COUNT {
+                        GolemDeathMember::Star
                     } else {
-                        NativeGolemDeathMember::Fragment(member_index)
+                        GolemDeathMember::Fragment(member_index)
                     };
                     self.actors.push(ActorPlan {
                         id: actor.id,
                         kind: actor.kind,
-                        plan: native_golem_death_member_plan(actor, age_ticks, member),
+                        plan: golem_death_member_plan(actor, age_ticks, member),
                         scale: actor.scale,
                         lightning: None,
                         electric_arc: None,
@@ -186,15 +180,15 @@ impl SecondaryView {
                 }
                 continue;
             }
-            let plan = native_secondary_presentation_plan_at_age(
+            let plan = secondary_presentation_plan_at_age(
                 actor,
                 age_ticks,
                 presentation_frame.unwrap_or(age_ticks),
                 gain,
                 enhanced_effects,
             );
-            let lightning = if actor.kind == NativeSecondaryActorKind::StormStrike {
-                Some(build_native_air_lightning_plan(NativeAirLightningInput {
+            let lightning = if actor.kind == SecondaryActorKind::StormStrike {
+                Some(build_air_lightning_plan(AirLightningInput {
                     chained: false,
                     enhanced_effects: true,
                     // native-air-presentation.ts explicitly floors this input.
@@ -215,8 +209,8 @@ impl SecondaryView {
                 None
             };
             indexes.insert(actor.id, self.actors.len());
-            let electric_arc = if actor.kind == NativeSecondaryActorKind::ElectricBurnArc {
-                native_electric_burn_arc_plan(actor, age_ticks, enhanced_effects)
+            let electric_arc = if actor.kind == SecondaryActorKind::ElectricBurnArc {
+                electric_burn_arc_plan(actor, age_ticks, enhanced_effects)
             } else {
                 None
             };
@@ -234,14 +228,14 @@ impl SecondaryView {
         retire_targets(renderer, &mut self.storm_targets, &live_ids);
         retire_targets(renderer, &mut self.hit_targets, &live_ids);
         let mut composite_owner = BTreeMap::new();
-        for (child, parent) in native_secondary_composite_owner_entries(actors.clone(), world_key) {
+        for (child, parent) in secondary_composite_owner_entries(actors.clone(), world_key) {
             if let (Some(&child_index), Some(_)) = (indexes.get(&child), indexes.get(&parent)) {
                 composite_owner.insert(child, parent);
                 self.composite_children.entry(parent).or_default().push(child_index);
             }
         }
         for actor in &self.actors {
-            if actor.kind == NativeSecondaryActorKind::Leviathan {
+            if actor.kind == SecondaryActorKind::Leviathan {
                 self.composite_children.entry(actor.id).or_default();
             }
         }
@@ -256,10 +250,10 @@ impl SecondaryView {
             let Some(&index) = indexes.get(&actor.id) else {
                 continue;
             };
-            if actor.kind == NativeSecondaryActorKind::GolemDeath {
+            if actor.kind == SecondaryActorKind::GolemDeath {
                 assert_eq!(
                     actor.painter_registrations.len(),
-                    solomon_sim::death_animations::NATIVE_GOLEM_DEATH_PAINTER_COUNT,
+                    solomon_sim::death_animations::GOLEM_DEATH_PAINTER_COUNT,
                     "Golem death retains each fragment and star painter"
                 );
                 for (member, registration) in actor.painter_registrations.iter().enumerate() {
@@ -275,7 +269,7 @@ impl SecondaryView {
                 continue;
             }
             let plan = &self.actors[index].plan;
-            if actor.kind == NativeSecondaryActorKind::ElectricBurnArc {
+            if actor.kind == SecondaryActorKind::ElectricBurnArc {
                 let Some(arc) = &self.actors[index].electric_arc else {
                     continue;
                 };
@@ -308,7 +302,7 @@ impl SecondaryView {
             if plan.draws.is_empty()
                 && matches!(
                     actor.kind,
-                    NativeSecondaryActorKind::AcidRain | NativeSecondaryActorKind::EarthquakeDust
+                    SecondaryActorKind::AcidRain | SecondaryActorKind::EarthquakeDust
                 )
             {
                 continue;
@@ -317,17 +311,14 @@ impl SecondaryView {
                 .painter_registrations
                 .first()
                 .expect("secondary actor has its canonical painter registration");
-            let region_light_point = (actor.kind == NativeSecondaryActorKind::EarthquakeDebris)
-                .then_some(actor.position);
+            let region_light_point =
+                (actor.kind == SecondaryActorKind::EarthquakeDebris).then_some(actor.position);
             let draw = if self.composite_children.contains_key(&actor.id) {
                 PainterDraw::Leviathan(index)
             } else {
                 PainterDraw::Actor(index)
             };
-            if matches!(
-                actor.kind,
-                NativeSecondaryActorKind::AcidRain | NativeSecondaryActorKind::StormCloud
-            ) {
+            if matches!(actor.kind, SecondaryActorKind::AcidRain | SecondaryActorKind::StormCloud) {
                 let mut owner = registration.layer(actor.position.y, 0.0);
                 owner.visible = false;
                 self.roots.push(PainterRoot {
@@ -418,21 +409,21 @@ impl SecondaryView {
         renderer: &mut Renderer,
         camera: &Camera,
         position: Vec2,
-        player: Option<&NativeSecondaryPlayerState>,
+        player: Option<&SecondaryPlayerState>,
         tick: f64,
     ) {
-        let plan = native_player_magic_shield_plan(player, tick);
+        let plan = player_magic_shield_plan(player, tick);
         if !plan.visible {
             return;
         }
-        let draw = NativeSecondarySpriteDraw {
+        let draw = SecondarySpriteDraw {
             alpha: plan.alpha,
-            atlas: NativeSecondaryAtlas::Clothes,
-            blend: NativeSecondaryBlend::Normal,
+            atlas: SecondaryAtlas::Clothes,
+            blend: SecondaryBlend::Normal,
             color_mode: None,
             clip: None,
-            entry: NATIVE_PLAYER_MAGIC_SHIELD_ENTRY,
-            offset: Vec2::new(0.0, NATIVE_PLAYER_MAGIC_SHIELD_OFFSET_Y),
+            entry: PLAYER_MAGIC_SHIELD_ENTRY,
+            offset: Vec2::new(0.0, PLAYER_MAGIC_SHIELD_OFFSET_Y),
             role: "player-magic-shield".into(),
             rotation_radians: 0.0,
             scale_x: plan.scale,

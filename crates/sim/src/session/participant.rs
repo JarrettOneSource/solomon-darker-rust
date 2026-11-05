@@ -4,11 +4,11 @@
 use crate::HubWizard;
 use crate::Vec2;
 use crate::economy::HubEconomyState;
-use crate::hub::college_intro::NativeCollegeIntroState;
+use crate::hub::college_intro::CollegeIntroState;
 use crate::hub::interaction::HubNpcMarkerEpoch;
 use crate::player::PlayerState;
-use crate::score::NativeHallOfFameRunState;
-use crate::screen_feedback::NativeSecondaryScreenFeedbackPresentation;
+use crate::score::HallOfFameRunState;
+use crate::screen_feedback::SecondaryScreenFeedbackPresentation;
 
 use super::PlayerLightingState;
 
@@ -26,10 +26,10 @@ pub struct SessionParticipant {
     pub player: Box<PlayerState>,
     pub wizard: HubWizard,
     pub lighting: PlayerLightingState,
-    pub college_intro: Option<NativeCollegeIntroState>,
+    pub college_intro: Option<CollegeIntroState>,
     pub marker_epoch: HubNpcMarkerEpoch,
-    pub score: NativeHallOfFameRunState,
-    pub screen_feedback: NativeSecondaryScreenFeedbackPresentation,
+    pub score: HallOfFameRunState,
+    pub screen_feedback: SecondaryScreenFeedbackPresentation,
     pub world_aim: Option<Vec2>,
     pub tutorial_profile_economy: Option<Box<HubEconomyState>>,
 }

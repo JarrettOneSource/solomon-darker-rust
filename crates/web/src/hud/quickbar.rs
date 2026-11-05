@@ -2,18 +2,16 @@
 //! labels, cooldowns and active flags. Mana formulas stay in the simulation owner.
 
 use solomon_sim::belt::{
-    NATIVE_BELT_SLOT_COUNT, NativeBeltEntry, NativeBeltPotionKind, native_belt_entry_item,
-    native_belt_potion_projection,
+    BELT_SLOT_COUNT, BeltPotionKind, NativeBeltEntry, belt_entry_item, belt_potion_projection,
 };
 use solomon_sim::hud::quickbar::{
-    NativeSkillQuickbarCooldownPresentation, native_skill_quickbar_cooldown_presentation,
-    native_skill_quickbar_icon_alpha,
+    SkillQuickbarCooldownPresentation, skill_quickbar_cooldown_presentation,
+    skill_quickbar_icon_alpha,
 };
 use solomon_sim::player::PlayerState;
-use solomon_sim::profile::{NATIVE_SKILL_CATALOG, native_skill_category};
+use solomon_sim::profile::{SKILL_CATALOG, skill_category};
 use solomon_sim::secondary::{
-    NativeSecondaryAbilityId, NativeSecondaryPlayerState,
-    native_secondary_ability_mana_cost_with_stat_book,
+    SecondaryAbilityId, SecondaryPlayerState, secondary_ability_mana_cost_with_stat_book,
 };
 use solomon_sim::settings::{GameControlBindings, game_binding_label};
 
@@ -25,7 +23,7 @@ pub(super) struct QuickbarSlot {
     pub binding_code: String,
     pub binding_label: String,
     pub entry_kind: &'static str,
-    pub cooldown: NativeSkillQuickbarCooldownPresentation,
+    pub cooldown: SkillQuickbarCooldownPresentation,
     pub mana_cost: Option<f64>,
     pub active: bool,
     pub combat_disabled: bool,
@@ -38,7 +36,7 @@ impl Hud {
     pub fn set_quickbar_player(
         &mut self,
         player: Option<&PlayerState>,
-        secondary: Option<&NativeSecondaryPlayerState>,
+        secondary: Option<&SecondaryPlayerState>,
         controls: &GameControlBindings,
         in_hub: bool,
     ) -> Result<(), String> {
@@ -52,7 +50,7 @@ impl Hud {
                 .entries
                 .iter()
                 .skip(self.hotbar.start())
-                .take(NATIVE_BELT_SLOT_COUNT)
+                .take(BELT_SLOT_COUNT)
                 .enumerate()
             {
                 let binding_code = controls.belt[slot].clone();
@@ -66,13 +64,13 @@ impl Hud {
                     Some(NativeBeltEntry::Skill { skill_id }) => Some(*skill_id),
                     _ => None,
                 };
-                let category = skill_id.and_then(native_skill_category);
+                let category = skill_id.and_then(skill_category);
                 let combat_disabled = in_hub && category == Some(2);
                 let mana_cost = if category == Some(2) {
                     skill_id
-                        .and_then(NativeSecondaryAbilityId::from_skill_id)
+                        .and_then(SecondaryAbilityId::from_skill_id)
                         .map(|ability| {
-                            native_secondary_ability_mana_cost_with_stat_book(
+                            secondary_ability_mana_cost_with_stat_book(
                                 &player.book,
                                 &player.stat_book,
                                 ability,
@@ -87,13 +85,13 @@ impl Hud {
                     mana_cost.is_some_and(|cost| player.combat.current_mana < cost);
                 let cooldown = if category == Some(2) {
                     let id = skill_id.expect("secondary skill ID");
-                    native_skill_quickbar_cooldown_presentation(
+                    skill_quickbar_cooldown_presentation(
                         secondary.map_or(0.0, |state| state.cooldown_ticks_by_skill[id]),
                         secondary.map_or(0.0, |state| state.cooldown_maximum_ticks_by_skill[id]),
                         secondary.map_or(0.0, |state| state.global_cooldown_ticks),
                     )
                 } else {
-                    NativeSkillQuickbarCooldownPresentation::default()
+                    SkillQuickbarCooldownPresentation::default()
                 };
                 let active = skill_id.is_some_and(|id| {
                     id == player.book.primary_skill_id
@@ -112,17 +110,16 @@ impl Hud {
                         })
                 });
                 let potion = match entry {
-                    Some(NativeBeltEntry::HealthPotion) => Some(native_belt_potion_projection(
+                    Some(NativeBeltEntry::HealthPotion) => Some(belt_potion_projection(
                         &player.economy.backpack,
-                        NativeBeltPotionKind::Health,
+                        BeltPotionKind::Health,
                     )),
-                    Some(NativeBeltEntry::ManaPotion) => Some(native_belt_potion_projection(
-                        &player.economy.backpack,
-                        NativeBeltPotionKind::Mana,
-                    )),
+                    Some(NativeBeltEntry::ManaPotion) => {
+                        Some(belt_potion_projection(&player.economy.backpack, BeltPotionKind::Mana))
+                    }
                     _ => None,
                 };
-                let item = entry.and_then(|entry| native_belt_entry_item(entry, &player.economy));
+                let item = entry.and_then(|entry| belt_entry_item(entry, &player.economy));
                 let entry_kind = match entry {
                     None => "empty",
                     Some(NativeBeltEntry::Skill { .. }) => "skill",
@@ -134,9 +131,7 @@ impl Hud {
                     format!("Empty belt slot {}, {input}", slot + 1)
                 } else {
                     let name = match entry {
-                        Some(NativeBeltEntry::Skill { skill_id }) => {
-                            NATIVE_SKILL_CATALOG[*skill_id].name
-                        }
+                        Some(NativeBeltEntry::Skill { skill_id }) => SKILL_CATALOG[*skill_id].name,
                         Some(NativeBeltEntry::HealthPotion) => "Health Potion",
                         Some(NativeBeltEntry::ManaPotion) => "Mana Potion",
                         _ => item.map_or("Unavailable item", |item| &item.name),
@@ -175,7 +170,7 @@ impl Hud {
                         .map(|potion| potion.count)
                         .or_else(|| item.map(|item| u64::from(item.quantity))),
                     icon_alpha: skill_id.map(|_| {
-                        native_skill_quickbar_icon_alpha(
+                        skill_quickbar_icon_alpha(
                             cooldown.remaining > 0.0,
                             combat_disabled || insufficient_mana,
                         )

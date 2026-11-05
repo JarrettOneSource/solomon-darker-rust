@@ -2,10 +2,8 @@
 
 use serde::Deserialize;
 use solomon_sim::painter::{WorldManagerLane, WorldPainterOrder};
-use solomon_sim::player_rescue::{
-    NativePlayerRescueProtection, native_rescue_damage, native_sparkle_scale,
-};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::player_rescue::{PlayerRescueProtection, rescue_damage, sparkle_scale};
+use solomon_sim::{Rng, Vec2};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,11 +47,9 @@ fn current_rescue_protection_preserves_all_float_stores_through_the_last_zero_al
     let goldens: Goldens = serde_json::from_str(fixture).unwrap();
     assert_eq!(goldens.source_revision, "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     for case in goldens.cases {
-        let mut protection = NativePlayerRescueProtection {
-            fraction: case.fraction,
-            ..NativePlayerRescueProtection::default()
-        };
-        let mut rng = NativeRng::new(case.seed);
+        let mut protection =
+            PlayerRescueProtection { fraction: case.fraction, ..PlayerRescueProtection::default() };
+        let mut rng = Rng::new(case.seed);
         let mut order = WorldPainterOrder { next_actor_ordinal: 0, next_transient_ordinal: 17 };
         let mut tick = 0;
         for frame in case.frames {
@@ -80,7 +76,7 @@ fn current_rescue_protection_preserves_all_float_stores_through_the_last_zero_al
             random.extend(rng.words);
             assert_eq!(random, frame.rng, "{context} full RNG");
             assert_eq!(
-                [0.0, 0.125, 50.0, 100.0].map(|amount| native_rescue_damage(amount, &protection)),
+                [0.0, 0.125, 50.0, 100.0].map(|amount| rescue_damage(amount, &protection)),
                 frame.damage,
                 "{context} protected damage"
             );
@@ -100,7 +96,7 @@ fn current_rescue_protection_preserves_all_float_stores_through_the_last_zero_al
                         registration.registration_ordinal as f64,
                         actual.rotation_degrees,
                         actual.timer,
-                        native_sparkle_scale(actual.timer),
+                        sparkle_scale(actual.timer),
                     ],
                     expected.values,
                     "{context} particle{}",

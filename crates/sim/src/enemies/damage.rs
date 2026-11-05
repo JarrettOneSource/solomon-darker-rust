@@ -330,7 +330,7 @@ impl EnemyWorld {
         maggot.current_health -= request.amount;
         let killed = maggot.current_health <= 0.0;
         if killed {
-            maggot.native_tree_query_member = false;
+            maggot.tree_query_member = false;
             maggot.ether_drain_captured = request.ether_drain_capture;
             maggot.death_epoch = Some(self.next_death_epoch);
             self.next_death_epoch += 1;

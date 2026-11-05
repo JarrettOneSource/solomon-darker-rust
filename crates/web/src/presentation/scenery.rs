@@ -3,11 +3,11 @@
 
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::scenery::{
-    NativeTreeActorPoses, NativeTreeEnemyPose, NativeTreeMaggotPose, NativeTreePlayerPose,
+    TreeActorPoses, TreeEnemyPose, TreeMaggotPose, TreePlayerPose,
 };
 use solomon_sim::boneyard::world::BoneyardWorld;
 use solomon_sim::enemies::actor_presentation::{
-    EnemyActorAppearanceContext, native_enemy_presentation_input,
+    EnemyActorAppearanceContext, enemy_presentation_input,
 };
 use solomon_sim::enemies::model::{EnemyBrain, SpiderPhase};
 use solomon_sim::session::GameSession;
@@ -18,11 +18,10 @@ use super::{EnemyPresentationMetadata, TimedSession};
 #[must_use]
 pub fn scenery_actor_poses(
     world: &BoneyardWorld,
-    players: impl IntoIterator<Item = NativeTreePlayerPose>,
+    players: impl IntoIterator<Item = TreePlayerPose>,
     metadata: Option<&EnemyPresentationMetadata>,
-) -> NativeTreeActorPoses {
-    let mut poses =
-        NativeTreeActorPoses { players: players.into_iter().collect(), ..Default::default() };
+) -> TreeActorPoses {
+    let mut poses = TreeActorPoses { players: players.into_iter().collect(), ..Default::default() };
     for actor in world.enemies.actors.iter() {
         if matches!(&actor.brain, EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured)
         {
@@ -33,7 +32,7 @@ pub fn scenery_actor_poses(
             if let Some(sample) = metadata.and_then(|metadata| metadata.actors.get(&actor.id)) {
                 sample
             } else {
-                fallback = native_enemy_presentation_input(
+                fallback = enemy_presentation_input(
                     actor,
                     EnemyActorAppearanceContext {
                         tick: world.ticks,
@@ -46,20 +45,20 @@ pub fn scenery_actor_poses(
                 );
                 &fallback
             };
-        poses.enemies.push(NativeTreeEnemyPose {
+        poses.enemies.push(TreeEnemyPose {
             id: actor.id,
             position: actor.position,
             enemy_token: actor.config.enemy_token,
-            native_type_id: actor.config.native_type_id,
+            type_id: actor.config.type_id,
             animation_state: sample.state,
             coffin_state: sample.coffin_state,
         });
     }
     for maggot in world.enemies.maggots.iter() {
-        poses.maggots.push(NativeTreeMaggotPose {
+        poses.maggots.push(TreeMaggotPose {
             id: maggot.id,
             position: maggot.position,
-            native_tree_query_member: maggot.native_tree_query_member,
+            tree_query_member: maggot.tree_query_member,
         });
     }
     poses.encounter =
@@ -67,11 +66,11 @@ pub fn scenery_actor_poses(
     poses
 }
 
-fn from_endpoint(endpoint: &TimedSession) -> NativeTreeActorPoses {
+fn from_endpoint(endpoint: &TimedSession) -> TreeActorPoses {
     let session = &endpoint.session;
     scenery_actor_poses(
         session.boneyard.as_ref().expect("retained Boneyard endpoint"),
-        session.participant_order.iter().map(|id| NativeTreePlayerPose {
+        session.participant_order.iter().map(|id| TreePlayerPose {
             id: id.clone(),
             position: session.participants.get(id).expect("participant exists").wizard.position,
         }),
@@ -103,17 +102,13 @@ pub(super) fn interpolate(
     older: &TimedSession,
     newer: &TimedSession,
     blend: f64,
-) -> NativeTreeActorPoses {
+) -> TreeActorPoses {
     let first = from_endpoint(older);
     let next = from_endpoint(newer);
     interpolate_poses(&first, &next, blend)
 }
 
-fn interpolate_poses(
-    first: &NativeTreeActorPoses,
-    next: &NativeTreeActorPoses,
-    blend: f64,
-) -> NativeTreeActorPoses {
+fn interpolate_poses(first: &TreeActorPoses, next: &TreeActorPoses, blend: f64) -> TreeActorPoses {
     let mut ids: Vec<_> = first.players.iter().map(|player| player.id.clone()).collect();
     if blend >= 1.0 {
         for player in &next.players {
@@ -124,7 +119,7 @@ fn interpolate_poses(
     }
     let players = ids
         .into_iter()
-        .map(|id| NativeTreePlayerPose {
+        .map(|id| TreePlayerPose {
             position: match (
                 first.players.iter().find(|player| player.id == id),
                 next.players.iter().find(|player| player.id == id),
@@ -165,7 +160,7 @@ fn interpolate_poses(
     {
         *position = lerp_vec(first, next, blend);
     }
-    NativeTreeActorPoses { players, enemies, maggots, encounter }
+    TreeActorPoses { players, enemies, maggots, encounter }
 }
 
 #[cfg(test)]

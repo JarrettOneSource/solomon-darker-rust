@@ -11,9 +11,9 @@ use crate::enemies::model::EnemyDamageRequest;
 use crate::float::fround;
 use crate::hub::interaction::BoastFailureProducer;
 use crate::player::PlayerState;
-use crate::profile::native_hagatha_boss_damage_factor;
+use crate::profile::hagatha_boss_damage_factor;
 use crate::secondary::*;
-use crate::spells::casting::NativePlayerWeaponKind;
+use crate::spells::casting::PlayerWeaponKind;
 use crate::spells::contacts::{
     BoneyardSpecialDeathInput, BoneyardSpecialDeathResult, resolve_boneyard_special_death_payload,
 };
@@ -23,7 +23,7 @@ impl GameSession {
     pub(super) fn activate_secondary_belt_skill(
         &mut self,
         id: &str,
-        ability: NativeSecondaryAbilityId,
+        ability: SecondaryAbilityId,
         slot: usize,
         aim: Option<Vec2>,
         extensions: Option<&dyn GameSimulationExtensions>,
@@ -63,8 +63,8 @@ impl GameSession {
         let participant = &self.participants.get(id).expect("participant exists");
         let player = &participant.player;
         let derived = player.derived_stats();
-        let mut authority = NativeSecondaryPlayerAuthority::from_snapshot_with_stat_book(
-            NativeSecondaryPlayerSnapshot {
+        let mut authority = SecondaryPlayerAuthority::from_snapshot_with_stat_book(
+            SecondaryPlayerSnapshot {
                 alive: player.combat.life_state == PlayerLifeState::Alive,
                 action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
@@ -73,7 +73,7 @@ impl GameSession {
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
-                input: NativeSecondaryInput { aim, ..NativeSecondaryInput::default() },
+                input: SecondaryInput { aim, ..SecondaryInput::default() },
                 skill_book: &player.book,
                 world_key: &key,
             },
@@ -88,7 +88,7 @@ impl GameSession {
             id,
             ability,
             slot,
-            &NativeSecondaryTickContext {
+            &SecondaryTickContext {
                 enhanced_effects: Some(self.enhanced_effects),
                 players: &players,
                 tick: self.ticks,
@@ -130,7 +130,7 @@ impl GameSession {
         tick: u64,
         unstepped_ids: &[u64],
         extensions: Option<&dyn GameSimulationExtensions>,
-    ) -> Result<NativeSecondaryTickResult, String> {
+    ) -> Result<SecondaryTickResult, String> {
         let unstepped: Vec<_> = self
             .secondary
             .actors
@@ -165,7 +165,7 @@ impl GameSession {
             let player = &participant.player;
             let derived = player.derived_stats();
             let input = inputs[id];
-            let snapshot = NativeSecondaryPlayerSnapshot {
+            let snapshot = SecondaryPlayerSnapshot {
                 alive: player.combat.life_state == PlayerLifeState::Alive,
                 action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
@@ -174,7 +174,7 @@ impl GameSession {
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
-                input: NativeSecondaryInput {
+                input: SecondaryInput {
                     aim: input.aim,
                     primary: input.primary,
                     quickbar: input.quickbar,
@@ -182,7 +182,7 @@ impl GameSession {
                 skill_book: &player.book,
                 world_key: &keys[id],
             };
-            let mut authority = NativeSecondaryPlayerAuthority::from_snapshot_with_stat_book(
+            let mut authority = SecondaryPlayerAuthority::from_snapshot_with_stat_book(
                 snapshot,
                 &player.stat_book,
                 &derived,
@@ -218,7 +218,7 @@ impl GameSession {
         };
         let first_event_id = self.secondary.next_event_id;
         let result = self.secondary.step(
-            &NativeSecondaryTickContext {
+            &SecondaryTickContext {
                 enhanced_effects: Some(self.enhanced_effects),
                 players: &players,
                 tick,
@@ -244,7 +244,7 @@ impl GameSession {
     /// `applySecondaryPlayerOutcomes` is shared by tick and immediate belt casts.
     fn apply_secondary_player_outcomes(
         &mut self,
-        result: &NativeSecondaryTickResult,
+        result: &SecondaryTickResult,
         previous_mindstars: &std::collections::BTreeSet<String>,
         tick: u64,
         extensions: Option<&dyn GameSimulationExtensions>,
@@ -319,7 +319,7 @@ impl GameSession {
     /// after the ordinary primary pass, so their age-zero area cannot replay.
     pub fn apply_secondary_contacts(
         &mut self,
-        result: &NativeSecondaryTickResult,
+        result: &SecondaryTickResult,
         tick: u64,
     ) -> Vec<BoneyardSpecialDeathResult> {
         let Some(world) = &mut self.boneyard else {
@@ -371,7 +371,7 @@ impl GameSession {
             .actors
             .iter()
             .filter(|actor| {
-                actor.kind == NativeSecondaryActorKind::EtherDrain && actor.world_key == world_key
+                actor.kind == SecondaryActorKind::EtherDrain && actor.world_key == world_key
             })
             .map(|actor| actor.position)
             .collect();
@@ -380,9 +380,9 @@ impl GameSession {
             let actor = world.enemies.actors.iter().find(|actor| actor.id == contact.target_id);
             let multiplier = actor.map_or(1.0, |actor| {
                 self.participants.get(&contact.owner_id).map_or(1.0, |participant| {
-                    native_hagatha_boss_damage_factor(
+                    hagatha_boss_damage_factor(
                         &participant.player.economy.owned_perk_selectors,
-                        u32::from(actor.config.native_type_id),
+                        u32::from(actor.config.type_id),
                     )
                 })
             });
@@ -407,7 +407,7 @@ impl GameSession {
             if amount == 0.0 && contact.amount.is_finite() && contact.amount >= 0.0 {
                 continue;
             }
-            let magic = contact.kind != NativeSecondaryDamageKind::Physical;
+            let magic = contact.kind != SecondaryDamageKind::Physical;
             let damaged = self.damage_enemy(EnemyDamageRequest {
                 enhanced_effects: Some(self.enhanced_effects),
                 actor_id: contact.target_id,
@@ -451,19 +451,19 @@ impl GameSession {
             if let Some(actor) =
                 world.enemies.actors.iter_mut().find(|actor| actor.id == change.target_id)
             {
-                let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {
+                let heading = if change.mode == SecondaryHeadingMode::Absolute {
                     change.degrees
                 } else {
                     actor.heading_deg + change.degrees
                 };
                 actor.heading_deg = fround((heading % 360.0 + 360.0) % 360.0);
-                if change.mode == NativeSecondaryHeadingMode::Absolute {
+                if change.mode == SecondaryHeadingMode::Absolute {
                     actor.path.wander_heading_deg = actor.heading_deg;
                 }
             } else if let Some(actor) =
                 world.enemies.maggots.iter_mut().find(|actor| actor.id == change.target_id)
             {
-                let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {
+                let heading = if change.mode == SecondaryHeadingMode::Absolute {
                     change.degrees
                 } else {
                     actor.heading_deg + change.degrees
@@ -476,7 +476,7 @@ impl GameSession {
 
     pub(super) fn apply_secondary_knockbacks(
         &mut self,
-        result: &NativeSecondaryTickResult,
+        result: &SecondaryTickResult,
         previous_owners: &[(u64, String)],
     ) {
         if self.boneyard.is_none() || result.knockbacks.is_empty() {
@@ -529,10 +529,10 @@ impl GameSession {
     }
 }
 
-pub(super) fn player_weapon(player: &PlayerState) -> Option<NativePlayerWeaponKind> {
+pub(super) fn player_weapon(player: &PlayerState) -> Option<PlayerWeaponKind> {
     match player.economy.equipment.weapon.as_ref().and_then(|item| item.equipment_type) {
-        Some(crate::economy::EquipmentType::Staff) => Some(NativePlayerWeaponKind::Staff),
-        Some(crate::economy::EquipmentType::Wand) => Some(NativePlayerWeaponKind::Wand),
+        Some(crate::economy::EquipmentType::Staff) => Some(PlayerWeaponKind::Staff),
+        Some(crate::economy::EquipmentType::Wand) => Some(PlayerWeaponKind::Wand),
         _ => None,
     }
 }

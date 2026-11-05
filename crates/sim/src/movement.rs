@@ -12,7 +12,7 @@ use crate::collision::{
 };
 use crate::constants::{COLLISION_RESPONSE, ENEMY_MOVEMENT, PLAYER_MOVEMENT};
 use crate::float::{fround, hypot};
-use crate::rng::NativeRng;
+use crate::rng::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerMovementState {
@@ -190,7 +190,7 @@ pub enum EnemyFamily {
 
 /// The per-family base speed rolled when an enemy spawns. Skeleton-derived families share one
 /// roll; Spider and Maggot roll their own.
-pub fn create_enemy_base_speed(family: EnemyFamily, rng: &mut NativeRng) -> f64 {
+pub fn create_enemy_base_speed(family: EnemyFamily, rng: &mut Rng) -> f64 {
     match family {
         EnemyFamily::Imp | EnemyFamily::GreenImp => 4.5,
         EnemyFamily::Zombie => fround(1.0 * 0.85),
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn fixed_family_speeds_do_not_touch_the_rng() {
-        let mut rng = NativeRng::new(3);
+        let mut rng = Rng::new(3);
         let before = rng.clone();
         assert_eq!(create_enemy_base_speed(EnemyFamily::Imp, &mut rng), 4.5);
         assert_eq!(create_enemy_base_speed(EnemyFamily::Zombie, &mut rng), fround(0.85));

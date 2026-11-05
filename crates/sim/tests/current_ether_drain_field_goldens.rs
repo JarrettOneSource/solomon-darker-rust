@@ -12,20 +12,20 @@ use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::ether_drain::*;
 use solomon_sim::secondary::*;
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 use std::collections::BTreeMap;
 
 struct FieldWorld {
-    targets: Vec<NativeEtherDrainTarget>,
-    animations: Vec<NativeEtherDrainWorldAnimationTarget>,
-    scenery: Vec<NativeSecondarySceneryTarget>,
+    targets: Vec<EtherDrainTarget>,
+    animations: Vec<EtherDrainWorldAnimationTarget>,
+    scenery: Vec<SecondarySceneryTarget>,
 }
-impl NativeSecondaryWorld for FieldWorld {
+impl SecondaryWorld for FieldWorld {
     fn target_exists(&self, _: &str, _: usize) -> bool {
         false
     }
-    fn dampen_candidates(&self, _: &str, _: Vec2) -> NativeSecondaryDampenCandidates {
-        NativeSecondaryDampenCandidates::default()
+    fn dampen_candidates(&self, _: &str, _: Vec2) -> SecondaryDampenCandidates {
+        SecondaryDampenCandidates::default()
     }
     fn phasing_destination(&self, _: &str, _: Vec2, _: Vec2) -> Option<Vec2> {
         None
@@ -33,39 +33,39 @@ impl NativeSecondaryWorld for FieldWorld {
     fn golem_movement(&self, _: &str, _: &str, _: Vec2, requested: Vec2, _: f64) -> Vec2 {
         requested
     }
-    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut NativeRng) -> Vec2 {
+    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut Rng) -> Vec2 {
         requested
     }
-    fn teleport_destination(&self, _: &str, _: &mut NativeRng) -> Vec2 {
+    fn teleport_destination(&self, _: &str, _: &mut Rng) -> Vec2 {
         Vec2::ZERO
     }
-    fn target(&self, _: &str, _: usize) -> Option<NativeSecondaryTarget> {
+    fn target(&self, _: &str, _: usize) -> Option<SecondaryTarget> {
         None
     }
-    fn targets(&self, _: &str, _: Vec2, _: f64) -> Vec<NativeSecondaryTarget> {
+    fn targets(&self, _: &str, _: Vec2, _: f64) -> Vec<SecondaryTarget> {
         Vec::new()
     }
-    fn ether_drain_targets(&self, _: &str) -> Option<Vec<NativeEtherDrainTarget>> {
+    fn ether_drain_targets(&self, _: &str) -> Option<Vec<EtherDrainTarget>> {
         Some(self.targets.clone())
     }
-    fn ether_drain_world_animations(&self, _: &str) -> Vec<NativeEtherDrainWorldAnimationTarget> {
+    fn ether_drain_world_animations(&self, _: &str) -> Vec<EtherDrainWorldAnimationTarget> {
         self.animations.clone()
     }
-    fn scenery_targets(&self, _: &str, _: Vec2, _: f64) -> Vec<NativeSecondarySceneryTarget> {
+    fn scenery_targets(&self, _: &str, _: Vec2, _: f64) -> Vec<SecondarySceneryTarget> {
         self.scenery.clone()
     }
 }
 fn snapshot(
-    state: &NativeSecondarySimulationState,
+    state: &SecondarySimulationState,
     order: WorldPainterOrder,
-    result: &NativeSecondaryTickResult,
+    result: &SecondaryTickResult,
 ) -> Value {
     let actors: Vec<_> = state
         .actors
         .iter()
         .map(|actor| {
             let mut value = support::actor_snapshot(actor);
-            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
+            if actor.kind == SecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
                 value["etherDrain"] = serde_json::to_value(actor.ether_drain.as_ref()).unwrap();
             }
             value
@@ -93,7 +93,7 @@ fn current_field_children_private_manager_captures_and_shared_birth_order_match_
         let mut belt = PlayerBeltComponent::new(&book);
         belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 74 });
         let wizard = HubWizard::at(Vec2::ZERO);
-        let mut state = NativeSecondarySimulationState::new(91);
+        let mut state = SecondarySimulationState::new(91);
         let mut order = WorldPainterOrder::default();
         let mut world = FieldWorld {
             targets: input(&case["targets"]),
@@ -102,7 +102,7 @@ fn current_field_children_private_manager_captures_and_shared_birth_order_match_
                 .as_array()
                 .unwrap()
                 .iter()
-                .map(|row| NativeSecondarySceneryTarget {
+                .map(|row| SecondarySceneryTarget {
                     id: row["id"].as_u64().unwrap() as usize,
                     position: input(&row["position"]),
                     type_id: row["typeId"].as_u64().unwrap() as u32,
@@ -113,24 +113,24 @@ fn current_field_children_private_manager_captures_and_shared_birth_order_match_
         let mut frame_index = 0;
         for tick in 1..=1080 {
             if tick == 170 {
-                world.targets.retain(|target| {
-                    !matches!(target.reference, NativeEtherDrainTargetRef::Loot { .. })
-                });
+                world
+                    .targets
+                    .retain(|target| !matches!(target.reference, EtherDrainTargetRef::Loot { .. }));
             }
             let mut authority = support::authority_from_fixture(declared, &book, &belt, &wizard);
             authority.input.aim = Some(Vec2::new(250.0, 250.0));
             authority.input.quickbar = if tick == 1 { Some(0) } else { None };
             let players = BTreeMap::from([("player".to_owned(), authority)]);
             let result = state.step(
-                &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+                &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
                 &mut world,
                 Some(&mut order),
             );
             if case["spatial"].as_bool().unwrap() && tick == 10 {
                 state.capture_ether_drain_image(
                     1,
-                    Some(NativeEtherDrainCapturedImage {
-                        atlas: NativeEtherDrainAtlas::Demon,
+                    Some(EtherDrainCapturedImage {
+                        atlas: EtherDrainAtlas::Demon,
                         entry: 80,
                         tint: 0xffffff,
                         body_y_offset: 0,

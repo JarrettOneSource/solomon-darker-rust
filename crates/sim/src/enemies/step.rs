@@ -67,7 +67,7 @@ impl EnemyWorld {
             })
             .collect();
         for (id, position) in skull_queries {
-            self.bind_native_query_target(&format!("boss-spell:{id}"), position);
+            self.bind_query_target(&format!("boss-spell:{id}"), position);
         }
         if context.paused {
             self.step_paused_timestamps(context.tick);
@@ -153,8 +153,8 @@ impl EnemyWorld {
                 super::projectile_hazards::spawn_burning_skeleton_fire(self, &actor, tick, order);
                 super::wraith::spawn_wraith_wisp(self, &actor, &actor_context, order);
                 if primary_cell_changed(before, actor.position) {
-                    actor.native_cell_binding_order = self.next_native_cell_binding_order;
-                    self.next_native_cell_binding_order += 1;
+                    actor.native_cell_binding_order = self.next_cell_binding_order;
+                    self.next_cell_binding_order += 1;
                 }
                 actor.config = authored_config;
                 self.actors[index] = actor;
@@ -177,8 +177,8 @@ impl EnemyWorld {
             if maggot_positions.iter().any(|(id, position)| {
                 *id == actor.id && primary_cell_changed(*position, actor.position)
             }) {
-                actor.native_cell_binding_order = self.next_native_cell_binding_order;
-                self.next_native_cell_binding_order += 1;
+                actor.native_cell_binding_order = self.next_cell_binding_order;
+                self.next_cell_binding_order += 1;
             }
         }
         let projectile_positions: Vec<_> = self
@@ -194,8 +194,8 @@ impl EnemyWorld {
             if projectile_positions.iter().any(|(id, position)| {
                 *id == state.id && primary_cell_changed(*position, state.position)
             }) {
-                state.native_cell_binding_order = self.next_native_cell_binding_order;
-                self.next_native_cell_binding_order += 1;
+                state.native_cell_binding_order = self.next_cell_binding_order;
+                self.next_cell_binding_order += 1;
             }
         }
     }

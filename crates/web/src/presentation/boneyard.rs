@@ -75,7 +75,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
             spider_exposure: light.scalar_at(actor.position),
             spider_target: target.map(|participant| EnemySpiderOutlineTarget {
                 position: participant.wizard.position,
-                primary_tint: solomon_sim::profile::primary::native_primary_spell_tint(
+                primary_tint: solomon_sim::profile::primary::primary_spell_tint(
                     participant.player.book.primary_skill_id,
                     participant.player.book.weld_build_id,
                 ),

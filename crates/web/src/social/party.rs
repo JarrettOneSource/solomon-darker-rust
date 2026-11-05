@@ -6,11 +6,9 @@ mod menu;
 pub(super) use interaction::{PartyClipboard, PartyMenuInteraction};
 
 use egui::{Color32, Id, Rect, Sense, pos2, vec2};
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
-};
-use solomon_sim::social::party_ui::{fit_native_party_menu_text, native_party_menu_name_font};
+use solomon_sim::social::party_ui::{fit_party_menu_text, party_menu_name_font};
 use solomon_sim::social::{GameChatWorldKind, party_member_display_name};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, measure_ui_text};
 
 use super::{SocialUi, gpu};
 use crate::gpu_ui::UiFrame;
@@ -59,7 +57,7 @@ impl SocialUi {
         let error = self
             .party_status
             .as_deref()
-            .map(|error| fit_native_party_menu_text(error, NativeUiFontName::Medium, 188.0, 0.85))
+            .map(|error| fit_party_menu_text(error, UiFontName::Medium, 188.0, 0.85))
             .unwrap_or_default();
         let mut y = 54.0 + if error.is_empty() { 0.0 } else { 22.0 };
         let tall = !rows.is_empty() || !error.is_empty();
@@ -83,7 +81,7 @@ impl SocialUi {
                 let body = ui.interact(panel, Id::unique("social/party-chip-body"), Sense::CLICK);
                 frame.record("social/party-chip-body", "Party panel", "region", &body);
                 self.ui.paint_tiles(frame, ui.painter(), 49, panel, 1.0, Color32::WHITE)?;
-                self.ui.paint_native_frame_scaled(
+                self.ui.paint_stock_frame_scaled(
                     frame,
                     ui.painter(),
                     17,
@@ -113,10 +111,10 @@ impl SocialUi {
                 gpu::native_text(
                     frame,
                     ui.painter(),
-                    &NativeUiTextSpec {
-                        align: NativeUiTextAlign::Left,
+                    &UiTextSpec {
+                        align: UiTextAlign::Left,
                         tint: 0xd9ba70,
-                        ..NativeUiTextSpec::new(NativeUiFontName::Menu, "PARTY", 42.0, 33.0)
+                        ..UiTextSpec::new(UiFontName::Menu, "PARTY", 42.0, 33.0)
                     },
                     origin,
                     1.0,
@@ -185,11 +183,11 @@ impl SocialUi {
                     gpu::native_text(
                         frame,
                         ui.painter(),
-                        &NativeUiTextSpec {
-                            align: NativeUiTextAlign::Left,
+                        &UiTextSpec {
+                            align: UiTextAlign::Left,
                             scale: 0.85,
                             tint: 0xff9a8a,
-                            ..NativeUiTextSpec::new(NativeUiFontName::Medium, &error, 24.0, 67.0)
+                            ..UiTextSpec::new(UiFontName::Medium, &error, 24.0, 67.0)
                         },
                         origin,
                         1.0,
@@ -209,21 +207,21 @@ impl SocialUi {
                         .iter()
                         .enumerate()
                         .map(|(index, (label, _))| {
-                            measure_native_ui_text(label, NativeUiFontName::Body, 1.0)
+                            measure_ui_text(label, UiFontName::Body, 1.0)
                                 + if index > 0 { 8.0 } else { 0.0 }
                         })
                         .sum();
                     let tags_left = 212.0 - tags_width;
                     let limit = if tags.is_empty() { 188.0 } else { tags_left - 32.0 };
-                    let font = native_party_menu_name_font(&name);
-                    let fitted = fit_native_party_menu_text(&name, font, limit, 0.65);
+                    let font = party_menu_name_font(&name);
+                    let fitted = fit_party_menu_text(&name, font, limit, 0.65);
                     gpu::native_text(
                         frame,
                         ui.painter(),
-                        &NativeUiTextSpec {
-                            align: NativeUiTextAlign::Left,
+                        &UiTextSpec {
+                            align: UiTextAlign::Left,
                             scale: 0.65,
-                            ..NativeUiTextSpec::new(font, &fitted, 24.0, y + 21.0)
+                            ..UiTextSpec::new(font, &fitted, 24.0, y + 21.0)
                         },
                         origin,
                         1.0,
@@ -233,20 +231,15 @@ impl SocialUi {
                         gpu::native_text(
                             frame,
                             ui.painter(),
-                            &NativeUiTextSpec {
-                                align: NativeUiTextAlign::Left,
+                            &UiTextSpec {
+                                align: UiTextAlign::Left,
                                 tint,
-                                ..NativeUiTextSpec::new(
-                                    NativeUiFontName::Body,
-                                    label,
-                                    tag_x,
-                                    y + 21.0,
-                                )
+                                ..UiTextSpec::new(UiFontName::Body, label, tag_x, y + 21.0)
                             },
                             origin,
                             1.0,
                         );
-                        tag_x += measure_native_ui_text(label, NativeUiFontName::Body, 1.0) + 8.0;
+                        tag_x += measure_ui_text(label, UiFontName::Body, 1.0) + 8.0;
                     }
                     y += 36.0;
                 }

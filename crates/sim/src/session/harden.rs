@@ -2,24 +2,22 @@
 //! Effects share the primary spell queue; impact sounds share the secondary event cursor.
 
 use crate::harden_effects::{
-    NativeHardenBreakupInput, NativeHardenChip, NativeHardenEffect, NativeHardenEffectOwner,
-    create_native_harden_breakup,
+    HardenBreakupInput, HardenChip, HardenEffect, HardenEffectOwner, create_harden_breakup,
 };
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::profile::PlayerSkillRuntimeState;
 use crate::secondary::{
-    NativeSecondaryAudioCue, NativeSecondaryEventKind, NativeSecondaryEventState,
-    NativeSecondarySimulationState,
+    SecondaryAudioCue, SecondaryEventKind, SecondaryEventState, SecondarySimulationState,
 };
 use crate::spells::model::{PrimarySpellTransient, SpellState};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 /// `native-harden.ts`: this crossing plays the formed sound twice.
-const NATIVE_HARDEN_FORMED_THRESHOLD: f64 = 0.25;
+const HARDEN_FORMED_THRESHOLD: f64 = 0.25;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PendingPlayerHardenChip {
-    pub chip: NativeHardenChip,
+    pub chip: HardenChip,
     pub owner_id: String,
     pub position: Vec2,
     pub world_key: String,
@@ -33,9 +31,9 @@ pub struct PlayerHardenContext<'a> {
     pub position: Vec2,
     pub world_key: &'a str,
     pub spells: &'a mut SpellState,
-    pub secondary: &'a mut NativeSecondarySimulationState,
+    pub secondary: &'a mut SecondarySimulationState,
     pub tick: u64,
-    pub rng: &'a mut NativeRng,
+    pub rng: &'a mut Rng,
     pub painter_order: &'a mut WorldPainterOrder,
 }
 
@@ -46,8 +44,8 @@ pub fn synchronize_player_harden_effects(
     // Contact chips are enrolled before the coating transition, even if that same
     // resource tick tears the coating down and creates a complete breakup.
     for pending in chips {
-        let effect = NativeHardenEffect::Shard {
-            owner: NativeHardenEffectOwner::new(
+        let effect = HardenEffect::Shard {
+            owner: HardenEffectOwner::new(
                 context.spells.next_id,
                 &pending.owner_id,
                 &pending.world_key,
@@ -62,7 +60,7 @@ pub fn synchronize_player_harden_effects(
             &pending.owner_id,
             pending.position,
             &pending.world_key,
-            NativeSecondaryAudioCue::IceShatter,
+            SecondaryAudioCue::IceShatter,
             pending.chip.pitch,
             1.0,
         );
@@ -73,15 +71,15 @@ pub fn synchronize_player_harden_effects(
     let before = before.harden.coating;
     let after = context.after.harden.coating;
     if before == 0.0 && after > 0.0 {
-        coating_sound(&mut context, NativeSecondaryAudioCue::Harden, 0.8_f32 as f64, 1.0);
+        coating_sound(&mut context, SecondaryAudioCue::Harden, 0.8_f32 as f64, 1.0);
     }
-    if before < NATIVE_HARDEN_FORMED_THRESHOLD && after >= NATIVE_HARDEN_FORMED_THRESHOLD {
-        coating_sound(&mut context, NativeSecondaryAudioCue::Harden, 1.0, 1.0);
-        coating_sound(&mut context, NativeSecondaryAudioCue::Harden, 1.0, 1.0);
+    if before < HARDEN_FORMED_THRESHOLD && after >= HARDEN_FORMED_THRESHOLD {
+        coating_sound(&mut context, SecondaryAudioCue::Harden, 1.0, 1.0);
+        coating_sound(&mut context, SecondaryAudioCue::Harden, 1.0, 1.0);
     }
     if before > 0.0 && after == 0.0 {
-        let breakup = create_native_harden_breakup(
-            NativeHardenBreakupInput {
+        let breakup = create_harden_breakup(
+            HardenBreakupInput {
                 coating: before,
                 position: context.position,
                 owner_id: context.player_id,
@@ -96,16 +94,16 @@ pub fn synchronize_player_harden_effects(
         for effect in breakup.effects {
             enroll(&mut context, effect);
         }
-        coating_sound(&mut context, NativeSecondaryAudioCue::IceShatter, breakup.pitch, before);
+        coating_sound(&mut context, SecondaryAudioCue::IceShatter, breakup.pitch, before);
     }
 }
 
-fn enroll(context: &mut PlayerHardenContext<'_>, mut effect: NativeHardenEffect) {
+fn enroll(context: &mut PlayerHardenContext<'_>, mut effect: HardenEffect) {
     // `nativePrimaryPainterRegistrationContract`: shards belong to the transient
     // post-world queue; the expanding burst occupies an ordinary actor row.
     let lane = match effect {
-        NativeHardenEffect::Shard { .. } => WorldManagerLane::Transient,
-        NativeHardenEffect::Burst { .. } => WorldManagerLane::Actor,
+        HardenEffect::Shard { .. } => WorldManagerLane::Transient,
+        HardenEffect::Burst { .. } => WorldManagerLane::Actor,
     };
     effect.common_mut().painter_registrations.push(context.painter_order.register(lane));
     context.spells.transients.push(PrimarySpellTransient::Harden(effect));
@@ -113,7 +111,7 @@ fn enroll(context: &mut PlayerHardenContext<'_>, mut effect: NativeHardenEffect)
 
 fn coating_sound(
     context: &mut PlayerHardenContext<'_>,
-    cue: NativeSecondaryAudioCue,
+    cue: SecondaryAudioCue,
     pitch: f64,
     gain: f64,
 ) {
@@ -125,12 +123,12 @@ fn sound(
     owner_id: &str,
     position: Vec2,
     world_key: &str,
-    cue: NativeSecondaryAudioCue,
+    cue: SecondaryAudioCue,
     pitch: f64,
     gain: f64,
 ) {
-    let mut event = NativeSecondaryEventState::new(
-        NativeSecondaryEventKind::Impact,
+    let mut event = SecondaryEventState::new(
+        SecondaryEventKind::Impact,
         owner_id.into(),
         world_key.into(),
         context.tick,

@@ -10,8 +10,8 @@ use super::{
     EquipmentType, FomentiusStockDefinition, HUB_INVENTORY_SLOT_CAPACITY,
     HUB_SACK_CHILD_REPLICATION_LIMIT, HUB_SACK_REPLICATION_DEPTH_LIMIT, HUB_STORAGE_SLOT_CAPACITY,
     HubEconomyContext, HubEconomyRejection as Rejection, HubEconomyResult, HubEconomyState,
-    HubEquipmentState, HubInventoryItem, HubItemKind, NATIVE_LOOT_BACKPACK_REPLICATION_LIMIT,
-    NativeSkillBookDefinition, TransferDirection,
+    HubEquipmentState, HubInventoryItem, HubItemKind, LOOT_BACKPACK_REPLICATION_LIMIT,
+    SkillBookDefinition, TransferDirection,
 };
 
 /// Website Sack naming limit, measured in UTF-16 code units. Existing names are retained.
@@ -66,7 +66,7 @@ impl HubInventoryItem {
     #[must_use]
     pub fn is_dyeable_clothing(&self) -> bool {
         matches!(
-            (self.native_type_id, self.equipment_type),
+            (self.type_id, self.equipment_type),
             (7005, Some(EquipmentType::Hat)) | (7006, Some(EquipmentType::Robe))
         ) || self
             .mod_item_content
@@ -141,7 +141,7 @@ pub fn project_inventory_items(source: &[HubInventoryItem]) -> Vec<ProjectedInve
                 depth,
                 parent_sack_id,
             });
-            if entry.item.native_type_id != 7008 {
+            if entry.item.type_id != 7008 {
                 continue;
             }
             let Some(contents) = &entry.item.contents else {
@@ -171,7 +171,7 @@ pub fn inventory_items_at_sack_path<'a>(
     let mut current = source;
     for sack_id in sack_path {
         let sack = current.iter().find(|item| {
-            item.id == *sack_id && item.kind == HubItemKind::Sack && item.native_type_id == 7008
+            item.id == *sack_id && item.kind == HubItemKind::Sack && item.type_id == 7008
         })?;
         current = sack.contents.as_deref().unwrap_or(&[]);
     }
@@ -184,7 +184,7 @@ pub fn reconcile_inventory_sack_path(source: &[HubInventoryItem], sack_path: &[u
     let mut reconciled = Vec::new();
     for sack_id in sack_path {
         let Some(sack) = current.iter().find(|item| {
-            item.id == *sack_id && item.kind == HubItemKind::Sack && item.native_type_id == 7008
+            item.id == *sack_id && item.kind == HubItemKind::Sack && item.type_id == 7008
         }) else {
             break;
         };
@@ -198,8 +198,8 @@ pub(crate) fn base_item(
     id: u64,
     kind: HubItemKind,
     name: &str,
-    native_type_id: u32,
-    native_subtype: Option<u32>,
+    type_id: u32,
+    subtype: Option<u32>,
     icons: &[usize],
 ) -> HubInventoryItem {
     HubInventoryItem {
@@ -215,10 +215,10 @@ pub(crate) fn base_item(
         mod_item_content: None,
         mod_affixes: None,
         name: name.to_owned(),
-        native_subtype,
-        native_selector: None,
+        subtype,
+        selector: None,
         native_effects: None,
-        native_type_id,
+        type_id,
         quantity: 1,
         rarity: None,
         recipe_index: None,
@@ -231,7 +231,7 @@ pub fn create_equipment_inventory_item(recipe: &EquipmentRecipe, id: u64) -> Hub
         id,
         HubItemKind::Equipment,
         recipe.name,
-        recipe.native_type_id,
+        recipe.type_id,
         None,
         recipe.icon_records,
     );
@@ -252,8 +252,8 @@ pub fn create_fomentius_inventory_item(
         id,
         definition.kind,
         definition.name,
-        definition.native_type_id,
-        Some(definition.native_subtype),
+        definition.type_id,
+        Some(definition.subtype),
         definition.icon_records,
     );
     item.quantity = quantity;
@@ -261,16 +261,16 @@ pub fn create_fomentius_inventory_item(
 }
 
 #[must_use]
-pub fn create_native_skill_book_inventory_item(
-    definition: &NativeSkillBookDefinition,
+pub fn create_skill_book_inventory_item(
+    definition: &SkillBookDefinition,
     id: u64,
 ) -> HubInventoryItem {
     base_item(
         id,
         HubItemKind::SkillBook,
         definition.name,
-        definition.native_type_id,
-        Some(definition.native_subtype),
+        definition.type_id,
+        Some(definition.subtype),
         definition.icon_records,
     )
 }
@@ -286,13 +286,13 @@ pub(super) fn starter_loadout(
         base_item(first_id + 1, HubItemKind::ManaPotion, "Mana Potion", 7001, Some(1), &[47]);
     mana.inventory_slot = Some(1);
     let mut equipment = HubEquipmentState::default();
-    for (offset, slot, equipment_type, name, native_type_id, icons) in [
+    for (offset, slot, equipment_type, name, type_id, icons) in [
         (2, EquipmentSlot::Hat, EquipmentType::Hat, "Hat", 7005, &[34, 38][..]),
         (3, EquipmentSlot::Robe, EquipmentType::Robe, "Robe", 7006, &[64, 67][..]),
         (4, EquipmentSlot::Weapon, EquipmentType::Staff, "Staff", 7004, &[72][..]),
     ] {
         let mut item =
-            base_item(first_id + offset, HubItemKind::Equipment, name, native_type_id, None, icons);
+            base_item(first_id + offset, HubItemKind::Equipment, name, type_id, None, icons);
         item.equipment_type = Some(equipment_type);
         if equipment_type != EquipmentType::Staff {
             item.icon_tints =
@@ -317,7 +317,7 @@ pub(super) fn materialize(source: &[HubInventoryItem]) -> Vec<HubInventoryItem> 
 /// `inventoryItemsShareStack`: the same predicate used by authoritative insert/move.
 #[must_use]
 pub fn inventory_items_share_stack(left: &HubInventoryItem, right: &HubInventoryItem) -> bool {
-    if left.native_type_id != right.native_type_id {
+    if left.type_id != right.type_id {
         return false;
     }
     if let Some(content) = &right.mod_item_content {
@@ -329,8 +329,7 @@ pub fn inventory_items_share_stack(left: &HubInventoryItem, right: &HubInventory
     if let Some(content) = &right.mod_content {
         return left.mod_content.as_ref().is_some_and(|left| left.content_id == content.content_id);
     }
-    (right.native_type_id == 7001 || right.kind == HubItemKind::ModItem)
-        && left.native_subtype == right.native_subtype
+    (right.type_id == 7001 || right.kind == HubItemKind::ModItem) && left.subtype == right.subtype
 }
 
 fn stack_maximum(item: &HubInventoryItem) -> u32 {
@@ -343,7 +342,7 @@ pub(super) fn insert(
     capacity: usize,
 ) -> Option<Vec<HubInventoryItem>> {
     let mut destination = materialize(source);
-    if (item.native_type_id == 7001 || item.kind == HubItemKind::ModItem)
+    if (item.type_id == 7001 || item.kind == HubItemKind::ModItem)
         && let Some(stack) =
             destination.iter_mut().find(|entry| inventory_items_share_stack(entry, &item))
     {
@@ -445,7 +444,7 @@ pub(super) fn remove_tree(
             let item = items.remove(index);
             return Some(RemovedItem { item, items, parent_sack_id });
         }
-        if items[index].native_type_id != 7008 {
+        if items[index].type_id != 7008 {
             continue;
         }
         let Some(contents) = &items[index].contents else {
@@ -476,7 +475,7 @@ pub(super) fn replace_tree(
             items[index].inventory_slot = slot;
             return Some(items);
         }
-        if items[index].native_type_id != 7008 {
+        if items[index].type_id != 7008 {
             continue;
         }
         let Some(contents) = &items[index].contents else {
@@ -515,8 +514,7 @@ impl HubEconomyState {
                 return false;
             }
         }
-        if project_inventory_items(&candidate.backpack).len()
-            > NATIVE_LOOT_BACKPACK_REPLICATION_LIMIT
+        if project_inventory_items(&candidate.backpack).len() > LOOT_BACKPACK_REPLICATION_LIMIT
             || !candidate.inventory_is_valid()
         {
             return false;
@@ -614,7 +612,7 @@ impl HubEconomyState {
                 && item.generated_level.is_none()
                 && item.kind == HubItemKind::Equipment
                 && item.native_effects.is_none()
-                && item.native_selector.is_none()
+                && item.selector.is_none()
                 && item.recipe_index.is_none()
             {
                 let tints = Some([Some(appearance.primary_tint), Some(appearance.secondary_tint)]);
@@ -665,8 +663,8 @@ impl HubEconomyState {
                 {
                     return false;
                 }
-                let sack = item.native_type_id == 7008 && item.kind == HubItemKind::Sack;
-                if (item.native_type_id == 7008) != (item.kind == HubItemKind::Sack) {
+                let sack = item.type_id == 7008 && item.kind == HubItemKind::Sack;
+                if (item.type_id == 7008) != (item.kind == HubItemKind::Sack) {
                     return false;
                 }
                 let Some(contents) = &item.contents else {
@@ -682,7 +680,7 @@ impl HubEconomyState {
             true
         }
         let mut seen = HashSet::new();
-        if !visit(&self.backpack, 0, Some(NATIVE_LOOT_BACKPACK_REPLICATION_LIMIT), &mut seen)
+        if !visit(&self.backpack, 0, Some(LOOT_BACKPACK_REPLICATION_LIMIT), &mut seen)
             || !visit(&self.storage, 0, Some(HUB_STORAGE_SLOT_CAPACITY), &mut seen)
         {
             return false;
@@ -710,7 +708,7 @@ impl HubEconomyState {
         let in_backpack = find_inventory_item(&self.backpack, item_id).is_some();
         let source = if in_backpack { &self.backpack } else { &self.storage };
         let mut item = find_inventory_item(source, item_id).ok_or(Rejection::ItemNotFound)?.clone();
-        if item.kind != HubItemKind::Sack || item.native_type_id != 7008 {
+        if item.kind != HubItemKind::Sack || item.type_id != 7008 {
             return Err(Rejection::IneligibleItem);
         }
         item.name = name.to_owned();
@@ -758,7 +756,7 @@ impl HubEconomyState {
         }
         if let Some(destination) = destination_sack_id {
             let valid_destination = find_inventory_item(&self.backpack, destination)
-                .is_some_and(|item| item.native_type_id == 7008);
+                .is_some_and(|item| item.type_id == 7008);
             let creates_cycle =
                 find_inventory_item(entry.item.contents.as_deref().unwrap_or(&[]), destination)
                     .is_some();
@@ -799,7 +797,7 @@ impl HubEconomyState {
         if let Some(id) = parent {
             let mut sack =
                 find_inventory_item(&self.backpack, id).ok_or(Rejection::InvalidTarget)?.clone();
-            if sack.native_type_id != 7008 {
+            if sack.type_id != 7008 {
                 return Err(Rejection::InvalidTarget);
             }
             sack.contents = Some(contents);
@@ -859,7 +857,7 @@ impl HubEconomyState {
         }
         .clone();
         let equipment_type = item.equipment_type.ok_or(Rejection::IneligibleItem)?;
-        if !native_equipment_meets_level_requirement(&item, context) {
+        if !equipment_meets_level_requirement(&item, context) {
             return Err(Rejection::IneligibleItem);
         }
         if !slot.accepts(equipment_type) {
@@ -918,7 +916,7 @@ impl HubEconomyState {
         let root = match destination_sack_id {
             Some(id) => {
                 let sack = find_inventory_item(&self.backpack, id)
-                    .filter(|item| item.native_type_id == 7008)
+                    .filter(|item| item.type_id == 7008)
                     .ok_or(Rejection::InvalidTarget)?;
                 sack.contents.as_deref().unwrap_or(&[])
             }
@@ -966,13 +964,11 @@ impl HubEconomyState {
         if context.player_level == 0 {
             return Err(Rejection::IneligibleItem);
         }
-        if find_inventory_item(&self.backpack, item_id)
-            .is_none_or(|item| item.native_type_id != 7008)
-        {
+        if find_inventory_item(&self.backpack, item_id).is_none_or(|item| item.type_id != 7008) {
             return Err(Rejection::ItemNotFound);
         }
         let mut weapon_equipped = false;
-        for (native_type_id, slot) in [
+        for (type_id, slot) in [
             (7005, EquipmentSlot::Hat),
             (7006, EquipmentSlot::Robe),
             (7004, EquipmentSlot::Weapon),
@@ -989,8 +985,8 @@ impl HubEconomyState {
                 .and_then(|sack| sack.contents.as_deref())
                 .unwrap_or(&[]);
             for entry in project_inventory_root_slots(contents) {
-                if entry.item.native_type_id == native_type_id
-                    && native_equipment_meets_level_requirement(entry.item, context)
+                if entry.item.type_id == type_id
+                    && equipment_meets_level_requirement(entry.item, context)
                 {
                     candidate = Some(entry.item.id);
                     break;
@@ -1008,8 +1004,7 @@ impl HubEconomyState {
             .unwrap_or(&[]);
         let mut rings = Vec::new();
         for entry in project_inventory_root_slots(contents) {
-            if entry.item.native_type_id == 7002
-                && native_equipment_meets_level_requirement(entry.item, context)
+            if entry.item.type_id == 7002 && equipment_meets_level_requirement(entry.item, context)
             {
                 rings.push(entry.item.id);
             }
@@ -1073,11 +1068,10 @@ impl HubEconomyState {
 
     pub fn insert_loot_item(&mut self, item: HubInventoryItem) -> bool {
         assert!(item.quantity > 0, "loot item quantity must be positive");
-        if (item.native_type_id == 7001 || item.kind == HubItemKind::ModItem)
+        if (item.type_id == 7001 || item.kind == HubItemKind::ModItem)
             && self.backpack.iter().any(|entry| inventory_items_share_stack(entry, &item))
         {
-            let Some(backpack) =
-                insert(&self.backpack, item, NATIVE_LOOT_BACKPACK_REPLICATION_LIMIT)
+            let Some(backpack) = insert(&self.backpack, item, LOOT_BACKPACK_REPLICATION_LIMIT)
             else {
                 return false;
             };
@@ -1087,8 +1081,7 @@ impl HubEconomyState {
         }
         let mut next_id = self.next_item_id;
         let item = identify_tree(item, &mut next_id);
-        let Some(backpack) = insert(&self.backpack, item, NATIVE_LOOT_BACKPACK_REPLICATION_LIMIT)
-        else {
+        let Some(backpack) = insert(&self.backpack, item, LOOT_BACKPACK_REPLICATION_LIMIT) else {
             return false;
         };
         self.backpack = backpack;
@@ -1101,13 +1094,13 @@ impl HubEconomyState {
     pub fn has_wizard_key(&self) -> bool {
         project_inventory_items(&self.backpack)
             .iter()
-            .any(|entry| entry.item.native_type_id == 7012 && entry.item.native_subtype == Some(1))
+            .any(|entry| entry.item.type_id == 7012 && entry.item.subtype == Some(1))
     }
 
     pub fn consume_wizard_key(&mut self) -> bool {
         let id = project_inventory_items(&self.backpack)
             .iter()
-            .find(|entry| entry.item.native_type_id == 7012 && entry.item.native_subtype == Some(1))
+            .find(|entry| entry.item.type_id == 7012 && entry.item.subtype == Some(1))
             .map(|entry| entry.item.id);
         let Some(id) = id else {
             return false;
@@ -1119,7 +1112,7 @@ impl HubEconomyState {
 }
 
 #[must_use]
-pub fn native_equipment_required_level(item: &HubInventoryItem) -> u32 {
+pub fn equipment_required_level(item: &HubInventoryItem) -> u32 {
     let recipe_level = item
         .recipe_index
         .and_then(|index| DOWSING_EQUIPMENT_RECIPES.get(index))
@@ -1128,12 +1121,12 @@ pub fn native_equipment_required_level(item: &HubInventoryItem) -> u32 {
 }
 
 #[must_use]
-pub fn native_equipment_meets_level_requirement(
+pub fn equipment_meets_level_requirement(
     item: &HubInventoryItem,
     context: &HubEconomyContext,
 ) -> bool {
     let reduction = if context.creativity_rank > 0 { 2 } else { 0 };
-    native_equipment_required_level(item).saturating_sub(reduction) <= context.player_level
+    equipment_required_level(item).saturating_sub(reduction) <= context.player_level
 }
 
 pub(super) fn identify_tree(mut item: HubInventoryItem, next_id: &mut u64) -> HubInventoryItem {

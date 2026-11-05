@@ -90,7 +90,7 @@ fn step_ordinary_living_actor(
 ) {
     let effect = context.ability_effect(actor.id);
     if effect.disrupted_ticks > 0 {
-        interrupt_native_secondary_action(actor);
+        interrupt_secondary_action(actor);
         actor.head_facing_offset = 0;
         if effect.time_scale != 0.0 {
             step_skeleton_recoil(actor);
@@ -123,7 +123,7 @@ fn step_ordinary_living_actor(
         return;
     }
     if effect.flee_ticks > 0 && !matches!(actor.brain, EnemyBrain::Coffin(_)) {
-        interrupt_native_secondary_action(actor);
+        interrupt_secondary_action(actor);
         actor.head_facing_offset = 0;
         super::movement::move_toward_target(
             world,
@@ -164,7 +164,7 @@ fn step_ordinary_living_actor(
     step_enemy_lighting(actor);
 }
 
-pub fn interrupt_native_secondary_action(actor: &mut EnemyActor) {
+pub fn interrupt_secondary_action(actor: &mut EnemyActor) {
     match &mut actor.brain {
         EnemyBrain::Skeleton(brain) => super::skeleton::reset_skeleton(brain),
         EnemyBrain::Archer(brain) => super::archer::reset_archer(brain),
@@ -186,7 +186,7 @@ pub fn step_damage_presentation_timers(actor: &mut EnemyActor, elapsed_ticks: u6
     }
     actor.hit_feedback.step(tick, elapsed_ticks);
     actor.hit_reaction_timer =
-        crate::combat::step_native_puppet_hit_timer(actor.hit_reaction_timer, elapsed_ticks);
+        crate::combat::step_puppet_hit_timer(actor.hit_reaction_timer, elapsed_ticks);
     if let EnemyBrain::Spider(brain) = &mut actor.brain {
         brain.spit_ticks_remaining = brain.spit_ticks_remaining.saturating_sub(elapsed_ticks);
     }

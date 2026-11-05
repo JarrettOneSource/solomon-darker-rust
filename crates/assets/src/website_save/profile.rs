@@ -2,10 +2,10 @@
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{
-    CompletedRunEconomyArchive, HubEconomyState, NativeHubNpcState, NativeUnforgeBonuses,
-    native_hagatha_bundle_state_is_valid, native_hagatha_outcome_state_is_valid,
+    CompletedRunEconomyArchive, HubEconomyState, NativeHubNpcState, UnforgeBonuses,
+    hagatha_bundle_state_is_valid, hagatha_outcome_state_is_valid,
 };
-use solomon_sim::profile::{NativeHagathaRuntimeState, WizardElement};
+use solomon_sim::profile::{HagathaRuntimeState, WizardElement};
 use solomon_sim::session::{GameSession, ParticipantProfile};
 
 use super::contract::{ParsedContinuation, SaveMetadata, integer, only_keys, record};
@@ -16,7 +16,7 @@ pub struct RestoredGameProfile {
     pub advanced_unlocks: [bool; 8],
     pub continuation: Option<ParsedContinuation>,
     pub economy: HubEconomyState,
-    pub hagatha_runtime: NativeHagathaRuntimeState,
+    pub hagatha_runtime: HagathaRuntimeState,
     pub metadata: SaveMetadata,
 }
 
@@ -190,14 +190,14 @@ pub(super) fn normalize_economy(
     source.insert("tutorialPending".into(), json!(tutorial));
     source.insert("npc".into(), normalize_npc(source.get("npc"), version >= 11)?);
     if source.get("unforgeBonuses").is_none_or(Value::is_null) {
-        source.insert("unforgeBonuses".into(), encode(&NativeUnforgeBonuses::default())?);
+        source.insert("unforgeBonuses".into(), encode(&UnforgeBonuses::default())?);
     }
     let mut economy: HubEconomyState = decode(Value::Object(source))
         .map_err(|_| "game save player economy inventory is invalid or Hagatha state is invalid")?;
     super::create::normalize_inventory(&mut economy);
     if !economy.inventory_is_valid()
-        || !native_hagatha_bundle_state_is_valid(&economy.hagatha_bundle_selectors)
-        || !native_hagatha_outcome_state_is_valid(
+        || !hagatha_bundle_state_is_valid(&economy.hagatha_bundle_selectors)
+        || !hagatha_outcome_state_is_valid(
             &economy.owned_perk_selectors,
             economy.tonic_purchases,
             economy.charm_capacity,
@@ -323,7 +323,7 @@ pub(super) fn normalize_hagatha_runtime(
     owned: &[u32],
     version: u64,
     index: usize,
-) -> Result<NativeHagathaRuntimeState, String> {
+) -> Result<HagathaRuntimeState, String> {
     let runtime = if let Some(value) = value {
         let field = format!("game save Hagatha runtime {index}");
         let source = record(value, &field)?;
@@ -337,7 +337,7 @@ pub(super) fn normalize_hagatha_runtime(
         }
         decode(value.clone())?
     } else {
-        let mut runtime = NativeHagathaRuntimeState::default();
+        let mut runtime = HagathaRuntimeState::default();
         runtime.purchase(owned);
         runtime
     };

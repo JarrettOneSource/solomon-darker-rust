@@ -43,7 +43,7 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
             match action["type"].as_str().unwrap() {
                 "fire-burn" => {
                     let input = &action["input"];
-                    state.apply_fire_burn(NativeSecondaryFireBurnInput {
+                    state.apply_fire_burn(SecondaryFireBurnInput {
                         damage: input["damage"].as_f64().unwrap(),
                         owner_id: input["ownerId"].as_str().unwrap().to_owned(),
                         rank: input["rank"].as_u64().unwrap() as u32,
@@ -54,7 +54,7 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
                 }
                 "ether-burn" => {
                     let input = &action["input"];
-                    state.apply_ether_burn(NativeSecondaryEtherBurnInput {
+                    state.apply_ether_burn(SecondaryEtherBurnInput {
                         owner_id: input["ownerId"].as_str().unwrap().to_owned(),
                         rank: input["rank"].as_u64().unwrap() as u32,
                         target: target(&input["target"]),
@@ -63,13 +63,13 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
                 }
                 "player-damage" => {
                     let applied = state.apply_player_damage(
-                        NativeSecondaryPlayerDamageInput {
+                        SecondaryPlayerDamageInput {
                             player_id: action["playerId"].as_str().unwrap(),
                             amount: action["amount"].as_f64().unwrap(),
                             tick: action["tick"].as_u64().unwrap(),
                             position: point(&action["position"]),
                             world_key: "boneyard:oracle",
-                            presentation: NativeSecondaryPlayerDamagePresentation::default(),
+                            presentation: SecondaryPlayerDamagePresentation::default(),
                         },
                         &mut order,
                     );
@@ -79,7 +79,7 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
                     let damage = &action["damage"];
                     let applied = state.apply_golem_damage(
                         action["actorId"].as_u64().unwrap(),
-                        NativeGolemIncomingDamage {
+                        GolemIncomingDamage {
                             primary_damage: damage["primaryDamage"].as_f64().unwrap(),
                             secondary_damage: damage["secondaryDamage"].as_f64().unwrap(),
                             reflectable_physical_source_in_range:
@@ -107,7 +107,7 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
                         .stoneskin_ticks_remaining =
                         action["patch"]["stoneskinTicksRemaining"].as_u64().unwrap();
                 }
-                "target-effect" => apply_native_secondary_target_effect(
+                "target-effect" => apply_secondary_target_effect(
                     &mut state.target_effects,
                     action["world"].as_str().unwrap(),
                     action["target"].as_u64().unwrap() as usize,

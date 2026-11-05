@@ -2,19 +2,19 @@
 
 use solomon_sim::Vec2;
 use solomon_sim::enemies::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
-use solomon_sim::enemies::lightning_presentation::native_mage_lightning_pulse_plan;
-use solomon_sim::enemies::presentation::NativeEnemyProjectileStreak;
+use solomon_sim::enemies::lightning_presentation::mage_lightning_pulse_plan;
+use solomon_sim::enemies::presentation::EnemyProjectileStreak;
 use solomon_sim::enemies::web_presentation::EnemyWebMesh;
 use solomon_sim::enemies::world::EnemyWorld;
 use solomon_sim::float::{fround, hypot};
-use solomon_sim::painter::{PainterRegistration, native_zanim_split_band_height};
-use solomon_sim::spells::air::{NativeAirCoronaPlan, NativeAirMesh, NativeAirRibbonLayer};
+use solomon_sim::painter::{PainterRegistration, zanim_split_band_height};
+use solomon_sim::spells::air::{AirCoronaPlan, AirMesh, AirRibbonLayer};
 use solomon_sim::spells::presentation::{SpellAtlas, SpellBlend};
 
 use super::art::{blend, color, project};
 use super::{EnemyDraw, EnemyDrawGroup, EnemyPainter, EnemyRoot, EnemyView, EnemyViewFrame};
+use crate::beam_mesh::{MeshVertex, clip_to_bands};
 use crate::courtyard::Camera;
-use crate::native_mesh::{NativeMeshVertex, clip_native_mesh};
 use solomon_graphics::{BlendMode, Renderer, Vertex};
 
 impl EnemyView {
@@ -98,7 +98,7 @@ impl EnemyView {
     pub(super) fn append_lightning_body(
         roots: &mut Vec<EnemyRoot>,
         position: Vec2,
-        layers: &[NativeAirRibbonLayer],
+        layers: &[AirRibbonLayer],
         registration: PainterRegistration,
         enhanced_effects: bool,
     ) {
@@ -127,7 +127,7 @@ impl EnemyView {
             painter: EnemyPainter { layer: owner, region_light_point: None },
             group: EnemyDrawGroup::at(position),
         });
-        let height = native_zanim_split_band_height(enhanced_effects);
+        let height = zanim_split_band_height(enhanced_effects);
         let count = ((maximum - minimum) / height).ceil() as usize;
         for band in 0..count {
             let top = minimum + band as f64 * height;
@@ -151,7 +151,7 @@ impl EnemyView {
         frame: &EnemyViewFrame<'_>,
     ) {
         for pulse in &world.mage_lightning_pulses {
-            let Some(plan) = native_mage_lightning_pulse_plan(pulse, frame.tick) else { continue };
+            let Some(plan) = mage_lightning_pulse_plan(pulse, frame.tick) else { continue };
             if let Some(layers) = plan.body {
                 let mut group = EnemyDrawGroup::at(plan.source);
                 for layer in &layers {
@@ -176,7 +176,7 @@ impl EnemyView {
     }
 }
 
-fn corona_group(corona: NativeAirCoronaPlan, origin: Vec2) -> EnemyDrawGroup {
+fn corona_group(corona: AirCoronaPlan, origin: Vec2) -> EnemyDrawGroup {
     let mut group =
         EnemyDrawGroup::at(Vec2::new(origin.x + corona.center.x, origin.y + corona.center.y));
     for draw in corona.draws {
@@ -207,7 +207,7 @@ fn corona_group(corona: NativeAirCoronaPlan, origin: Vec2) -> EnemyDrawGroup {
 
 fn append_ribbon(
     group: &mut EnemyDrawGroup,
-    layer: &NativeAirRibbonLayer,
+    layer: &AirRibbonLayer,
     origin: Vec2,
     bounds: Option<(f64, f64)>,
     blend: EnemyArtBlend,
@@ -233,12 +233,12 @@ fn append_ribbon(
 }
 
 fn mesh_triangles(
-    mesh: &NativeAirMesh,
+    mesh: &AirMesh,
     origin: Vec2,
     bounds: Option<(f64, f64)>,
-) -> Vec<[NativeMeshVertex; 3]> {
+) -> Vec<[MeshVertex; 3]> {
     if let Some((top, bottom)) = bounds {
-        return clip_native_mesh(mesh, origin, top, bottom);
+        return clip_to_bands(mesh, origin, top, bottom);
     }
     mesh.indices
         .as_chunks::<3>()
@@ -248,7 +248,7 @@ fn mesh_triangles(
             indices.map(|index| {
                 let index = index as usize;
                 let point = mesh.vertices[index];
-                NativeMeshVertex {
+                MeshVertex {
                     position: Vec2::new(origin.x + point.x, origin.y + point.y),
                     uv: mesh.uvs[index],
                     color: [1.0; 4],
@@ -258,7 +258,7 @@ fn mesh_triangles(
         .collect()
 }
 
-pub(super) fn arrow_streak(streak: NativeEnemyProjectileStreak, origin: Vec2) -> EnemyDraw {
+pub(super) fn arrow_streak(streak: EnemyProjectileStreak, origin: Vec2) -> EnemyDraw {
     let dx = streak.end.x - streak.start.x;
     let dy = streak.end.y - streak.start.y;
     let length = hypot(dx, dy);
@@ -292,8 +292,8 @@ fn unpack_color(color: u32) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use solomon_sim::boneyard::presentation::{BoneyardPainterEntry, boneyard_painter_order};
-    use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellOwner, NativeBossSpell};
-    use solomon_sim::enemies::lightning_presentation::native_dark_lightning_body;
+    use solomon_sim::enemies::boss_spell::{BossSpell, BossSpellKind, BossSpellOwner};
+    use solomon_sim::enemies::lightning_presentation::dark_lightning_body;
     use solomon_sim::hub::painter::{PainterLane, PainterLayer};
     use solomon_sim::painter::WorldManagerLane;
 
@@ -302,7 +302,7 @@ mod tests {
     #[test]
     fn faculty_live_split_quality_changes_the_scenery_crossing_and_keeps_born_ribbons() {
         for born_enhanced in [true, false] {
-            let spell = NativeBossSpell {
+            let spell = BossSpell {
                 owner: BossSpellOwner {
                     age_ticks: 0,
                     damage: 0.0,
@@ -321,7 +321,7 @@ mod tests {
                     enhanced_effects: born_enhanced,
                 },
             };
-            let layers = native_dark_lightning_body(&spell);
+            let layers = dark_lightning_body(&spell);
             let original = layers.clone();
             let mut enhanced_content = None;
             for live_enhanced in [true, false, true] {

@@ -7,7 +7,7 @@ use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
 };
 use solomon_sim::spells::weld::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn target(id: &str, x: f64, y: f64, order: usize) -> PrimarySpellTarget {
     PrimarySpellTarget {
@@ -20,16 +20,16 @@ fn target(id: &str, x: f64, y: f64, order: usize) -> PrimarySpellTarget {
         grid_position: None,
         id: id.into(),
         kind: PrimarySpellTargetKind::Enemy,
-        native_priority: 0,
+        priority: 0,
         pending_remove: false,
         position: Vec2::new(x, y),
         query_lane: PrimarySpellQueryLane::Grid,
         registration_order: order,
     }
 }
-fn birth(quantity: u32, smart: f64) -> NativeWeldPersistentActorState {
-    create_native_weld_persistent_actor(
-        NativeWeldActorBirth {
+fn birth(quantity: u32, smart: f64) -> WeldPersistentActorState {
+    create_weld_persistent_actor(
+        WeldActorBirth {
             build_id: 1006,
             direction: Vec2::new(1.0, 0.0),
             id: 100,
@@ -42,14 +42,10 @@ fn birth(quantity: u32, smart: f64) -> NativeWeldPersistentActorState {
         None,
     )
 }
-fn release(
-    quantity: u32,
-    smart: f64,
-    targets: &[PrimarySpellTarget],
-) -> NativeWeldPersistentRelease {
-    let mut rng = NativeRng::new(17);
+fn release(quantity: u32, smart: f64, targets: &[PrimarySpellTarget]) -> WeldPersistentRelease {
+    let mut rng = Rng::new(17);
     let mut painters = WorldPainterOrder { next_actor_ordinal: 101, next_transient_ordinal: 0 };
-    let result = release_native_weld_persistent_actor(
+    let result = release_weld_persistent_actor(
         birth(quantity, smart),
         101,
         1,
@@ -57,21 +53,21 @@ fn release(
         Some(&mut painters),
         targets,
     );
-    assert_eq!(rng, NativeRng::new(17), "release/acquisition consumes no RNG");
+    assert_eq!(rng, Rng::new(17), "release/acquisition consumes no RNG");
     assert_eq!(painters.next_actor_ordinal, 100 + result.actors.len());
     result
 }
-fn boulder(actor: &NativeWeldPersistentActorState) -> &NativeWeldEtherealBoulderState {
-    let NativeWeldPersistentActorState::EtherealBoulder(actor) = actor else { panic!("EBoulder") };
+fn boulder(actor: &WeldPersistentActorState) -> &WeldEtherealBoulderState {
+    let WeldPersistentActorState::EtherealBoulder(actor) = actor else { panic!("EBoulder") };
     actor
 }
-fn boulder_mut(actor: &mut NativeWeldPersistentActorState) -> &mut NativeWeldEtherealBoulderState {
-    let NativeWeldPersistentActorState::EtherealBoulder(actor) = actor else { panic!("EBoulder") };
+fn boulder_mut(actor: &mut WeldPersistentActorState) -> &mut WeldEtherealBoulderState {
+    let WeldPersistentActorState::EtherealBoulder(actor) = actor else { panic!("EBoulder") };
     actor
 }
-fn advance(actor: &mut NativeWeldPersistentActorState, targets: &[PrimarySpellTarget]) {
-    assert!(step_native_weld_persistent_actor(actor, &|_, _, _| true).0);
-    finish_native_weld_ethereal_boulder_guidance(boulder_mut(actor), targets);
+fn advance(actor: &mut WeldPersistentActorState, targets: &[PrimarySpellTarget]) {
+    assert!(step_weld_persistent_actor(actor, &|_, _, _| true).0);
+    finish_weld_ethereal_boulder_guidance(boulder_mut(actor), targets);
 }
 #[test]
 fn all_authored_quantity_and_smart_rows_preserve_native_split_identity_pool_and_motion() {
@@ -126,20 +122,20 @@ fn native_guidance_moves_before_turning_and_reacquires_only_a_missing_nonnull_ha
     assert_eq!(rock.tracking_ticks_remaining, 1749);
     rock.target_id = Some("removed".into());
     let heading = rock.heading_degrees;
-    finish_native_weld_ethereal_boulder_guidance(rock, &targets);
+    finish_weld_ethereal_boulder_guidance(rock, &targets);
     assert_eq!(rock.target_id.as_deref(), Some("near"));
     assert_eq!(rock.heading_degrees, heading, "no same-tick steering on replacement");
     let mut inactive = targets[0].clone();
     inactive.active = false;
-    finish_native_weld_ethereal_boulder_guidance(rock, &[inactive]);
+    finish_weld_ethereal_boulder_guidance(rock, &[inactive]);
     assert_eq!(rock.target_id, None);
     assert!(rock.heading_degrees < heading, "inactive resolved target supplies final sample");
     let heading = rock.heading_degrees;
-    finish_native_weld_ethereal_boulder_guidance(rock, &targets);
+    finish_weld_ethereal_boulder_guidance(rock, &targets);
     assert_eq!(rock.heading_degrees, heading, "null target never polls");
     rock.target_id = Some("removed".into());
     rock.hit_target_ids.push("near".into());
-    finish_native_weld_ethereal_boulder_guidance(
+    finish_weld_ethereal_boulder_guidance(
         rock,
         &[targets[0].clone(), target("farther", 200.0, -200.0, 1)],
     );
@@ -158,19 +154,19 @@ fn native_steering_window_is_not_actor_lifetime_and_terrain_still_retires_the_mo
     assert_eq!(boulder(&actor).tracking_ticks_remaining, 0);
     assert_eq!(boulder(&actor).heading_degrees, 90.0);
     assert_eq!(boulder(&actor).common.origin.x, 2925.0);
-    let (alive, terminal) = step_native_weld_persistent_actor(&mut actor, &|_, _, _| false);
+    let (alive, terminal) = step_weld_persistent_actor(&mut actor, &|_, _, _| false);
     assert!(!alive);
     assert_eq!(terminal.unwrap().common.origin.x, 2927.25);
 }
 #[test]
 fn weak_release_uses_native_single_rock_policy_and_turn_accumulator_caps_at_ten() {
     let mut actor = birth(4, 2.5);
-    let mut rng = NativeRng::new(7);
-    update_native_weld_persistent_actor(
+    let mut rng = Rng::new(7);
+    update_weld_persistent_actor(
         &mut actor,
         Vec2::ZERO,
         Vec2::new(1.0, 0.0),
-        NativeWeldPersistentUpdateOptions { underpowered: true, ..Default::default() },
+        WeldPersistentUpdateOptions { underpowered: true, ..Default::default() },
         &mut rng,
     );
     let weak = boulder(&actor);
@@ -178,7 +174,7 @@ fn weak_release_uses_native_single_rock_policy_and_turn_accumulator_caps_at_ten(
     assert_eq!(weak.turn_input, 1.0);
     assert_eq!(weak.tracking_ticks_remaining, 150);
     assert!(!weak.reacquires_target);
-    let mut released = release_native_weld_persistent_actor(
+    let mut released = release_weld_persistent_actor(
         actor,
         101,
         2,
@@ -191,6 +187,6 @@ fn weak_release_uses_native_single_rock_policy_and_turn_accumulator_caps_at_ten(
     let rock = boulder_mut(&mut released);
     rock.flight_ticks = 1;
     rock.turn_accumulator = 9.999;
-    finish_native_weld_ethereal_boulder_guidance(rock, &[target("near", 100.0, -100.0, 0)]);
+    finish_weld_ethereal_boulder_guidance(rock, &[target("near", 100.0, -100.0, 0)]);
     assert_eq!(rock.turn_accumulator, 10.0);
 }

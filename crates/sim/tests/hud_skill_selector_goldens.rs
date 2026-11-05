@@ -1,7 +1,7 @@
 //! Source HUD target admission, learned option filtering and native strip placement.
 use serde_json::Value;
 use solomon_sim::hud::skill_selector::*;
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
 
 #[test]
 fn hud_selectors_exclude_the_other_slot_unlearned_welds_and_exhausted_skills() {
@@ -10,10 +10,10 @@ fn hud_selectors_exclude_the_other_slot_unlearned_welds_and_exhausted_skills() {
             .unwrap();
     for case in fixture["options"].as_array().unwrap() {
         let target =
-            NativeHudSkillSelectorTarget::from_binding(case["binding"].as_u64().unwrap() as usize)
+            HudSkillSelectorTarget::from_binding(case["binding"].as_u64().unwrap() as usize)
                 .unwrap();
         let slots = std::array::from_fn(|slot| case["slots"][slot].as_u64().map(|id| id as usize));
-        let mut book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+        let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
         book.learned_skill_order.clear();
         book.permanent_ranks.fill(0);
         book.effective_ranks.fill(0);
@@ -25,7 +25,7 @@ fn hud_selectors_exclude_the_other_slot_unlearned_welds_and_exhausted_skills() {
         }
         book.weld_build_id = case["weldBuildId"].as_u64().map(|id| id as u32);
         assert_eq!(target.title(), case["title"].as_str().unwrap());
-        let actual = native_hud_skill_selector_options(&book, &slots, target);
+        let actual = hud_skill_selector_options(&book, &slots, target);
         let expected = case["options"].as_array().unwrap();
         assert_eq!(actual.len(), expected.len());
         for (actual, expected) in actual.iter().zip(expected) {
@@ -35,7 +35,7 @@ fn hud_selectors_exclude_the_other_slot_unlearned_welds_and_exhausted_skills() {
         }
     }
     for case in fixture["layouts"].as_array().unwrap() {
-        let actual = native_hud_skill_selector_layout(
+        let actual = hud_skill_selector_layout(
             case["count"].as_u64().unwrap() as usize,
             case["width"].as_f64().unwrap(),
         );

@@ -1,13 +1,12 @@
 //! Stock `NativeUiSprite`, `NativeUiStrip`, `NativeUiNineSlice` and bitmap text.
 //!
 //! Geometry is the existing `ui.rs` Website projection expressed as GPU quads;
-//! bundle registration and `sim::native_ui_text` remain their canonical owners.
+//! bundle registration and `sim::ui_text` remain their canonical owners.
 
 use egui::{Color32, Painter, Pos2, Rect, Vec2, pos2, vec2};
 use solomon_assets::{SpriteRecord, parse_bundle};
-use solomon_sim::native_ui_text::{
-    NativeUiTextLayout, NativeUiTextSpec, layout_native_ui_text, native_ui_font,
-    native_ui_glyph_ink_bounds,
+use solomon_sim::ui_text::{
+    UiTextLayout, UiTextSpec, layout_ui_text, ui_font, ui_glyph_ink_bounds,
 };
 
 use super::UiFrame;
@@ -263,7 +262,7 @@ impl StockAtlas {
         Ok(())
     }
 
-    pub fn paint_native_frame(
+    pub fn paint_stock_frame(
         &self,
         frame: &UiFrame<'_>,
         painter: &Painter,
@@ -326,7 +325,7 @@ impl StockAtlas {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn paint_native_frame_scaled(
+    pub fn paint_stock_frame_scaled(
         &self,
         frame: &UiFrame<'_>,
         painter: &Painter,
@@ -339,7 +338,7 @@ impl StockAtlas {
         if !scale.is_finite() || scale <= 0.0 {
             return Err("stock frame scale must be finite and positive".to_owned());
         }
-        self.paint_native_frame(
+        self.paint_stock_frame(
             &frame.with_scale(destination.min, scale),
             painter,
             index,
@@ -453,7 +452,7 @@ pub fn message_frame(
             Color32::WHITE,
         )?;
     }
-    atlas.paint_native_frame(frame, painter, 17, destination.shrink(5.0), true, Color32::WHITE)
+    atlas.paint_stock_frame(frame, painter, 17, destination.shrink(5.0), true, Color32::WHITE)
 }
 
 pub fn message_frame_scaled(
@@ -474,23 +473,19 @@ pub fn message_frame_scaled(
     )
 }
 
-pub fn native_text(
-    frame: &UiFrame<'_>,
-    painter: &Painter,
-    spec: &NativeUiTextSpec<'_>,
-) -> NativeUiTextLayout {
-    let layout = layout_native_ui_text(spec);
+pub fn native_text(frame: &UiFrame<'_>, painter: &Painter, spec: &UiTextSpec<'_>) -> UiTextLayout {
+    let layout = layout_ui_text(spec);
     paint_text_layout(frame, painter, &layout);
     layout
 }
 
-pub fn paint_text_layout(frame: &UiFrame<'_>, painter: &Painter, layout: &NativeUiTextLayout) {
-    let atlas = native_ui_font(layout.font).atlas;
+pub fn paint_text_layout(frame: &UiFrame<'_>, painter: &Painter, layout: &UiTextLayout) {
+    let atlas = ui_font(layout.font).atlas;
     let [width, height] = atlas.dimensions();
     let size = vec2(width as f32, height as f32);
     let path = format!("assets/stock/{}.png", atlas.as_str());
     for glyph in &layout.glyphs {
-        let ink = native_ui_glyph_ink_bounds(glyph);
+        let ink = ui_glyph_ink_bounds(glyph);
         let destination =
             rect([ink.left as f32, ink.top as f32, ink.width as f32, ink.height as f32]);
         let mut positions = [

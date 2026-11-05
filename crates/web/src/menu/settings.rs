@@ -14,10 +14,10 @@ use crate::platform::Surface;
 use egui::{Color32, Pos2, Rect, Ui, Vec2};
 use fullscreen::SettingsFullscreen;
 use solomon_protocol::hosted::{EnhancedEffectsAuthority, EnhancedEffectsScope};
-use solomon_sim::hud::quickbar::NativeSkillQuickbarCooldownPresentation;
+use solomon_sim::hud::quickbar::SkillQuickbarCooldownPresentation;
 use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState};
-use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec};
 use solomon_sim::settings::{GameControlAction, GameSettings, game_binding_label};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec};
 use std::rc::Rc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsContext {
@@ -254,7 +254,7 @@ pub(super) struct SettingsView {
     mobile_art: Rc<MobileEditorArt>,
     mobile_state: MobileUiLayoutState,
     mobile_preview: Option<MobileEditorPlayerPreview>,
-    mobile_cooldowns: [NativeSkillQuickbarCooldownPresentation; 83],
+    mobile_cooldowns: [SkillQuickbarCooldownPresentation; 83],
     mobile_editor: Option<MobileUiEditor>,
     mobile_fullscreen: bool,
     mobile_save: Option<Option<MobileUiLayout>>,
@@ -284,7 +284,7 @@ impl SettingsView {
             mobile_art: Rc::new(MobileEditorArt::load().await?),
             mobile_state: MobileUiLayoutState::default(),
             mobile_preview: None,
-            mobile_cooldowns: [NativeSkillQuickbarCooldownPresentation::default(); 83],
+            mobile_cooldowns: [SkillQuickbarCooldownPresentation::default(); 83],
             mobile_editor: None,
             mobile_fullscreen: false,
             mobile_save: None,
@@ -515,11 +515,11 @@ impl SettingsView {
             frame,
             ui,
             self.page.title(),
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             header.center() + Vec2::new(0.0, 10.0),
             2.0,
             0xd9bd72,
-            NativeUiTextAlign::Center,
+            UiTextAlign::Center,
         );
         let content = Rect::from_min_max(
             panel.min + Vec2::new(if compact { 14.0 } else { 20.0 }, band + 12.0),
@@ -833,11 +833,11 @@ impl SettingsView {
             frame,
             ui,
             label,
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             rect.min + Vec2::new(10.0, 26.0),
             1.0,
             0xdbc174,
-            NativeUiTextAlign::Left,
+            UiTextAlign::Left,
         );
         Ok(())
     }
@@ -869,11 +869,11 @@ impl SettingsView {
             &paint,
             ui,
             label,
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             rect.min + Vec2::new(10.0, 26.0),
             1.0,
             0xdbc174,
-            NativeUiTextAlign::Left,
+            UiTextAlign::Left,
         );
         self.control_panel.paint_centered(
             &paint,
@@ -927,11 +927,11 @@ impl SettingsView {
             &paint,
             ui,
             label,
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             rect.min + Vec2::new(if nested { 30.0 } else { 10.0 }, 26.0),
             1.0,
             0xdbc174,
-            NativeUiTextAlign::Left,
+            UiTextAlign::Left,
         );
         toggle_art(
             &paint,
@@ -972,11 +972,11 @@ impl SettingsView {
             &paint,
             ui,
             label,
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             rect.min + Vec2::new(10.0, 26.0),
             1.0,
             0xdbc174,
-            NativeUiTextAlign::Left,
+            UiTextAlign::Left,
         );
         self.control_panel.paint_strip(&paint, ui.painter(), 4, track, Color32::WHITE)?;
         let mut value = setting.value(&self.settings);
@@ -1051,11 +1051,11 @@ impl SettingsView {
             &paint,
             ui,
             &format!("{value}%"),
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             egui::pos2(rect.right() - 10.0, rect.top() + 26.0),
             1.0,
             0xf0d996,
-            NativeUiTextAlign::Right,
+            UiTextAlign::Right,
         );
         Ok(())
     }
@@ -1078,11 +1078,11 @@ impl SettingsView {
             &paint,
             ui,
             &label,
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             rect.min + Vec2::new(10.0, 26.0),
             1.0,
             0xdbc174,
-            NativeUiTextAlign::Left,
+            UiTextAlign::Left,
         );
         let plate = Rect::from_min_size(
             egui::pos2(rect.right() - 210.0, rect.center().y - 15.0),
@@ -1107,12 +1107,12 @@ impl SettingsView {
         crate::gpu_ui::native_text(
             &paint,
             ui.painter(),
-            &NativeUiTextSpec {
-                align: NativeUiTextAlign::Center,
+            &UiTextSpec {
+                align: UiTextAlign::Center,
                 alpha: f64::from(alpha),
                 tint: if listening { 0xf7e1a0 } else { 0xd9bd72 },
-                ..NativeUiTextSpec::new(
-                    NativeUiFontName::ControlPanel,
+                ..UiTextSpec::new(
+                    UiFontName::ControlPanel,
                     &value,
                     f64::from(position.x),
                     f64::from(position.y),
@@ -1249,11 +1249,11 @@ fn group_heading(frame: &UiFrame<'_>, ui: &mut Ui, title: &str, width: f32) {
         frame,
         ui,
         title,
-        NativeUiFontName::ControlPanel,
+        UiFontName::ControlPanel,
         r.min + Vec2::new(8.0, 14.0),
         1.0,
         0xa99258,
-        NativeUiTextAlign::Left,
+        UiTextAlign::Left,
     );
 }
 fn flow(ui: &mut Ui, text: &str, width: f32, size: f32, tint: Color32) -> Rect {

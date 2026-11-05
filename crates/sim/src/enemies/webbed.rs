@@ -5,7 +5,7 @@ use crate::float::fround;
 use crate::spells::targeting::direction_from_heading;
 
 #[must_use]
-pub fn apply_native_webbed(source: Option<WebbedState>, strength: f64) -> WebbedState {
+pub fn apply_webbed(source: Option<WebbedState>, strength: f64) -> WebbedState {
     let prior = source.map_or(0.0, |source| source.severity);
     let severity = fround(prior + 1.0).floor().min(3.0);
     let strength = source.map_or(0.0, |source| source.strength).max(strength);
@@ -22,7 +22,7 @@ pub fn apply_native_webbed(source: Option<WebbedState>, strength: f64) -> Webbed
 }
 
 #[must_use]
-pub fn step_native_webbed(mut source: WebbedState, velocity: Vec2) -> Option<WebbedState> {
+pub fn step_webbed(mut source: WebbedState, velocity: Vec2) -> Option<WebbedState> {
     if source.severity < 3.0 && velocity.x * velocity.x + velocity.y * velocity.y > 0.5 {
         source.severity = fround(source.severity - fround(0.001));
     }
@@ -34,7 +34,7 @@ pub fn step_native_webbed(mut source: WebbedState, velocity: Vec2) -> Option<Web
 }
 
 #[must_use]
-pub fn native_webbed_movement_scale(source: Option<&WebbedState>) -> f64 {
+pub fn webbed_movement_scale(source: Option<&WebbedState>) -> f64 {
     source.map_or(1.0, |source| (1.0 - source.severity / (2.9_f32 as f64)).max(0.0))
 }
 
@@ -50,7 +50,7 @@ pub fn damage_native_cocoon(
 }
 
 #[must_use]
-pub fn native_cocoon_position(position: Vec2, heading: f64) -> Vec2 {
+pub fn cocoon_position(position: Vec2, heading: f64) -> Vec2 {
     let direction = direction_from_heading(heading);
     Vec2::new(
         fround(position.x + direction.x * 60.0 + fround(0.1)),
@@ -59,7 +59,7 @@ pub fn native_cocoon_position(position: Vec2, heading: f64) -> Vec2 {
 }
 
 #[must_use]
-pub fn native_cocoon_tilt(heading: f64) -> Vec2 {
+pub fn cocoon_tilt(heading: f64) -> Vec2 {
     let direction = direction_from_heading((heading / 30.0).trunc() * 30.0);
     let x = fround(direction.x * -5.0);
     let y = fround(direction.y * -5.0);

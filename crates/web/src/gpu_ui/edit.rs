@@ -201,9 +201,7 @@ fn native_name_geometry(
     field: Rect,
 ) -> Arc<geometry::Geometry> {
     use solomon_sim::menu::create_name::{layout_create_wizard_name, measure_create_wizard_name};
-    use solomon_sim::native_ui_text::{
-        NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, layout_native_ui_text,
-    };
+    use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, layout_ui_text};
     let height = field.height();
     let mut carets = Vec::new();
     let mut clusters = Vec::new();
@@ -212,9 +210,9 @@ fn native_name_geometry(
     } else {
         let native = layout_create_wizard_name(text);
         let uppercase = text.to_uppercase();
-        let plain = layout_native_ui_text(&NativeUiTextSpec {
-            align: NativeUiTextAlign::Left,
-            ..NativeUiTextSpec::new(NativeUiFontName::Heading, &uppercase, 0.0, 0.0)
+        let plain = layout_ui_text(&UiTextSpec {
+            align: UiTextAlign::Left,
+            ..UiTextSpec::new(UiFontName::Heading, &uppercase, 0.0, 0.0)
         });
         if let (Some(native), Some(plain)) = (native.glyphs.first(), plain.glyphs.first()) {
             origin.x - field.min.x + (native.center_x - plain.center_x) as f32 * scale

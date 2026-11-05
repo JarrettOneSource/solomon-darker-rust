@@ -10,11 +10,9 @@ use solomon_sim::hall_of_fame::presentation::*;
 use solomon_sim::hall_of_fame::{
     HallOfFameBoard, HallOfFameEntry, format_hall_of_fame_time, rank_hall_of_fame_entries,
 };
-use solomon_sim::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, NativeUiTextSpec, measure_native_ui_text,
-};
-use solomon_sim::profile::{native_skill_root, native_wizard_class_title};
+use solomon_sim::profile::{skill_root, wizard_class_title};
 use solomon_sim::skill_picker::SKILL_PICKER_ROOT_TINTS;
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, measure_ui_text};
 use std::collections::BTreeMap;
 #[derive(Clone, Copy)]
 pub struct HallSnapshot<'a> {
@@ -571,7 +569,7 @@ impl HallView {
                 widgets::alpha(0xd9ba70, hall_highlight_fill_alpha(tick)),
             );
         }
-        self.ui.paint_native_frame_scaled(
+        self.ui.paint_stock_frame_scaled(
             frame,
             ui.painter(),
             17,
@@ -605,7 +603,7 @@ impl HallView {
                     &self.vfx,
                     orb,
                     portrait_scale,
-                    &solomon_sim::element_vfx::native_element_vfx_plan(entry.element, tick, 1.0),
+                    &solomon_sim::element_vfx::element_vfx_plan(entry.element, tick, 1.0),
                 )
             },
         )?;
@@ -615,7 +613,7 @@ impl HallView {
                 format!(
                     "Level {} {}",
                     entry.level,
-                    native_wizard_class_title(entry.element, entry.discipline)
+                    wizard_class_title(entry.element, entry.discipline)
                 ),
                 layout.level,
             ),
@@ -698,7 +696,7 @@ impl HallView {
         ] {
             hall_text(frame, ui, stage, &value, anchor);
         }
-        self.ui.paint_native_frame_scaled(
+        self.ui.paint_stock_frame_scaled(
             frame,
             ui.painter(),
             50,
@@ -719,7 +717,7 @@ impl HallView {
             let center = stage.at(cell.center.x, cell.center.y);
             if let Some(skill) = entry.highest_skills.get(index) {
                 let id = usize::try_from(skill.skill_id).map_err(|_| "Hall skill identity")?;
-                let root = if id < 8 { Some(id) } else { native_skill_root(id) }
+                let root = if id < 8 { Some(id) } else { skill_root(id) }
                     .ok_or_else(|| format!("unknown native skill root for {id}"))?;
                 self.skills.paint_centered(
                     frame,
@@ -784,16 +782,16 @@ impl HallView {
         Ok(())
     }
 }
-fn hall_font(font: HallFont) -> NativeUiFontName {
+fn hall_font(font: HallFont) -> UiFontName {
     match font {
-        HallFont::Body => NativeUiFontName::Body,
-        HallFont::Heading => NativeUiFontName::Heading,
-        HallFont::Medium => NativeUiFontName::Medium,
-        HallFont::Menu => NativeUiFontName::Menu,
+        HallFont::Body => UiFontName::Body,
+        HallFont::Heading => UiFontName::Heading,
+        HallFont::Medium => UiFontName::Medium,
+        HallFont::Menu => UiFontName::Menu,
     }
 }
 fn measure(text: &str, font: HallFont) -> f64 {
-    measure_native_ui_text(
+    measure_ui_text(
         &if font == HallFont::Heading { text.to_uppercase() } else { text.to_owned() },
         hall_font(font),
         1.0,
@@ -822,12 +820,12 @@ fn hall_text_alpha(
     crate::gpu_ui::native_text(
         frame,
         ui.painter(),
-        &NativeUiTextSpec {
-            align: NativeUiTextAlign::Left,
+        &UiTextSpec {
+            align: UiTextAlign::Left,
             scale: f64::from(stage.scale),
             alpha,
             tint: 0xd9ba70,
-            ..NativeUiTextSpec::new(
+            ..UiTextSpec::new(
                 hall_font(anchor.font),
                 &text,
                 f64::from(position.x),

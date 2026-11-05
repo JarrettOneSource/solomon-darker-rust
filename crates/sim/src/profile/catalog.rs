@@ -1,12 +1,10 @@
 //! Stock skill/stat and Weld tables from Website player-progression.ts.
 //! Values are extracted without rounding; profile-goldens.json pins every row.
 
-use super::{
-    NativeSkillDefinition, NativeSkillProperty, NativeSkillRule, NativeSkillValue, NativeWeldBuild,
-};
+use super::{SkillDefinition, SkillProperty, SkillRule, SkillValue, WeldBuild};
 
-pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
-    NativeSkillDefinition {
+pub const SKILL_CATALOG: [SkillDefinition; 83] = [
+    SkillDefinition {
         id: 0,
         name: "Element of Ether",
         family: "element",
@@ -19,7 +17,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 1,
         name: "Element of Fire",
         family: "element",
@@ -32,7 +30,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 2,
         name: "Element of Air",
         family: "element",
@@ -45,7 +43,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 3,
         name: "Element of Water",
         family: "element",
@@ -58,7 +56,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 4,
         name: "Element of Earth",
         family: "element",
@@ -71,7 +69,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 5,
         name: "Body Discipline",
         family: "discipline",
@@ -84,7 +82,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 6,
         name: "Mind Discipline",
         family: "discipline",
@@ -97,7 +95,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 7,
         name: "Arcane Discipline",
         family: "discipline",
@@ -110,7 +108,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 8,
         name: "Magic Missile",
         family: "ether",
@@ -122,32 +120,32 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %d:mDamage1%-%d:mDamage2%", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(20.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(25.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(20.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(25.0) },
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0, 33.0, 36.0, 39.0,
                     42.0, 45.0, 48.0, 51.0, 54.0, 57.0, 60.0, 63.0, 65.0, 67.0, 68.0, 69.0, 70.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage1",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0,
                     15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 30.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage2",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 2.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 19.0, 20.0,
                     22.0, 24.0, 26.0, 28.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 9,
         name: "Smart Missiles",
         family: "ether",
@@ -163,23 +161,21 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mSpeed",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 25.0, 40.0, 55.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 10,
         name: "More Missiles",
         family: "ether",
@@ -191,23 +187,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Missiles Thrown: %d:mQuantity%", "Mana Cost: +%d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mQuantity",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 4.0, 8.0, 15.0, 20.0, 25.0, 30.0, 32.0, 34.0, 36.0, 38.0, 40.0, 42.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 11,
         name: "Call Leviathan",
         family: "ether",
@@ -223,29 +219,29 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 15.0, 20.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mQuantity",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     75.0, 75.0, 80.0, 80.0, 80.0, 80.0, 75.0, 70.0, 65.0, 60.0, 55.0, 50.0, 50.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 12,
         name: "Planewalker",
         family: "ether",
@@ -261,24 +257,24 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mDuration",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 8.0, 10.0, 12.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 25.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 100.0, 150.0, 200.0, 250.0, 275.0, 300.0, 325.0, 350.0, 375.0, 400.0,
                     425.0, 435.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 13,
         name: "Piercing",
         family: "ether",
@@ -294,27 +290,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mPierces",
-                value: NativeSkillValue::Ranks(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
+                value: SkillValue::Ranks(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mLoss",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 80.0, 75.0, 70.0, 65.0, 60.0, 55.0, 50.0, 45.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 80.0, 75.0, 70.0, 65.0, 60.0, 55.0, 50.0, 45.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 14,
         name: "Ether Blast",
         family: "ether",
@@ -326,15 +318,15 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Charges: %d:mCharges%", "Reduction Per Charge: 15%%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(4.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(6.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(4.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(6.0) },
+            SkillProperty {
                 name: "mCharges",
-                value: NativeSkillValue::Ranks(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
+                value: SkillValue::Ranks(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 15,
         name: "Phasing",
         family: "ether",
@@ -346,13 +338,13 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Mana Cost: %d:mManaCost%\"\r\n\t\"Cooldown: %d:mCooldown% second"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mManaCost", value: NativeSkillValue::Ranks(&[0.0, 75.0]) },
-            NativeSkillProperty { name: "mCooldown", value: NativeSkillValue::Ranks(&[0.0, 1.0]) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mManaCost", value: SkillValue::Ranks(&[0.0, 75.0]) },
+            SkillProperty { name: "mCooldown", value: SkillValue::Ranks(&[0.0, 1.0]) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 16,
         name: "Fireball",
         family: "fire",
@@ -364,26 +356,26 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %d:mDamage%", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(20.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(25.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(20.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(25.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 4.0, 7.0, 10.0, 14.0, 18.0, 22.0, 26.0, 30.0, 35.0, 40.0, 45.0, 50.0,
                     60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0,
                     300.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 12.0, 15.0, 18.0, 19.0, 20.0, 21.0, 22.0, 24.0, 25.0, 26.0, 28.0, 30.0,
                     32.0, 36.0, 40.0, 44.0, 48.0, 50.0, 53.0, 56.0, 59.0, 72.0, 75.0, 77.0, 80.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 17,
         name: "Embers",
         family: "fire",
@@ -399,29 +391,29 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 3.0, 6.0, 9.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 2.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 15.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mFragments",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 4.0, 5.0, 5.0, 6.0, 6.0, 7.0, 7.0, 8.0, 8.0, 9.0, 10.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 18,
         name: "Explode",
         family: "fire",
@@ -437,30 +429,30 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(6.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(6.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0,
                     65.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 9.0, 12.0, 15.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mRadius",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 19,
         name: "Embers to Imps",
         family: "fire",
@@ -476,23 +468,21 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 60.0, 62.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 60.0, 62.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 20,
         name: "Immolate",
         family: "fire",
@@ -504,23 +494,19 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Splash Damage: %d:mDamage%", "Radius: 5 ft", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 5.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 5.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 8.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 60.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 8.0, 16.0, 24.0, 32.0, 40.0, 48.0, 56.0, 60.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 21,
         name: "Ring of Fire",
         family: "fire",
@@ -532,23 +518,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %d:mDamage%", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 40.0, 70.0, 90.0, 120.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 22,
         name: "Burn",
         family: "fire",
@@ -560,15 +546,15 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %d:mDamage%", "Duration: 2 seconds"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[0.0, 3.0, 6.0, 9.0, 11.0, 12.0, 13.0, 14.0, 15.0]),
+                value: SkillValue::Ranks(&[0.0, 3.0, 6.0, 9.0, 11.0, 12.0, 13.0, 14.0, 15.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 23,
         name: "Firewalker",
         family: "fire",
@@ -582,22 +568,20 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDuration",
-                value: NativeSkillValue::Ranks(&[0.0, 2.5, 2.6, 2.75, 2.85, 2.95, 3.1, 3.2, 3.3]),
+                value: SkillValue::Ranks(&[0.0, 2.5, 2.6, 2.75, 2.85, 2.95, 3.1, 3.2, 3.3]),
             },
-            NativeSkillProperty { name: "mHoard", value: NativeSkillValue::Scalar(50.0) },
+            SkillProperty { name: "mHoard", value: SkillValue::Scalar(50.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 24,
         name: "Lightning",
         family: "air",
@@ -612,25 +596,25 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(20.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(25.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(20.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(25.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 2.5, 4.0, 7.0, 9.0, 12.0, 15.0, 19.0, 21.0, 23.0, 25.0, 27.0, 29.0, 31.0,
                     33.0, 35.0, 37.0, 39.0, 41.0, 51.0, 61.0, 71.0, 81.0, 91.0, 101.0, 121.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 12.0, 14.0, 18.0, 20.0, 21.0, 22.0, 25.0, 27.0, 30.0, 32.0, 35.0, 37.0,
                     42.0, 45.0, 47.0, 50.0, 52.0, 55.0, 57.0, 62.0, 67.0, 72.0, 77.0, 82.0, 87.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 25,
         name: "Chaining",
         family: "air",
@@ -642,17 +626,17 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Arcs: %d:mArcs%", "Mana Cost: +%x:mManaCost%_s(.7)_o(0,1)_i / second"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(6.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(6.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mArcs",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0,
                     7.5,
                     10.0,
@@ -670,7 +654,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 26,
         name: "Stun",
         family: "air",
@@ -685,23 +669,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mStunAmount",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 40.0, 55.0, 70.0, 80.0, 90.0, 95.0, 97.0, 98.0, 99.0, 100.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 27,
         name: "Magic Storm",
         family: "air",
@@ -713,29 +697,27 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %d:mDamage1% - %d:mDamage2%", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage1",
-                value: NativeSkillValue::Ranks(&[
-                    2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 25.0,
-                ]),
+                value: SkillValue::Ranks(&[2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 15.0, 18.0, 20.0, 25.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage2",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     3.0, 6.0, 9.0, 12.0, 14.0, 18.0, 22.0, 30.0, 40.0, 50.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     65.0, 70.0, 70.0, 70.0, 70.0, 65.0, 65.0, 65.0, 60.0, 60.0, 50.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 28,
         name: "Magic Tornado",
         family: "air",
@@ -751,29 +733,29 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mSpeed",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 25.0, 50.0, 100.0, 125.0, 150.0, 200.0, 225.0, 250.0, 300.0, 350.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDuration",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 15.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 20.0, 20.0, 20.0, 20.0, 15.0, 15.0, 15.0, 10.0, 10.0, 10.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 29,
         name: "Hurricane",
         family: "air",
@@ -788,29 +770,29 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage1",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 15.0, 18.0, 21.0, 24.0, 25.0, 26.0, 27.0, 28.0, 30.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage2",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 20.0, 40.0, 60.0, 80.0, 100.0, 120.0, 140.0, 160.0, 170.0, 180.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 30,
         name: "Prismatic Shock",
         family: "air",
@@ -826,23 +808,19 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mDuration",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 10.0, 15.0, 18.0, 20.0, 22.0, 24.0, 26.0, 30.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 10.0, 15.0, 18.0, 20.0, 22.0, 24.0, 26.0, 30.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 70.0, 70.0, 70.0, 70.0, 65.0, 65.0, 65.0, 60.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 70.0, 70.0, 70.0, 70.0, 65.0, 65.0, 65.0, 60.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 31,
         name: "Disintegrate",
         family: "air",
@@ -856,17 +834,15 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mChance",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 5.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 25.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 5.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 25.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0,
                     7.5,
                     10.0,
@@ -882,7 +858,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 32,
         name: "Frost Jet",
         family: "water",
@@ -897,25 +873,25 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(20.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(25.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(20.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(25.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 2.5, 3.5, 5.5, 7.5, 9.0, 11.0, 13.0, 15.0, 17.0, 19.0, 21.0, 23.0, 25.0,
                     27.0, 29.0, 31.0, 33.0, 35.0, 37.0, 39.0, 41.0, 43.0, 45.0, 47.0, 49.0, 30.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 12.5, 17.5, 18.5, 20.0, 21.0, 22.5, 25.0, 27.5, 30.0, 32.5, 35.0, 37.5,
                     42.5, 45.0, 47.5, 50.0, 52.5, 55.0, 57.5, 60.0, 62.5, 64.5, 66.5, 68.5, 70.5,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 33,
         name: "Chill Wind",
         family: "water",
@@ -930,17 +906,17 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mPushback",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0,
                     5.0,
                     10.0,
@@ -956,7 +932,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 34,
         name: "Cone of Ice",
         family: "water",
@@ -971,23 +947,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(6.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(11.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(6.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(11.0) },
+            SkillProperty {
                 name: "mWiden",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 30.0, 50.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 7.5, 10.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.5, 51.0, 51.5,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 35,
         name: "Ring of Ice",
         family: "water",
@@ -999,23 +975,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Freeze: %d:mDamage% seconds", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     5.0, 10.0, 20.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 75.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     35.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 95.0, 100.0, 105.0, 110.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 36,
         name: "Harden",
         family: "water",
@@ -1031,29 +1007,29 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mArmorPlus",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 8.0, 12.0, 18.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 60.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mMaxArmor",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0, 250.0, 300.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 8.0, 10.0, 15.0, 25.0, 32.0, 45.0, 50.0, 55.0, 58.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 37,
         name: "Cold Aura",
         family: "water",
@@ -1068,29 +1044,29 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(4.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(4.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mPercent",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 40.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mRadius",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 6.0, 7.0, 8.0, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 7.5, 10.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.5, 51.0, 51.5,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 38,
         name: "Hail",
         family: "water",
@@ -1106,35 +1082,35 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage1",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 8.0, 10.0, 12.0, 14.0, 16.0, 17.0, 18.0, 19.0, 20.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage2",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mToHit",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 25.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 7.5, 10.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.5, 51.0, 51.5,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 39,
         name: "Permafrost",
         family: "water",
@@ -1148,12 +1124,12 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mSlowdown", value: NativeSkillValue::Ranks(&[0.0, 50.0]) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mSlowdown", value: SkillValue::Ranks(&[0.0, 50.0]) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 40,
         name: "Boulder",
         family: "earth",
@@ -1168,26 +1144,26 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(20.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(25.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(20.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(25.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 30.0, 50.0, 75.0, 100.0, 120.0, 140.0, 160.0, 180.0, 200.0, 220.0,
                     240.0, 260.0, 280.0, 300.0, 320.0, 340.0, 360.0, 380.0, 400.0, 420.0, 440.0,
                     460.0, 480.0, 500.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0,
                     24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0, 34.0, 35.0, 36.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 41,
         name: "Earthquake",
         family: "earth",
@@ -1199,23 +1175,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Duration: %d:mDuration% seconds", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDuration",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 15.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 42,
         name: "Hasten Rocks",
         family: "earth",
@@ -1230,23 +1206,21 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mSpeedUp",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 50.0, 100.0, 150.0, 175.0, 200.0, 225.0, 250.0, 275.0, 300.0, 350.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 43,
         name: "Bind Rocks",
         family: "earth",
@@ -1261,24 +1235,22 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mStrength",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     100.0, 250.0, 500.0, 750.0, 1000.0, 1200.0, 1400.0, 1600.0, 1800.0, 2000.0,
                     2100.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 44,
         name: "Rock Surge",
         family: "earth",
@@ -1290,23 +1262,21 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Chance of Full Boulder: %d:mChance%%%", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mChance",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 20.0, 25.0, 30.0, 32.0, 34.0, 36.0, 38.0, 40.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 20.0, 25.0, 30.0, 32.0, 34.0, 36.0, 38.0, 40.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 75.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 45,
         name: "Raise Golem",
         family: "earth",
@@ -1322,36 +1292,36 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mHP",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0, 450.0, 500.0, 550.0,
                     600.0, 700.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage1",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     1.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage2",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     2.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 30.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     8.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 46,
         name: "Stoneskin",
         family: "earth",
@@ -1363,21 +1333,19 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Duration: %f:mDuration% seconds\"\r\n\t\"Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDuration",
-                value: NativeSkillValue::Ranks(&[0.0, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 10.0]),
+                value: SkillValue::Ranks(&[0.0, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 10.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 47,
         name: "Gargantuan",
         family: "earth",
@@ -1392,21 +1360,21 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mSize",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 100.0, 120.0, 140.0, 160.0, 170.0, 180.0, 190.0, 200.0, 210.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5]),
+                value: SkillValue::Ranks(&[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 48,
         name: "Teleport",
         family: "arcane",
@@ -1418,19 +1386,19 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Cooldown: %d:mCooldown% seconds\"\r\n\t\"Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mCooldown",
-                value: NativeSkillValue::Ranks(&[0.0, 60.0, 30.0, 15.0, 10.0, 5.0, 4.0, 3.0, 1.0]),
+                value: SkillValue::Ranks(&[0.0, 60.0, 30.0, 15.0, 10.0, 5.0, 4.0, 3.0, 1.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[0.0, 10.0, 10.0, 9.0, 9.0, 8.0, 7.0, 6.0, 5.0]),
+                value: SkillValue::Ranks(&[0.0, 10.0, 10.0, 9.0, 9.0, 8.0, 7.0, 6.0, 5.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 49,
         name: "Magic Circle",
         family: "arcane",
@@ -1442,23 +1410,21 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Circle Slowdown: %d:mSlow%%%", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mSlow",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 50.0, 60.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 50.0, 60.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0, 120.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 50,
         name: "Magic Trap",
         family: "arcane",
@@ -1474,23 +1440,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 7.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0, 20.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 51,
         name: "Dampen",
         family: "arcane",
@@ -1507,12 +1473,12 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mManaCost", value: NativeSkillValue::Ranks(&[0.0, 90.0]) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mManaCost", value: SkillValue::Ranks(&[0.0, 90.0]) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 52,
         name: "Spell Welding",
         family: "arcane",
@@ -1524,11 +1490,11 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Produce a new offensive spell"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 53,
         name: "Flash",
         family: "arcane",
@@ -1540,13 +1506,13 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Chance to Flash: %f:mChance%%%", "Dazzle Duration: %n:mDuration% seconds"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mChance", value: NativeSkillValue::Ranks(&[0.0, 10.0]) },
-            NativeSkillProperty { name: "mDuration", value: NativeSkillValue::Ranks(&[0.0, 4.0]) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mChance", value: SkillValue::Ranks(&[0.0, 10.0]) },
+            SkillProperty { name: "mDuration", value: SkillValue::Ranks(&[0.0, 4.0]) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 54,
         name: "Magic Shield",
         family: "arcane",
@@ -1558,24 +1524,24 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Absorb: %d:mAbsorb% damage", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(7.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(7.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mAbsorb",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 25.0, 50.0, 100.0, 200.0, 250.0, 300.0, 350.0, 400.0, 450.0, 500.0, 550.0,
                     600.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 80.0, 80.0, 80.0, 80.0, 80.0, 75.0, 70.0, 65.0, 60.0, 55.0, 50.0, 50.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 55,
         name: "Explosive Shield",
         family: "arcane",
@@ -1587,13 +1553,13 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %d:mDamage%%% of Shield Absorb", "Mana Cost: +%d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mDamage", value: NativeSkillValue::Ranks(&[0.0, 50.0]) },
-            NativeSkillProperty { name: "mManaCost", value: NativeSkillValue::Ranks(&[0.0, 20.0]) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mDamage", value: SkillValue::Ranks(&[0.0, 50.0]) },
+            SkillProperty { name: "mManaCost", value: SkillValue::Ranks(&[0.0, 20.0]) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 56,
         name: "Mana Up",
         family: "mind",
@@ -1605,18 +1571,18 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Max Mana: +%d:mValue%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0,
                     1100.0, 1250.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 57,
         name: "Channel Mana",
         family: "mind",
@@ -1628,18 +1594,18 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Recovery: +%d:mValue%%%"],
         bonus_lines: &["Concentrate: +%d:mConcentration%%% Recovery"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0,
                 ]),
             },
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(15.0) },
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(15.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 58,
         name: "Meditation",
         family: "mind",
@@ -1651,19 +1617,19 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Idle Time: %f:mSeconds% seconds", "Mana Recovery: %d:mValue%x"],
         bonus_lines: &["Concentrate: Can Meditate while walking (lesser effect)"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[0.0, 4.0, 4.0, 4.0, 5.0, 5.0, 5.0, 5.0, 6.0]),
+                value: SkillValue::Ranks(&[0.0, 4.0, 4.0, 4.0, 5.0, 5.0, 5.0, 5.0, 6.0]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mSeconds",
-                value: NativeSkillValue::Ranks(&[0.0, 3.5, 2.5, 2.0, 1.8, 1.6, 1.5, 1.3, 1.0]),
+                value: SkillValue::Ranks(&[0.0, 3.5, 2.5, 2.0, 1.8, 1.6, 1.5, 1.3, 1.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 59,
         name: "Battle Mage",
         family: "mind",
@@ -1675,18 +1641,18 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Mana Cost: -%d:mValue%%%"],
         bonus_lines: &["Concentrate: -%d:mConcentration%%% Mana Cost"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(6.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(11.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(6.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(11.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0,
                 ]),
             },
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(15.0) },
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(15.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 60,
         name: "Focus",
         family: "mind",
@@ -1698,13 +1664,13 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Skill Recharge: +%d:mValue%%%"],
         bonus_lines: &["Concentrate: %d:mConcentration%%% chance of instant recharge."],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mValue", value: NativeSkillValue::Ranks(&[0.0, 100.0]) },
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(25.0) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mValue", value: SkillValue::Ranks(&[0.0, 100.0]) },
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(25.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 61,
         name: "Siege Mage",
         family: "mind",
@@ -1716,18 +1682,18 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: +%d:mValue%%%"],
         bonus_lines: &["Concentrate: +%d:mConcentration%%% Damage"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 20.0, 40.0, 60.0, 80.0, 100.0, 120.0, 140.0, 160.0, 180.0, 225.0,
                 ]),
             },
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(15.0) },
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(15.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 62,
         name: "Resist Magic",
         family: "mind",
@@ -1739,18 +1705,16 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Resist: %d:mValue%%%"],
         bonus_lines: &["Concentrate: +%d:mConcentration%%% Resistance"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(20.0) },
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(20.0) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 25.0, 35.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 25.0, 35.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 63,
         name: "Creativity",
         family: "mind",
@@ -1762,11 +1726,11 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Requirements: -2", "Skill Choices: +1"],
         bonus_lines: &["Concentrate: 20%% chance of skill insight"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 64,
         name: "Health Up",
         family: "body",
@@ -1778,18 +1742,18 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Max Health: +%d:mValue%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(12.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(12.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 350.0, 400.0, 450.0, 500.0,
                     550.0, 650.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 65,
         name: "Enchant Staff",
         family: "body",
@@ -1801,18 +1765,18 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Melee Damage: +%d:mDamage%"],
         bonus_lines: &["Concentrate: 2x Attack Speed"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(15.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(15.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 4.0, 8.0, 12.0, 16.0, 18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0, 32.0,
                     34.0, 36.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 66,
         name: "Telekinesis",
         family: "body",
@@ -1824,12 +1788,12 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Distance: x%n:mValue%"],
         bonus_lines: &["Concentrate: Double pickup range"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mValue", value: NativeSkillValue::Ranks(&[1.0, 5.0]) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mValue", value: SkillValue::Ranks(&[1.0, 5.0]) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 67,
         name: "Rush",
         family: "body",
@@ -1841,18 +1805,16 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Speed: +%d:mValue%%%"],
         bonus_lines: &["Concentrate: +%d:mConcentration%%% Speed"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 10.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 10.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0]),
             },
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(25.0) },
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(25.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 68,
         name: "Deflect",
         family: "body",
@@ -1864,12 +1826,12 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Chance To Deflect: +%d:mValue%%%"],
         bonus_lines: &["Concentrate: Reflects physical damage x5"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(1.0) },
-            NativeSkillProperty { name: "mValue", value: NativeSkillValue::Ranks(&[0.0, 10.0]) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(1.0) },
+            SkillProperty { name: "mValue", value: SkillValue::Ranks(&[0.0, 10.0]) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 69,
         name: "Resist Poison",
         family: "body",
@@ -1881,18 +1843,16 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Reduce: %d:mValue%%%"],
         bonus_lines: &["Concentrate: +%d:mConcentration%%% Resistance"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(10.0) },
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 60.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 60.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 70,
         name: "Faster Caster",
         family: "body",
@@ -1904,18 +1864,18 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Speed: +%d:mValue%%%"],
         bonus_lines: &["Concentrate: +%d:mConcentration%%% Speed"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mValue",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0,
                 ]),
             },
-            NativeSkillProperty { name: "mConcentration", value: NativeSkillValue::Scalar(25.0) },
+            SkillProperty { name: "mConcentration", value: SkillValue::Scalar(25.0) },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 71,
         name: "Fortunate Flailing",
         family: "body",
@@ -1929,17 +1889,17 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &["Concentrate: +20%% damage with all effects"],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(4.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(9.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(4.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(9.0) },
+            SkillProperty {
                 name: "mChance",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 20.0, 45.0, 65.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 72,
         name: "Acid Rain",
         family: "advanced",
@@ -1951,23 +1911,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %f:mDamage%_s(.7)_o(0,1)_i / second", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 73,
         name: "Fire Wall",
         family: "advanced",
@@ -1979,23 +1939,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Damage: %f:mDamage%_s(.7)_o(0,1)_i / second", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 11.0, 12.0, 15.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 74,
         name: "Ether Drain",
         family: "advanced",
@@ -2011,23 +1971,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 5.0, 7.0, 10.0, 12.0, 15.0, 17.0, 20.0, 22.0, 24.0, 25.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     75.0, 80.0, 80.0, 80.0, 80.0, 80.0, 75.0, 70.0, 65.0, 60.0, 55.0, 50.0, 50.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 75,
         name: "Iron Golem",
         family: "advanced",
@@ -2039,23 +1999,23 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Reflect Damage: %d:mReflect%%%", "Mana Cost: %d:mManaCost%"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(4.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(4.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mReflect",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 25.0, 50.0, 75.0, 100.0, 125.0, 150.0, 175.0, 250.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 76,
         name: "Call Comet",
         family: "advanced",
@@ -2071,30 +2031,30 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mFreeze",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 20.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 75.0, 100.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mDamage",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 50.0, 70.0, 90.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0, 170.0, 200.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0, 170.0, 180.0, 190.0,
                     200.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 77,
         name: "Turn Undead",
         family: "advanced",
@@ -2110,30 +2070,30 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(5.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(10.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(5.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(10.0) },
+            SkillProperty {
                 name: "mFlee",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 3.0, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75, 5.0, 5.25, 5.5, 6.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mWeaken",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0,
                 ]),
             },
-            NativeSkillProperty {
+            SkillProperty {
                 name: "mManaCost",
-                value: NativeSkillValue::Ranks(&[
+                value: SkillValue::Ranks(&[
                     0.0, 100.0, 110.0, 120.0, 130.0, 135.0, 140.0, 145.0, 150.0, 155.0, 160.0,
                     161.0,
                 ]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 78,
         name: "Mindstar",
         family: "advanced",
@@ -2145,17 +2105,15 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         stat_lines: &["Boost: +1 to skills\"\r\n\t\"Hoards %d:mHoard%%% of mana when active"],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mHoard",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 60.0, 40.0, 30.0, 25.0, 20.0, 15.0, 10.0, 5.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 60.0, 40.0, 30.0, 25.0, 20.0, 15.0, 10.0, 5.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 79,
         name: "Regenerate",
         family: "advanced",
@@ -2169,17 +2127,15 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         ],
         bonus_lines: &[],
         numeric_properties: &[
-            NativeSkillProperty { name: "mCapLevel", value: NativeSkillValue::Scalar(3.0) },
-            NativeSkillProperty { name: "mMaxLevel", value: NativeSkillValue::Scalar(8.0) },
-            NativeSkillProperty {
+            SkillProperty { name: "mCapLevel", value: SkillValue::Scalar(3.0) },
+            SkillProperty { name: "mMaxLevel", value: SkillValue::Scalar(8.0) },
+            SkillProperty {
                 name: "mHoard",
-                value: NativeSkillValue::Ranks(&[
-                    0.0, 25.0, 21.0, 18.0, 15.0, 12.0, 10.0, 8.0, 6.0,
-                ]),
+                value: SkillValue::Ranks(&[0.0, 25.0, 21.0, 18.0, 15.0, 12.0, 10.0, 8.0, 6.0]),
             },
         ],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 80,
         name: "Plane Orb",
         family: "runtime_only",
@@ -2192,7 +2148,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 81,
         name: "Reserved",
         family: "runtime_only",
@@ -2205,7 +2161,7 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
         bonus_lines: &[],
         numeric_properties: &[],
     },
-    NativeSkillDefinition {
+    SkillDefinition {
         id: 82,
         name: "",
         family: "",
@@ -2220,8 +2176,8 @@ pub const NATIVE_SKILL_CATALOG: [NativeSkillDefinition; 83] = [
     },
 ];
 
-pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
-    NativeWeldBuild {
+pub const WELD_BUILDS: [WeldBuild; 10] = [
+    WeldBuild {
         id: 1000,
         color_roots: [0, 1],
         component_skill_ids: [8, 16, 10, 18, 9, 17],
@@ -2230,7 +2186,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Magic Missile + Fireball",
         synthetic_name: "Burning Bolt",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1001,
         color_roots: [0, 3],
         component_skill_ids: [8, 32, 10, 34, 9, 33],
@@ -2239,7 +2195,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Magic Missile + Frost Jet",
         synthetic_name: "Frost Missile",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1002,
         color_roots: [0, 2],
         component_skill_ids: [8, 24, 10, 25, 9, 26],
@@ -2248,7 +2204,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Magic Missile + Lightning",
         synthetic_name: "Ball Lightning",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1003,
         color_roots: [2, 1],
         component_skill_ids: [16, 24, 18, 25, 17, 26],
@@ -2257,7 +2213,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Lighting + Fireball",
         synthetic_name: "Flame Lash",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1004,
         color_roots: [2, 3],
         component_skill_ids: [32, 24, 34, 25, 33, 26],
@@ -2266,7 +2222,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Lightning + Frost Jet",
         synthetic_name: "Blizzard Beam",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1005,
         color_roots: [3, 1],
         component_skill_ids: [16, 32, 18, 34, 17, 33],
@@ -2275,7 +2231,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Fireball + Frost Jet",
         synthetic_name: "Steam Jet",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1006,
         color_roots: [0, 4],
         component_skill_ids: [8, 40, 10, 43, 9, 42],
@@ -2284,7 +2240,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Magic Missile + Boulder",
         synthetic_name: "Ethereal Boulder",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1007,
         color_roots: [4, 1],
         component_skill_ids: [16, 40, 18, 43, 17, 42],
@@ -2293,7 +2249,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Fireball + Boulder",
         synthetic_name: "Meteor Swarm",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1008,
         color_roots: [4, 3],
         component_skill_ids: [32, 40, 34, 43, 33, 42],
@@ -2302,7 +2258,7 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
         pair_description: "Welded Frost Jet + Boulder",
         synthetic_name: "Hailstones",
     },
-    NativeWeldBuild {
+    WeldBuild {
         id: 1009,
         color_roots: [4, 2],
         component_skill_ids: [24, 40, 25, 43, 26, 42],
@@ -2313,8 +2269,8 @@ pub const NATIVE_WELD_BUILDS: [NativeWeldBuild; 10] = [
     },
 ];
 
-pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
-    NativeSkillRule {
+pub const SKILL_RULES: [SkillRule; 72] = [
+    SkillRule {
         skill_id: 8,
         minimum_level: 1,
         root: 0,
@@ -2323,7 +2279,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 9,
         minimum_level: 1,
         root: 0,
@@ -2332,7 +2288,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 10,
         minimum_level: 1,
         root: 0,
@@ -2341,7 +2297,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 11,
         minimum_level: 3,
         root: 0,
@@ -2350,7 +2306,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 12,
         minimum_level: 25,
         root: 0,
@@ -2359,7 +2315,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 13,
         minimum_level: 20,
         root: 0,
@@ -2368,7 +2324,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[14],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 14,
         minimum_level: 20,
         root: 0,
@@ -2377,7 +2333,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[13],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 15,
         minimum_level: 6,
         root: 0,
@@ -2386,7 +2342,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 16,
         minimum_level: 1,
         root: 1,
@@ -2395,7 +2351,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 17,
         minimum_level: 1,
         root: 1,
@@ -2404,7 +2360,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 18,
         minimum_level: 1,
         root: 1,
@@ -2413,7 +2369,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 19,
         minimum_level: 20,
         root: 1,
@@ -2422,7 +2378,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[20],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 20,
         minimum_level: 20,
         root: 1,
@@ -2431,7 +2387,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[19],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 21,
         minimum_level: 4,
         root: 1,
@@ -2440,7 +2396,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 22,
         minimum_level: 12,
         root: 1,
@@ -2449,7 +2405,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[16, 21, 23],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 23,
         minimum_level: 8,
         root: 1,
@@ -2458,7 +2414,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 24,
         minimum_level: 1,
         root: 2,
@@ -2467,7 +2423,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 25,
         minimum_level: 1,
         root: 2,
@@ -2476,7 +2432,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 26,
         minimum_level: 1,
         root: 2,
@@ -2485,7 +2441,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 27,
         minimum_level: 1,
         root: 2,
@@ -2494,7 +2450,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 28,
         minimum_level: 12,
         root: 2,
@@ -2503,7 +2459,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 29,
         minimum_level: 20,
         root: 2,
@@ -2512,7 +2468,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[31],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 30,
         minimum_level: 12,
         root: 2,
@@ -2521,7 +2477,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[24, 27],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 31,
         minimum_level: 20,
         root: 2,
@@ -2530,7 +2486,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[29],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 32,
         minimum_level: 1,
         root: 3,
@@ -2539,7 +2495,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 33,
         minimum_level: 1,
         root: 3,
@@ -2548,7 +2504,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 34,
         minimum_level: 1,
         root: 3,
@@ -2557,7 +2513,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 35,
         minimum_level: 1,
         root: 3,
@@ -2566,7 +2522,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 36,
         minimum_level: 20,
         root: 3,
@@ -2575,7 +2531,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[37],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 37,
         minimum_level: 20,
         root: 3,
@@ -2584,7 +2540,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[36],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 38,
         minimum_level: 18,
         root: 3,
@@ -2593,7 +2549,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 39,
         minimum_level: 16,
         root: 3,
@@ -2602,7 +2558,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[32, 35],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 40,
         minimum_level: 1,
         root: 4,
@@ -2611,7 +2567,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 41,
         minimum_level: 3,
         root: 4,
@@ -2620,7 +2576,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 42,
         minimum_level: 1,
         root: 4,
@@ -2629,7 +2585,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 43,
         minimum_level: 1,
         root: 4,
@@ -2638,7 +2594,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 44,
         minimum_level: 20,
         root: 4,
@@ -2647,7 +2603,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[47],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 45,
         minimum_level: 6,
         root: 4,
@@ -2656,7 +2612,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 46,
         minimum_level: 25,
         root: 4,
@@ -2665,7 +2621,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 47,
         minimum_level: 20,
         root: 4,
@@ -2674,7 +2630,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[44],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 48,
         minimum_level: 1,
         root: 7,
@@ -2683,7 +2639,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 49,
         minimum_level: 1,
         root: 7,
@@ -2692,7 +2648,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 50,
         minimum_level: 1,
         root: 7,
@@ -2701,7 +2657,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 51,
         minimum_level: 18,
         root: 7,
@@ -2710,7 +2666,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 52,
         minimum_level: 1,
         root: 7,
@@ -2719,7 +2675,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 53,
         minimum_level: 8,
         root: 7,
@@ -2728,7 +2684,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 54,
         minimum_level: 4,
         root: 7,
@@ -2737,7 +2693,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 55,
         minimum_level: 10,
         root: 7,
@@ -2746,7 +2702,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 56,
         minimum_level: 1,
         root: 6,
@@ -2755,7 +2711,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 57,
         minimum_level: 1,
         root: 6,
@@ -2764,7 +2720,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 58,
         minimum_level: 8,
         root: 6,
@@ -2773,7 +2729,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 59,
         minimum_level: 5,
         root: 6,
@@ -2782,7 +2738,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 60,
         minimum_level: 8,
         root: 6,
@@ -2791,7 +2747,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 61,
         minimum_level: 25,
         root: 6,
@@ -2800,7 +2756,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 62,
         minimum_level: 18,
         root: 6,
@@ -2809,7 +2765,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 63,
         minimum_level: 12,
         root: 6,
@@ -2818,7 +2774,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 64,
         minimum_level: 1,
         root: 5,
@@ -2827,7 +2783,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 65,
         minimum_level: 1,
         root: 5,
@@ -2836,7 +2792,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 66,
         minimum_level: 10,
         root: 5,
@@ -2845,7 +2801,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 67,
         minimum_level: 1,
         root: 5,
@@ -2854,7 +2810,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 68,
         minimum_level: 10,
         root: 5,
@@ -2863,7 +2819,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 69,
         minimum_level: 6,
         root: 5,
@@ -2872,7 +2828,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 70,
         minimum_level: 25,
         root: 5,
@@ -2881,7 +2837,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 71,
         minimum_level: 5,
         root: 5,
@@ -2890,7 +2846,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 72,
         minimum_level: 1,
         root: 2,
@@ -2899,7 +2855,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 73,
         minimum_level: 5,
         root: 1,
@@ -2908,7 +2864,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 74,
         minimum_level: 10,
         root: 0,
@@ -2917,7 +2873,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 75,
         minimum_level: 10,
         root: 4,
@@ -2926,7 +2882,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 76,
         minimum_level: 10,
         root: 3,
@@ -2935,7 +2891,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 77,
         minimum_level: 6,
         root: 7,
@@ -2944,7 +2900,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 78,
         minimum_level: 10,
         root: 6,
@@ -2953,7 +2909,7 @@ pub const NATIVE_SKILL_RULES: [NativeSkillRule; 72] = [
         any: &[],
         forbidden: &[],
     },
-    NativeSkillRule {
+    SkillRule {
         skill_id: 79,
         minimum_level: 10,
         root: 5,

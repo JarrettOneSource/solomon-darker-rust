@@ -14,13 +14,12 @@ pub use entities::{
 use crate::Vec2;
 use crate::float::fround;
 use crate::painter::{PainterRegistration, WorldManagerLane};
-pub use crate::region_feedback::native_region_point_gain;
+pub use crate::region_feedback::region_point_gain;
 
 use super::BoneyardBounds;
 use super::lighting::{
-    NATIVE_DEFAULT_LIGHT_QUALITY, NativeBoneyardLightIndex, NativeBoneyardLightManagerView,
-    NativeBoneyardLightSource, NativePlayerLightOwner, native_lantern_light_source,
-    native_player_light_source,
+    BoneyardLightIndex, BoneyardLightManagerView, BoneyardLightSource, DEFAULT_LIGHT_QUALITY,
+    PlayerLightOwner, lantern_light_source, player_light_source,
 };
 
 const WORLD_LIGHT_ZOOM: f64 = 1.35;
@@ -42,7 +41,7 @@ pub struct WorldLightPlayer<'a> {
 #[derive(Clone, Debug)]
 pub struct WorldLightOwner {
     pub registration: PainterRegistration,
-    pub sources: Vec<NativeBoneyardLightSource>,
+    pub sources: Vec<BoneyardLightSource>,
 }
 
 #[derive(Clone, Debug)]
@@ -64,7 +63,7 @@ pub struct WorldLightScene {
 #[derive(Clone, Debug)]
 pub struct BoneyardWorldLightQuery {
     pub cameras: Vec<BoneyardBounds>,
-    indices: Vec<NativeBoneyardLightIndex>,
+    indices: Vec<BoneyardLightIndex>,
 }
 
 impl BoneyardWorldLightQuery {
@@ -79,15 +78,15 @@ impl BoneyardWorldLightQuery {
         let mut cameras = Vec::with_capacity(players.len());
         let mut providers = Vec::with_capacity(players.len() + provider_owners.len() + 1);
         for (index, player) in players.iter().enumerate() {
-            cameras.push(native_primary_view_bounds(
+            cameras.push(primary_view_bounds(
                 scene.camera_bounds,
                 player.position,
                 player.viewport.unwrap_or(STOCK_VIEWPORT),
                 WORLD_LIGHT_ZOOM,
                 0.0,
             ));
-            let source = native_player_light_source(
-                NativePlayerLightOwner {
+            let source = player_light_source(
+                PlayerLightOwner {
                     id: player.id,
                     position: player.position,
                     heading_index: player.heading_index,
@@ -112,7 +111,7 @@ impl BoneyardWorldLightQuery {
                 registration: scene
                     .lantern_light_registration
                     .expect("lantern light has a native manager registration"),
-                sources: vec![native_lantern_light_source(position, tick, true)],
+                sources: vec![lantern_light_source(position, tick, true)],
             });
         }
         let mut misc = misc_owners.to_vec();
@@ -121,11 +120,11 @@ impl BoneyardWorldLightQuery {
         let mut indices = Vec::with_capacity(cameras.len());
         for camera in &cameras {
             let mut index =
-                NativeBoneyardLightIndex::new(Vec2::new(scene.bounds.width, scene.bounds.height));
+                BoneyardLightIndex::new(Vec2::new(scene.bounds.width, scene.bounds.height));
             index.rebuild(
                 &sources,
                 &tail,
-                NativeBoneyardLightManagerView {
+                BoneyardLightManagerView {
                     camera_position: Vec2::new(
                         camera.x + camera.width / 2.0,
                         camera.y + camera.height / 2.0,
@@ -136,7 +135,7 @@ impl BoneyardWorldLightQuery {
                         camera.height * WORLD_LIGHT_ZOOM,
                     ),
                 },
-                NATIVE_DEFAULT_LIGHT_QUALITY,
+                DEFAULT_LIGHT_QUALITY,
             );
             indices.push(index);
         }
@@ -153,7 +152,7 @@ impl BoneyardWorldLightQuery {
     }
 
     /// The source exposes concatenated accepted providers, including one copy per camera.
-    pub fn accepted_sources(&self) -> impl Iterator<Item = &NativeBoneyardLightSource> {
+    pub fn accepted_sources(&self) -> impl Iterator<Item = &BoneyardLightSource> {
         self.indices.iter().flat_map(|index| index.accepted_sources())
     }
 
@@ -162,7 +161,7 @@ impl BoneyardWorldLightQuery {
         let mut gain: f64 = 0.0;
         for camera in &self.cameras {
             let center = Vec2::new(camera.x + camera.width / 2.0, camera.y + camera.height / 2.0);
-            gain = gain.max(native_region_point_gain(position, center, camera.width, false));
+            gain = gain.max(region_point_gain(position, center, camera.width, false));
         }
         gain
     }
@@ -170,7 +169,7 @@ impl BoneyardWorldLightQuery {
 
 /// `primary-spell-targeting.ts::nativePrimaryViewBounds`, including each float32 store.
 #[must_use]
-pub fn native_primary_view_bounds(
+pub fn primary_view_bounds(
     bounds: BoneyardBounds,
     focus: Vec2,
     viewport: Vec2,
@@ -195,7 +194,7 @@ pub fn native_primary_view_bounds(
 pub fn ordered_boneyard_light_sources(
     providers: &mut [WorldLightOwner],
     misc: &mut [WorldMiscLightOwner],
-) -> (Vec<NativeBoneyardLightSource>, Vec<NativeBoneyardLightSource>) {
+) -> (Vec<BoneyardLightSource>, Vec<BoneyardLightSource>) {
     let sources = ordered_provider_sources(providers);
     // The first stable sort only breaks ties inside the same manager registration.
     misc.sort_by_key(|entry| (entry.append_ordinal, entry.birth_tick, entry.id));
@@ -203,7 +202,7 @@ pub fn ordered_boneyard_light_sources(
     (sources, ordered_provider_sources(&mut misc))
 }
 
-fn ordered_provider_sources(owners: &mut [WorldLightOwner]) -> Vec<NativeBoneyardLightSource> {
+fn ordered_provider_sources(owners: &mut [WorldLightOwner]) -> Vec<BoneyardLightSource> {
     owners.sort_by_key(|owner| {
         let lane = match owner.registration.manager_lane {
             WorldManagerLane::Actor => 0,
