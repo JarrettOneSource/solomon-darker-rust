@@ -143,7 +143,9 @@ and after it left ([Performance](PERFORMANCE.md#entity-storage)), and its handle
 query and view types made the simulation harder to read. A storage change is
 accepted only when the session benchmark shows no regression and every final
 checkpoint stays byte-identical, which also shows that painter, contact and
-random-number order are unchanged.
+random-number order are unchanged. The Boneyard cases must reach combat: casting
+stays locked until Solomon's entrance finishes, so the benchmark plays the
+entrance before timing.
 
 Removing an entity from the middle of a `Vec` keeps survivor order, which
 determines contact selection, RNG draws, and painter registration. Births enter at

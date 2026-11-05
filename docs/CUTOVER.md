@@ -65,16 +65,18 @@ rule.
 
 **Storage follows performance evidence.** Entity storage moved to `bevy_ecs` in
 October 2026 to gain structure and, it was hoped, speed. The measurements in
-[Performance](PERFORMANCE.md#entity-storage) showed the opposite: simulation
-ticks became 3–18% slower and session copies 2–7× slower, with no workload faster.
+[Performance](PERFORMANCE.md#entity-storage) showed the opposite, although its
+Boneyard cases never reached combat: simulation ticks became 3–18% slower and
+session copies 2–7× slower, with no workload faster.
 The game used `bevy_ecs` only as storage (no systems or schedules), and the
 wrapper types that adapted it added most of the hard-to-read syntax in
 `solomon-sim`. Storage is now plain `Vec`, `Option` and `BTreeMap` collections
-again, and the same benchmark shows ticks 2–12% faster and session copies
-1.7–6.3× faster than with `bevy_ecs`. A storage change is accepted only when the
-session benchmark shows no regression and every final checkpoint stays
-byte-identical, which also proves painter, contact and random-number order are
-unchanged.
+again, and the benchmark, now including casting combat, shows ticks 1–12% faster
+and session copies 2.1–6.3× faster than with `bevy_ecs`. A storage change is
+accepted only when the session benchmark shows no regression and every final
+checkpoint stays byte-identical, which also proves painter, contact and
+random-number order are unchanged. Its Boneyard cases must reach combat, which
+stays locked until Solomon's entrance finishes.
 
 **Simple Rust.** Prefer code a newcomer can read over code that is short or
 general. [Coding standards](CODING-STANDARDS.md#simple-rust) lists the concrete
@@ -157,6 +159,7 @@ These must be finished before Rust moves to `/game`.
 | 25 | Mod CLI in Rust | Not started | `tools/sdmod/cli.mjs` is about 730 lines of Node wrapping the `solomon-sdmod` binary. Make the binary the command-line tool. |
 | 26 | `cargo xtask` | Not started | Replace the Python and shell packaging and verification scripts so contributors need only Rust and Trunk. Node stays for Playwright browser tests. |
 | 27 | Repository size | Not started | The Git pack is about 614 MiB, mostly PNG. Stop committing generated art once item 3 lands. Rewriting history is a separate owner decision. |
+| 28 | Local spell journey | Not started | No repository journey casts primary spells locally: `electric-burn.cjs` and the other combat journeys need the hosted staging fixtures. Against the native host, `solomon-entrance.cjs` walks a wizard into Solomon, which starts combat, so a local journey can cast every school. Weld builds need a supported local grant, because Create does not offer them and the developer Console runs only on hosted servers. |
 
 ## Cutover checklist
 

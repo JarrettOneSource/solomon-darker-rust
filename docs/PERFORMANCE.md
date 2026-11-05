@@ -128,42 +128,48 @@ host measurements.
 
 Entity populations are plain `Vec`, `Option` and `BTreeMap` collections. They
 replaced `bevy_ecs` component storage in November 2026, which had itself replaced
-plain collections in October. Both changes were measured with the same native
-session driver, built with Rust 1.98.1, optimization level 3, no LTO and 16
-codegen units. Runs alternate between the two builds after a paired warm-up;
-builds complete before timing, and ordinary background services keep running.
+plain collections in October. Both changes were measured with a native session
+driver built with Rust 1.98.1, optimization level 3, no LTO and 16 codegen units.
+Runs alternate between the two builds after a paired warm-up; builds complete
+before timing, and ordinary background services keep running.
 
-College cases advance 1,000 movement ticks. Boneyard cases advance 300 ticks with
-held primary casting and 32 or 128 mixed Skeleton, Skeleton Archer, Zombie and Imp
-actors. Players have additional health for this benchmark so hits still resolve
-and combat continues throughout the measurement. Every requested tick advances
-in the expected run phase; all players remain alive. Seeds, inputs and navigation
-are identical, and all final checkpoints match byte for byte. The first admission
-tick is measured separately and excluded from the retained-tick timings below.
-Clone timings cover construction and destruction of 500 complete session copies
-per run.
+College cases advance 1,000 movement ticks. Boneyard combat stays locked until a
+wizard touches Solomon and his entrance finishes, so each Boneyard case first plays
+that entrance, untimed, then times 300 ticks of primary casting among 32 or 128
+mixed Skeleton, Skeleton Archer, Zombie and Imp actors. One player casts Fire; four
+players cast Fire, Water, Earth and Ether; and four Weld players cast Flame Lash,
+Blizzard Beam, Steam Jet and Hailstones, which keep the most effects alive. The
+timed windows cast 260, 990 and 3,802 spells, and the Weld case ends with 169 live
+effects. Players have additional health and mana so combat continues throughout.
+Every requested tick advances in the expected run phase; all players remain alive.
+Seeds, inputs and navigation are identical, and all final checkpoints match byte
+for byte. The first admission tick is measured separately and excluded from the
+retained-tick timings below. Clone timings cover construction and destruction of
+500 complete session copies per run.
 
 The current storage (`68fb9390`) compared with `bevy_ecs` storage (`bf9d8644`) on
 an Apple M2, as medians of 20 alternating pairs:
 
 | Scene | ECS tick, µs | Plain tick, µs | ECS clone, µs | Plain clone, µs |
 | --- | ---: | ---: | ---: | ---: |
-| College, one player | 40.97 | 35.94 | 40.22 | 6.40 |
-| College, four players | 71.84 | 64.60 | 53.06 | 15.35 |
-| 32 enemies, one player | 256.53 | 249.06 | 82.96 | 48.80 |
-| 128 enemies, four players | 641.71 | 626.54 | 123.79 | 66.51 |
+| College, one player | 40.94 | 35.80 | 40.85 | 6.49 |
+| College, four players | 69.03 | 61.28 | 51.05 | 15.05 |
+| 32 enemies, one Fire player | 1,113.99 | 1,103.67 | 104.15 | 50.26 |
+| 128 enemies, four players | 1,119.42 | 1,057.03 | 146.32 | 70.74 |
+| 32 enemies, four Weld players | 985.77 | 903.44 | 171.29 | 78.25 |
 
-Ticks are 2–12% faster and session copies 1.7–6.3× faster, by median per-pair
-ratio. Serializing 100 network snapshots costs the same within 2%. Process peak
+Ticks are 1–12% faster and session copies 2.1–6.3× faster, by median per-pair
+ratio. Serializing 100 network snapshots costs the same within 1.3%. Process peak
 RSS, which includes asset loading, setup and temporary copies, falls by
-0.8–1.5 MiB. Every primary transient now takes the space of the largest effect
-variant, 512 bytes, yet sessions tick and copy faster with that one contiguous
-list than they did with a table per effect type.
+1.0–1.4 MiB. Every primary transient takes the space of the largest effect variant,
+512 bytes, yet the Weld case, which holds the most live effects, ticks 8% faster
+and copies 2.2× faster than it did with a table per effect type.
 
 The October change (`c1017a5` compared with `dc16cfca` on an Apple M5 Pro, medians
-of five alternating runs) went the other way: ticks became 3–18% slower, session
-copies 2–7× slower, peak RSS rose by 1.4–2.4 MiB and the inline `GameSession` grew
-from 11,064 to 12,080 bytes.
+of five alternating runs) made ticks 3–18% slower and session copies 2–7× slower,
+raised peak RSS by 1.4–2.4 MiB and grew the inline `GameSession` from 11,064 to
+12,080 bytes. Its driver did not play Solomon's entrance, so its Boneyard cases
+measured enemy crowds without any spells.
 
 These measurements establish the cost of the tested native simulation workloads.
 They do not establish browser frame rate, GPU cost or long-session memory use.
