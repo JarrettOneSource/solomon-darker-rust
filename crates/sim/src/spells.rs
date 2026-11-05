@@ -18,7 +18,6 @@ pub mod hand_cast;
 mod lifecycle;
 pub mod model;
 pub mod presentation;
-pub mod projectile_storage;
 mod projectiles;
 mod simulation;
 pub mod transient_storage;

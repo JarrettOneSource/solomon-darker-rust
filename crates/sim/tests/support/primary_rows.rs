@@ -19,10 +19,10 @@ pub fn registration(value: PainterRegistration) -> Value {
 pub fn random_state(rng: &NativeRng) -> Value {
     json!({ "indexA": rng.index_a, "indexB": rng.index_b, "words": rng.words.as_slice() })
 }
-pub fn projectile_row(projectile: PrimaryProjectileRef<'_>) -> Value {
+pub fn projectile_row(projectile: &PrimarySpellProjectile) -> Value {
     let (kind, detail) = match projectile {
-        PrimaryProjectileRef::Weld(_) => unreachable!("this fixture casts the five elements"),
-        PrimaryProjectileRef::Ether(spell) => (
+        PrimarySpellProjectile::Weld(_) => unreachable!("this fixture casts the five elements"),
+        PrimarySpellProjectile::Ether(spell) => (
             "ether",
             json!([
                 spell.damage_retention,
@@ -37,7 +37,7 @@ pub fn projectile_row(projectile: PrimaryProjectileRef<'_>) -> Value {
                 spell.visual_scale,
             ]),
         ),
-        PrimaryProjectileRef::Fire(spell) => {
+        PrimarySpellProjectile::Fire(spell) => {
             let spent = match spell.spent_ember {
                 NativeSpentEmber::None => json!({ "kind": "none" }),
                 NativeSpentEmber::Immolate { damage } => {
@@ -61,7 +61,7 @@ pub fn projectile_row(projectile: PrimaryProjectileRef<'_>) -> Value {
                 ]),
             )
         }
-        PrimaryProjectileRef::Earth(spell) => (
+        PrimarySpellProjectile::Earth(spell) => (
             "earth",
             json!([
                 spell.assembly_charge,

@@ -4,7 +4,7 @@ use crate::Vec2;
 use crate::float::hypot;
 use crate::secondary::{NativeSecondaryActorKind as SecondaryKind, NativeSecondarySimulationState};
 use crate::spells::model::{
-    PrimaryProjectileRef, PrimarySpellProjectilePhase, PrimaryTransientRef, SpellState,
+    PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimaryTransientRef, SpellState,
 };
 use crate::spells::weld::{WeldHailChildRef, WeldPersistentRef, WeldWorldRef};
 
@@ -33,10 +33,10 @@ pub fn observe_ml_bot_policy_own_effects(
             continue;
         }
         let (target, radius) = match projectile {
-            PrimaryProjectileRef::Ether(state) => (state.target_id.is_some(), 0.0),
-            PrimaryProjectileRef::Weld(state) => (state.target_id.is_some(), 0.0),
-            PrimaryProjectileRef::Fire(state) => (false, state.explode_radius),
-            PrimaryProjectileRef::Earth(_) => (false, 0.0),
+            PrimarySpellProjectile::Ether(state) => (state.target_id.is_some(), 0.0),
+            PrimarySpellProjectile::Weld(state) => (state.target_id.is_some(), 0.0),
+            PrimarySpellProjectile::Fire(state) => (false, state.explode_radius),
+            PrimarySpellProjectile::Earth(_) => (false, 0.0),
         };
         rows.push(EffectRow {
             damage: common.damage,

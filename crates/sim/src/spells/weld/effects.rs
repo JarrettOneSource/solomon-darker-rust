@@ -189,7 +189,7 @@ pub struct NativeWeldGroundSparkFadeSeed {
 }
 
 pub fn create_native_weld_ground_spark_fade_program(
-    projectile: crate::spells::model::ProjectileRef<'_, super::WeldProjectileProgram>,
+    projectile: &super::NativeWeldProjectileState,
     rng: &mut NativeRng,
 ) -> Vec<NativeWeldGroundSparkFadeSeed> {
     if projectile.build_id != 1009 {

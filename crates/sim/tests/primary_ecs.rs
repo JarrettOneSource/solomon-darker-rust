@@ -106,11 +106,8 @@ fn mixed_primary_flight_retirement_birth_and_restore_preserve_order() {
         cast(WizardElement::Fire, false, 3, &mut rng, &mut order),
         cast(WizardElement::Ether, true, 4, &mut rng, &mut order),
     ];
-    let mut live = SpellState {
-        next_id: 10,
-        projectiles: records.clone().into_iter().collect(),
-        ..SpellState::default()
-    };
+    let mut live =
+        SpellState { next_id: 10, projectiles: records.to_vec(), ..SpellState::default() };
     assert_eq!(
         serde_json::to_value(&live.projectiles).unwrap(),
         serde_json::to_value(&records).unwrap()
@@ -122,7 +119,7 @@ fn mixed_primary_flight_retirement_birth_and_restore_preserve_order() {
         live.projectiles.iter().map(|spell| spell.common().id).collect::<Vec<_>>(),
         [1, 3, 4]
     );
-    let held = live.projectiles.get(0).unwrap().common();
+    let held = live.projectiles[0].common();
     assert_eq!(held.phase, PrimarySpellProjectilePhase::Held);
     assert_eq!(held.flight_ticks, 0);
     assert_eq!(held.age_ticks, records[0].common().age_ticks + 6);

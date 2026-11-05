@@ -11,7 +11,7 @@ use crate::secondary::NativeSecondarySimulationState;
 use crate::spells::air::{
     NativeAirLightPlan, build_native_air_contact_light_source, build_native_air_path_light_sources,
 };
-use crate::spells::model::{PrimaryProjectileRef, PrimaryTransientRef, SpellState};
+use crate::spells::model::{PrimarySpellProjectile, PrimaryTransientRef, SpellState};
 use crate::spells::weld::{NativeWeldMeteorPhase, WeldPersistentRef, WeldWorldRef};
 
 use super::super::lighting::enemy::{
@@ -169,23 +169,23 @@ pub fn collect_boneyard_entity_lights(
                 continue;
             }
             let source = match spell {
-                PrimaryProjectileRef::Weld(spell) => native_weld_projectile_light_source(
+                PrimarySpellProjectile::Weld(spell) => native_weld_projectile_light_source(
                     spell.build_id,
                     common.id as usize,
                     common.position,
                     frame,
                     multiple_shadows,
                 ),
-                PrimaryProjectileRef::Earth(_) => {
+                PrimarySpellProjectile::Earth(_) => {
                     native_boulder_light_source(common.position, common.charge, multiple_shadows)
                 }
-                PrimaryProjectileRef::Ether(_) => native_missile_light_source(
+                PrimarySpellProjectile::Ether(_) => native_missile_light_source(
                     common.id as u32,
                     common.position,
                     frame,
                     multiple_shadows,
                 ),
-                PrimaryProjectileRef::Fire(_) => native_fireball_light_source(
+                PrimarySpellProjectile::Fire(_) => native_fireball_light_source(
                     common.id,
                     common.position,
                     frame,

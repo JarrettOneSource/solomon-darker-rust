@@ -4,7 +4,7 @@
 
 use super::earth::{EarthBoulderVector3, earth_boulder_transform_point};
 use super::model::{
-    EarthBoulderOrientation, EarthProjectileProgram, PrimarySpellProjectilePhase, ProjectileRef,
+    EarthBoulderOrientation, PrimarySpellEarthProjectile, PrimarySpellProjectilePhase,
 };
 use super::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
 use super::visual::visual_unit_random;
@@ -23,8 +23,8 @@ pub struct EarthBoulderPresentationState {
     pub shell_charge: f64,
 }
 
-impl From<ProjectileRef<'_, EarthProjectileProgram>> for EarthBoulderPresentationState {
-    fn from(state: ProjectileRef<'_, EarthProjectileProgram>) -> Self {
+impl From<&PrimarySpellEarthProjectile> for EarthBoulderPresentationState {
+    fn from(state: &PrimarySpellEarthProjectile) -> Self {
         Self {
             age_ticks: state.common.age_ticks as f64,
             assembly_charge: state.assembly_charge,
@@ -152,7 +152,7 @@ pub fn earth_boulder_presentation_plan(
 /// Weld uses the raw stored scales and shell centers from the same geometry.
 #[must_use]
 pub fn earth_boulder_sprite_plan(
-    state: ProjectileRef<'_, EarthProjectileProgram>,
+    state: &PrimarySpellEarthProjectile,
     render_tick: f64,
 ) -> NativeSpellSpritePlan {
     earth_boulder_sprite_plan_at_age(state, render_tick, state.common.age_ticks as f64)
@@ -161,7 +161,7 @@ pub fn earth_boulder_sprite_plan(
 /// The source opening flash reads fractional presentation age; cosmetic jitter reads render time.
 #[must_use]
 pub fn earth_boulder_sprite_plan_at_age(
-    state: ProjectileRef<'_, EarthProjectileProgram>,
+    state: &PrimarySpellEarthProjectile,
     render_tick: f64,
     age_ticks: f64,
 ) -> NativeSpellSpritePlan {

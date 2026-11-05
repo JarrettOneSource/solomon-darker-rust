@@ -121,46 +121,40 @@ fn projectile(value: &Value) -> PrimarySpellProjectile {
         "weld" => PrimarySpellProjectile::Weld(weld::projectile(value, common)),
         "earth" => PrimarySpellProjectile::Earth(PrimarySpellEarthProjectile {
             common,
-            program: EarthProjectileProgram {
-                assembly_charge: number(value, "assemblyCharge"),
-                hit_target_ids: values(value, "hitTargetIds")
-                    .iter()
-                    .map(|id| id.as_str().unwrap().into())
-                    .collect(),
-                maximum_charge: number(value, "maximumCharge"),
-                orientation: std::array::from_fn(|i| value["orientation"][i].as_f64().unwrap()),
-                remaining_damage: number(value, "remainingDamage"),
-                shell_charge: number(value, "shellCharge"),
-                toughness: number(value, "toughness"),
-            },
+            assembly_charge: number(value, "assemblyCharge"),
+            hit_target_ids: values(value, "hitTargetIds")
+                .iter()
+                .map(|id| id.as_str().unwrap().into())
+                .collect(),
+            maximum_charge: number(value, "maximumCharge"),
+            orientation: std::array::from_fn(|i| value["orientation"][i].as_f64().unwrap()),
+            remaining_damage: number(value, "remainingDamage"),
+            shell_charge: number(value, "shellCharge"),
+            toughness: number(value, "toughness"),
         }),
         "ether" => PrimarySpellProjectile::Ether(PrimarySpellEtherProjectile {
             common,
-            program: EtherProjectileProgram {
-                damage_retention: number(value, "damageRetention"),
-                heading_degrees: number(value, "headingDegrees"),
-                pierces_remaining: integer(value, "piercesRemaining") as u32,
-                reacquires_target: value["reacquiresTarget"].as_bool().unwrap(),
-                speed: number(value, "speed"),
-                target_id: value["targetId"].as_str().map(String::from),
-                turn_input: number(value, "turnInput"),
-                turn_accumulator: number(value, "turnAccumulator"),
-                underpowered: value["underpowered"].as_bool().unwrap(),
-                visual_scale: number(value, "visualScale"),
-            },
+            damage_retention: number(value, "damageRetention"),
+            heading_degrees: number(value, "headingDegrees"),
+            pierces_remaining: integer(value, "piercesRemaining") as u32,
+            reacquires_target: value["reacquiresTarget"].as_bool().unwrap(),
+            speed: number(value, "speed"),
+            target_id: value["targetId"].as_str().map(String::from),
+            turn_input: number(value, "turnInput"),
+            turn_accumulator: number(value, "turnAccumulator"),
+            underpowered: value["underpowered"].as_bool().unwrap(),
+            visual_scale: number(value, "visualScale"),
         }),
         "fire" => PrimarySpellProjectile::Fire(PrimarySpellFireProjectile {
             common,
-            program: FireProjectileProgram {
-                burn_damage: number(value, "burnDamage"),
-                ember_damage: number(value, "emberDamage"),
-                ember_fragments: integer(value, "emberFragments") as u32,
-                explode_damage: number(value, "explodeDamage"),
-                explode_radius: number(value, "explodeRadius"),
-                private_seed: number(value, "privateSeed") as i32,
-                spent_ember: NativeSpentEmber::None,
-                underpowered: value["underpowered"].as_bool().unwrap(),
-            },
+            burn_damage: number(value, "burnDamage"),
+            ember_damage: number(value, "emberDamage"),
+            ember_fragments: integer(value, "emberFragments") as u32,
+            explode_damage: number(value, "explodeDamage"),
+            explode_radius: number(value, "explodeRadius"),
+            private_seed: number(value, "privateSeed") as i32,
+            spent_ember: NativeSpentEmber::None,
+            underpowered: value["underpowered"].as_bool().unwrap(),
         }),
         other => panic!("unexpected contact fixture projectile {other}"),
     }
@@ -371,19 +365,19 @@ fn fire_contact(value: &Value) -> FireActorContact {
     }
 }
 
-fn projectile_row(spell: PrimaryProjectileRef<'_>) -> Value {
-    if matches!(spell, PrimaryProjectileRef::Weld(_)) {
+fn projectile_row(spell: &PrimarySpellProjectile) -> Value {
+    if matches!(spell, PrimarySpellProjectile::Weld(_)) {
         return weld_rows::projectile(spell);
     }
     let (kind, detail) = match spell {
-        PrimaryProjectileRef::Weld(spell) => (
+        PrimarySpellProjectile::Weld(spell) => (
             "weld",
             json!([spell.build_id, spell.contacts_remaining, spell.target_id, spell.vector]),
         ),
-        PrimaryProjectileRef::Earth(spell) => {
+        PrimarySpellProjectile::Earth(spell) => {
             ("earth", json!([spell.remaining_damage, spell.hit_target_ids, spell.shell_charge]))
         }
-        PrimaryProjectileRef::Ether(spell) => (
+        PrimarySpellProjectile::Ether(spell) => (
             "ether",
             json!([
                 spell.pierces_remaining,
@@ -393,7 +387,7 @@ fn projectile_row(spell: PrimaryProjectileRef<'_>) -> Value {
                 spell.common.direction.y
             ]),
         ),
-        PrimaryProjectileRef::Fire(_) => ("fire", json!([])),
+        PrimarySpellProjectile::Fire(_) => ("fire", json!([])),
     };
     let common = spell.common();
     json!({"id": common.id,

@@ -13,8 +13,8 @@ use solomon_sim::spells::fire::{
     native_fire_particle_lifetime_ticks,
 };
 use solomon_sim::spells::model::{
-    PrimaryProjectileRef, PrimarySpellProjectile, PrimarySpellTransient, PrimaryTransientMut,
-    PrimaryTransientRef, SpellState,
+    PrimarySpellProjectile, PrimarySpellTransient, PrimaryTransientMut, PrimaryTransientRef,
+    SpellState,
 };
 use solomon_sim::spells::water::water_frost_jet_lifetime_ticks;
 use solomon_sim::spells::weld::WeldWorldRef;
@@ -59,7 +59,7 @@ pub(super) fn project(
         newer.projectiles.iter(),
         blend,
         |spell| spell.common().id,
-        |spell| spell.snapshot(),
+        |&spell| spell.clone(),
         |first, next, blend| projectile(first, next, blend, clocks),
     )
     .into_iter()
@@ -158,12 +158,12 @@ pub(super) fn project(
 }
 
 fn projectile(
-    first: &PrimaryProjectileRef<'_>,
-    next: &PrimaryProjectileRef<'_>,
+    first: &PrimarySpellProjectile,
+    next: &PrimarySpellProjectile,
     blend: f64,
     clocks: &mut PresentationClocks,
 ) -> PrimarySpellProjectile {
-    let mut output = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
+    let mut output = if blend < 1.0 { first.clone() } else { next.clone() };
     if std::mem::discriminant(first) != std::mem::discriminant(next) {
         return output;
     }
@@ -177,8 +177,8 @@ fn projectile(
     match (&mut output, first, next) {
         (
             PrimarySpellProjectile::Weld(output),
-            PrimaryProjectileRef::Weld(first),
-            PrimaryProjectileRef::Weld(next),
+            PrimarySpellProjectile::Weld(first),
+            PrimarySpellProjectile::Weld(next),
         ) => {
             output.ball_lightning_acceleration = lerp_option(
                 first.ball_lightning_acceleration,
@@ -204,8 +204,8 @@ fn projectile(
         }
         (
             PrimarySpellProjectile::Earth(output),
-            PrimaryProjectileRef::Earth(first),
-            PrimaryProjectileRef::Earth(next),
+            PrimarySpellProjectile::Earth(first),
+            PrimarySpellProjectile::Earth(next),
         ) => {
             output.common.charge = lerp(first.common.charge, next.common.charge, blend);
             output.shell_charge = lerp(first.shell_charge, next.shell_charge, blend);

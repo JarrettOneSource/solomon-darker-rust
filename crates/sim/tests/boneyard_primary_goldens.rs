@@ -17,7 +17,7 @@ use solomon_sim::secondary::NativeSecondarySimulationState;
 use solomon_sim::spells::PrimarySpellInput;
 use solomon_sim::spells::boneyard::*;
 use solomon_sim::spells::model::PrimaryTransientRef;
-use solomon_sim::spells::model::{PrimaryProjectileRef, PrimarySpellProjectilePhase, SpellState};
+use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellProjectilePhase, SpellState};
 use solomon_sim::spells::targeting::{
     PrimarySpellTarget, PrimarySpellTargetKind, native_primary_view_ray_endpoint,
 };
@@ -177,12 +177,12 @@ impl EnemyGeometry for OpenBirthGeometry {
     }
 }
 
-fn projectile_row(spell: PrimaryProjectileRef<'_>) -> Value {
+fn projectile_row(spell: &PrimarySpellProjectile) -> Value {
     let kind = match spell {
-        PrimaryProjectileRef::Weld(_) => "weld",
-        PrimaryProjectileRef::Earth(_) => "earth",
-        PrimaryProjectileRef::Ether(_) => "ether",
-        PrimaryProjectileRef::Fire(_) => "fire",
+        PrimarySpellProjectile::Weld(_) => "weld",
+        PrimarySpellProjectile::Earth(_) => "earth",
+        PrimarySpellProjectile::Ether(_) => "ether",
+        PrimarySpellProjectile::Fire(_) => "fire",
     };
     let common = spell.common();
     json!([

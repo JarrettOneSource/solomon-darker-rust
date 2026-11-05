@@ -312,7 +312,7 @@ fn resolve_with_order<'context, 'world>(
             return false;
         }
         if let Some(updated) = work.updated_projectiles.remove(&id) {
-            projectile.replace(updated);
+            *projectile = updated;
         }
         true
     });
@@ -612,8 +612,7 @@ impl ContactWork<'_, '_> {
     }
 
     fn resolve_projectiles(&mut self) {
-        let mut projectiles: Vec<_> =
-            self.source.projectiles.iter().map(|spell| spell.snapshot()).collect();
+        let mut projectiles = self.source.projectiles.clone();
         projectiles.sort_by_key(|spell| spell.common().id);
         for projectile in projectiles {
             let common = projectile.common();

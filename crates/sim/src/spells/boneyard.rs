@@ -10,7 +10,7 @@ use super::contacts::{
     BoneyardSpecialDeathResult, BoneyardSpellCombatContext, BoneyardSpellCombatResult,
     BoneyardSpellHitKind, resolve_boneyard_spell_combat,
 };
-use super::model::{PrimaryProjectileRef, PrimarySpellTickResult, SpellState};
+use super::model::{PrimarySpellProjectile, PrimarySpellTickResult, SpellState};
 use super::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
     native_primary_view_ray_endpoint,
@@ -570,7 +570,7 @@ impl BoneyardPrimaryGeometry<'_> {
         }
         let ignored = if matches!(
             spell,
-            PrimarySpellTraversalActor::Projectile(PrimaryProjectileRef::Earth(_))
+            PrimarySpellTraversalActor::Projectile(PrimarySpellProjectile::Earth(_))
                 | PrimarySpellTraversalActor::EtherealBoulder(_)
         ) {
             self.gravestones

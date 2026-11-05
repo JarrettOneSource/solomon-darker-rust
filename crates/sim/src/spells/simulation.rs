@@ -47,16 +47,16 @@ pub type PrimarySpellObstruction<'a> = dyn Fn(Vec2, Vec2, Option<&str>, u32) -> 
 /// Ethereal Boulder. Borrow the real actor so collision keeps its family rules.
 #[derive(Clone, Copy)]
 pub enum PrimarySpellTraversalActor<'a> {
-    Projectile(PrimaryProjectileRef<'a>),
+    Projectile(&'a PrimarySpellProjectile),
     EtherealBoulder(&'a NativeWeldEtherealBoulderState),
 }
 
 #[must_use]
-pub fn native_primary_birth_terrain_exclusion_mask(spell: &impl PrimaryProjectileRead) -> u32 {
-    match spell.view() {
-        PrimaryProjectileRef::Fire(_) => NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
-        PrimaryProjectileRef::Ether(_) => NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
-        PrimaryProjectileRef::Weld(spell) if matches!(spell.build_id, 1000..=1002) => {
+pub fn native_primary_birth_terrain_exclusion_mask(spell: &PrimarySpellProjectile) -> u32 {
+    match spell {
+        PrimarySpellProjectile::Fire(_) => NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
+        PrimarySpellProjectile::Ether(_) => NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+        PrimarySpellProjectile::Weld(spell) if matches!(spell.build_id, 1000..=1002) => {
             NATIVE_PRIMARY_CAST_TERRAIN_EXCLUSION_MASK
         }
         _ => 0,
@@ -67,9 +67,9 @@ pub fn native_primary_birth_terrain_exclusion_mask(spell: &impl PrimaryProjectil
 pub fn native_primary_flight_terrain_exclusion_mask(spell: PrimarySpellTraversalActor<'_>) -> u32 {
     match spell {
         PrimarySpellTraversalActor::Projectile(
-            PrimaryProjectileRef::Fire(_) | PrimaryProjectileRef::Ether(_),
+            PrimarySpellProjectile::Fire(_) | PrimarySpellProjectile::Ether(_),
         ) => NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
-        PrimarySpellTraversalActor::Projectile(PrimaryProjectileRef::Weld(spell))
+        PrimarySpellTraversalActor::Projectile(PrimarySpellProjectile::Weld(spell))
             if matches!(spell.build_id, 1000..=1002) =>
         {
             NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK
@@ -240,8 +240,8 @@ impl SpellState {
         self.advance_transients(epoch, rng, order, &mut result.tick);
         self.advance_projectiles(epoch, rng, order, &mut result.tick);
         for projectile in self.projectiles.iter() {
-            if matches!(projectile, PrimaryProjectileRef::Fire(_))
-                || matches!(projectile, PrimaryProjectileRef::Weld(spell) if spell.build_id==1000)
+            if matches!(projectile, PrimarySpellProjectile::Fire(_))
+                || matches!(projectile, PrimarySpellProjectile::Weld(spell) if spell.build_id==1000)
             {
                 self.transients.push(PrimarySpellTransient::FireParticle(create_fire_particle(
                     self.next_id,
@@ -404,7 +404,7 @@ impl SpellState {
         if !authority.eligible {
             if element == WizardElement::Earth {
                 self.projectiles.retain(|spell| {
-                    !(matches!(spell, PrimaryProjectileRef::Earth(_))
+                    !(matches!(spell, PrimarySpellProjectile::Earth(_))
                         && spell.common().owner_id == context.owner_id
                         && spell.common().phase == PrimarySpellProjectilePhase::Held)
                 });
@@ -537,7 +537,7 @@ impl SpellState {
             for born in births {
                 let birth_mask = native_primary_birth_terrain_exclusion_mask(&born);
                 let flight_mask = native_primary_flight_terrain_exclusion_mask(
-                    PrimarySpellTraversalActor::Projectile(born.view()),
+                    PrimarySpellTraversalActor::Projectile(&born),
                 );
                 let common = born.common();
                 let lookahead = Vec2::new(
@@ -546,7 +546,7 @@ impl SpellState {
                 );
                 let initial_clear = matches!(&born, PrimarySpellProjectile::Weld(spell) if spell.build_id==1009)
                     || (context.can_traverse)(
-                        PrimarySpellTraversalActor::Projectile(born.view()),
+                        PrimarySpellTraversalActor::Projectile(&born),
                         wizard.position,
                         common.position,
                         0.0,
@@ -554,7 +554,7 @@ impl SpellState {
                     );
                 let clear = initial_clear
                     && (context.can_traverse)(
-                        PrimarySpellTraversalActor::Projectile(born.view()),
+                        PrimarySpellTraversalActor::Projectile(&born),
                         common.position,
                         lookahead,
                         0.0,
@@ -563,7 +563,7 @@ impl SpellState {
                 if clear {
                     let mut spell = born;
                     self.advance_projectile_with_presentation(
-                        &mut spell.view_mut(),
+                        &mut spell,
                         context.targets,
                         context.tick,
                         rng,
@@ -606,7 +606,7 @@ impl SpellState {
 
         let earth_release_eligible = element == WizardElement::Earth
             && self.projectiles.iter().any(|spell| {
-                matches!(spell, PrimaryProjectileRef::Earth(_))
+                matches!(spell, PrimarySpellProjectile::Earth(_))
                     && spell.common().owner_id == context.owner_id
                     && spell.common().phase == PrimarySpellProjectilePhase::Held
                     && spell.common().charge >= 0.3_f32 as f64
@@ -736,9 +736,8 @@ impl SpellState {
                     let underpowered =
                         if accepted { earth_accepted_underpowered } else { mana.debit(mana_cost) };
                     let origin = emitter(wizard, element, authority.weapon_kind);
-                    for mut projectile in self.projectiles.iter_mut() {
-                        let PrimaryProjectilePartsMut::Earth(mut spell) = projectile.view_mut()
-                        else {
+                    for projectile in self.projectiles.iter_mut() {
+                        let PrimarySpellProjectile::Earth(spell) = projectile else {
                             continue;
                         };
                         if spell.common.owner_id != context.owner_id
@@ -783,7 +782,7 @@ impl SpellState {
                     }
                     wizard.primary_cast.underpowered = underpowered;
                     let held_boulder = self.projectiles.iter().find_map(|projectile| {
-                        if let PrimaryProjectileRef::Earth(spell) = projectile
+                        if let PrimarySpellProjectile::Earth(spell) = projectile
                             && spell.common.owner_id == context.owner_id
                             && spell.common.phase == PrimarySpellProjectilePhase::Held
                         {
@@ -894,28 +893,26 @@ impl SpellState {
         };
         self.projectiles.push(PrimarySpellProjectile::Earth(PrimarySpellEarthProjectile {
             common,
-            program: EarthProjectileProgram {
-                assembly_charge: if surged { charge } else { initial },
-                hit_target_ids: Vec::new(),
-                maximum_charge: profile.maximum_charge,
-                orientation: if surged {
-                    earth_boulder_flight_orientation_step(
-                        EARTH_BOULDER_IDENTITY_ORIENTATION,
-                        aim,
-                        velocity,
-                        charge,
-                    )
-                } else {
-                    EARTH_BOULDER_IDENTITY_ORIENTATION
-                },
-                remaining_damage: if surged {
-                    native_earth_boulder_released_damage(profile.common.damage_minimum, charge, 1.0)
-                } else {
-                    profile.common.damage_minimum
-                },
-                shell_charge: if surged { charge } else { initial },
-                toughness: profile.toughness,
+            assembly_charge: if surged { charge } else { initial },
+            hit_target_ids: Vec::new(),
+            maximum_charge: profile.maximum_charge,
+            orientation: if surged {
+                earth_boulder_flight_orientation_step(
+                    EARTH_BOULDER_IDENTITY_ORIENTATION,
+                    aim,
+                    velocity,
+                    charge,
+                )
+            } else {
+                EARTH_BOULDER_IDENTITY_ORIENTATION
             },
+            remaining_damage: if surged {
+                native_earth_boulder_released_damage(profile.common.damage_minimum, charge, 1.0)
+            } else {
+                profile.common.damage_minimum
+            },
+            shell_charge: if surged { charge } else { initial },
+            toughness: profile.toughness,
         }));
         self.next_id += 1;
     }
@@ -928,17 +925,16 @@ impl SpellState {
         result: &mut PrimarySpellTickResult,
     ) {
         let mut projectiles = std::mem::take(&mut self.projectiles);
-        projectiles.retain_mut(|stored| {
-            let mut spell = stored.view_mut();
+        projectiles.retain_mut(|spell| {
             if spell.common().phase == PrimarySpellProjectilePhase::Held {
-                advance_projectile(&mut spell, &[]);
+                advance_projectile(spell, &[]);
                 return true;
             }
             let common = spell.common();
-            if !matches!(spell, PrimaryProjectilePartsMut::Earth(_))
+            if !matches!(spell, PrimarySpellProjectile::Earth(_))
                 && common.age_ticks.is_multiple_of(5)
                 && !(context.can_traverse)(
-                    PrimarySpellTraversalActor::Projectile(spell.view()),
+                    PrimarySpellTraversalActor::Projectile(spell),
                     common.position,
                     Vec2::new(
                         common.position.x + common.velocity.x * 5.0,
@@ -946,12 +942,12 @@ impl SpellState {
                     ),
                     0.0,
                     native_primary_flight_terrain_exclusion_mask(
-                        PrimarySpellTraversalActor::Projectile(spell.view()),
+                        PrimarySpellTraversalActor::Projectile(spell),
                     ),
                 )
             {
                 self.projectile_terrain_impact(
-                    &spell.snapshot(),
+                    spell,
                     context.tick,
                     context.enhanced_effects,
                     rng,
@@ -961,11 +957,11 @@ impl SpellState {
                 return false;
             }
             let targets = (context.targets_for_owner)(&spell.common().owner_id);
-            self.advance_projectile_with_presentation(&mut spell, targets, context.tick, rng);
+            self.advance_projectile_with_presentation(spell, targets, context.tick, rng);
             let common = spell.common();
-            if matches!(spell, PrimaryProjectilePartsMut::Earth(_))
+            if matches!(spell, PrimarySpellProjectile::Earth(_))
                 && !(context.can_traverse)(
-                    PrimarySpellTraversalActor::Projectile(spell.view()),
+                    PrimarySpellTraversalActor::Projectile(spell),
                     common.position,
                     Vec2::new(
                         fround(common.position.x + common.velocity.x),
@@ -976,7 +972,7 @@ impl SpellState {
                 )
             {
                 self.projectile_terrain_impact(
-                    &spell.snapshot(),
+                    spell,
                     context.tick,
                     context.enhanced_effects,
                     rng,
@@ -1080,7 +1076,7 @@ impl SpellState {
     ) {
         let mut projectiles = std::mem::take(&mut self.projectiles);
         projectiles.retain_mut(|projectile| {
-            let PrimaryProjectilePartsMut::Earth(mut spell) = projectile.view_mut() else {
+            let PrimarySpellProjectile::Earth(spell) = projectile else {
                 return true;
             };
             if spell.common.owner_id != context.owner_id
@@ -1118,7 +1114,7 @@ impl SpellState {
                 Vec2::new(fround(position.x + velocity.x), fround(position.y + velocity.y));
             let radius = spell.common.charge * 75.0;
             if (context.can_traverse)(
-                PrimarySpellTraversalActor::Projectile(projectile.view()),
+                PrimarySpellTraversalActor::Projectile(projectile),
                 position,
                 next_position,
                 radius,
@@ -1127,7 +1123,7 @@ impl SpellState {
                 true
             } else {
                 self.projectile_terrain_impact(
-                    &projectile.snapshot(),
+                    projectile,
                     context.tick,
                     context.enhanced_effects,
                     rng,
@@ -1149,7 +1145,7 @@ impl SpellState {
                 return true;
             }
             let parent = self.projectiles.iter().find_map(|spell| {
-                if let PrimaryProjectileRef::Earth(boulder) = spell
+                if let PrimarySpellProjectile::Earth(boulder) = spell
                     && boulder.common.id == rock.parent_id
                 {
                     Some(boulder)

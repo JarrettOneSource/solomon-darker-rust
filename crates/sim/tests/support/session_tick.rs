@@ -10,7 +10,7 @@ use solomon_sim::loot::NativeLootDropKind;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::session::GameSession;
 use solomon_sim::spells::model::PrimaryTransientRef;
-use solomon_sim::spells::model::{PrimaryProjectileRef, PrimarySpellProjectilePhase};
+use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellProjectilePhase};
 
 fn point(position: Vec2) -> Value {
     json!([position.x, position.y])
@@ -60,10 +60,10 @@ fn primary_snapshot(session: &GameSession) -> Value {
         .map(|projectile| {
             let common = projectile.common();
             let kind = match projectile {
-                PrimaryProjectileRef::Earth(_) => "earth",
-                PrimaryProjectileRef::Ether(_) => "ether",
-                PrimaryProjectileRef::Fire(_) => "fire",
-                PrimaryProjectileRef::Weld(_) => "weld",
+                PrimarySpellProjectile::Earth(_) => "earth",
+                PrimarySpellProjectile::Ether(_) => "ether",
+                PrimarySpellProjectile::Fire(_) => "fire",
+                PrimarySpellProjectile::Weld(_) => "weld",
             };
             let phase = match common.phase {
                 PrimarySpellProjectilePhase::Flight => "flight",

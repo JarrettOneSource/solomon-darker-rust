@@ -12,7 +12,7 @@ use crate::spells::earth::{
 };
 use crate::spells::fire::native_fire_impact_pitch;
 use crate::spells::model::{
-    FireExplosionPresentation, PrimaryProjectileRef, PrimarySpellProjectilePhase,
+    FireExplosionPresentation, PrimarySpellProjectile, PrimarySpellProjectilePhase,
     PrimarySpellTransientBase, PrimaryTransientRef,
 };
 use crate::spells::weld::{NativeWeldMeteorPhase, WeldPersistentRef, WeldWorldRef};
@@ -153,7 +153,7 @@ impl CombatAudioCursor {
             if player.cast.fizzle_sequence > previous.fizzle {
                 if element == WizardElement::Earth {
                     let boulder = frame.primary.projectiles.iter().find_map(|spell| match spell {
-                        PrimaryProjectileRef::Earth(earth)
+                        PrimarySpellProjectile::Earth(earth)
                             if earth.common.owner_id == player.id =>
                         {
                             Some(earth)

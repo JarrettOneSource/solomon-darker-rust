@@ -185,11 +185,11 @@ impl SpellView {
             let first_root = self.roots.len();
             self.admit_view(common.id);
             let plan = match spell {
-                PrimaryProjectileRef::Earth(spell) => {
+                PrimarySpellProjectile::Earth(spell) => {
                     // EarthBoulderView uses actor age for its cosmetic program too.
                     earth_boulder_sprite_plan_at_age(spell, age, age)
                 }
-                PrimaryProjectileRef::Ether(spell) => {
+                PrimarySpellProjectile::Ether(spell) => {
                     let mut plan = ether_primary_flight_plan(
                         common.id,
                         age,
@@ -202,14 +202,14 @@ impl SpellView {
                     plan.world_y = common.position.y;
                     plan
                 }
-                PrimaryProjectileRef::Fire(spell) => native_fireball_plan(
+                PrimarySpellProjectile::Fire(spell) => native_fireball_plan(
                     NativeFireballPresentationState {
                         age_ticks: age,
                         ..NativeFireballPresentationState::from(spell)
                     },
                     presentation_frame,
                 ),
-                PrimaryProjectileRef::Weld(spell) => {
+                PrimarySpellProjectile::Weld(spell) => {
                     let target_id = format!("primary:{}", common.id);
                     let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
                     self.append_weld(
@@ -227,7 +227,7 @@ impl SpellView {
                 }
             };
             self.append_plan(plan, common.registration);
-            if matches!(spell, PrimaryProjectileRef::Earth(_)) {
+            if matches!(spell, PrimarySpellProjectile::Earth(_)) {
                 self.roots
                     .last_mut()
                     .expect("Earth Boulder owns a world root")
