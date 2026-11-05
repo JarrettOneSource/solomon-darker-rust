@@ -276,7 +276,7 @@ fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
             assert_eq!(spells[index + 1].owner.id, 2);
             assert_eq!(child.owner.age_ticks, 0);
             assert_eq!(child.owner.spawn_tick, tick);
-            let BossSpellKind::FallingBone { height, .. } = *child.kind else {
+            let BossSpellKind::FallingBone { height, .. } = child.kind else {
                 panic!("Rain of Bones births a falling bone");
             };
             assert_eq!(height, -175.0);

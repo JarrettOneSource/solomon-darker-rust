@@ -158,7 +158,7 @@ pub fn collect_boneyard_entity_lights(
     for spell in enemies.boss_spells.iter() {
         append(
             &mut providers,
-            super::super::lighting::native_boss_spell_light(&spell, frame, multiple_shadows),
+            super::super::lighting::native_boss_spell_light(spell, frame, multiple_shadows),
             Some(spell.owner.painter_registration),
         );
     }

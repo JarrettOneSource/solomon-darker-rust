@@ -6,11 +6,10 @@ use crate::Vec2;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
 mod storage;
-pub use storage::{BossSpellMut, BossSpellRead, BossSpellRef, BossSpells};
+pub use storage::BossSpells;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct BossSpellOwner {
     pub age_ticks: u64,
     pub damage: f64,
@@ -31,7 +30,6 @@ pub struct BossSpellLight {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub enum BossSpellKind {
     UltraBanish {
         remaining_ticks: u64,
@@ -187,7 +185,7 @@ pub struct NativeBossSpell {
     pub kind: BossSpellKind,
 }
 
-impl BossSpellRef<'_> {
+impl NativeBossSpell {
     #[must_use]
     pub fn guided_missile_state(&self) -> NativeGuidedMissileState {
         let BossSpellKind::SkullMissile {
@@ -199,7 +197,7 @@ impl BossSpellRef<'_> {
             turn_rate,
             visual_scale,
             ..
-        } = *self.kind
+        } = self.kind
         else {
             panic!("Skull Missile state required");
         };
@@ -224,7 +222,7 @@ impl BossSpellRef<'_> {
             remaining_ticks,
             velocity,
             ..
-        } = *self.kind
+        } = self.kind
         else {
             panic!("Dark Fireball state required");
         };
@@ -242,7 +240,7 @@ impl BossSpellRef<'_> {
     #[must_use]
     pub fn rain_state(&self) -> NativeRainOfBonesState {
         let BossSpellKind::RainOfBones { alpha, phase, remaining_ticks, rotation_sign, scale } =
-            *self.kind
+            self.kind
         else {
             panic!("Rain of Bones state required");
         };
@@ -255,9 +253,7 @@ impl BossSpellRef<'_> {
             scale,
         }
     }
-}
 
-impl BossSpellMut<'_> {
     pub fn set_guided_missile_state(&mut self, state: NativeGuidedMissileState) {
         let BossSpellKind::SkullMissile {
             heading_deg,
@@ -268,7 +264,7 @@ impl BossSpellMut<'_> {
             turn_rate,
             visual_scale,
             ..
-        } = &mut *self.kind
+        } = &mut self.kind
         else {
             panic!("Skull Missile state required")
         };
@@ -290,7 +286,7 @@ impl BossSpellMut<'_> {
             remaining_ticks,
             velocity,
             ..
-        } = &mut *self.kind
+        } = &mut self.kind
         else {
             panic!("Dark Fireball state required")
         };

@@ -11,7 +11,7 @@ use solomon_sim::combat::PuppetHitState;
 use solomon_sim::enemies::actor_presentation::{
     EnemyActorAppearanceContext, EnemySpiderOutlineTarget,
 };
-use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellRead, BossSpells};
+use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpells};
 use solomon_sim::enemies::model::EnemyBrain;
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::float::fround;
@@ -226,9 +226,9 @@ fn project_boss_spells(older: &BossSpells, newer: &BossSpells, blend: f64) -> Bo
     older
         .iter()
         .map(|first| {
-            let mut spell = first.snapshot();
+            let mut spell = first.clone();
             let Some(next) = by_id.get(&first.owner.id) else { return spell };
-            if std::mem::discriminant(first.kind) != std::mem::discriminant(next.kind)
+            if std::mem::discriminant(&first.kind) != std::mem::discriminant(&next.kind)
                 || matches!(first.kind, BossSpellKind::MouthBeamSegment { .. })
             {
                 return spell;
