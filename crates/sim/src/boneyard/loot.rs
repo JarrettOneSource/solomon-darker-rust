@@ -6,9 +6,6 @@
 mod effects;
 pub mod messages;
 pub mod presentation;
-mod storage;
-
-pub use storage::{LootActorMut, LootActorRead, LootActorRef, LootActorWrite, LootActors};
 
 use crate::float;
 use std::collections::HashSet;
@@ -84,21 +81,28 @@ pub enum BoneyardGoodiePhase {
     Broken,
 }
 
-/// Motion, lifetime and painter ownership for a ground pickup.
-#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
+/// A ground pickup: its motion, lifetime and painter ownership, and the reward it
+/// grants on capture. Fields follow the save record's order.
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct LootBody {
+pub struct BoneyardLootActor {
     pub activation_delay_ticks: i64,
     pub age_ticks: u64,
     pub alpha: f64,
+    pub amount: u64,
     pub animation_phase: f64,
+    pub bonus_kind: Option<NativeBonusKind>,
     pub bounce_height: f64,
     pub bounce_velocity: f64,
     pub frame_phase: f64,
     pub id: usize,
+    pub item: Option<HubInventoryItem>,
     pub kind: NativeLootDropKind,
     pub last_step_tick: Option<u64>,
     pub lifetime_ticks_remaining: Option<i64>,
+    pub native_type_id: u32,
+    pub orb_kind: Option<NativeOrbKind>,
+    pub orb_value: f64,
     pub painter_registration: PainterRegistration,
     pub position: Vec2,
     pub rotation_deg: f64,
@@ -106,30 +110,9 @@ pub struct LootBody {
     pub scatter_active: bool,
     pub scatter_progress: f64,
     pub settled_sound_emitted: bool,
-    pub spawn_tick: u64,
-}
-
-/// Contents awarded at capture. Inventory data is separate from moving the pickup.
-#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct LootReward {
-    pub amount: u64,
-    pub bonus_kind: Option<NativeBonusKind>,
-    pub item: Option<HubInventoryItem>,
-    pub native_type_id: u32,
-    pub orb_kind: Option<NativeOrbKind>,
-    pub orb_value: f64,
     pub source: NativeLootDropSource,
+    pub spawn_tick: u64,
     pub tier: u32,
-}
-
-/// Owned birth/checkpoint record. Live entities keep body and reward as components.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
-#[cfg_attr(feature = "persistence", serde(from = "storage::LootActorFields"))]
-pub struct BoneyardLootActor {
-    pub body: LootBody,
-    pub reward: LootReward,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -143,7 +126,6 @@ pub struct BoneyardGoodieInput {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct BoneyardGoodieState {
     pub active: bool,
     pub activated_by_player_id: Option<String>,
@@ -161,7 +143,7 @@ pub struct BoneyardGoodieState {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardLootStore {
-    pub actors: LootActors,
+    pub actors: Vec<BoneyardLootActor>,
     pub effects: Vec<EnemyDeathEffect>,
     pub goodies: Vec<BoneyardGoodieState>,
     pub last_step_tick: Option<u64>,
@@ -273,9 +255,9 @@ impl BoneyardLootStore {
         }
         let next_key_drop_level = initial_native_key_drop_level(&mut shared_rng);
         Self {
-            actors: LootActors::default(),
+            actors: Vec::new(),
             effects: Vec::new(),
-            goodies: goodies.into_iter().collect(),
+            goodies,
             last_step_tick: None,
             last_key_needed_tick: -NATIVE_GOODIE_KEY_FEEDBACK_INTERVAL_TICKS - 1,
             last_successful_item_level: -1,
@@ -303,15 +285,15 @@ impl BoneyardLootStore {
         let mut output =
             NativeHagathaLastWordLoot { actor_ids: Vec::new(), gold: 0, items: Vec::new() };
         for actor in self.actors.iter() {
-            if actor.reward().native_type_id != 2012 && actor.reward().native_type_id != 2013 {
+            if actor.native_type_id != 2012 && actor.native_type_id != 2013 {
                 continue;
             }
             output.actor_ids.push(actor.id);
-            if actor.reward().native_type_id == 2012 {
-                output.gold += actor.reward().amount;
+            if actor.native_type_id == 2012 {
+                output.gold += actor.amount;
             }
-            if actor.reward().native_type_id == 2013
-                && let Some(item) = &actor.reward().item
+            if actor.native_type_id == 2013
+                && let Some(item) = &actor.item
             {
                 output.items.push(item.clone());
             }
@@ -435,45 +417,41 @@ impl BoneyardLootStore {
             };
             occupied.insert(id);
             self.actors.push(BoneyardLootActor {
-                body: LootBody {
-                    activation_delay_ticks: spec.activation_delay_ticks,
-                    age_ticks: 0,
-                    alpha: if spec.kind == NativeLootDropKind::Bonus { 1.0 } else { 0.0 },
-                    animation_phase: spec.phase,
-                    bounce_height: if spec.kind == NativeLootDropKind::Sack { -25.0 } else { 0.0 },
-                    bounce_velocity: if spec.kind == NativeLootDropKind::Sack {
-                        0.1_f32 as f64
-                    } else {
-                        0.0
-                    },
-                    frame_phase: 0.0,
-                    id,
-                    kind: spec.kind,
-                    last_step_tick: tick.checked_sub(1),
-                    lifetime_ticks_remaining: match spec.kind {
-                        NativeLootDropKind::Orb => Some(NATIVE_ORB_DECAY_DELAY_TICKS),
-                        NativeLootDropKind::Bonus => Some(NATIVE_BONUS_LIFETIME_TICKS),
-                        _ => None,
-                    },
-                    painter_registration: painter_order.register(WorldManagerLane::Actor),
-                    position: spec.position,
-                    rotation_deg: spec.rotation_deg.unwrap_or(0.0),
-                    scatter_seed: spec.scatter_seed.unwrap_or(0),
-                    scatter_active: spec.kind == NativeLootDropKind::Gold,
-                    scatter_progress: 0.0,
-                    settled_sound_emitted: false,
-                    spawn_tick: tick,
+                activation_delay_ticks: spec.activation_delay_ticks,
+                age_ticks: 0,
+                alpha: if spec.kind == NativeLootDropKind::Bonus { 1.0 } else { 0.0 },
+                animation_phase: spec.phase,
+                bounce_height: if spec.kind == NativeLootDropKind::Sack { -25.0 } else { 0.0 },
+                bounce_velocity: if spec.kind == NativeLootDropKind::Sack {
+                    0.1_f32 as f64
+                } else {
+                    0.0
                 },
-                reward: LootReward {
-                    amount: spec.amount.unwrap_or(0),
-                    bonus_kind: spec.bonus_kind,
-                    item: spec.item,
-                    native_type_id: spec.native_type_id,
-                    orb_kind: spec.orb_kind,
-                    orb_value: spec.value.unwrap_or(0.0),
-                    source: spec.source,
-                    tier: spec.tier.unwrap_or(0),
+                frame_phase: 0.0,
+                id,
+                kind: spec.kind,
+                last_step_tick: tick.checked_sub(1),
+                lifetime_ticks_remaining: match spec.kind {
+                    NativeLootDropKind::Orb => Some(NATIVE_ORB_DECAY_DELAY_TICKS),
+                    NativeLootDropKind::Bonus => Some(NATIVE_BONUS_LIFETIME_TICKS),
+                    _ => None,
                 },
+                painter_registration: painter_order.register(WorldManagerLane::Actor),
+                position: spec.position,
+                rotation_deg: spec.rotation_deg.unwrap_or(0.0),
+                scatter_seed: spec.scatter_seed.unwrap_or(0),
+                scatter_active: spec.kind == NativeLootDropKind::Gold,
+                scatter_progress: 0.0,
+                settled_sound_emitted: false,
+                spawn_tick: tick,
+                amount: spec.amount.unwrap_or(0),
+                bonus_kind: spec.bonus_kind,
+                item: spec.item,
+                native_type_id: spec.native_type_id,
+                orb_kind: spec.orb_kind,
+                orb_value: spec.value.unwrap_or(0.0),
+                source: spec.source,
+                tier: spec.tier.unwrap_or(0),
             });
         }
         rejected
@@ -549,9 +527,8 @@ impl BoneyardLootStore {
     fn ground_recipe_indexes(&self) -> Vec<usize> {
         let mut recipes = Vec::new();
         for actor in self.actors.iter() {
-            if actor.reward().native_type_id == 2013
-                && let Some(recipe) =
-                    actor.reward().item.as_ref().and_then(|item| item.recipe_index)
+            if actor.native_type_id == 2013
+                && let Some(recipe) = actor.item.as_ref().and_then(|item| item.recipe_index)
             {
                 recipes.push(recipe);
             }
@@ -652,7 +629,7 @@ impl BoneyardLootStore {
 
     fn step_actor(
         &mut self,
-        actor: &mut impl LootActorWrite,
+        actor: &mut BoneyardLootActor,
         participants: &[BoneyardLootParticipant<'_>],
         tick: u64,
         painter_order: &mut WorldPainterOrder,
@@ -719,7 +696,7 @@ impl BoneyardLootStore {
 
     fn step_orb(
         &mut self,
-        actor: &mut impl LootActorWrite,
+        actor: &mut BoneyardLootActor,
         participants: &[BoneyardLootParticipant<'_>],
         tick: u64,
         painter_order: &mut WorldPainterOrder,
@@ -729,14 +706,13 @@ impl BoneyardLootStore {
         actor.alpha = fround(actor.alpha + (0.05_f32 as f64)).min(1.0);
         actor.animation_phase = fround(actor.animation_phase + 2.5);
         if delay < 1 {
-            actor.reward_mut().orb_value =
-                fround(actor.reward().orb_value - NATIVE_ORB_DECAY_PER_TICK);
+            actor.orb_value = fround(actor.orb_value - NATIVE_ORB_DECAY_PER_TICK);
         }
-        if actor.reward().orb_value <= 0.0 {
+        if actor.orb_value <= 0.0 {
             return false;
         }
         actor.lifetime_ticks_remaining = Some(delay);
-        if actor.reward().orb_value <= NATIVE_ORB_ACTIVE_VALUE_FLOOR {
+        if actor.orb_value <= NATIVE_ORB_ACTIVE_VALUE_FLOOR {
             return true;
         }
         for participant in participants {
@@ -767,7 +743,7 @@ impl BoneyardLootStore {
 
     fn step_bonus(
         &mut self,
-        actor: &mut impl LootActorWrite,
+        actor: &mut BoneyardLootActor,
         participants: &[BoneyardLootParticipant<'_>],
         tick: u64,
         painter_order: &mut WorldPainterOrder,
@@ -796,7 +772,7 @@ impl BoneyardLootStore {
 
     fn first_capture_participant<'a, 'b>(
         &mut self,
-        actor: &impl LootActorRead,
+        actor: &BoneyardLootActor,
         participants: &'a [BoneyardLootParticipant<'b>],
     ) -> Option<&'a BoneyardLootParticipant<'b>> {
         for participant in participants {
@@ -823,7 +799,7 @@ impl BoneyardLootStore {
 
     fn accept_pickup(
         &mut self,
-        actor: &impl LootActorRead,
+        actor: &BoneyardLootActor,
         participant: &BoneyardLootParticipant<'_>,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
@@ -832,12 +808,12 @@ impl BoneyardLootStore {
         self.spawn_pickup_effects(actor, tick, painter_order);
         output.pickups.push(BoneyardLootPickup {
             actor_id: actor.id,
-            amount: actor.reward().amount,
-            bonus_kind: actor.reward().bonus_kind,
-            item: actor.reward().item.clone(),
+            amount: actor.amount,
+            bonus_kind: actor.bonus_kind,
+            item: actor.item.clone(),
             kind: actor.kind,
-            orb_kind: actor.reward().orb_kind,
-            orb_value: actor.reward().orb_value,
+            orb_kind: actor.orb_kind,
+            orb_value: actor.orb_value,
             player_id: participant.player_id.to_owned(),
             source_position: actor.position,
             tick,
@@ -852,9 +828,9 @@ impl BoneyardLootStore {
             if sound == BoneyardLootSound::GotoOrb { 1.0 } else { self.draw_loot_pitch() }
         });
         let text = match actor.kind {
-            NativeLootDropKind::Gold => Some(format!("{} GOLD", actor.reward().amount)),
-            NativeLootDropKind::Sack => actor.reward().item.as_ref().map(|item| item.name.clone()),
-            NativeLootDropKind::Bonus => match actor.reward().bonus_kind {
+            NativeLootDropKind::Gold => Some(format!("{} GOLD", actor.amount)),
+            NativeLootDropKind::Sack => actor.item.as_ref().map(|item| item.name.clone()),
+            NativeLootDropKind::Bonus => match actor.bonus_kind {
                 Some(NativeBonusKind::SkillChoice) => Some("BONUS SKILL POINT".to_owned()),
                 Some(NativeBonusKind::DamageX4) => Some("DAMAGE x4".to_owned()),
                 _ => None,
@@ -870,8 +846,8 @@ impl BoneyardLootStore {
         output.events.push(event);
     }
 
-    fn sack_drop_sound(&mut self, actor: &impl LootActorRead) -> BoneyardLootSound {
-        if actor.reward().item.as_ref().is_some_and(|item| item.native_type_id == 7001) {
+    fn sack_drop_sound(&mut self, actor: &BoneyardLootActor) -> BoneyardLootSound {
+        if actor.item.as_ref().is_some_and(|item| item.native_type_id == 7001) {
             return BoneyardLootSound::DropPotion;
         }
         if self.shared_rng.draw_integer(2) == 0 {
@@ -887,7 +863,7 @@ impl BoneyardLootStore {
 
     fn emit_sound(
         &mut self,
-        actor: &impl LootActorRead,
+        actor: &BoneyardLootActor,
         tick: u64,
         sound: BoneyardLootSound,
         playback_rate: f64,

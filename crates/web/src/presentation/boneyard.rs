@@ -3,7 +3,6 @@
 use std::collections::BTreeMap;
 
 use solomon_sim::boneyard::BoneyardBounds;
-use solomon_sim::boneyard::loot::LootActorRead;
 use solomon_sim::boneyard::world_light::{
     BoneyardLightEnvironment, WorldLightPlayer, WorldLightScene, boneyard_world_light_query,
 };
@@ -177,12 +176,12 @@ pub(super) fn project(
         next.loot.actors.iter(),
         blend,
         |actor| actor.id,
-        |actor| actor.snapshot(),
-        |first, next, blend| {
+        |&actor| actor.clone(),
+        |&first, &next, blend| {
             if first.kind != next.kind {
-                return first.snapshot();
+                return first.clone();
             }
-            let mut actor = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
+            let mut actor = if blend < 1.0 { first.clone() } else { next.clone() };
             actor.alpha = lerp(first.alpha, next.alpha, blend);
             actor.animation_phase =
                 lerp_cycle(first.animation_phase, next.animation_phase, blend, 360.0);
@@ -193,12 +192,10 @@ pub(super) fn project(
             actor.scatter_progress = lerp(first.scatter_progress, next.scatter_progress, blend);
             actor
         },
-    )
-    .into_iter()
-    .collect();
+    );
     let (effects, ages) =
         enemies::interpolate_death_effects(&first.loot.effects, &next.loot.effects, blend);
-    world.loot.effects = effects.into_iter().collect();
+    world.loot.effects = effects;
     metadata.death_effects.extend(ages);
     if older.run.phase == GameRunPhase::GameOver
         && newer.run.phase == GameRunPhase::GameOver

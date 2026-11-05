@@ -3,7 +3,6 @@
 
 use super::*;
 use crate::audio::{AudioEvent, AudioOptions};
-use crate::boneyard::loot::LootActorRead;
 use crate::economy::CompletedRunEconomyArchive;
 use crate::economy::HubEconomyState;
 use crate::enemies::model::EnemyDamageRequest;
@@ -42,10 +41,10 @@ impl GameSession {
         if last_word && let Some(world) = &self.boneyard {
             for actor in world.loot.actors.iter() {
                 if actor.kind == NativeLootDropKind::Gold {
-                    ground_gold += actor.reward().amount;
+                    ground_gold += actor.amount;
                 }
                 if actor.kind == NativeLootDropKind::Sack
-                    && let Some(item) = &actor.reward().item
+                    && let Some(item) = &actor.item
                 {
                     ground_items.push(item.clone());
                 }
@@ -250,7 +249,7 @@ impl GameSession {
         }
         let mut remove = Vec::new();
         for actor in world.loot.actors.iter() {
-            if actor.reward().native_type_id == 2012 {
+            if actor.native_type_id == 2012 {
                 remove.push(actor.id);
             }
         }
@@ -266,7 +265,7 @@ impl GameSession {
             );
             if participant.player.economy.archive_hagatha_last_word_items(&retained.items, &name) {
                 for actor in world.loot.actors.iter() {
-                    if actor.reward().native_type_id == 2013 {
+                    if actor.native_type_id == 2013 {
                         remove.push(actor.id);
                     }
                 }

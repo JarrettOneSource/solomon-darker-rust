@@ -694,7 +694,7 @@ fn consumed_loot_enrolls_its_flare_on_the_contact_tick() {
         state.ticks,
         &mut state.painter_order,
     );
-    for mut loot in state.boneyard.as_mut().unwrap().loot.actors.iter_mut() {
+    for loot in state.boneyard.as_mut().unwrap().loot.actors.iter_mut() {
         loot.position = Vec2::new(250.0, 250.0);
         loot.activation_delay_ticks = 0;
     }
