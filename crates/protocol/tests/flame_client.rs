@@ -3,10 +3,9 @@ use serde_json::{Value, json};
 use solomon_protocol::flame_presentation::*;
 use solomon_sim::Vec2;
 use solomon_sim::spells::model::{
-    PrimarySpellFireParticle, PrimarySpellTransient, PrimarySpellTransientBase,
-    PrimaryTransientRef, SpellState,
+    PrimarySpellFireParticle, PrimarySpellTransient, PrimarySpellTransientBase, SpellState,
 };
-use solomon_sim::spells::weld::WeldWorldRef;
+use solomon_sim::spells::weld::NativeWeldWorldActor;
 
 #[path = "../../sim/tests/support/website_rows.rs"]
 mod website_rows;
@@ -45,11 +44,13 @@ fn rows(state: &SpellState) -> Value {
         .iter()
         .map(|actor| {
             let (kind, alpha) = match actor {
-                PrimaryTransientRef::Weld(WeldWorldRef::Channel(_)) => ("weld-channel", None),
-                PrimaryTransientRef::Weld(WeldWorldRef::FlameLashFade(fade)) => {
+                PrimarySpellTransient::Weld(NativeWeldWorldActor::Channel(_)) => {
+                    ("weld-channel", None)
+                }
+                PrimarySpellTransient::Weld(NativeWeldWorldActor::FlameLashFade(fade)) => {
                     ("weld-flame-lash-fade", Some(fade.alpha))
                 }
-                PrimaryTransientRef::FireParticle(_) => ("fire", None),
+                PrimarySpellTransient::FireParticle(_) => ("fire", None),
                 _ => unreachable!(),
             };
             json!({"id":actor.common().id,"kind":kind,"age":actor.common().age_ticks,"alpha":alpha})

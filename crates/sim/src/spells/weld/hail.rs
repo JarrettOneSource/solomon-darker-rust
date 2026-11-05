@@ -1,7 +1,5 @@
 //! Native Hail terrain/contact children from `core-kernels/native-weld-hail-contact.ts`.
 
-use crate::spells::transient_storage::WeldHailChildMut;
-
 use super::model::{NativeWeldActorBase, NativeWeldActorBirth};
 use super::persistent::NativeWeldHailstonesState;
 use crate::float;
@@ -254,11 +252,14 @@ pub fn create_native_weld_hail_knockback(
     })
 }
 
-pub fn step_native_weld_hail_child(actor: &mut WeldHailChildMut<'_>, rng: &mut NativeRng) -> bool {
+pub fn step_native_weld_hail_child(
+    actor: &mut NativeWeldHailChildActorState,
+    rng: &mut NativeRng,
+) -> bool {
     match actor {
         // The contact transaction, rather than the visual epoch, owns knockback.
-        WeldHailChildMut::Knockback(_) => true,
-        WeldHailChildMut::Line(actor) => {
+        NativeWeldHailChildActorState::Knockback(_) => true,
+        NativeWeldHailChildActorState::Line(actor) => {
             actor.alpha = fround(actor.alpha - actor.alpha_step);
             if actor.alpha <= 0.0 {
                 return false;
@@ -266,7 +267,7 @@ pub fn step_native_weld_hail_child(actor: &mut WeldHailChildMut<'_>, rng: &mut N
             actor.common.owner.age_ticks += 1;
             true
         }
-        WeldHailChildMut::Flash(actor) => {
+        NativeWeldHailChildActorState::Flash(actor) => {
             actor.alpha = fround(actor.alpha - actor.alpha_step);
             if actor.alpha <= 0.0 {
                 return false;
@@ -274,7 +275,7 @@ pub fn step_native_weld_hail_child(actor: &mut WeldHailChildMut<'_>, rng: &mut N
             actor.common.owner.age_ticks += 1;
             true
         }
-        WeldHailChildMut::TerrainParticle(actor) => {
+        NativeWeldHailChildActorState::TerrainParticle(actor) => {
             actor.alpha = fround(actor.alpha - actor.alpha_step);
             if actor.alpha <= 0.0 {
                 return false;
@@ -290,7 +291,7 @@ pub fn step_native_weld_hail_child(actor: &mut WeldHailChildMut<'_>, rng: &mut N
             );
             true
         }
-        WeldHailChildMut::TerrainBouncer(actor) => {
+        NativeWeldHailChildActorState::TerrainBouncer(actor) => {
             let global_tick = actor.common.birth_tick + actor.common.owner.age_ticks + 1;
             if actor.height != 0.0 && global_tick.is_multiple_of(3) {
                 actor.common.owner.age_ticks += 1;

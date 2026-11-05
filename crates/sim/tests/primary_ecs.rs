@@ -153,10 +153,9 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
     use solomon_sim::spells::fire::NATIVE_FIRE_IMPACT_LIFETIME_TICKS;
     use solomon_sim::spells::model::{
         PrimarySpellFireImpact, PrimarySpellTransient, PrimarySpellTransientBase,
-        PrimaryTransientRef,
     };
     use solomon_sim::spells::weld::{
-        NativeWeldActorBirth, NativeWeldMeteorSpawnProgram, NativeWeldWorldActor, WeldWorldRef,
+        NativeWeldActorBirth, NativeWeldMeteorSpawnProgram, NativeWeldWorldActor,
         create_native_weld_meteor,
     };
 
@@ -219,7 +218,10 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
     assert_eq!(effects[0].common().id, 1);
     assert_eq!(effects[0].common().age_ticks, 1);
     assert_eq!(effects[1].common().id, 3);
-    assert!(matches!(effects[2], PrimaryTransientRef::Weld(WeldWorldRef::MeteorFlash(_))));
+    assert!(matches!(
+        effects[2],
+        PrimarySpellTransient::Weld(NativeWeldWorldActor::MeteorFlash(_))
+    ));
     assert_eq!(effects.last().unwrap().common().id, 4);
     assert_eq!(effects.last().unwrap().common().age_ticks, 1);
     assert_eq!(

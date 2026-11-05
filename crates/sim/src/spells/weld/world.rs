@@ -9,7 +9,7 @@ use crate::spells::model::{
 };
 use crate::spells::simulation::{PrimarySpellEpochContext, PrimarySpellTraversalActor};
 use crate::spells::targeting::NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK;
-use crate::spells::transient_storage::{WeldPersistentRef, WeldWorldMut, WeldWorldRef};
+use crate::spells::weld::{NativeWeldPersistentActorState, NativeWeldWorldActor};
 use crate::{NativeRng, Vec2};
 
 pub fn enroll_native_weld_actor_painter(
@@ -63,12 +63,13 @@ impl SpellState {
 
     pub(crate) fn advance_weld_world_actor(
         &mut self,
-        actor: &mut WeldWorldMut<'_>,
+        actor: &mut NativeWeldWorldActor,
         context: &PrimarySpellEpochContext<'_>,
         rng: &mut NativeRng,
         order: &mut WorldPainterOrder,
     ) -> bool {
-        if let WeldWorldRef::Persistent(WeldPersistentRef::Hailstones(hail)) = actor.view()
+        if let NativeWeldWorldActor::Persistent(NativeWeldPersistentActorState::Hailstones(hail)) =
+            actor
             && hail.phase == PrimarySpellProjectilePhase::Flight
         {
             let origin = hail.common.origin;
@@ -101,9 +102,9 @@ impl SpellState {
             }
         }
         let already_impacting =
-            matches!(actor.view(), WeldWorldRef::Meteor(meteor) if meteor.impact_due);
-        let can_advance = |persistent: WeldPersistentRef<'_>, from, to| {
-            let WeldPersistentRef::EtherealBoulder(boulder) = persistent else {
+            matches!(actor, NativeWeldWorldActor::Meteor(meteor) if meteor.impact_due);
+        let can_advance = |persistent: &NativeWeldPersistentActorState, from, to| {
+            let NativeWeldPersistentActorState::EtherealBoulder(boulder) = persistent else {
                 return true;
             };
             (context.can_traverse)(
@@ -131,7 +132,7 @@ impl SpellState {
             return false;
         }
         let mut children = Vec::new();
-        if let WeldWorldRef::Meteor(meteor) = actor.view()
+        if let NativeWeldWorldActor::Meteor(meteor) = actor
             && meteor.impact_due
             && !already_impacting
         {
@@ -167,8 +168,8 @@ impl SpellState {
     /// Source enrollment runs after every actor epoch and new cast. A logical
     /// actor-lane light may share its painter; transient-lane lights do not.
     pub(crate) fn enroll_weld_painters(&mut self, order: &mut WorldPainterOrder) {
-        for mut effect in self.transients.iter_mut() {
-            let crate::spells::model::PrimaryTransientMut::Weld(actor) = &mut effect else {
+        for effect in self.transients.iter_mut() {
+            let PrimarySpellTransient::Weld(actor) = effect else {
                 continue;
             };
             enroll_native_weld_actor_painter(actor.common_mut(), order);

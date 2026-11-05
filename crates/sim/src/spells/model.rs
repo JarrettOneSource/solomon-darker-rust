@@ -10,7 +10,7 @@ use crate::painter::PainterRegistration;
 use crate::profile::primary::{NativePrimarySkillProfile, NativeSpentEmber};
 use crate::{NativeRng, Vec2};
 
-pub use super::transient_storage::{PrimaryTransientMut, PrimaryTransientRef, PrimaryTransients};
+pub use super::transient_storage::PrimaryTransients;
 
 pub type EarthBoulderOrientation = [f64; 9];
 

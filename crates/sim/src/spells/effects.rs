@@ -205,35 +205,35 @@ pub(super) fn create_fire_particle(
     }
 }
 
-pub(super) fn transient_lifetime(effect: PrimaryTransientRef<'_>) -> u64 {
+pub(super) fn transient_lifetime(effect: &PrimarySpellTransient) -> u64 {
     match effect {
-        PrimaryTransientRef::WaterAura(spell) => spell.duration_ticks,
-        PrimaryTransientRef::Air(spell) => super::air::native_air_contact_lifetime_ticks(
+        PrimarySpellTransient::WaterAura(spell) => spell.duration_ticks,
+        PrimarySpellTransient::Air(spell) => super::air::native_air_contact_lifetime_ticks(
             spell.underpowered,
             spell.chained,
             spell.enhanced_effects,
         ),
-        PrimaryTransientRef::Water(spell) => water_frost_jet_lifetime_ticks(spell.common.id),
-        PrimaryTransientRef::EarthImpact(spell) => spell.lifetime_ticks,
-        PrimaryTransientRef::EtherImpact(_) => 19,
-        PrimaryTransientRef::EtherPierceStreak(_) => 10,
-        PrimaryTransientRef::EtherBlast(_) => NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS,
-        PrimaryTransientRef::FireParticle(spell) => {
+        PrimarySpellTransient::Water(spell) => water_frost_jet_lifetime_ticks(spell.common.id),
+        PrimarySpellTransient::EarthImpact(spell) => spell.lifetime_ticks,
+        PrimarySpellTransient::EtherImpact(_) => 19,
+        PrimarySpellTransient::EtherPierceStreak(_) => 10,
+        PrimarySpellTransient::EtherBlast(_) => NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS,
+        PrimarySpellTransient::FireParticle(spell) => {
             native_fire_particle_lifetime_ticks(spell.common.id, spell.enhanced_effects)
         }
-        PrimaryTransientRef::FireExplosion(_) => NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS,
-        PrimaryTransientRef::FireImpact(_) => NATIVE_FIRE_IMPACT_LIFETIME_TICKS,
+        PrimarySpellTransient::FireExplosion(_) => NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS,
+        PrimarySpellTransient::FireImpact(_) => NATIVE_FIRE_IMPACT_LIFETIME_TICKS,
         // These actors have their own native lifecycle rather than a fixed duration.
-        PrimaryTransientRef::Harden(_)
-        | PrimaryTransientRef::EarthCalledRock(_)
-        | PrimaryTransientRef::AirHurricane(_)
-        | PrimaryTransientRef::WaterHail(_)
-        | PrimaryTransientRef::Staff(_)
-        | PrimaryTransientRef::Weld(_)
-        | PrimaryTransientRef::EarthBoulderBit(_)
-        | PrimaryTransientRef::FireEmber(_)
-        | PrimaryTransientRef::FireGoodImp(_)
-        | PrimaryTransientRef::FirePatch(_) => unreachable!("actor has a native step"),
+        PrimarySpellTransient::Harden(_)
+        | PrimarySpellTransient::EarthCalledRock(_)
+        | PrimarySpellTransient::AirHurricane(_)
+        | PrimarySpellTransient::WaterHail(_)
+        | PrimarySpellTransient::Staff(_)
+        | PrimarySpellTransient::Weld(_)
+        | PrimarySpellTransient::EarthBoulderBit(_)
+        | PrimarySpellTransient::FireEmber(_)
+        | PrimarySpellTransient::FireGoodImp(_)
+        | PrimarySpellTransient::FirePatch(_) => unreachable!("actor has a native step"),
     }
 }
 

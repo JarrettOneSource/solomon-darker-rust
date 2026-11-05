@@ -2,8 +2,6 @@
 //! `native-weld-primary-runtime.ts`, `native-weld-flame-lash.ts`,
 //! `native-weld-ground-spark.ts` and `primary-spells.ts`.
 
-use crate::spells::transient_storage::WeldWorldMut;
-
 use super::blizzard::{NativeWeldBlizzardChainFrostState, NativeWeldBlizzardGlowState};
 use super::flame_state::{
     NativeFlameChannelVisual, NativeFlameFadeBirth, NativeFlameFadeVisual, native_flame_fade_alpha,
@@ -452,27 +450,27 @@ pub struct NativeWeldWorldActorStep {
 }
 
 pub fn step_native_weld_world_actor(
-    actor: &mut WeldWorldMut<'_>,
+    actor: &mut NativeWeldWorldActor,
     rng: &mut NativeRng,
     can_advance: &NativeWeldPersistentTraversal<'_>,
 ) -> NativeWeldWorldActorStep {
     let mut debris = Vec::new();
     let mut terrain_contact = None;
     let alive = match actor {
-        WeldWorldMut::BlizzardChainFrost(actor) => {
+        NativeWeldWorldActor::BlizzardChainFrost(actor) => {
             let lifetime = water_frost_jet_lifetime_ticks(actor.common.owner.id);
             step_visible_age(&mut actor.common, lifetime)
         }
-        WeldWorldMut::BlizzardGlow(_) => false,
-        WeldWorldMut::FlameLashFade(actor) => {
+        NativeWeldWorldActor::BlizzardGlow(_) => false,
+        NativeWeldWorldActor::FlameLashFade(actor) => {
             let alive = step_alpha(&mut actor.common, &mut actor.alpha, actor.alpha_step);
             if alive {
                 actor.rotation_degrees = fround(actor.rotation_degrees + 1.0);
             }
             alive
         }
-        WeldWorldMut::HailChild(actor) => step_native_weld_hail_child(actor, rng),
-        WeldWorldMut::BoulderDebris(actor) => {
+        NativeWeldWorldActor::HailChild(actor) => step_native_weld_hail_child(actor, rng),
+        NativeWeldWorldActor::BoulderDebris(actor) => {
             let global_tick = actor.common.birth_tick + actor.common.owner.age_ticks + 1;
             if let Some(body) =
                 step_native_weld_boulder_debris_particle(actor.debris, global_tick, rng)
@@ -484,31 +482,31 @@ pub fn step_native_weld_world_actor(
                 false
             }
         }
-        WeldWorldMut::HailRockFade(actor) => step_visible_age(&mut actor.common, 400),
-        WeldWorldMut::FrostFade(actor) => {
+        NativeWeldWorldActor::HailRockFade(actor) => step_visible_age(&mut actor.common, 400),
+        NativeWeldWorldActor::FrostFade(actor) => {
             let lifetime = if actor.common.build_id == 1004 { 3 } else { 20 };
             step_visible_age(&mut actor.common, lifetime)
         }
-        WeldWorldMut::GroundSparkFade(actor) => {
+        NativeWeldWorldActor::GroundSparkFade(actor) => {
             step_alpha(&mut actor.common, &mut actor.seed.alpha, actor.seed.alpha_step)
         }
-        WeldWorldMut::MeteorMarker(actor) => step_native_weld_meteor_marker(actor),
-        WeldWorldMut::MeteorFlash(actor) => {
+        NativeWeldWorldActor::MeteorMarker(actor) => step_native_weld_meteor_marker(actor),
+        NativeWeldWorldActor::MeteorFlash(actor) => {
             step_alpha(&mut actor.common, &mut actor.alpha, actor.alpha_step)
         }
-        WeldWorldMut::Channel(actor) => step_visible_age(&mut actor.common, 2),
-        WeldWorldMut::Steam(actor) => step_native_weld_steam_actor(actor),
-        WeldWorldMut::Impact(actor) => {
+        NativeWeldWorldActor::Channel(actor) => step_visible_age(&mut actor.common, 2),
+        NativeWeldWorldActor::Steam(actor) => step_native_weld_steam_actor(actor),
+        NativeWeldWorldActor::Impact(actor) => {
             actor.alpha =
                 if actor.alpha > 0.0 { fround(actor.alpha - 0.1_f32 as f64) } else { 0.0 };
             actor.alpha >= 0.0 && step_visible_age(&mut actor.common, 20)
         }
-        WeldWorldMut::Meteor(actor) => {
+        NativeWeldWorldActor::Meteor(actor) => {
             let result = step_native_weld_meteor(actor, rng);
             debris = result.1;
             result.0
         }
-        WeldWorldMut::Persistent(actor) => {
+        NativeWeldWorldActor::Persistent(actor) => {
             let result = step_native_weld_persistent_actor(actor, can_advance);
             terrain_contact = result.1;
             result.0

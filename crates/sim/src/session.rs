@@ -347,11 +347,11 @@ const fn first_mod_consumable_use_id() -> u64 {
 }
 
 fn validate_checkpoint(checkpoint: &GameCheckpoint) -> Result<(), String> {
-    use crate::spells::model::PrimaryTransientRef;
-    use crate::spells::weld::{WeldPersistentRef, WeldWorldRef};
+    use crate::spells::model::PrimarySpellTransient;
+    use crate::spells::weld::{NativeWeldPersistentActorState, NativeWeldWorldActor};
     for actor in checkpoint.spells.transients.iter() {
-        if let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
-            WeldPersistentRef::EtherealBoulder(actor),
+        if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
+            NativeWeldPersistentActorState::EtherealBoulder(actor),
         )) = actor
         {
             actor.validate_guidance()?;

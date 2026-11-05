@@ -133,7 +133,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
         let secondary_count = layers.len();
         for actor in &staff {
             layers.push(
-                SecondaryView::staff_painter(actor.view())
+                SecondaryView::staff_painter(&actor)
                     .expect("fixture admits visible staff rows")
                     .layer,
             );
@@ -146,7 +146,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
                 view.secondary.draw_staff_transient(
                     &mut view.renderer,
                     &camera,
-                    staff[index - secondary_count].view(),
+                    &staff[index - secondary_count],
                     world_tint,
                 );
             }

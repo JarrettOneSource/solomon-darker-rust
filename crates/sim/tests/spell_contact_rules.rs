@@ -17,8 +17,8 @@ use solomon_sim::secondary::presentation::native_secondary_presentation_plan;
 use solomon_sim::session::{
     GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
-use solomon_sim::spells::model::PrimaryTransientRef;
-use solomon_sim::spells::transient_storage::WeldWorldRef;
+use solomon_sim::spells::model::PrimarySpellTransient;
+use solomon_sim::spells::weld::NativeWeldWorldActor;
 
 fn drain_session() -> (GameSession, NavigationSet) {
     let mut session = GameSession::new_participants(
@@ -310,7 +310,8 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                     assert_eq!(emission.underpowered, reserve.is_some());
                 }
                 for actor in session.spells.transients.iter() {
-                    let PrimaryTransientRef::Weld(WeldWorldRef::Steam(particle)) = actor else {
+                    let PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(particle)) = actor
+                    else {
                         continue;
                     };
                     contact_particles += usize::from(particle.contact_enabled);
@@ -333,19 +334,17 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                     GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
                 );
             }
-            assert!(
-                !session.spells.transients.iter().any(|actor| matches!(
-                    actor,
-                    PrimaryTransientRef::Weld(WeldWorldRef::Steam(_))
-                ))
-            );
+            assert!(!session.spells.transients.iter().any(|actor| matches!(
+                actor,
+                PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(_))
+            )));
         }
     }
 }
 
 #[test]
 fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
-    use solomon_sim::spells::weld::WeldPersistentRef;
+    use solomon_sim::spells::weld::NativeWeldPersistentActorState;
     for funded in [true, false] {
         let (mut session, navigation) = drain_session();
         let player = &mut session.participants.get_mut("owner").unwrap().player;
@@ -389,8 +388,8 @@ fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
                 GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
             );
             for actor in session.spells.transients.iter() {
-                let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
-                    WeldPersistentRef::EtherealBoulder(rock),
+                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
+                    NativeWeldPersistentActorState::EtherealBoulder(rock),
                 )) = actor
                 else {
                     continue;

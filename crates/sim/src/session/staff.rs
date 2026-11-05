@@ -72,20 +72,19 @@ impl GameSession {
         let mut existing_actions = BTreeSet::new();
         let mut retained = std::mem::take(&mut self.spells.transients);
         retained.retain_mut(|stored| {
-            let crate::spells::model::PrimaryTransientMut::Staff(actor) = stored else {
+            let PrimarySpellTransient::Staff(actor) = stored else {
                 return true;
             };
-            let actor = actor.view();
             match actor {
-                StaffTransientRef::Contact(event) => {
+                NativePlayerStaffTransient::Contact(event) => {
                     if let Some(event) = step_native_staff_contact_event(event) {
-                        stored.replace(PrimarySpellTransient::Staff(
+                        *stored = PrimarySpellTransient::Staff(
                             NativePlayerStaffTransient::Contact(event),
-                        ));
+                        );
                         return true;
                     }
                 }
-                StaffTransientRef::ContactKnockback(actor) => {
+                NativePlayerStaffTransient::ContactKnockback(actor) => {
                     let id = enemy_id(&actor.target_id);
                     let exists = id.is_some_and(|id| {
                         staff_targets(self.boneyard.as_ref().unwrap())
@@ -98,29 +97,28 @@ impl GameSession {
                         output.displacements.push((id, delta));
                     }
                     if let Some(actor) = stepped.actor {
-                        stored.replace(PrimarySpellTransient::Staff(
+                        *stored = PrimarySpellTransient::Staff(
                             NativePlayerStaffTransient::ContactKnockback(actor),
-                        ));
+                        );
                         return true;
                     }
                 }
-                StaffTransientRef::PikeBreak(vfx) => {
+                NativePlayerStaffTransient::PikeBreak(vfx) => {
                     if let Some(vfx) = step_native_staff_pike_break_vfx(vfx) {
-                        stored.replace(PrimarySpellTransient::Staff(
+                        *stored = PrimarySpellTransient::Staff(
                             NativePlayerStaffTransient::PikeBreak(vfx),
-                        ));
+                        );
                         return true;
                     }
                 }
-                StaffTransientRef::Vfx(vfx) => {
+                NativePlayerStaffTransient::Vfx(vfx) => {
                     if let Some(vfx) = step_native_player_staff_vfx(vfx) {
-                        stored.replace(PrimarySpellTransient::Staff(
-                            NativePlayerStaffTransient::Vfx(vfx),
-                        ));
+                        *stored =
+                            PrimarySpellTransient::Staff(NativePlayerStaffTransient::Vfx(vfx));
                         return true;
                     }
                 }
-                StaffTransientRef::Knockback(actor) => {
+                NativePlayerStaffTransient::Knockback(actor) => {
                     let bodies = super::secondary::boneyard_player_bodies(
                         &self.participants,
                         &self.participant_order,
@@ -150,13 +148,13 @@ impl GameSession {
                         }
                     }
                     if let Some(actor) = stepped.actor {
-                        stored.replace(PrimarySpellTransient::Staff(
+                        *stored = PrimarySpellTransient::Staff(
                             NativePlayerStaffTransient::Knockback(actor),
-                        ));
+                        );
                         return true;
                     }
                 }
-                StaffTransientRef::Action(action) => {
+                NativePlayerStaffTransient::Action(action) => {
                     let owner = action.common().owner_id.clone();
                     let Some(participant) = self.participants.get_mut(&owner) else {
                         return false;
@@ -171,8 +169,8 @@ impl GameSession {
                     }
                     // A retiring Spin still emitted the contact from its sampled terminal frame.
                     if let Some(action) = stepped.action {
-                        stored.replace(PrimarySpellTransient::Staff(
-                            NativePlayerStaffTransient::Action(action),
+                        *stored = PrimarySpellTransient::Staff(NativePlayerStaffTransient::Action(
+                            action,
                         ));
                         return true;
                     }

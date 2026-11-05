@@ -1,7 +1,8 @@
 //! Flame Lash, Blizzard and Steam channel contacts from source
 //! `spell-combat/channels.ts` and its native pushback helpers.
 
-use crate::spells::transient_storage::{PrimaryTransientRef, WeldWorldRef};
+use crate::spells::model::PrimarySpellTransient;
+use crate::spells::weld::NativeWeldWorldActor;
 
 use super::*;
 
@@ -52,7 +53,7 @@ impl ContactWork<'_, '_> {
             main.target_id.clone()
         } else {
             self.source.transients.iter().find_map(|effect| {
-                if let PrimaryTransientRef::Weld(WeldWorldRef::Channel(channel)) = effect
+                if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Channel(channel)) = effect
                     && channel.common.owner.id == emission.id
                     && channel.common.owner.owner_id == emission.owner_id
                     && channel.common.owner.world_key == emission.world_key

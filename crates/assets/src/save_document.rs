@@ -488,8 +488,8 @@ mod tests {
         assert_eq!(saved["turnAccumulator"], serde_json::json!(0.61_f32 as f64));
         assert_eq!(saved["flightSpeed"], 2.25);
         assert_eq!(
-            restored.session.spells.transients.iter().next().unwrap().snapshot(),
-            session.spells.transients.iter().next().unwrap().snapshot()
+            restored.session.spells.transients.iter().next().unwrap(),
+            session.spells.transients.iter().next().unwrap()
         );
         for legacy in ["lifetimeTicksRemaining", "speedFactor"] {
             let mut mixed = projected.clone();

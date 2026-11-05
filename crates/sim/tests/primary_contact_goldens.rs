@@ -15,7 +15,7 @@ use solomon_sim::profile::primary::*;
 use solomon_sim::profile::weld::{NativeWeldCastKind, NativeWeldPrimaryVector};
 use solomon_sim::secondary::NativeSecondaryTargetEffectPatch;
 use solomon_sim::spells::contacts::*;
-use solomon_sim::spells::model::PrimaryTransientRef;
+use solomon_sim::spells::model::PrimarySpellTransient;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
@@ -398,53 +398,53 @@ fn projectile_row(spell: &PrimarySpellProjectile) -> Value {
         "velocity": point(common.velocity),
         "detail": detail})
 }
-fn transient_row(effect: PrimaryTransientRef<'_>) -> Value {
-    if matches!(effect, PrimaryTransientRef::Weld(_)) {
+fn transient_row(effect: &PrimarySpellTransient) -> Value {
+    if matches!(effect, PrimarySpellTransient::Weld(_)) {
         return weld_rows::transient(effect);
     }
     let (kind, detail) = match effect {
-        PrimaryTransientRef::AirHurricane(effect) => (
+        PrimarySpellTransient::AirHurricane(effect) => (
             "air-hurricane",
             json!({"birthTick":effect.birth_tick,"charge":effect.charge,"contactCharge":effect.contact_charge,
             "damageMinimum":effect.damage_minimum,"damageMaximum":effect.damage_maximum,"enhancedEffects":effect.enhanced_effects,"phaseDegrees":effect.phase_degrees,"position":point(effect.position)}),
         ),
-        PrimaryTransientRef::Air(effect) => (
+        PrimarySpellTransient::Air(effect) => (
             "air",
             json!({"birthTick": effect.birth_tick, "variant": effect.variant,
             "enhancedEffects": effect.enhanced_effects,
             "targetId": effect.target_id, "origin": point(effect.origin), "direction": point(effect.direction),
             "endpoint": point(effect.endpoint), "midpoint": point(effect.midpoint)}),
         ),
-        PrimaryTransientRef::EarthBoulderBit(effect) => (
+        PrimarySpellTransient::EarthBoulderBit(effect) => (
             "earth-boulder-bit",
             json!({"birthTick": effect.birth_tick, "origin": point(effect.origin), "position": point(effect.position)}),
         ),
-        PrimaryTransientRef::EarthImpact(effect) => (
+        PrimarySpellTransient::EarthImpact(effect) => (
             "earth-impact",
             json!({"birthTick": effect.birth_tick, "charge": effect.charge, "enhancedEffects": effect.enhanced_effects,
                 "lifetimeTicks": effect.lifetime_ticks, "origin": point(effect.origin)}),
         ),
-        PrimaryTransientRef::EtherBlast(effect) => (
+        PrimarySpellTransient::EtherBlast(effect) => (
             "ether-blast",
             json!({"birthTick": effect.birth_tick, "charges": effect.charges, "origin": point(effect.origin)}),
         ),
-        PrimaryTransientRef::EtherImpact(effect) => (
+        PrimarySpellTransient::EtherImpact(effect) => (
             "ether-impact",
             json!({"birthTick": effect.birth_tick, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimaryTransientRef::EtherPierceStreak(effect) => (
+        PrimarySpellTransient::EtherPierceStreak(effect) => (
             "ether-pierce-streak",
             json!({"headingDegrees": effect.heading_degrees, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimaryTransientRef::FireImpact(effect) => {
+        PrimarySpellTransient::FireImpact(effect) => {
             ("fire-impact", json!({"origin": point(effect.origin)}))
         }
-        PrimaryTransientRef::FireExplosion(effect) => (
+        PrimarySpellTransient::FireExplosion(effect) => (
             "fire-explosion",
             json!({"damage": effect.damage, "burnDamage": effect.burn_damage,
             "footprintDimension": effect.footprint_dimension, "visualScale": effect.visual_scale, "origin": point(effect.origin)}),
         ),
-        PrimaryTransientRef::FireEmber(effect) => (
+        PrimarySpellTransient::FireEmber(effect) => (
             "fire-ember",
             json!({"damage": effect.damage, "burnDamage": effect.burn_damage, "position": point(effect.position)}),
         ),
@@ -500,7 +500,7 @@ fn current_frost_missile_direct_area_and_terrain_contacts_replay_source() {
 #[test]
 fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panicking() {
     use solomon_sim::spells::weld::{
-        NativeWeldActorBirth, NativeWeldPersistentActorState, NativeWeldWorldActor, WeldWorldRef,
+        NativeWeldActorBirth, NativeWeldPersistentActorState, NativeWeldWorldActor,
         create_native_weld_persistent_actor, release_native_weld_persistent_actor,
     };
 
@@ -587,13 +587,13 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
                 .iter()
                 .filter(|effect| matches!(
                     effect,
-                    PrimaryTransientRef::Weld(WeldWorldRef::BoulderDebris(_))
+                    PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(_))
                 ))
                 .count(),
             16
         );
         assert!(spells.transients.iter().any(|effect| matches!(
-            effect, PrimaryTransientRef::Weld(WeldWorldRef::Impact(actor))
+            effect, PrimarySpellTransient::Weld(NativeWeldWorldActor::Impact(actor))
                 if actor.common.build_id == 1006
         )));
         #[cfg(feature = "persistence")]
@@ -609,8 +609,7 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
 fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
     use solomon_sim::spells::weld::{
         NativeWeldActorBirth, NativeWeldHailstoneLocalPosition, NativeWeldHailstoneRockState,
-        NativeWeldPersistentActorState, NativeWeldWorldActor, WeldPersistentRef, WeldWorldRef,
-        create_native_weld_persistent_actor,
+        NativeWeldPersistentActorState, NativeWeldWorldActor, create_native_weld_persistent_actor,
     };
 
     for target_health in [4.0, 20.0] {
@@ -708,9 +707,9 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
                 .all(|actor| actor.current_health == target_health)
         );
         let retained = spells.transients.iter().find(|effect| effect.common().id == 33).unwrap();
-        let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(WeldPersistentRef::Hailstones(
-            actor,
-        ))) = retained
+        let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
+            NativeWeldPersistentActorState::Hailstones(actor),
+        )) = retained
         else {
             panic!("the uncontacted Hailstone keeps its carrier")
         };

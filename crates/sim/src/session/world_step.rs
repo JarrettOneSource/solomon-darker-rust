@@ -1,6 +1,7 @@
 //! Input admission and the one shared movement/world epoch of the public Game tick.
 
-use crate::spells::transient_storage::{PrimaryTransientRef, StaffTransientRef};
+use crate::spells::model::PrimarySpellTransient;
+use crate::spells::staff::NativePlayerStaffTransient;
 
 use super::*;
 use crate::Vec2;
@@ -78,7 +79,7 @@ impl GameSession {
                 }
             }
             let acting_staff = self.spells.transients.iter().any(|effect| match effect {
-                PrimaryTransientRef::Staff(StaffTransientRef::Action(actor)) => {
+                PrimarySpellTransient::Staff(NativePlayerStaffTransient::Action(actor)) => {
                     actor.common().owner_id == *id
                 }
                 _ => false,

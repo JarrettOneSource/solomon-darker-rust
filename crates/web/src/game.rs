@@ -1530,8 +1530,8 @@ impl Game {
             .transients
             .iter()
             .filter_map(|effect| {
-                if let solomon_sim::spells::model::PrimaryTransientRef::Staff(
-                    solomon_sim::spells::staff::StaffTransientRef::Contact(event),
+                if let solomon_sim::spells::model::PrimarySpellTransient::Staff(
+                    solomon_sim::spells::staff::NativePlayerStaffTransient::Contact(event),
                 ) = effect
                 {
                     Some(event.clone())

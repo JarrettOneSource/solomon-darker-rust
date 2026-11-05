@@ -23,36 +23,32 @@ impl SpellState {
         self.transients.collect_births();
         population.advance(|effect| {
             let retained = self.advance_transient(effect, context, rng, order, result);
-            crate::ecs::EntityStep {
-                retained,
-                births_before: Vec::new(),
-                births_after: self.transients.take_births(),
-            }
+            (retained, self.transients.take_births())
         });
         self.transients = population;
     }
 
     fn advance_transient(
         &mut self,
-        effect: &mut PrimaryTransientMut<'_>,
+        effect: &mut PrimarySpellTransient,
         context: &PrimarySpellEpochContext<'_>,
         rng: &mut NativeRng,
         order: &mut WorldPainterOrder,
         result: &mut PrimarySpellTickResult,
     ) -> bool {
         match effect {
-            PrimaryTransientMut::Harden(actor) => {
+            PrimarySpellTransient::Harden(actor) => {
                 let owner_id = actor.common().owner_id.clone();
                 step_native_harden_effect(actor, context.tick, rng, |position| {
                     (context.can_place)(&owner_id, position, 0.0)
                 })
             }
             // Staff has already advanced in its contact host this tick.
-            PrimaryTransientMut::Staff(_) => true,
-            PrimaryTransientMut::Weld(actor) => {
+            PrimarySpellTransient::Staff(_) => true,
+            PrimarySpellTransient::Weld(actor) => {
                 self.advance_weld_world_actor(actor, context, rng, order)
             }
-            PrimaryTransientMut::EarthBoulderBit(effect) => {
+            PrimarySpellTransient::EarthBoulderBit(effect) => {
                 if let Some(debris) = step_native_weld_boulder_debris_particle(
                     effect.debris,
                     effect.birth_tick + effect.common.age_ticks + 1,
@@ -65,10 +61,10 @@ impl SpellState {
                     false
                 }
             }
-            PrimaryTransientMut::EarthCalledRock(_)
-            | PrimaryTransientMut::AirHurricane(_)
-            | PrimaryTransientMut::WaterHail(_) => true,
-            PrimaryTransientMut::FireGoodImp(actor) => {
+            PrimarySpellTransient::EarthCalledRock(_)
+            | PrimarySpellTransient::AirHurricane(_)
+            | PrimarySpellTransient::WaterHail(_) => true,
+            PrimarySpellTransient::FireGoodImp(actor) => {
                 let owner_id = actor.common.owner_id.clone();
                 let collision_radius = actor.collision_radius;
                 let can_occupy =
@@ -99,14 +95,14 @@ impl SpellState {
                 step.retained
             }
 
-            PrimaryTransientMut::FirePatch(patch) => {
+            PrimarySpellTransient::FirePatch(patch) => {
                 let (retained, contact) = step_native_fire_patch(patch, context.tick);
                 if let Some(contact) = contact {
                     result.fire_actor_contacts.push(FireActorContact::Patch(contact));
                 }
                 retained
             }
-            PrimaryTransientMut::FireEmber(ember) => {
+            PrimarySpellTransient::FireEmber(ember) => {
                 let step = step_native_fire_ember(ember);
                 if step.retained {
                     if (context.can_place)(&ember.common.owner_id, ember.position, 7.0) {
@@ -170,7 +166,7 @@ impl SpellState {
                 false
             }
             _ => {
-                if effect.common().age_ticks + 1 < transient_lifetime(effect.view()) {
+                if effect.common().age_ticks + 1 < transient_lifetime(effect) {
                     effect.common_mut().age_ticks += 1;
                     true
                 } else {

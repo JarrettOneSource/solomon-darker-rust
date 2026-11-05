@@ -128,7 +128,8 @@ fn harden_chips_and_coating_transitions_enroll_in_source_order_with_exact_rng() 
             .transients
             .iter()
             .map(|effect| {
-                let solomon_sim::spells::model::PrimaryTransientRef::Harden(effect) = effect else {
+                let solomon_sim::spells::model::PrimarySpellTransient::Harden(effect) = effect
+                else {
                     panic!("Harden enrolls actual Harden actors")
                 };
                 effect_snapshot(effect)

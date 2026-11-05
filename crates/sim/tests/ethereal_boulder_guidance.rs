@@ -70,7 +70,7 @@ fn boulder_mut(actor: &mut NativeWeldPersistentActorState) -> &mut NativeWeldEth
     actor
 }
 fn advance(actor: &mut NativeWeldPersistentActorState, targets: &[PrimarySpellTarget]) {
-    assert!(step_native_weld_persistent_actor(&mut actor.view_mut(), &|_, _, _| true).0);
+    assert!(step_native_weld_persistent_actor(actor, &|_, _, _| true).0);
     finish_native_weld_ethereal_boulder_guidance(boulder_mut(actor), targets);
 }
 #[test]
@@ -158,8 +158,7 @@ fn native_steering_window_is_not_actor_lifetime_and_terrain_still_retires_the_mo
     assert_eq!(boulder(&actor).tracking_ticks_remaining, 0);
     assert_eq!(boulder(&actor).heading_degrees, 90.0);
     assert_eq!(boulder(&actor).common.origin.x, 2925.0);
-    let (alive, terminal) =
-        step_native_weld_persistent_actor(&mut actor.view_mut(), &|_, _, _| false);
+    let (alive, terminal) = step_native_weld_persistent_actor(&mut actor, &|_, _, _| false);
     assert!(!alive);
     assert_eq!(terminal.unwrap().common.origin.x, 2927.25);
 }

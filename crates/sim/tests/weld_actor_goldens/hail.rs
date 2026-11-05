@@ -126,9 +126,7 @@ fn hail_terrain_children_keep_native_birth_draws_contact_presentation_and_bounce
         }
         for tick in 0..=220 {
             if tick > 0 {
-                actors.retain_mut(|actor| {
-                    step_native_weld_hail_child(&mut actor.view_mut(), &mut rng)
-                });
+                actors.retain_mut(|actor| step_native_weld_hail_child(actor, &mut rng));
             }
             if let Some(expected) =
                 case["frames"].as_array().unwrap().iter().find(|frame| frame["tick"] == tick)
@@ -139,7 +137,7 @@ fn hail_terrain_children_keep_native_birth_draws_contact_presentation_and_bounce
                     let actors: Vec<_> =
                         actors.iter().cloned().map(NativeWeldWorldActor::HailChild).collect();
                     weld_visual_rows::compare(
-                        actors.iter().map(|actor| NativeWeldPresentationState::World(actor.view())),
+                        actors.iter().map(NativeWeldPresentationState::World),
                         sample,
                         "Hail contact compositor",
                     );

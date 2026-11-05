@@ -1,9 +1,8 @@
 //! Source EtherDrain world projections and accepted forces from
 //! `core-server/native-ether-drain-world.ts` and `boneyard-world-placement.ts`.
 
-use crate::spells::transient_storage::{PrimaryTransientRef, WeldHailChildRef, WeldWorldRef};
-
-use crate::spells::transient_storage::{PrimaryTransientMut, WeldHailChildMut, WeldWorldMut};
+use crate::spells::model::PrimarySpellTransient;
+use crate::spells::weld::{NativeWeldHailChildActorState, NativeWeldWorldActor};
 
 use super::*;
 use crate::Vec2;
@@ -144,13 +143,13 @@ fn capture_world_animations(
         let reference =
             NativeEtherDrainWorldAnimationRef::PrimaryTransient { id: effect.common().id };
         match effect {
-            PrimaryTransientRef::WaterHail(actor) => {
+            PrimarySpellTransient::WaterHail(actor) => {
                 push(actor.saved_bounce_velocity, actor.position, reference)
             }
-            PrimaryTransientRef::Weld(WeldWorldRef::HailChild(
-                WeldHailChildRef::TerrainBouncer(actor),
+            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
+                NativeWeldHailChildActorState::TerrainBouncer(actor),
             )) => push(actor.bounce_velocity, actor.position, reference),
-            PrimaryTransientRef::Weld(WeldWorldRef::BoulderDebris(actor)) => {
+            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(actor)) => {
                 push(actor.debris.bounce_velocity, actor.position, reference)
             }
             _ => {}
@@ -245,21 +244,23 @@ impl GameSession {
                             return true;
                         }
                         match effect {
-                            PrimaryTransientMut::WaterHail(actor) => {
+                            PrimarySpellTransient::WaterHail(actor) => {
                                 if contact.consume {
                                     return false;
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimaryTransientMut::Weld(WeldWorldMut::HailChild(
-                                WeldHailChildMut::TerrainBouncer(actor),
+                            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
+                                NativeWeldHailChildActorState::TerrainBouncer(actor),
                             )) => {
                                 if contact.consume {
                                     return false;
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimaryTransientMut::Weld(WeldWorldMut::BoulderDebris(actor)) => {
+                            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(
+                                actor,
+                            )) => {
                                 if contact.consume {
                                     return false;
                                 }

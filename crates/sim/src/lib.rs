@@ -18,7 +18,6 @@ pub mod constants;
 pub mod crow_blindness;
 pub mod death_animations;
 pub mod economy;
-mod ecs;
 pub mod element_vfx;
 pub mod enemies;
 pub mod equipment;

@@ -4,9 +4,7 @@
 use serde::{Deserialize, Serialize};
 use solomon_sim::Vec2;
 use solomon_sim::painter::PainterRegistration;
-use solomon_sim::spells::model::PrimaryTransientRef;
 use solomon_sim::spells::model::{PrimarySpellTransient, SpellState};
-use solomon_sim::spells::weld::WeldWorldRef;
 use solomon_sim::spells::weld::{
     NativeFlameChannelVisual, NativeFlameFadeVisual, NativeWeldActorBirth,
     NativeWeldChannelActorState, NativeWeldFlameLashFadeState, NativeWeldFlameLashFadeVariant,
@@ -178,11 +176,11 @@ impl FlamePresentationFrame {
 /// Complete actors are the fallback after admission/reset; missing legacy
 /// samples are deliberately excluded rather than reconstructed from new RNG.
 pub fn flame_presentation_birth(
-    actor: PrimaryTransientRef<'_>,
+    actor: &PrimarySpellTransient,
 ) -> Result<Option<FlamePresentationBirth>, String> {
-    let PrimaryTransientRef::Weld(actor) = actor else { return Ok(None) };
+    let PrimarySpellTransient::Weld(actor) = actor else { return Ok(None) };
     let recipe = match actor {
-        WeldWorldRef::Channel(channel) if channel.common.build_id == 1003 => {
+        NativeWeldWorldActor::Channel(channel) if channel.common.build_id == 1003 => {
             let Some(NativeFlameChannelVisual::NativeBirth(_)) = &channel.flame_visual else {
                 return Ok(None);
             };
@@ -193,7 +191,7 @@ pub fn flame_presentation_birth(
                 painter_registration: root(actor)?,
             }
         }
-        WeldWorldRef::FlameLashFade(fade) => {
+        NativeWeldWorldActor::FlameLashFade(fade) => {
             let NativeFlameFadeVisual::NativeBirth(_) = fade.flame_visual else { return Ok(None) };
             FlamePresentationRecipe::Fade {
                 birth: fade.flame_visual,
@@ -328,7 +326,7 @@ pub fn materialize_flame_presentation(
     Some(PrimarySpellTransient::Weld(actor))
 }
 
-fn root(actor: WeldWorldRef<'_>) -> Result<PainterRegistration, String> {
+fn root(actor: &NativeWeldWorldActor) -> Result<PainterRegistration, String> {
     actor
         .common()
         .owner
