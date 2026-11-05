@@ -81,7 +81,7 @@ impl EnemyWorld {
                 *registration = *resolved;
             }
         };
-        for mut projectile in self.projectiles.iter_mut() {
+        for projectile in self.projectiles.iter_mut() {
             let state = projectile.state_mut();
             resolve(&mut state.painter_registration);
             if let Some(registration) = &mut state.light_registration {

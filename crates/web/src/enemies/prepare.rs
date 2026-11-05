@@ -16,7 +16,6 @@ use solomon_sim::enemies::presentation::{
 use solomon_sim::enemies::projectile_presentation::{
     enemy_projectile_effect_bypasses_world_tint, native_enemy_projectile_effect_plan_with_input,
 };
-use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use solomon_sim::enemies::projectiles::{
     EnemyProjectileEffectKind, EnemyProjectileKind, EnemyProjectilePayload,
 };

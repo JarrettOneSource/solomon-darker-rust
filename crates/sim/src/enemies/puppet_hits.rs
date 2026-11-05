@@ -7,7 +7,6 @@ use super::targeting::target_eligible;
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
 use crate::combat::PuppetHitState;
-use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::spells::targeting::{PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

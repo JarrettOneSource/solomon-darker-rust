@@ -4,7 +4,6 @@
 use crate::Vec2;
 use crate::enemies::model::EnemyDeathEffectKind;
 use crate::enemies::projectiles::EnemyProjectileEffectKind;
-use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::enemies::world::EnemyWorld;
 use crate::float::fround;
 use crate::painter::{PainterRegistration, WorldManagerLane};

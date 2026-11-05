@@ -2,7 +2,6 @@
 
 use crate::Vec2;
 use crate::boneyard::collision::closest_point_on_segment;
-use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::enemies::projectiles::{EnemyProjectileKind, MageLightningContact};
 use crate::enemies::world::EnemyWorld;
 use crate::float::hypot;

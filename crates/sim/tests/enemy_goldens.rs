@@ -1859,10 +1859,8 @@ impl solomon_sim::enemies::world::EnemyGeometry for GroundEnemyGeometry {
     }
 }
 
-fn enemy_projectile_json(
-    projectile: solomon_sim::enemies::projectiles::EnemyProjectileRef<'_>,
-) -> Value {
-    use solomon_sim::enemies::projectiles::{EnemyProjectileMotion, EnemyProjectileRead};
+fn enemy_projectile_json(projectile: &solomon_sim::enemies::projectiles::EnemyProjectile) -> Value {
+    use solomon_sim::enemies::projectiles::EnemyProjectile;
     let state = projectile.state();
     let mut record = json!({
         "ageTicks":state.age_ticks,"bounceVelocity":state.bounce_velocity,"chillTumbleAccumulator":state.chill_tumble_accumulator,
@@ -1876,8 +1874,8 @@ fn enemy_projectile_json(
         "verticalOffset":state.vertical_offset,"verticalVelocity":state.vertical_velocity,"visualPhaseDeg":state.visual_phase_deg,"visualScale":state.visual_scale,
         "kind":projectile.kind().id(),
     });
-    if let EnemyProjectileMotion::Arrow { velocity } = projectile.motion() {
-        record["velocity"] = point_json(velocity);
+    if let EnemyProjectile::Arrow { velocity, .. } = projectile {
+        record["velocity"] = point_json(*velocity);
     }
     record
 }

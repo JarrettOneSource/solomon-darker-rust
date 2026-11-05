@@ -63,7 +63,7 @@ impl EnemyWorld {
             step_demon_fires(self, context, tick);
             let mut projectiles = std::mem::take(&mut self.projectiles);
             projectiles.retain_mut(|projectile| {
-                projectile.state.last_step_tick >= tick
+                projectile.state().last_step_tick >= tick
                     || step_projectile(self, projectile, context, tick, order)
             });
             self.projectiles = projectiles;
@@ -74,22 +74,21 @@ impl EnemyWorld {
 
 fn step_projectile(
     world: &mut EnemyWorld,
-    projectile: &mut EnemyProjectileMut<'_>,
+    projectile: &mut EnemyProjectile,
     context: &EnemyStepContext<'_>,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    let state = &mut *projectile.state;
-    match projectile.motion {
-        EnemyProjectileMotion::Arrow { velocity } => {
+    match projectile {
+        EnemyProjectile::Arrow { state, velocity } => {
             step_arrow(world, state, velocity, context, tick, order)
         }
-        EnemyProjectileMotion::Firebolt => step_firebolt(world, state, context, tick, order),
-        EnemyProjectileMotion::GuidedMissile => {
+        EnemyProjectile::Firebolt(state) => step_firebolt(world, state, context, tick, order),
+        EnemyProjectile::GuidedMissile(state) => {
             step_guided_missile(world, state, context, tick, order)
         }
-        EnemyProjectileMotion::DemonBomb => step_demon_bomb(world, state, context, tick, order),
-        EnemyProjectileMotion::PoisonPool => step_poison_pool(world, state, context, tick, order),
+        EnemyProjectile::DemonBomb(state) => step_demon_bomb(world, state, context, tick, order),
+        EnemyProjectile::PoisonPool(state) => step_poison_pool(world, state, context, tick, order),
     }
 }
 
@@ -138,10 +137,8 @@ fn step_arrow(
     }) {
         retire_projectile(
             world,
-            &EnemyProjectileRef {
-                state,
-                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
-            },
+            EnemyProjectileKind::Arrow,
+            state,
             tick,
             state.target_player_id.as_deref(),
         );
@@ -155,10 +152,8 @@ fn step_arrow(
     if let Some(player) = player {
         emit_projectile_impact(
             world,
-            &EnemyProjectileRef {
-                state,
-                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
-            },
+            EnemyProjectileKind::Arrow,
+            state,
             tick,
             Some(&player.id),
             order,
@@ -167,24 +162,13 @@ fn step_arrow(
     let blocked =
         state.age_ticks.is_multiple_of(5) && terrain_blocked(state, *velocity, context, 5.0, 0x380);
     if blocked {
-        emit_projectile_impact(
-            world,
-            &EnemyProjectileRef {
-                state,
-                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
-            },
-            tick,
-            None,
-            order,
-        );
+        emit_projectile_impact(world, EnemyProjectileKind::Arrow, state, tick, None, order);
     }
     if player.is_some() || blocked {
         retire_projectile(
             world,
-            &EnemyProjectileRef {
-                state,
-                motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
-            },
+            EnemyProjectileKind::Arrow,
+            state,
             tick,
             player.map(|player| player.id.as_str()),
         );
@@ -200,10 +184,8 @@ fn step_arrow(
         if state.visual_scale <= 0.0 {
             retire_projectile(
                 world,
-                &EnemyProjectileRef {
-                    state,
-                    motion: EnemyProjectileMotion::Arrow { velocity: *velocity },
-                },
+                EnemyProjectileKind::Arrow,
+                state,
                 tick,
                 state.target_player_id.as_deref(),
             );
@@ -237,9 +219,8 @@ fn step_firebolt(
     if (state.age_ticks + 1).is_multiple_of(10)
         && terrain_blocked(state, velocity, context, 10.0, 0x700)
     {
-        let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::Firebolt };
-        emit_projectile_impact(world, &projectile, tick, None, order);
-        retire_projectile(world, &projectile, tick, None);
+        emit_projectile_impact(world, EnemyProjectileKind::Firebolt, state, tick, None, order);
+        retire_projectile(world, EnemyProjectileKind::Firebolt, state, tick, None);
         return false;
     }
     let previous_tick = state.last_step_tick;
@@ -252,12 +233,24 @@ fn step_firebolt(
     spawn_firebolt_trail(world, state, previous_tick, order);
     let player = first_player_center_contact(state.position, context.players, 30.0);
     let expired = state.age_ticks >= state.lifetime_ticks;
-    let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::Firebolt };
     if let Some(player) = player {
-        emit_projectile_impact(world, &projectile, tick, Some(&player.id), order);
+        emit_projectile_impact(
+            world,
+            EnemyProjectileKind::Firebolt,
+            state,
+            tick,
+            Some(&player.id),
+            order,
+        );
     }
     if player.is_some() || outside || expired {
-        retire_projectile(world, &projectile, tick, player.map(|player| player.id.as_str()));
+        retire_projectile(
+            world,
+            EnemyProjectileKind::Firebolt,
+            state,
+            tick,
+            player.map(|player| player.id.as_str()),
+        );
         false
     } else {
         true
@@ -280,8 +273,13 @@ fn step_guided_missile(
         position: state.position,
         margin: 500.0,
     }) {
-        let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::GuidedMissile };
-        retire_projectile(world, &projectile, tick, projectile.state().target_player_id.as_deref());
+        retire_projectile(
+            world,
+            EnemyProjectileKind::GuidedMissile,
+            state,
+            tick,
+            state.target_player_id.as_deref(),
+        );
         return false;
     }
     let target = target_by_id(state.target_player_id.as_deref(), context.players)
@@ -306,28 +304,46 @@ fn step_guided_missile(
         state.target_player_id.as_deref(),
         context.players,
     );
-    let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::GuidedMissile };
     if let Some(player) = player {
-        emit_projectile_impact(world, &projectile, tick, Some(&player.id), order);
+        emit_projectile_impact(
+            world,
+            EnemyProjectileKind::GuidedMissile,
+            state,
+            tick,
+            Some(&player.id),
+            order,
+        );
     }
     // The native lookahead keeps the vector calculated before this tick's turn.
-    let blocked = projectile.state().age_ticks.is_multiple_of(5)
+    let blocked = state.age_ticks.is_multiple_of(5)
         && terrain_blocked(
-            projectile.state(),
+            state,
             native_enemy_projectile_velocity(old_heading, old_speed),
             context,
             5.0,
             0x700,
         );
     if blocked {
-        emit_projectile_impact(world, &projectile, tick, None, order);
+        emit_projectile_impact(world, EnemyProjectileKind::GuidedMissile, state, tick, None, order);
     }
     if player.is_some() || blocked {
-        retire_projectile(world, &projectile, tick, player.map(|player| player.id.as_str()));
+        retire_projectile(
+            world,
+            EnemyProjectileKind::GuidedMissile,
+            state,
+            tick,
+            player.map(|player| player.id.as_str()),
+        );
         return false;
     }
-    if projectile.state().age_ticks >= projectile.state().lifetime_ticks {
-        retire_projectile(world, &projectile, tick, projectile.state().target_player_id.as_deref());
+    if state.age_ticks >= state.lifetime_ticks {
+        retire_projectile(
+            world,
+            EnemyProjectileKind::GuidedMissile,
+            state,
+            tick,
+            state.target_player_id.as_deref(),
+        );
         return false;
     }
     state.speed = fround((old_speed - 0.07500000298023224).max(state.minimum_speed));
@@ -446,12 +462,7 @@ fn step_demon_bomb(
         damage.magic_damage = fround(source_damage * 0.5);
         world.player_damage.push(damage);
     }
-    retire_projectile(
-        world,
-        &EnemyProjectileRef { state, motion: EnemyProjectileMotion::DemonBomb },
-        tick,
-        None,
-    );
+    retire_projectile(world, EnemyProjectileKind::DemonBomb, state, tick, None);
     false
 }
 
@@ -466,19 +477,30 @@ fn step_poison_pool(
     state.last_step_tick = tick;
     state.visual_scale = fround(state.visual_scale + fround(0.025)).min(fround(1.6));
     spawn_poison_pool_bubble(world, state, tick, order);
-    let projectile = EnemyProjectileRef { state, motion: EnemyProjectileMotion::PoisonPool };
     for player in context.players {
         if !player.summoned
             && target_eligible(player)
-            && native_poison_pool_contact(projectile.state().position, player.position)
+            && native_poison_pool_contact(state.position, player.position)
         {
             let event = world.next_event_id;
             world.next_event_id += 1;
-            apply_projectile_contact(world, &projectile, &player.id, event);
+            apply_projectile_contact(
+                world,
+                EnemyProjectileKind::PoisonPool,
+                state,
+                &player.id,
+                event,
+            );
         }
     }
-    if native_poison_pool_alpha(projectile.state().age_ticks) == 0.0 {
-        retire_projectile(world, &projectile, tick, projectile.state().target_player_id.as_deref());
+    if native_poison_pool_alpha(state.age_ticks) == 0.0 {
+        retire_projectile(
+            world,
+            EnemyProjectileKind::PoisonPool,
+            state,
+            tick,
+            state.target_player_id.as_deref(),
+        );
         false
     } else {
         true
@@ -504,13 +526,13 @@ fn squared_distance(left: Vec2, right: Vec2) -> f64 {
 
 fn emit_projectile_impact(
     world: &mut EnemyWorld,
-    projectile: &impl EnemyProjectileRead,
+    kind: EnemyProjectileKind,
+    state: &EnemyProjectileState,
     tick: u64,
     player: Option<&str>,
     order: &mut WorldPainterOrder,
 ) {
-    spawn_projectile_impact_effects(world, projectile, tick, order);
-    let state = projectile.state();
+    spawn_projectile_impact_effects(world, kind, state, tick, order);
     let mut event = EnemyEvent::new(EnemyEventKind::ProjectileImpact, state.owner_actor_id, tick);
     event.projectile_id = Some(state.id);
     event.target_player_id = Some(player.map(str::to_owned));
@@ -518,7 +540,7 @@ fn emit_projectile_impact(
     let Some(player) = player else {
         return;
     };
-    if projectile.kind() == EnemyProjectileKind::GuidedMissile {
+    if kind == EnemyProjectileKind::GuidedMissile {
         let mut event =
             EnemyEvent::new(EnemyEventKind::PlayerStatusSound, state.owner_actor_id, tick);
         event.gain_scale = Some(1.0);
@@ -528,51 +550,48 @@ fn emit_projectile_impact(
         event.target_player_id = Some(Some(player.to_owned()));
         world.emit_event(event);
     }
-    apply_projectile_contact(world, projectile, player, event_id);
+    apply_projectile_contact(world, kind, state, player, event_id);
 }
 fn apply_projectile_contact(
     world: &mut EnemyWorld,
-    projectile: &impl EnemyProjectileRead,
+    kind: EnemyProjectileKind,
+    state: &EnemyProjectileState,
     player: &str,
     event_id: usize,
 ) {
-    let state = projectile.state();
-    let fire = fround(if projectile.kind() == EnemyProjectileKind::Firebolt {
+    let fire = fround(if kind == EnemyProjectileKind::Firebolt {
         state.damage * 0.5
     } else {
         state.secondary_damage * 0.5
     });
     let mut damage = EnemyPlayerDamage::new(state.owner_actor_id, event_id, player.to_owned());
-    damage.physical_damage = if projectile.kind() == EnemyProjectileKind::Arrow {
-        fround(state.damage + fire)
-    } else {
-        fire
-    };
-    damage.magic_damage = match projectile.kind() {
+    damage.physical_damage =
+        if kind == EnemyProjectileKind::Arrow { fround(state.damage + fire) } else { fire };
+    damage.magic_damage = match kind {
         EnemyProjectileKind::Arrow | EnemyProjectileKind::Firebolt => fire,
         _ => state.damage,
     };
     damage.cold_slow_ticks = state.cold_slow_ticks;
     damage.poison_damage = state.poison_damage;
     damage.poison_duration = state.poison_duration;
-    if projectile.kind() == EnemyProjectileKind::GuidedMissile {
+    if kind == EnemyProjectileKind::GuidedMissile {
         damage.poison_contact_damage =
             Some(if state.payload == EnemyProjectilePayload::Poison { 1.0 } else { 0.0 });
         damage.suppress_hit_response = true;
     }
-    if projectile.kind() == EnemyProjectileKind::PoisonPool {
+    if kind == EnemyProjectileKind::PoisonPool {
         damage.suppress_flash = true;
     }
     world.player_damage.push(damage);
 }
 fn retire_projectile(
     world: &mut EnemyWorld,
-    projectile: &impl EnemyProjectileRead,
+    kind: EnemyProjectileKind,
+    state: &EnemyProjectileState,
     tick: u64,
     target: Option<&str>,
 ) {
-    let state = projectile.state();
-    if projectile.kind() == EnemyProjectileKind::Firebolt {
+    if kind == EnemyProjectileKind::Firebolt {
         world.projectile_effects.retain(|effect| {
             !matches!(effect.kind, EnemyProjectileEffectKind::FireboltTrail)
                 || effect.state.owner_projectile_id != state.id

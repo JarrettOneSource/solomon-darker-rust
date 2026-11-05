@@ -8,8 +8,7 @@ use super::model::{
 };
 use super::path::EnemyNavigation;
 use super::projectiles::{
-    EnemyProjectileEffect, EnemyProjectileKnockback, EnemyProjectileRead, EnemyProjectiles,
-    MageLightningPulse,
+    EnemyProjectile, EnemyProjectileEffect, EnemyProjectileKnockback, MageLightningPulse,
 };
 pub use super::step::EnemyLiveCounts;
 use super::voices::BossNarration;
@@ -245,7 +244,7 @@ pub struct EnemyWorld {
     pub player_knockbacks: Vec<EnemyPlayerKnockback>,
     pub player_positions: BTreeMap<String, Vec2>,
     pub pending_spawn_intents: Vec<EnemySpawnIntent>,
-    pub projectiles: EnemyProjectiles,
+    pub projectiles: Vec<EnemyProjectile>,
     pub mage_lightning_pulses: Vec<MageLightningPulse>,
     pub projectile_effects: Vec<EnemyProjectileEffect>,
     pub projectile_knockbacks: Vec<EnemyProjectileKnockback>,
@@ -301,7 +300,7 @@ impl EnemyWorld {
             player_knockbacks: Vec::new(),
             player_positions: BTreeMap::new(),
             pending_spawn_intents: Vec::new(),
-            projectiles: EnemyProjectiles::default(),
+            projectiles: Vec::new(),
             mage_lightning_pulses: Vec::new(),
             projectile_effects: Vec::new(),
             projectile_knockbacks: Vec::new(),

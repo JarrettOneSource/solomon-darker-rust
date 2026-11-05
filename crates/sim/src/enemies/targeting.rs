@@ -6,7 +6,6 @@ use super::path::native_enemy_target_refresh_ticks;
 use super::world::EnemyStepContext;
 use super::world::EnemyWorld;
 use crate::Vec2;
-use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::float::hypot;
 use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::{

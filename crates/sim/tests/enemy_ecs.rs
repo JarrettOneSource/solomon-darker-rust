@@ -124,7 +124,7 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
     use solomon_sim::enemies::projectile_emission::{
         SpawnEnemyProjectileOptions, spawn_projectile,
     };
-    use solomon_sim::enemies::projectiles::{EnemyProjectileKind, EnemyProjectileRead};
+    use solomon_sim::enemies::projectiles::EnemyProjectileKind;
 
     let mut live = EnemyWorld::new("projectile-ecs", 50);
     let mut order = WorldPainterOrder::default();
@@ -170,11 +170,9 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
         serde_json::to_value(&live.projectiles).unwrap(),
         serde_json::to_value(&records).unwrap()
     );
-    {
-        let bomb = live.projectiles.get_mut(3).unwrap();
-        bomb.state.speed = 0.0;
-        bomb.state.settled_ticks_remaining = 1;
-    }
+    let bomb = live.projectiles[3].state_mut();
+    bomb.speed = 0.0;
+    bomb.settled_ticks_remaining = 1;
     let admitted: Vec<_> = live.projectiles.iter().map(|p| p.state().id).collect();
     step(&mut live, &[], 1, &mut order);
     assert_eq!(

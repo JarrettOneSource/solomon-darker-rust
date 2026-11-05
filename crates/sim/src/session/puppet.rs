@@ -1,7 +1,6 @@
 //! Commit late spell targets before the next enemy pass, from
 //! `core-server/enemies/puppet-hits.ts::finalizeBoneyardPuppetQueries`.
 
-use crate::enemies::projectiles::EnemyProjectileRead;
 use std::collections::HashSet;
 
 use super::*;
