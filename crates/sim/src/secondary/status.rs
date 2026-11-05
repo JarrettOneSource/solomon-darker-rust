@@ -39,7 +39,6 @@ pub struct NativeSecondarySteamedEffectState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeSecondaryTargetEffectState {
     pub circle_slow_factor: f64,
     pub circle_slow_ticks: u64,

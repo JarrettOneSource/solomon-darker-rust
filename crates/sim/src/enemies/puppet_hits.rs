@@ -41,7 +41,6 @@ pub struct EnemyPuppetTarget {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct EnemyPuppetHit {
     pub feedback: PuppetHitState,
     pub hit_tick: u64,

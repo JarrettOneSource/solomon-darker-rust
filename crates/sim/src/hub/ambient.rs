@@ -53,7 +53,6 @@ fn random_integer(state: u32, maximum_exclusive: u32) -> (u32, u32) {
 /// One drop of spray above the fountain.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct HubFountainParticle {
     pub id: u32,
     /// Seconds of life left; it is also the drop's brightness before the alpha limit.

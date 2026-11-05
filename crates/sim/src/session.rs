@@ -73,7 +73,6 @@ impl Default for GameSessionOptions {
 /// `player-lighting.ts`: this state belongs to simulation, including overlay decay.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PlayerLightingState {
     // Crow blindness is an fround duration and can retain a fractional final tick.
     pub blindness_ticks_remaining: f64,
@@ -311,7 +310,7 @@ fn session_from_checkpoint(
         inventory_dye_sessions: checkpoint.inventory_dye_sessions,
         screen_flashes: checkpoint.screen_flashes,
         enhanced_effects: checkpoint.enhanced_effects,
-        participants: checkpoint.participants.into_iter().collect(),
+        participants: checkpoint.participants,
         participant_order: checkpoint.participant_order,
         next_entity_id: checkpoint.next_entity_id,
         npcs: checkpoint.npcs,
@@ -329,7 +328,7 @@ fn session_from_checkpoint(
         run: checkpoint.run,
         level_up_barrier: checkpoint.level_up_barrier,
         next_level_up_barrier_id: checkpoint.next_level_up_barrier_id,
-        mod_effects: checkpoint.mod_effects.into_iter().collect(),
+        mod_effects: checkpoint.mod_effects,
         next_mod_consumable_use_id: checkpoint.next_mod_consumable_use_id,
         ticks: checkpoint.ticks,
         boneyard,

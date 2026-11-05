@@ -30,7 +30,6 @@ use crate::{NativeRng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldChannelActorState {
     pub common: NativeWeldActorBase,
     #[cfg_attr(feature = "persistence", serde(default = "enhanced_effects_default"))]
@@ -90,7 +89,6 @@ pub enum NativeWeldFlameLashFadeVariant {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldFlameLashFadeState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -237,7 +235,6 @@ pub fn create_native_weld_ground_spark_fade_program(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldGroundSparkFadeActorState {
     pub common: NativeWeldActorBase,
     pub seed: NativeWeldGroundSparkFadeSeed,
@@ -256,7 +253,6 @@ pub fn create_native_weld_ground_spark_fade_actor(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldImpactActorState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -304,7 +300,6 @@ pub fn create_primary_spell_weld_impact(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldBoulderDebrisActorState {
     pub common: NativeWeldActorBase,
     pub debris: NativeWeldBoulderDebrisParticleState,
@@ -325,7 +320,6 @@ pub fn create_native_weld_boulder_debris_actor(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailRockFadeActorState {
     pub common: NativeWeldActorBase,
     pub position: Vec2,
@@ -343,7 +337,6 @@ pub fn create_native_weld_hail_rock_fade_actor(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldMeteorFlashActorState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,

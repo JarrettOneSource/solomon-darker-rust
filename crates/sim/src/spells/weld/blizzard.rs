@@ -12,7 +12,6 @@ use crate::{NativeRng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldBlizzardGlowState {
     pub common: NativeWeldActorBase,
     pub rotation_degrees: f64,
@@ -178,7 +177,6 @@ pub fn native_weld_blizzard_beam_plan(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldBlizzardChainFrostState {
     pub common: NativeWeldActorBase,
 }

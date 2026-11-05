@@ -563,7 +563,7 @@ fn merge_pulses<'a>(
     }
     let mut pulses: Vec<_> = pulses.into_values().collect();
     pulses.sort_by_key(|pulse| (pulse.tick, pulse.id));
-    pulses.into_iter().collect()
+    pulses
 }
 
 fn interpolate_spiders(

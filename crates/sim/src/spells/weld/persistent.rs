@@ -25,7 +25,6 @@ pub const NATIVE_WELD_HAIL_LOOKAHEAD_DISTANCE: f64 = 30.0;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldEtherealBoulderState {
     pub common: NativeWeldActorBase,
     pub assembly_scale: f64,
@@ -103,7 +102,6 @@ pub struct NativeWeldHailstoneRockState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailstonesState {
     pub common: NativeWeldActorBase,
     pub collision_radius: f64,
@@ -122,7 +120,6 @@ pub struct NativeWeldHailstonesState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldMeteorFieldState {
     pub common: NativeWeldActorBase,
     pub pulse_sequence: u64,
@@ -342,7 +339,6 @@ pub fn update_native_weld_persistent_actor(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldFrostFadeActorState {
     pub common: NativeWeldActorBase,
     pub scale: f64,

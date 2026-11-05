@@ -70,8 +70,11 @@ pub(super) fn interpolate_members<'a, T: Clone + 'a, K: Clone + Ord>(
     )
 }
 
-/// Projects borrowed component views into owned display state. Source views do
-/// not need to use the same representation as the output.
+/// Blends members that appear in both snapshots, matched by `id`, into owned
+/// display state. Before the newer endpoint the output keeps the older snapshot's
+/// members, copying unmatched ones with `snapshot`; at the endpoint it takes the
+/// newer snapshot's members instead. Members are usually borrowed records, so the
+/// output type can differ from the member type.
 pub(super) fn interpolate_projected_members<V, T, K: Clone + Ord>(
     older: impl IntoIterator<Item = V>,
     newer: impl IntoIterator<Item = V> + Clone,

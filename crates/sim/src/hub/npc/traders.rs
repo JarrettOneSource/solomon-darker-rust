@@ -133,7 +133,6 @@ impl HubPotionTraderClock {
 /// One native Hagatha crossfade sprite, with its independently sampled fade and lifetime.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct HubHagathaParticle {
     pub frame: usize,
     pub id: u64,
@@ -222,7 +221,6 @@ impl HubHagathaClock {
 /// A present Skorcha, with native variant, gesture and independently pulsing hat.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct HubSkorcha {
     pub dismissal_index: usize,
     pub gesture: usize,

@@ -27,7 +27,6 @@ pub struct DeadSpiderState {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct SpiderRemains {
     pub id: usize,
     pub spawn_tick: u64,

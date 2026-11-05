@@ -60,7 +60,7 @@ fn step(world: &mut EnemyWorld, players: &[EnemyTarget], tick: u64, order: &mut 
 
 #[test]
 fn mixed_controllers_keep_identity_and_order_after_retirement_and_restore() {
-    let mut live = EnemyWorld::new("enemy-ecs", 50);
+    let mut live = EnemyWorld::new("enemy-order", 50);
     let mut order = WorldPainterOrder::default();
     let players = [EnemyTarget {
         id: "wizard".into(),
@@ -126,7 +126,7 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
     };
     use solomon_sim::enemies::projectiles::EnemyProjectileKind;
 
-    let mut live = EnemyWorld::new("projectile-ecs", 50);
+    let mut live = EnemyWorld::new("projectile-order", 50);
     let mut order = WorldPainterOrder::default();
     live.spawn(
         &[EnemySpawnIntent::new(EnemyToken::SkeletonArcher, Vec2::new(100.0, 100.0), 1, 0, 31)],
@@ -219,7 +219,7 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
 fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
     use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellOwner, NativeBossSpell};
 
-    let mut live = EnemyWorld::new("boss-spell-ecs", 50);
+    let mut live = EnemyWorld::new("boss-spell-order", 50);
     let mut order = WorldPainterOrder::default();
     let kinds = [
         BossSpellKind::HeartmongerFlicker { phase_deg: 0.0 },
@@ -305,7 +305,7 @@ fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
 fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
     use solomon_sim::enemies::model::{CoffinPhase, EnemyBrain, MaggotMovementPhase};
 
-    let mut live = EnemyWorld::new("maggot-ecs", 50);
+    let mut live = EnemyWorld::new("maggot-order", 50);
     let mut order = WorldPainterOrder::default();
     live.spawn(
         &[EnemySpawnIntent::new(EnemyToken::Coffin, Vec2::new(200.0, 200.0), 1, 0, 31)],

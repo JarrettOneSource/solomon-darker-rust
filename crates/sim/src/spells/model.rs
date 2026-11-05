@@ -131,7 +131,6 @@ pub struct PrimarySpellTransientBase {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellAirTransient {
     pub common: PrimarySpellTransientBase,
     #[cfg_attr(feature = "persistence", serde(default))]
@@ -151,7 +150,6 @@ pub struct PrimarySpellAirTransient {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellWaterTransient {
     pub common: PrimarySpellTransientBase,
     pub direction: Vec2,
@@ -165,7 +163,6 @@ pub struct PrimarySpellWaterTransient {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellEarthImpact {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,
@@ -183,7 +180,6 @@ const fn default_earth_impact_enhanced_effects() -> bool {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellEarthBoulderBit {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,
@@ -194,7 +190,6 @@ pub struct PrimarySpellEarthBoulderBit {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellEarthCalledRock {
     pub common: PrimarySpellTransientBase,
     pub fall_velocity: f64,
@@ -213,7 +208,6 @@ pub struct PrimarySpellEarthCalledRock {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellFireParticle {
     pub common: PrimarySpellTransientBase,
     #[cfg_attr(feature = "persistence", serde(default = "primary_effects_enhanced_default"))]
@@ -225,7 +219,6 @@ pub struct PrimarySpellFireParticle {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellEtherImpact {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,
@@ -235,7 +228,6 @@ pub struct PrimarySpellEtherImpact {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellEtherPierceStreak {
     pub common: PrimarySpellTransientBase,
     pub heading_degrees: f64,
@@ -245,7 +237,6 @@ pub struct PrimarySpellEtherPierceStreak {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellEtherBlast {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,
@@ -256,7 +247,6 @@ pub struct PrimarySpellEtherBlast {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellFireImpact {
     pub common: PrimarySpellTransientBase,
     pub origin: Vec2,
@@ -264,7 +254,6 @@ pub struct PrimarySpellFireImpact {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellFireEmber {
     pub common: PrimarySpellTransientBase,
     pub burn_damage: f64,
@@ -289,7 +278,6 @@ pub enum FireExplosionPresentation {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellFireExplosion {
     pub common: PrimarySpellTransientBase,
     pub burn_damage: f64,
@@ -303,7 +291,6 @@ pub struct PrimarySpellFireExplosion {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellFireGoodImp {
     pub common: PrimarySpellTransientBase,
     pub body_rotation_degrees: f64,
@@ -345,7 +332,6 @@ pub enum FirePatchType {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellFirePatch {
     pub common: PrimarySpellTransientBase,
     pub atlas_phase: f64,
@@ -367,7 +353,6 @@ pub struct PrimarySpellFirePatch {
 /// Player-owned Hurricane is synchronized by the Air/Water host, not the generic effect clock.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellAirHurricane {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,
@@ -383,7 +368,6 @@ pub struct PrimarySpellAirHurricane {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellWaterAura {
     pub common: PrimarySpellTransientBase,
     pub alpha_decay: f64,
@@ -396,7 +380,6 @@ pub struct PrimarySpellWaterAura {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct PrimarySpellWaterHail {
     pub common: PrimarySpellTransientBase,
     pub birth_tick: u64,

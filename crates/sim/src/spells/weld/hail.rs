@@ -12,7 +12,6 @@ pub const NATIVE_WELD_HAIL_COLD_SLOW_TICKS: u64 = 250;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailTerrainParticleState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -28,7 +27,6 @@ pub struct NativeWeldHailTerrainParticleState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailTerrainBouncerState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -46,7 +44,6 @@ pub struct NativeWeldHailTerrainBouncerState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailLineState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -59,7 +56,6 @@ pub struct NativeWeldHailLineState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailFlashState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -70,7 +66,6 @@ pub struct NativeWeldHailFlashState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldHailKnockbackState {
     pub common: NativeWeldActorBase,
     pub delta: Vec2,

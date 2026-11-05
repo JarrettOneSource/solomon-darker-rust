@@ -34,7 +34,7 @@ fn membership_changes_preserve_admission_identity_and_saved_continuation() {
         assert_eq!(
             serde_json::to_value(live.participant(id).unwrap()).unwrap(),
             serde_json::to_value(&original.participants[id]).unwrap(),
-            "membership changes preserve every retained component for {id}"
+            "membership changes preserve every retained field for {id}"
         );
     }
 

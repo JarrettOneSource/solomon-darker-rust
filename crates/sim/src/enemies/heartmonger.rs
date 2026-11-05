@@ -20,7 +20,6 @@ pub const NATIVE_HEARTMONGER_BLIND_CHANCES: [f64; 5] = [0.0, 5.0, 10.0, 30.0, 10
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct DetachedCrow {
     pub flight: CrowState,
     pub owner_actor_id: usize,
