@@ -278,7 +278,7 @@ impl EnemyWorld {
             actor.position = position;
             return true;
         }
-        let Some(mut maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == actor_id) else {
+        let Some(maggot) = self.maggots.iter_mut().find(|maggot| maggot.id == actor_id) else {
             return false;
         };
         if maggot.life_state != EnemyLifeState::Alive || !maggot.combat_active {

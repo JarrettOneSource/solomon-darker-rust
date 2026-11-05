@@ -11,7 +11,7 @@ use solomon_sim::enemies::actor_presentation::{
     native_enemy_presentation_input, native_maggot_presentation_input,
 };
 use solomon_sim::enemies::model::{
-    EnemyActor, EnemyBrain, EnemyDeathEffect, EnemyEvent, MaggotRead, SpiderPhase,
+    EnemyActor, EnemyBrain, EnemyDeathEffect, EnemyEvent, SpiderPhase,
 };
 use solomon_sim::enemies::presentation::NativeEnemyEffectPresentationInput;
 use solomon_sim::enemies::projectiles::{
@@ -75,7 +75,7 @@ pub(super) fn from_world(
     }
     let tick = world.last_step_tick.unwrap_or(presentation_tick as u64);
     for maggot in world.maggots.iter() {
-        metadata.maggots.insert(maggot.id, native_maggot_presentation_input(&maggot, tick));
+        metadata.maggots.insert(maggot.id, native_maggot_presentation_input(maggot, tick));
     }
     for projectile in world.projectiles.iter() {
         metadata
@@ -291,16 +291,16 @@ pub(super) fn interpolate(
         newer.maggots.iter(),
         blend,
         |maggot| maggot.id,
-        |maggot| maggot.snapshot(),
-        |first, second, blend| {
-            let mut maggot = endpoint(first, second, blend).snapshot();
+        |&maggot| maggot.clone(),
+        |&first, &second, blend| {
+            let mut maggot = endpoint(first, second, blend).clone();
             let sample = interpolate_maggot(
                 &older_metadata.maggots[&first.id],
                 &newer_metadata.maggots[&second.id],
                 blend,
             );
             maggot.current_health = sample.current_health;
-            maggot.controller.emergence_phase = sample.emergence_phase;
+            maggot.emergence_phase = sample.emergence_phase;
             maggot.heading_deg = sample.heading_deg;
             maggot.gait_pose = sample.pose;
             maggot.position = sample.position;

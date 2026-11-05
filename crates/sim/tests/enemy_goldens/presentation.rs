@@ -13,7 +13,7 @@ use solomon_sim::enemies::death_presentation::native_enemy_death_effect_plan;
 use solomon_sim::enemies::lightning_presentation::{
     native_dark_lightning_body, native_mage_lightning_pulse_plan,
 };
-use solomon_sim::enemies::model::{EnemyActor, MaggotRead};
+use solomon_sim::enemies::model::{EnemyActor, EnemyMaggotActor};
 use solomon_sim::enemies::projectile_presentation::native_enemy_projectile_effect_plan;
 use solomon_sim::enemies::rain_presentation::NativeRainCloud;
 use solomon_sim::enemies::tendrils::HeartmongerTendrils;
@@ -267,7 +267,7 @@ impl EnemyPresentationGoldens {
             self.check_actor("ai", name, tick, actor);
         }
         for maggot in world.maggots.iter() {
-            self.check_maggot(name, tick, &maggot);
+            self.check_maggot(name, tick, maggot);
         }
         for effect in &world.projectile_effects {
             let record_key = key("projectile", name, tick, effect.state.id);
@@ -395,7 +395,7 @@ impl EnemyPresentationGoldens {
         }
     }
 
-    fn check_maggot(&mut self, name: &str, tick: u64, maggot: &impl MaggotRead) {
+    fn check_maggot(&mut self, name: &str, tick: u64, maggot: &EnemyMaggotActor) {
         let record_key = key("ai", name, tick, maggot.id);
         let Some(index) = self.maggot_index.get(&record_key) else { return };
         let record = &self.source["maggots"][index];

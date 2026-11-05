@@ -305,7 +305,7 @@ fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
 
 #[test]
 fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
-    use solomon_sim::enemies::model::{CoffinPhase, EnemyBrain, MaggotMovementPhase, MaggotRead};
+    use solomon_sim::enemies::model::{CoffinPhase, EnemyBrain, MaggotMovementPhase};
 
     let mut live = EnemyWorld::new("maggot-ecs", 50);
     let mut order = WorldPainterOrder::default();
@@ -331,7 +331,7 @@ fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
     step(&mut live, &[], 1, &mut order);
     let admitted: Vec<_> = live.maggots.iter().map(|maggot| maggot.id).collect();
     assert_eq!(admitted.len(), 3);
-    assert!(live.maggots.iter().all(|maggot| maggot.controller().emergence_tick == 0));
+    assert!(live.maggots.iter().all(|maggot| maggot.emergence_tick == 0));
     // Stop further releases while the existing brood emerges.
     live.actors.get_mut(0).unwrap().staff_movement_factor = 0.0;
     let middle = live.maggots.get(1).unwrap();
@@ -361,11 +361,7 @@ fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
         );
         assert_eq!(restored_order, order);
     }
-    assert!(
-        live.maggots
-            .iter()
-            .all(|maggot| maggot.controller().movement_phase == MaggotMovementPhase::Crawl)
-    );
+    assert!(live.maggots.iter().all(|maggot| maggot.movement_phase == MaggotMovementPhase::Crawl));
     live.actors.remove(0);
     restored.actors.remove(0);
     step(&mut live, &[], 61, &mut order);

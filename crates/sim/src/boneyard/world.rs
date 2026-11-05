@@ -751,7 +751,7 @@ impl BoneyardWorld {
                 actor.position = body.position;
             }
         }
-        for mut maggot in self.enemies.maggots.iter_mut() {
+        for maggot in self.enemies.maggots.iter_mut() {
             let id = format!("enemy-{}", maggot.id);
             if let Some(body) = bodies.iter().find(|body| body.id == id) {
                 maggot.position = body.position;

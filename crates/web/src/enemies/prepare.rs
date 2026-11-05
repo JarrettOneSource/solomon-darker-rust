@@ -147,9 +147,9 @@ impl EnemyView {
                 maggot.position,
                 match frame.presentation.and_then(|metadata| metadata.maggots.get(&maggot.id)) {
                     Some(sample) => {
-                        native_maggot_plan_with_input(&maggot, sample, frame.complex_lighting)
+                        native_maggot_plan_with_input(maggot, sample, frame.complex_lighting)
                     }
-                    None => native_maggot_plan(&maggot, frame.tick, frame.complex_lighting),
+                    None => native_maggot_plan(maggot, frame.tick, frame.complex_lighting),
                 },
                 true,
             );

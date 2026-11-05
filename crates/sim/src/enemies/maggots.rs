@@ -1,7 +1,5 @@
 //! Coffin-owned Maggot admission, movement, bite and terminal effects from `maggots.ts`.
 //! Emerging rows are real bodies; the separate admission pass decides combat ownership.
-mod storage;
-pub use storage::{MaggotActors, MaggotMut, MaggotRead, MaggotRef};
 
 use super::EnemyToken;
 use super::config::EnemyFamilyConfig;
@@ -45,7 +43,7 @@ impl EnemyWorld {
         let mut counts: BTreeMap<usize, AdmissionCount> = BTreeMap::new();
         for maggot in self.maggots.iter() {
             if maggot.life_state != EnemyLifeState::Alive
-                || maggot.controller().movement_phase != MaggotMovementPhase::Crawl
+                || maggot.movement_phase != MaggotMovementPhase::Crawl
             {
                 continue;
             }
@@ -86,7 +84,7 @@ impl EnemyWorld {
                 }
                 let death_tick =
                     context.tick.saturating_sub(source.death_started_tick.unwrap_or(context.tick));
-                if source.controller.last_attack_tick.is_some() && death_tick < 6 {
+                if source.last_attack_tick.is_some() && death_tick < 6 {
                     source.death_tick = death_tick;
                     // Native mark-only bite disposal leaves the grid at t+3.
                     source.native_tree_query_member &= death_tick < 3;
@@ -112,9 +110,9 @@ impl EnemyWorld {
             if effect.disrupted_ticks > 0 || effect.time_scale == 0.0 {
                 return true;
             }
-            if source.controller.movement_phase == MaggotMovementPhase::Emerging {
+            if source.movement_phase == MaggotMovementPhase::Emerging {
                 step_emerging_maggot(source, context);
-                if source.controller.movement_phase == MaggotMovementPhase::Emerging {
+                if source.movement_phase == MaggotMovementPhase::Emerging {
                     return true;
                 }
                 if !admit_maggot(self, source, context, &mut counts, &owners) {
@@ -122,30 +120,27 @@ impl EnemyWorld {
                 }
             }
             if !source.combat_active {
-                source.controller.target_player_id = None;
+                source.target_player_id = None;
                 return true;
             }
-            let current =
-                target_by_id(source.controller.target_player_id.as_deref(), context.players);
+            let current = target_by_id(source.target_player_id.as_deref(), context.players);
             if !current.is_some_and(|current| {
-                target_eligible(current)
-                    && context.tick < source.controller.next_target_refresh_tick
+                target_eligible(current) && context.tick < source.next_target_refresh_tick
             }) {
                 let selected = nearest_eligible_target(source.position, context.players)
                     .map(|target| target.id.clone());
-                if selected != source.controller.target_player_id {
-                    source.controller.path.clear_route();
+                if selected != source.target_player_id {
+                    source.path.clear_route();
                 }
-                source.controller.target_player_id = selected;
-                source.controller.next_target_refresh_tick =
+                source.target_player_id = selected;
+                source.next_target_refresh_tick =
                     context.tick + native_enemy_target_refresh_ticks(1);
             }
-            let target =
-                target_by_id(source.controller.target_player_id.as_deref(), context.players);
-            if source.controller.path.reorientation_ticks_remaining > 0 {
-                source.body.heading_deg = source.controller.path.step_reorientation(
-                    source.body.heading_deg,
-                    source.body.position,
+            let target = target_by_id(source.target_player_id.as_deref(), context.players);
+            if source.path.reorientation_ticks_remaining > 0 {
+                source.heading_deg = source.path.step_reorientation(
+                    source.heading_deg,
+                    source.position,
                     target.map(|target| target.position),
                 );
                 return true;
@@ -158,7 +153,7 @@ impl EnemyWorld {
                 && !fleeing
                 && distance <= 18.0_f64.max(source.collision_radius + target.collision_radius)
             {
-                if context.tick >= source.controller.next_attack_tick {
+                if context.tick >= source.next_attack_tick {
                     let mut event =
                         EnemyEvent::new(EnemyEventKind::AttackMarker, source.id, context.tick);
                     event.target_player_id = Some(Some(target.id.clone()));
@@ -179,13 +174,13 @@ impl EnemyWorld {
                         target.position.x - source.position.x,
                         target.position.y - source.position.y,
                     );
-                    source.controller.last_attack_tick = Some(context.tick);
+                    source.last_attack_tick = Some(context.tick);
                     source.life_state = EnemyLifeState::Dying;
                     source.terminal_emitted = false;
                 }
                 return true;
             }
-            if context.tick < source.controller.next_movement_tick {
+            if context.tick < source.next_movement_tick {
                 return true;
             }
             move_maggot(self, source, context, fleeing, effect.time_scale);
@@ -197,7 +192,7 @@ impl EnemyWorld {
 
 fn admit_maggot(
     world: &mut EnemyWorld,
-    source: &mut MaggotMut<'_>,
+    source: &mut EnemyMaggotActor,
     context: &EnemyStepContext<'_>,
     counts: &mut BTreeMap<usize, AdmissionCount>,
     owners: &BTreeMap<usize, usize>,
@@ -212,10 +207,9 @@ fn admit_maggot(
         count.inactive -= 1;
         count.active += 1;
         source.combat_active = true;
-        source.controller.next_attack_tick = context.tick + 10;
-        source.controller.target_player_id =
-            nearest_eligible_target(source.position, context.players)
-                .map(|target| target.id.clone());
+        source.next_attack_tick = context.tick + 10;
+        source.target_player_id = nearest_eligible_target(source.position, context.players)
+            .map(|target| target.id.clone());
         return true;
     }
     if count.inactive > 30 {
@@ -224,18 +218,18 @@ fn admit_maggot(
         return false;
     }
     source.combat_active = false;
-    source.controller.target_player_id = None;
+    source.target_player_id = None;
     true
 }
 
 fn move_maggot(
     world: &mut EnemyWorld,
-    source: &mut MaggotMut<'_>,
+    source: &mut EnemyMaggotActor,
     context: &EnemyStepContext<'_>,
     fleeing: bool,
     speed_scale: f64,
 ) {
-    let target = target_by_id(source.controller.target_player_id.as_deref(), context.players);
+    let target = target_by_id(source.target_player_id.as_deref(), context.players);
     let target_heading = target.map_or(0.0, |target| {
         if hypot(target.velocity_per_tick.x, target.velocity_per_tick.y) == 0.0 {
             target.heading_deg.unwrap_or(0.0)
@@ -252,7 +246,7 @@ fn move_maggot(
         movement_per_tick: 0.5 / MOVEMENT_CADENCE_TICKS as f64
             * speed_scale
             * source.staff_movement_factor
-            * source.controller.path.speed_factor,
+            * source.path.speed_factor,
         radial_direction: if fleeing {
             RadialDirection::Retreat
         } else {
@@ -263,7 +257,7 @@ fn move_maggot(
         target_heading_deg: target_heading,
         target_position: target.map(|target| target.position),
     };
-    let mut path = source.controller.path;
+    let mut path = source.path;
     let mut goal = native_enemy_steering_goal(&path, &request);
     if !fleeing {
         let routed = resolve_native_enemy_path_goal(
@@ -314,19 +308,18 @@ fn move_maggot(
     );
     if traveled != 0.0 {
         source.gait_pose = positive_modulo(source.gait_pose + traveled / 2.0, 2.0);
-        source.controller.last_movement_tick = Some(context.tick);
+        source.last_movement_tick = Some(context.tick);
     }
     source.heading_deg = steering.heading_deg;
-    source.controller.next_movement_tick = context.tick + MOVEMENT_CADENCE_TICKS;
-    source.controller.path = path;
+    source.next_movement_tick = context.tick + MOVEMENT_CADENCE_TICKS;
+    source.path = path;
     source.position = position;
     // Native free movement rebinds even when the resolved displacement is zero.
     source.native_tree_query_member = true;
 }
 
-fn step_emerging_maggot(source: &mut MaggotMut<'_>, context: &EnemyStepContext<'_>) {
-    let requested =
-        context.tick.saturating_sub(source.spawn_tick + source.controller.emergence_tick);
+fn step_emerging_maggot(source: &mut EnemyMaggotActor, context: &EnemyStepContext<'_>) {
+    let requested = context.tick.saturating_sub(source.spawn_tick + source.emergence_tick);
     if requested == 0 {
         return;
     }
@@ -334,26 +327,25 @@ fn step_emerging_maggot(source: &mut MaggotMut<'_>, context: &EnemyStepContext<'
     let mut settled = false;
     let mut delta = Vec2::ZERO;
     while elapsed < requested {
-        delta.x += source.controller.launch_velocity.x;
-        delta.y += source.controller.launch_velocity.y;
+        delta.x += source.launch_velocity.x;
+        delta.y += source.launch_velocity.y;
         source.vertical_offset = fround(source.vertical_offset + source.vertical_velocity);
         source.vertical_velocity = fround(source.vertical_velocity + 0.075);
-        source.controller.emergence_phase = fround(source.controller.emergence_phase + 0.25);
-        if source.controller.emergence_phase >= 5.0 {
-            source.controller.emergence_phase = fround(source.controller.emergence_phase - 5.0);
+        source.emergence_phase = fround(source.emergence_phase + 0.25);
+        if source.emergence_phase >= 5.0 {
+            source.emergence_phase = fround(source.emergence_phase - 5.0);
         }
         elapsed += 1;
         if source.vertical_offset <= 0.0 {
             continue;
         }
-        source.vertical_velocity = source.controller.landing_bounce_velocity;
-        source.controller.launch_velocity = Vec2::new(
-            fround(source.controller.launch_velocity.x * 0.5),
-            fround(source.controller.launch_velocity.y * 0.5),
+        source.vertical_velocity = source.landing_bounce_velocity;
+        source.launch_velocity = Vec2::new(
+            fround(source.launch_velocity.x * 0.5),
+            fround(source.launch_velocity.y * 0.5),
         );
-        source.controller.landing_bounce_velocity =
-            fround(source.controller.landing_bounce_velocity * 0.5);
-        if source.controller.landing_bounce_velocity > -0.25 {
+        source.landing_bounce_velocity = fround(source.landing_bounce_velocity * 0.5);
+        if source.landing_bounce_velocity > -0.25 {
             settled = true;
             source.vertical_offset = 0.0;
             break;
@@ -372,22 +364,21 @@ fn step_emerging_maggot(source: &mut MaggotMut<'_>, context: &EnemyStepContext<'
         "resolved emerging Maggot position must be finite"
     );
     if hypot(position.x - source.position.x, position.y - source.position.y) != 0.0 {
-        source.controller.last_movement_tick = Some(context.tick);
+        source.last_movement_tick = Some(context.tick);
     }
-    source.controller.emergence_tick += elapsed;
-    source.controller.movement_phase =
+    source.emergence_tick += elapsed;
+    source.movement_phase =
         if settled { MaggotMovementPhase::Crawl } else { MaggotMovementPhase::Emerging };
-    source.controller.next_movement_tick =
-        context.tick + if settled { MOVEMENT_CADENCE_TICKS } else { 1 };
+    source.next_movement_tick = context.tick + if settled { MOVEMENT_CADENCE_TICKS } else { 1 };
     source.position = position;
 }
 
-fn retire_maggot(world: &mut EnemyWorld, maggot: &impl MaggotRead, tick: u64) {
+fn retire_maggot(world: &mut EnemyWorld, maggot: &EnemyMaggotActor, tick: u64) {
     let event_id = world.emit_event(EnemyEvent::new(EnemyEventKind::EnemyRetired, maggot.id, tick));
     world.retired.push(EnemyRetirement { actor_id: maggot.id, event_id });
 }
 
-fn emit_maggot_death_sounds(world: &mut EnemyWorld, maggot: &impl MaggotRead, tick: u64) {
+fn emit_maggot_death_sounds(world: &mut EnemyWorld, maggot: &EnemyMaggotActor, tick: u64) {
     let pitch = 1.0 + world.draw_unit() * 0.2;
     let sound = [EnemySound::MaggotSquish1, EnemySound::MaggotSquish2, EnemySound::MaggotSquish3]
         [world.draw_integer(3) as usize];
@@ -400,7 +391,7 @@ fn emit_maggot_death_sounds(world: &mut EnemyWorld, maggot: &impl MaggotRead, ti
 }
 fn emit_maggot_death_sound(
     world: &mut EnemyWorld,
-    maggot: &impl MaggotRead,
+    maggot: &EnemyMaggotActor,
     tick: u64,
     sound: EnemySound,
     pitch: f64,
@@ -416,7 +407,7 @@ fn emit_maggot_death_sound(
 
 fn spawn_maggot_death_effects(
     world: &mut EnemyWorld,
-    maggot: &impl MaggotRead,
+    maggot: &EnemyMaggotActor,
     tick: u64,
     enhanced_effects: bool,
     order: &mut WorldPainterOrder,
