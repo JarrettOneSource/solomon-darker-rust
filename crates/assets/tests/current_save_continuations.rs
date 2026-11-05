@@ -68,10 +68,57 @@ fn check_case(case: &Value) {
         .collect();
     support::assert_website_json(
         &serde_json::from_str(&reencoded).unwrap(),
-        &case["reencoded"],
+        &current_document_expectation(&case["reencoded"]),
         name,
         &trig_paths.iter().map(String::as_str).collect::<Vec<_>>(),
     );
     let retired: Value = serde_json::from_str(&website_save::retire(&document).unwrap()).unwrap();
-    support::assert_website_json(&retired, &case["retired"], &format!("{name} retired"), &[]);
+    support::assert_website_json(
+        &retired,
+        &current_document_expectation(&case["retired"]),
+        &format!("{name} retired"),
+        &[],
+    );
+}
+
+fn current_document_expectation(recorded: &Value) -> Value {
+    let mut expected = recorded.clone();
+    assert_eq!(expected["schemaVersion"], 51);
+    expected["schemaVersion"] = serde_json::json!(website_save::SCHEMA_VERSION);
+    let Some(actors) = expected
+        .pointer_mut("/continuation/simulation/primarySpells/transients")
+        .and_then(Value::as_array_mut)
+    else {
+        return expected;
+    };
+    for actor in actors {
+        if actor["kind"] != "weld-persistent" || actor["buildId"] != 1006 {
+            continue;
+        }
+        // These four frozen actors predate schema 52. Held rocks receive the
+        // native release speed; existing flight retains its recorded velocity
+        // magnitude. Their directions are south and south plus ten degrees.
+        // No saved motion, identity, damage, RNG or other field is discarded.
+        let (speed, heading, reacquires) = match (actor["phase"].as_str(), actor["id"].as_u64()) {
+            (Some("held"), Some(1)) => (2.25, 180.0, true),
+            (Some("flight"), Some(1)) => (3.3000001907348633, 180.0, false),
+            (Some("flight"), Some(2)) => (2.999999931662434, 190.0, false),
+            _ => panic!("unqualified recorded Boulder"),
+        };
+        let fields = actor.as_object_mut().unwrap();
+        let clock = fields.remove("lifetimeTicksRemaining").unwrap();
+        let turn = fields.remove("speedFactor").unwrap();
+        for (key, value) in [
+            ("flightSpeed", serde_json::json!(speed)),
+            ("headingDegrees", serde_json::json!(heading)),
+            ("reacquiresTarget", serde_json::json!(reacquires)),
+            ("targetId", Value::Null),
+            ("trackingTicksRemaining", clock),
+            ("turnAccumulator", serde_json::json!(0.01_f32 as f64)),
+            ("turnInput", turn),
+        ] {
+            assert!(fields.insert(key.into(), value).is_none());
+        }
+    }
+    expected
 }

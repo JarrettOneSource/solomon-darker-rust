@@ -3,15 +3,15 @@
 use super::MobileUiEditor;
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, FontFamily, FontId, Painter, Pos2, Rect, Stroke, pos2, vec2};
-use solomon_sim::appearance::equipment::native_wizard_icon_primary_tint;
 use solomon_sim::belt::{
     NATIVE_BELT_SLOT_COUNT, NativeBeltEntry, NativeBeltPotionKind, native_belt_entry_item,
     native_belt_potion_projection,
 };
-use solomon_sim::economy::{DOWSING_EQUIPMENT_RECIPES, EquipmentType, HubInventoryItem};
+use solomon_sim::economy::{EquipmentType, HubInventoryItem};
 use solomon_sim::hud::quickbar::{
     NativeSkillQuickbarCooldownPresentation, native_skill_quickbar_icon_alpha,
 };
+use solomon_sim::hud::{native_inventory_item_icon_tints, native_inventory_item_icon_transform};
 use solomon_sim::mobile_ui::{MobileUiElementId, mobile_ui_belt_element_id};
 use solomon_sim::player::PlayerState;
 use solomon_sim::profile::native_skill_category;
@@ -23,7 +23,7 @@ use solomon_sim::secondary::{
 struct ItemIcon {
     id: u64,
     records: Vec<usize>,
-    tints: [Option<u32>; 2],
+    tints: [u32; 2],
     equipment_type: Option<EquipmentType>,
     quantity: u64,
 }
@@ -129,20 +129,7 @@ fn item_icon(item: &HubInventoryItem, quantity: u64, player: &PlayerState) -> It
         records: item.icon_records.clone(),
         equipment_type: item.equipment_type,
         quantity,
-        tints: if matches!(item.equipment_type, Some(EquipmentType::Hat | EquipmentType::Robe)) {
-            item.icon_tints
-                .or_else(|| {
-                    item.recipe_index
-                        .and_then(|index| DOWSING_EQUIPMENT_RECIPES.get(index))
-                        .map(|recipe| recipe.icon_tints)
-                })
-                .unwrap_or([
-                    Some(native_wizard_icon_primary_tint(player.selection.element)),
-                    Some(0xffffff),
-                ])
-        } else {
-            [None, None]
-        },
+        tints: native_inventory_item_icon_tints(item, player.selection.element),
     }
 }
 
@@ -497,16 +484,11 @@ impl MobileUiEditor {
                 )?;
             }
             Some(BeltIcon::Item(item)) => {
-                let (translation, rotation) = match item.equipment_type {
-                    Some(EquipmentType::Amulet) => (vec2(0.0, -5.0), 0.0),
-                    Some(EquipmentType::Staff) => {
-                        (vec2(-22.94306, 32.76608), 35.0_f32.to_radians())
-                    }
-                    Some(EquipmentType::Wand) => (vec2(0.0, 0.0), 45.0_f32.to_radians()),
-                    _ => (egui::Vec2::ZERO, 0.0),
-                };
+                let ([x, y], rotation) = native_inventory_item_icon_transform(item.equipment_type);
+                let translation = vec2(x as f32, y as f32);
+                let rotation = (rotation as f32).to_radians();
                 for (index, record) in item.records.iter().enumerate() {
-                    let tint = item.tints.get(index).copied().flatten().unwrap_or(0xffffff);
+                    let tint = item.tints.get(index).copied().unwrap_or(0xffffff);
                     paint.art(
                         frame,
                         painter,

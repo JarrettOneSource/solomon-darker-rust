@@ -12,7 +12,7 @@ use solomon_modding::package::{
     compile_web_session_content_definitions, materialize_web_session_content_value,
 };
 use solomon_sim::boneyard::{BoneyardSource, LoadedBoneyard};
-use solomon_sim::economy::{EquipmentSlot, HubInventoryAction};
+use solomon_sim::economy::{BoastSelection, EquipmentSlot, HubInventoryAction};
 use solomon_sim::enemies::SpawnLocationPolicy;
 use solomon_sim::modding::{LuaObject, LuaValue};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
@@ -76,6 +76,67 @@ struct Ui {
     content_id: String,
     player_id: String,
     request_id: u64,
+}
+
+#[test]
+fn admitted_mod_skill_keeps_its_authored_random_boast_on_the_next_queued_offer() {
+    let mut fixture: Value = serde_json::from_str(include_str!(
+        "../../sim/tests/fixtures/website/mod-host-services-goldens.json"
+    ))
+    .unwrap();
+    let source = fixture["payload"]["mods"][0]["entryScript"].as_str().unwrap();
+    let random_boast =
+        source.replace("stock_icon = 6,", "stock_icon = 6, random_skill_choices = true,");
+    assert_ne!(source, random_boast, "the admitted fixture contains the authored Boast");
+    fixture["payload"]["mods"][0]["entryScript"] = json!(random_boast);
+    let payload = serde_json::from_value(fixture["payload"].clone()).unwrap();
+    let package = compile_web_session_content_definitions(
+        materialize_web_session_content_value(&payload).unwrap(),
+    )
+    .unwrap();
+    let mut game = GameSession::new(
+        "wizard".into(),
+        NewGameSelection {
+            name: "Tester".into(),
+            element: WizardElement::Ether,
+            discipline: WizardDiscipline::Arcane,
+        },
+        GameSessionOptions::default(),
+    );
+    let mut host = PreparedModHost::with_clock(&package, &mut game, || 0.0).unwrap();
+    let selection = host.runtime().content.boasts().next().unwrap().selection.clone();
+    game.participants.get_mut("wizard").unwrap().player.economy.npc.boast.selected =
+        Some(BoastSelection::Mod(selection));
+    game.grant_experience_with_extensions("wizard", 801.0, Some(host.runtime()));
+    let progression = &game.participants.get("wizard").unwrap().player.progression;
+    let level = progression.level;
+    let offer = progression.pending_offer.as_ref().unwrap();
+    let sequence = offer.sequence;
+    assert!(offer.automatic_choice_index.is_some());
+    let context = serde_json::from_value(json!({ "participant_id": "wizard" })).unwrap();
+    host.step(
+        &[PreparedModDerivedEvent {
+            name: "level.up".into(),
+            payload: serde_json::from_value(json!({ "level": level, "player_id": "wizard" }))
+                .unwrap(),
+        }],
+        game.ticks,
+        "profile",
+        &context,
+        &mut game,
+    )
+    .unwrap();
+    let skill = host.runtime().content.skills().next().unwrap().common.content_id.clone();
+    let mod_sequence = host.checkpoint().unwrap().skills.offers[0].sequence;
+    host.choose_skill("wizard", &skill, mod_sequence, sequence, &mut game).unwrap();
+    assert_eq!(host.checkpoint().unwrap().skills.ranks[0].rank, 1);
+    let next =
+        game.participants.get("wizard").unwrap().player.progression.pending_offer.clone().unwrap();
+    assert_ne!(next.sequence, sequence);
+    assert!(
+        next.automatic_choice_index.is_some(),
+        "the next queued offer keeps the admitted resolver"
+    );
 }
 
 #[test]

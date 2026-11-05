@@ -18,6 +18,12 @@ mod skill_selector;
 mod skills;
 mod viewport;
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod navigation_tests;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod automatic_unequip_tests;
+
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 
@@ -704,6 +710,15 @@ impl PlayerPanels {
                 return Ok(());
             }
             let code = key.code;
+            if (self.notice.is_some() || self.dye.is_some())
+                && (code == "Escape"
+                    || code == self.controls.open_menu
+                    || code == self.controls.open_inventory
+                    || code == self.controls.open_skills)
+            {
+                self.back(now)?;
+                return Ok(());
+            }
             if self.panel.is_none() {
                 if code == self.controls.open_inventory {
                     self.actions.push(PlayerPanelAction::OpenInventory);
@@ -712,18 +727,18 @@ impl PlayerPanels {
                     self.actions.push(PlayerPanelAction::OpenSkills);
                 }
             } else if code == "Escape" || code == self.controls.open_menu {
-                if matches!(self.panel, Some(PlayerPanel::Service(_)))
-                    && self.notice.is_none()
-                    && self.dye.is_none()
-                {
-                    // HubInventoryUi gives the menu key a direct service close;
-                    // the Inventory key and footer retain Sack Back navigation.
+                if matches!(
+                    self.panel,
+                    Some(PlayerPanel::Inventory | PlayerPanel::Skills | PlayerPanel::Service(_))
+                ) {
+                    // Report 22: Menu closes the whole optional book; the
+                    // Inventory binding and footer retain one-Sack Back.
                     self.close(now, None);
                 } else {
                     self.back(now)?;
                 }
             } else if code == self.controls.open_inventory {
-                if matches!(self.panel, Some(PlayerPanel::Service(_))) {
+                if self.inventory_owner_active() {
                     self.back(now)?;
                 } else {
                     self.close(
@@ -785,6 +800,14 @@ impl PlayerPanels {
                     return Ok(());
                 }
                 self.pointer = point;
+                if target == Target::Back && self.selected_backpack_item_id(snapshot).is_none() {
+                    // Retail kind-7 holder activates on the first press. Do not
+                    // retain a release that could pop the next settled page.
+                    self.press = None;
+                    self.pressed_npc_selector = None;
+                    self.back(now)?;
+                    return Ok(());
+                }
                 let inventory_item_id = match target {
                     Target::Item(id) => Some(id),
                     Target::Equipment(slot) => {
@@ -939,7 +962,19 @@ impl PlayerPanels {
         }
         match target {
             Target::View(_) => unreachable!("section navigation handled above"),
-            Target::Close | Target::Back => self.back(now)?,
+            Target::Close => self.back(now)?,
+            Target::Back => {
+                if let Some(item_id) = self.selected_backpack_item_id(snapshot) {
+                    self.sound_at_rate(AudioCue::BackpackOpen, 1.25);
+                    self.actions.push(PlayerPanelAction::Inventory(HubInventoryAction::Move {
+                        item_id,
+                        destination_sack_id: self.sack_path.iter().rev().nth(1).copied(),
+                        destination_slot: None,
+                    }));
+                } else {
+                    self.back(now)?;
+                }
+            }
             Target::Inventory => self.close(now, Some(PlayerPanel::Inventory)),
             Target::Skills => self.close(now, Some(PlayerPanel::Skills)),
             Target::Boasts => {
@@ -1119,7 +1154,7 @@ impl PlayerPanels {
                             self.actions.push(PlayerPanelAction::Inventory(
                                 HubInventoryAction::Unequip {
                                     slot,
-                                    destination_sack_id: None,
+                                    destination_sack_id: self.sack_path.last().copied(),
                                     destination_slot: None,
                                 },
                             ));
@@ -1160,6 +1195,12 @@ impl PlayerPanels {
         inventory_items_at_sack_path(&snapshot.economy.backpack, &self.sack_path)
             .unwrap_or(&snapshot.economy.backpack)
     }
+
+    fn selected_backpack_item_id(&self, snapshot: &PlayerPanelSnapshot<'_>) -> Option<u64> {
+        let Some(Target::Item(item_id)) = self.selected else { return None };
+        find_inventory_item(&snapshot.economy.backpack, item_id).map(|item| item.id)
+    }
+
     pub fn update(
         &mut self,
         snapshot: &PlayerPanelSnapshot<'_>,

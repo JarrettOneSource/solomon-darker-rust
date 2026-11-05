@@ -220,6 +220,61 @@ fn ready(client: &mut Client, frame: &SnapshotFrame<Value>) {
 }
 
 #[test]
+fn report103_standalone_solo_entry_modal_release_and_restart_have_no_timed_grace() {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let directory =
+        std::env::temp_dir().join(format!("solomon-solo-resume-{}-{unique}", std::process::id()));
+    let checkpoint = directory.join("host.json");
+    let mut host = HostThread::start(checkpoint.clone());
+    let mut client = Client::connect(&host);
+    let (credentials, _) = client.hello("Solo", None);
+    client.send(ClientMessage::StartRun { tutorial: false });
+    let loading = client.frame(|frame| frame.host.loading_run_id.is_some());
+    assert_eq!(loading.host.resume_grace.as_ref().unwrap().remaining_ms, None);
+    let run_id = loading.host.loading_run_id.clone().unwrap();
+    ready(&mut client, &loading);
+    let admitted = client.frame(|frame| {
+        frame.sequence > loading.sequence
+            && frame.host.loading_run_id.is_none()
+            && frame.host.resume_grace.as_ref().is_none_or(|grace| grace.remaining_ms.is_some())
+    });
+    assert!(admitted.host.resume_grace.is_none(), "solo entry must not install a deadline");
+    let mut running = client.frame(|frame| tick(frame) > tick(&loading));
+    for source in [PauseSource::PauseMenu, PauseSource::Inventory, PauseSource::SkillBook] {
+        client.send(ClientMessage::GameplayPause { paused: true, source });
+        let paused = client.frame(|frame| frame.host.pause.is_some());
+        assert!(tick(&paused) >= tick(&running));
+        client.send(ClientMessage::GameplayPause { paused: false, source });
+        let released =
+            client.frame(|frame| frame.sequence > paused.sequence && frame.host.pause.is_none());
+        assert!(released.host.resume_grace.is_none(), "solo {source:?}");
+        running = client.frame(|frame| tick(frame) > tick(&paused));
+        assert!(running.host.resume_grace.is_none());
+    }
+    let saved_tick = client.save(1);
+    // Restart from the real durable authority checkpoint with a lost old transport.
+    host.finish();
+    drop(client);
+    let mut host = HostThread::start(checkpoint);
+    let mut client = Client::connect(&host);
+    let (_, restored) = client.hello("Solo", Some(credentials));
+    assert_eq!(restored.snapshot["run"]["run_id"], run_id);
+    assert!(tick(&restored) >= saved_tick);
+    assert_eq!(restored.host.resume_grace.as_ref().unwrap().remaining_ms, None);
+    ready(&mut client, &restored);
+    let admitted = client.frame(|frame| {
+        frame.sequence > restored.sequence
+            && frame.host.loading_run_id.is_none()
+            && frame.host.resume_grace.as_ref().is_none_or(|grace| grace.remaining_ms.is_some())
+    });
+    assert!(admitted.host.resume_grace.is_none(), "solo restart must not install a deadline");
+    client.frame(|frame| tick(frame) > tick(&restored));
+    host.finish();
+    drop(client);
+    fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn interrupted_reconnect_keeps_the_last_received_credential_until_admission_is_acknowledged() {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
     let directory = std::env::temp_dir()

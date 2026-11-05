@@ -110,6 +110,95 @@ fn finish_close(client: &mut WebSocket<TcpStream>) {
 }
 
 #[test]
+fn accepted_close_frames_keep_their_identity_separate_from_unclosed_tcp() {
+    let assets = TestAssets::new();
+    let mut server = assets.start(TransportConfig::default());
+    let origin = format!("http://{}", server.local_addr());
+    for (frame, expected_code) in [
+        (None, 1005),
+        (Some(CloseFrame { code: 1000.into(), reason: "finished".into() }), 1000),
+        (Some(CloseFrame { code: 1001.into(), reason: "proxy reload".into() }), 1001),
+    ] {
+        let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+        let peer = connected(&server);
+        let expected_reason = frame.as_ref().map_or("", |frame| frame.reason.as_str()).to_owned();
+        client.close(frame).unwrap();
+        let Message::Close(reply) = next_message(&mut client) else {
+            panic!("the peer receives its actual close reply");
+        };
+        if expected_code == 1005 {
+            assert!(reply.is_none(), "local no-status identity must not be sent on the wire");
+        } else {
+            assert_eq!(u16::from(reply.unwrap().code), expected_code);
+        }
+        finish_close(&mut client);
+        let TransportEvent::Disconnected { peer_id, close } = next_event(&server) else {
+            panic!("the accepted Close retires its actual peer");
+        };
+        assert_eq!(peer_id, peer.id());
+        assert_eq!(close.code, Some(expected_code));
+        assert_eq!(close.reason, expected_reason);
+    }
+
+    let client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    drop(client);
+    let TransportEvent::Disconnected { peer_id, close } = next_event(&server) else {
+        panic!("an unclosed TCP stream still publishes its actual loss");
+    };
+    assert_eq!(peer_id, peer.id());
+    assert_eq!(close.code, None, "no accepted Close frame means actual transport loss");
+
+    let mut malformed = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    // A client Text frame without its required mask is a real framing violation.
+    malformed.get_mut().write_all(&[0x81, 0x01, b'x']).unwrap();
+    let Message::Close(Some(frame)) = next_message(&mut malformed) else {
+        panic!("malformed WebSocket frames still receive their protocol rejection");
+    };
+    assert_eq!(u16::from(frame.code), 1002);
+    let TransportEvent::Disconnected { peer_id, close } = next_event(&server) else {
+        panic!("the malformed peer retires with its protocol error");
+    };
+    assert_eq!(peer_id, peer.id());
+    assert_eq!(close.code, Some(1002));
+    server.shutdown();
+}
+
+#[test]
+fn tcp_loss_during_a_requested_close_keeps_the_accepted_close_identity() {
+    let assets = TestAssets::new();
+    let mut server = assets.start(TransportConfig::default());
+    let origin = format!("http://{}", server.local_addr());
+    for (code, reason) in [
+        (1000, "client disconnect"),
+        (1003, "game transport accepts text messages only"),
+        (1008, "game message rejected"),
+        (1012, "game updating"),
+    ] {
+        let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+        let peer = connected(&server);
+        if code == 1003 {
+            client.send(Message::Binary(vec![1, 2, 3].into())).unwrap();
+        } else {
+            peer.close(code, reason).unwrap();
+        }
+        let Message::Close(Some(frame)) = next_message(&mut client) else {
+            panic!("the requested close reached the peer before TCP ended");
+        };
+        assert_eq!(u16::from(frame.code), code);
+        client.get_ref().shutdown(std::net::Shutdown::Both).unwrap();
+        let TransportEvent::Disconnected { peer_id, close } = next_event(&server) else {
+            panic!("the interrupted close handshake retires its actual peer");
+        };
+        assert_eq!(peer_id, peer.id());
+        assert_eq!(close.code, Some(code));
+        assert_eq!(close.reason, reason);
+    }
+    server.shutdown();
+}
+
+#[test]
 fn game_sockets_bypass_asset_workers_and_keep_text_order_and_close_identity() {
     let assets = TestAssets::new();
     let server = assets.start(TransportConfig::default());

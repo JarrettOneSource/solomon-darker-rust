@@ -820,6 +820,17 @@ impl Renderer {
         self.forced_texture_color_mode = previous;
     }
 
+    /// Enchant Staff temporarily restores texture RGB for its learned gradient
+    /// inside a Stone diffuse capture, then resumes the captured hand colours.
+    pub fn draw_with_texture_rgb(&mut self, draw: impl FnOnce(&mut Self)) {
+        self.flush();
+        let previous = self.forced_texture_color_mode;
+        self.forced_texture_color_mode = Some(TextureColorMode::Texture);
+        draw(self);
+        self.flush();
+        self.forced_texture_color_mode = previous;
+    }
+
     /// Native Puppet hit sprites retain diffuse red and apply their parent alpha.
     pub fn draw_diffuse_with_opacity(&mut self, opacity: f32, draw: impl FnOnce(&mut Self)) {
         self.flush();
@@ -960,6 +971,33 @@ impl Renderer {
         self.standard_alpha = previous;
         self.erasing = previous_erasing;
         self.bind_blend();
+    }
+
+    /// InventoryScreen's scratch target uses D3D9 integer pixel centers and native
+    /// per-channel alpha. Ordinary UI groups keep SourceOver and WebGL centers.
+    pub fn render_native_ui_capture(
+        &mut self,
+        target: &RenderTarget,
+        logical: [f32; 2],
+        draw: impl FnOnce(&mut Self),
+    ) {
+        self.flush();
+        let centers = self.native_world_pixel_centers;
+        let alpha = self.standard_alpha;
+        let erasing = self.erasing;
+        let opacity = self.opacity;
+        self.native_world_pixel_centers = true;
+        self.standard_alpha = false;
+        self.erasing = false;
+        self.opacity = 1.0;
+        self.bind_blend();
+        self.render_to_color(target, logical, [0.0; 4], draw);
+        self.native_world_pixel_centers = centers;
+        self.standard_alpha = alpha;
+        self.erasing = erasing;
+        self.opacity = opacity;
+        self.bind_blend();
+        self.bind_projection(self.logical_size, [self.viewport[2] as f32, self.viewport[3] as f32]);
     }
 
     /// Remove the actual source alpha from a premultiplied GPU composition.

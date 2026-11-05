@@ -1,6 +1,6 @@
 //! Direct-join messages shared by the native authority and the WebAssembly client.
 //!
-//! This is the Rust port's own versioned protocol, not the Website's version 129 wire
+//! This is the Rust port's own versioned protocol, separate from the Website's wire
 //! format. Admission, input sequencing, pause and readiness follow `host/game-host.ts`;
 //! gameplay payloads reuse the actual simulation types rather than a second player model.
 
@@ -22,7 +22,9 @@ pub mod hosted;
 pub mod snapshot;
 pub mod transfer;
 
-pub const PROTOCOL_VERSION: u32 = 2;
+// Action poses and Boulder guidance are authoritative gameplay state.
+// Older clients must reject this host rather than silently omit those fields.
+pub const PROTOCOL_VERSION: u32 = 3;
 pub const WEBSOCKET_PATH: &str = "/session";
 pub const GAME_TICK_RATE: u32 = 100;
 pub const SNAPSHOT_RATE: u32 = 20;

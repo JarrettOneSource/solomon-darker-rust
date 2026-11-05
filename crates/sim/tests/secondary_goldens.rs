@@ -66,6 +66,7 @@ fn read_player(value: &Value) -> NativeSecondaryPlayerState {
         cast_action: value["castAction"].as_object().map(|_| NativeSecondaryCastAction {
             weapon_kind: weapon(&value["castAction"]["weaponKind"]),
             progress: value["castAction"]["progress"].as_f64().unwrap(),
+            hand: None,
         }),
         cast_sequence: value["castSequence"].as_u64().unwrap(),
         cast_spin_ticks_remaining: value["castSpinTicksRemaining"].as_u64().unwrap(),
@@ -142,7 +143,7 @@ fn assert_snapshot(actual: &Value, expected: &Value, path: &str) {
 }
 
 #[test]
-fn every_secondary_rank_cost_reserve_and_cast_clock_replays_the_website() {
+fn every_secondary_rank_cost_reserve_and_equipped_cast_clock_replays_the_website() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/secondary-goldens.json")).unwrap();
     for case in fixture["profiles"].as_array().unwrap() {
@@ -180,10 +181,19 @@ fn every_secondary_rank_cost_reserve_and_cast_clock_replays_the_website() {
             "{ability:?} mana"
         );
     }
-    for case in fixture["castActions"].as_array().unwrap() {
+    // This immutable Website fixture predates the recovered bare Cast2 clock.
+    // All eight equipped trajectories remain valid. The four no-item trajectories
+    // are superseded by retail rate/status/terminal cases in native_bare_cast.rs.
+    for case in fixture["castActions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|case| weapon(&case["weaponKind"]).is_some())
+    {
         let mut action = Some(NativeSecondaryCastAction {
             weapon_kind: weapon(&case["weaponKind"]),
             progress: 0.0,
+            hand: None,
         });
         let records = case["records"].as_array().unwrap();
         for (index, record) in records.iter().enumerate() {
@@ -191,7 +201,9 @@ fn every_secondary_rank_cost_reserve_and_cast_clock_replays_the_website() {
             action = step_native_secondary_cast_action(
                 action,
                 case["fasterCasterPercent"].as_f64().unwrap(),
-            );
+                1.0,
+            )
+            .action;
         }
         assert!(action.is_none());
     }
@@ -210,12 +222,19 @@ fn every_secondary_rank_cost_reserve_and_cast_clock_replays_the_website() {
         let factors = factors(&case["factors"]);
         let mut player = read_player(&case["initial"]);
         for (index, record) in case["records"].as_array().unwrap().iter().enumerate() {
-            player.step(&book, case["rechargeFactor"].as_f64().unwrap(), &factors);
-            assert_snapshot(
-                &player_snapshot(&player),
-                record,
-                &format!("cooldown tick {}", index + 1),
-            );
+            player.step(&book, case["rechargeFactor"].as_f64().unwrap(), &factors, 1.0);
+            let mut actual = player_snapshot(&player);
+            let mut expected = record.clone();
+            if case["initial"]["castAction"].is_object()
+                && case["initial"]["castAction"]["weaponKind"].is_null()
+            {
+                // This historical cooldown trajectory also projected the old
+                // Faster-Caster-scaled bare clock. Preserve its other fields;
+                // native_bare_cast independently covers the recovered action.
+                actual.as_object_mut().unwrap().remove("castAction");
+                expected.as_object_mut().unwrap().remove("castAction");
+            }
+            assert_snapshot(&actual, &expected, &format!("cooldown tick {}", index + 1));
         }
     }
     for case in fixture["focusCases"].as_array().unwrap() {
@@ -225,7 +244,7 @@ fn every_secondary_rank_cost_reserve_and_cast_clock_replays_the_website() {
         }
         let mut player = read_player(&case["initial"]);
         let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        player.step(&book, 0.0, &NativeOffensiveSpellFactors::default());
+        player.step(&book, 0.0, &NativeOffensiveSpellFactors::default(), 1.0);
         player.begin_cooldown(
             NativeSecondaryAbilityId::Stoneskin,
             10000.0,

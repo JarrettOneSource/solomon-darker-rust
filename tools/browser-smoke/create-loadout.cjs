@@ -50,8 +50,12 @@ fs.mkdirSync(output, {recursive:true});
     const randomized = await gpu.waitForUi(page, snapshot => snapshot.acceptedSelection?.name === 'Felix',
       'native randomized admission retains the accepted name');
     receipt.randomized = randomized.acceptedSelection;
-    assert.ok(['Fire','Water','Air','Earth','Ether'].includes(receipt.randomized.element));
-    assert.ok(['Body','Mind','Arcane'].includes(receipt.randomized.discipline));
+    const elements = ['Fire','Water','Air','Earth','Ether'];
+    // WizardDiscipline::ALL also accepts a distinct randomized elemental root.
+    assert.ok(elements.includes(receipt.randomized.element));
+    assert.ok(['Body','Mind','Arcane',...elements].includes(receipt.randomized.discipline));
+    assert.notEqual(receipt.randomized.discipline, receipt.randomized.element,
+      'native dice keep the two elemental roots distinct');
     receipt.checks.push('whole-loadout randomization retains the name and commits an actual native loadout');
     await page.screenshot({path:path.join(output, 'create-randomized-admitted.png')});
     // Each variant enters through an ordinary fresh-player College journey.

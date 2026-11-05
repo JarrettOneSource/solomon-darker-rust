@@ -207,21 +207,136 @@ fn sample_archive() -> RunArchive {
     recorder.close(RunArchiveEndReason::HostClosed).remove(0)
 }
 #[test]
-fn archives_from_before_snapshot_compaction_keep_their_complete_checkpoint() {
+fn supported_archive_protocols_keep_their_complete_checkpoint() {
     let archive = sample_archive();
     let (bytes, _) = super::encoding::serialize_archive(&archive, "historical-run").unwrap();
     let mut document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let checkpoint = document["states"][0]["checkpoint"].clone();
-    for version in [1, 2] {
+    for version in [1, 2, 3] {
         document["archive"]["protocolVersion"] = json!(version);
         let decoded = super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap())
-            .expect("wire-only compaction does not change archived gameplay state");
+            .expect("supported archives retain the canonical checkpoint");
         assert_eq!(decoded.archive.protocol_version, version);
         assert_eq!(serde_json::to_value(&decoded.states[0].checkpoint).unwrap(), checkpoint);
     }
-    for version in [0, 3] {
+    for version in [0, 4, u32::MAX] {
         document["archive"]["protocolVersion"] = json!(version);
         assert!(super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap()).is_err());
+    }
+}
+
+fn boulder_archive() -> Value {
+    use solomon_sim::spells::weld::{NativeWeldActorBirth, create_native_weld_persistent_actor};
+    let archive = sample_archive();
+    let (bytes, _) = super::encoding::serialize_archive(&archive, "boulder-history").unwrap();
+    let mut document: Value = serde_json::from_slice(&bytes).unwrap();
+    let held = create_native_weld_persistent_actor(
+        NativeWeldActorBirth {
+            build_id: 1006,
+            direction: Vec2::new(1.0, 0.0),
+            id: 41,
+            origin: Vec2::new(120.0, 200.0),
+            owner_id: "alpha",
+            tick: 7,
+            vector: &[12.0, 3.0, 1.0, 1.5, 2.5, 1.0],
+            world_key: "boneyard:first",
+        },
+        None,
+    );
+    let mut held = serde_json::to_value(held).unwrap();
+    held["EtherealBoulder"]["common"]["owner"]["age_ticks"] = json!(30);
+    let mut flight = held.clone();
+    let rock = &mut flight["EtherealBoulder"];
+    rock["common"]["owner"]["id"] = json!(42);
+    rock["phase"] = json!("Flight");
+    rock["quantity"] = json!(0);
+    rock["flight_ticks"] = json!(17);
+    rock["velocity"] = json!({"x":3.0,"y":4.0});
+    rock["flight_speed"] = json!(5.0);
+    rock["target_id"] = json!("enemy:99");
+    rock["turn_accumulator"] = json!(0.61_f32 as f64);
+    rock["tracking_ticks_remaining"] = json!(432);
+    rock["hit_target_ids"] = json!(["enemy:2"]);
+    let checkpoint = &mut document["states"][0]["checkpoint"];
+    checkpoint["ticks"] = json!(37);
+    checkpoint["spells"]["next_id"] = json!(43);
+    checkpoint["spells"]["transients"] = json!([
+        {"Weld":{"Persistent":held}},
+        {"Weld":{"Persistent":flight}}
+    ]);
+    let mut final_state = document["states"][0].clone();
+    final_state["checkpoint"]["ticks"] = json!(38);
+    document["states"].as_array_mut().unwrap().push(final_state);
+    document["archive"]["finalState"] = json!(1);
+    document
+}
+
+const BOULDER_GUIDANCE_FIELDS: [&str; 7] = [
+    "flight_speed",
+    "heading_degrees",
+    "reacquires_target",
+    "target_id",
+    "tracking_ticks_remaining",
+    "turn_accumulator",
+    "turn_input",
+];
+
+#[test]
+fn historical_boulder_archives_migrate_every_checkpoint_without_rewriting_identity() {
+    let current = boulder_archive();
+    let mut historical = current.clone();
+    let mut expected = current.clone();
+    for (state_index, state) in historical["states"].as_array_mut().unwrap().iter_mut().enumerate()
+    {
+        for (index, actor) in state["checkpoint"]["spells"]["transients"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .enumerate()
+        {
+            let rock = actor["Weld"]["Persistent"]["EtherealBoulder"].as_object_mut().unwrap();
+            for key in BOULDER_GUIDANCE_FIELDS {
+                rock.remove(key);
+            }
+            // These are the actual pre-guidance checkpoint fields, not current
+            // rows carrying an older protocol label. Stored motion is untouched.
+            rock.insert("lifetime_ticks_remaining".into(), json!(432));
+            rock.insert("speed_factor".into(), json!(1.5));
+            let migrated = &mut expected["states"][state_index]["checkpoint"]["spells"]["transients"]
+                [index]["Weld"]["Persistent"]["EtherealBoulder"];
+            migrated["target_id"] = Value::Null;
+            migrated["turn_accumulator"] = json!(0.01_f32 as f64);
+            migrated["tracking_ticks_remaining"] = json!(if index == 0 { 1750 } else { 432 });
+            migrated["reacquires_target"] = json!(index == 0);
+        }
+    }
+    for version in [1, 2] {
+        historical["archive"]["protocolVersion"] = json!(version);
+        expected["archive"]["protocolVersion"] = json!(version);
+        let bytes = serde_json::to_vec(&historical).unwrap();
+        let decoded = super::encoding::decode_archive(&bytes)
+            .unwrap_or_else(|error| panic!("legacy protocol{version}: {error}"));
+        assert_eq!(serde_json::to_value(decoded).unwrap(), expected, "protocol{version}");
+        assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), historical);
+    }
+    let decoded = super::encoding::decode_archive(&serde_json::to_vec(&current).unwrap()).unwrap();
+    assert_eq!(serde_json::to_value(decoded).unwrap(), current, "current guidance stays exact");
+}
+
+#[test]
+fn archived_boulders_reject_mixed_legacy_and_current_guidance() {
+    let mut document = boulder_archive();
+    document["archive"]["protocolVersion"] = json!(1);
+    let unreferenced = document["states"][1].clone();
+    document["states"].as_array_mut().unwrap().push(unreferenced);
+    for legacy in ["lifetime_ticks_remaining", "speed_factor"] {
+        let mut mixed = document.clone();
+        mixed["states"][2]["checkpoint"]["spells"]["transients"][1]["Weld"]["Persistent"]["EtherealBoulder"]
+            [legacy] = json!(1);
+        let error = super::encoding::decode_archive(&serde_json::to_vec(&mixed).unwrap())
+            .err()
+            .expect("even an unreferenced/mixed historical field must be rejected");
+        assert!(error.contains("mixes legacy"), "{legacy}: {error}");
     }
 }
 #[test]

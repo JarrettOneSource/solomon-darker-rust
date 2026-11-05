@@ -11,6 +11,7 @@ use super::{
     NativeSecondaryScreenFlashState, NativeSecondaryTarget, NativeSecondaryTargetEffectState,
 };
 use crate::float::fround;
+use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::{NativeRng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -74,6 +75,16 @@ impl Default for NativeSecondaryPlayerDamagePresentation {
     fn default() -> Self {
         Self { physical: false, enhanced_effects: true }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NativeSecondaryPlayerDamageInput<'a> {
+    pub player_id: &'a str,
+    pub amount: f64,
+    pub tick: u64,
+    pub position: Vec2,
+    pub world_key: &'a str,
+    pub presentation: NativeSecondaryPlayerDamagePresentation,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -409,13 +420,17 @@ impl NativeSecondarySimulationState {
 
     pub fn apply_player_damage(
         &mut self,
-        player_id: &str,
-        amount: f64,
-        tick: u64,
-        position: Vec2,
-        world_key: &str,
-        presentation: NativeSecondaryPlayerDamagePresentation,
+        input: NativeSecondaryPlayerDamageInput<'_>,
+        order: &mut WorldPainterOrder,
     ) -> NativeSecondaryPlayerDamageResult {
+        let NativeSecondaryPlayerDamageInput {
+            player_id,
+            amount,
+            tick,
+            position,
+            world_key,
+            presentation,
+        } = input;
         assert!(
             amount.is_finite() && amount >= 0.0,
             "secondary player damage is finite and non-negative"
@@ -435,12 +450,17 @@ impl NativeSecondarySimulationState {
                 return unabsorbed;
             }
             if presentation.physical {
+                let first_birth = self.next_actor_id;
                 self.spawn_stoneskin_chip(
                     player_id,
                     position,
                     world_key,
                     presentation.enhanced_effects,
                     None,
+                );
+                super::enroll_native_secondary_painter_owners(
+                    self.actors.iter_mut().filter(|actor| actor.id >= first_birth),
+                    order,
                 );
             }
             return absorbed;
@@ -498,6 +518,7 @@ impl NativeSecondarySimulationState {
             actor.scale = fround(2.0 + scale);
             actor.lifetime_ticks = 26;
             actor.variant = index;
+            actor.painter_registrations = vec![order.register(WorldManagerLane::Transient)];
             self.spawn_actor(actor);
         }
         if explosion_damage > 0.0 {
@@ -517,6 +538,7 @@ impl NativeSecondarySimulationState {
             actor.position = position;
             actor.presentation_rng = Some(presentation_rng);
             actor.radius = 110.0;
+            actor.painter_registrations = vec![order.register(WorldManagerLane::Transient)];
             self.spawn_actor(actor);
             let mut actor = NativeSecondaryActorState::new(
                 0,
@@ -532,6 +554,8 @@ impl NativeSecondarySimulationState {
             actor.radius = 75.0;
             actor.slow_factor = 0.0375_f32 as f64;
             actor.variant = 1;
+            actor.painter_registrations = vec![order.register(WorldManagerLane::Transient)];
+            actor.light_registration = Some(order.register(WorldManagerLane::Actor));
             self.spawn_actor(actor);
             let mut event = NativeSecondaryEventState::new(
                 NativeSecondaryEventKind::Impact,

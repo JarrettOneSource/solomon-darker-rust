@@ -90,7 +90,12 @@ struct HostTicket {
     admission: HostedAdmission,
     expires_at_ms: f64,
 }
+struct ReconnectTicket {
+    credential: String,
+    expires_at_ms: f64,
+}
 struct CollegeRecord {
+    reconnect_tickets: BTreeMap<String, ReconnectTicket>,
     host: HostedGameHost,
     path: String,
     tickets: BTreeMap<String, HostTicket>,
@@ -214,6 +219,7 @@ impl HostedSupervisor {
                     GAME_HUB_PATH.into()
                 },
                 tickets: BTreeMap::new(),
+                reconnect_tickets: BTreeMap::new(),
                 created_at_ms: 0.0,
                 claimed: !standalone,
             }],
@@ -421,6 +427,10 @@ impl HostedSupervisor {
         self.join_intents.retain(|_, intent| intent.expires_at_ms > now_ms);
         self.join_requests.retain(|_, request| request.expires_at_ms > now_ms);
         for college in &mut self.colleges {
+            for owner in college.host.poll_reconnects(now_ms, false)? {
+                self.broker.close_connection(&owner);
+            }
+            college.reconnect_tickets.retain(|_, ticket| ticket.expires_at_ms > now_ms);
             college.tickets.retain(|_, ticket| ticket.expires_at_ms > now_ms);
             college.host.prune_party_access(now_ms);
             college.host.retain_run_archives(now_ms);

@@ -23,6 +23,7 @@ mod boneyards;
 mod cloud;
 mod observer;
 mod presentation;
+mod reconnect;
 mod routing;
 mod social;
 mod transfer;
@@ -34,6 +35,9 @@ use transfer::{TransferCompletion, TransferRequest};
 
 pub(super) struct HostedGame {
     api: WebsiteApi,
+    endpoint: Option<String>,
+    endpoint_account_id: Option<u64>,
+    reconnect: Option<reconnect::ReconnectEpisode>,
     desktop_endpoint: Option<crate::desktop::DesktopEndpoint>,
     account: Option<Account>,
     active_mods: Vec<ActiveWebMod>,
@@ -92,6 +96,10 @@ impl HostedGame {
 
     pub(super) fn end_connection(&mut self) {
         self.connecting = false;
+        if let Some(mut episode) = self.reconnect.take() {
+            episode.cancel();
+        }
+        self.endpoint = None;
         self.leave_checkpoint = None;
         // The page's deployment save/poll owner survives the announced socket close.
         self.pending_transfer = None;
@@ -126,6 +134,7 @@ enum HostedRequest {
     Menu { action: HostedMenuAction, requester: Option<(String, String)> },
     PollJoin { request_id: u64, token: String },
     Connect(Box<ConnectRequest>),
+    Reconnect(reconnect::ReconnectRequest),
     Leaderboard(String),
     Route(RouteRequest),
     Presentation(Vec<solomon_sim::modding::assets::GameModAsset>),
@@ -168,6 +177,7 @@ enum Completion {
     Menu { action: HostedMenuAction, result: Result<MenuResult, String> },
     PollJoin { request_id: u64, token: String, result: Result<PartyJoinRequestStatus, String> },
     Connect { request: Box<ConnectRequest>, result: Result<ConnectionEndpoint, String> },
+    Reconnect(Result<ProvisionedGameEndpoint, crate::hosted::ApiError>),
     Save { batch: SaveBatch, result: Result<u64, String> },
     Leaderboard(Result<(), String>),
     Route { request_id: u64, result: CompletedRoute },
@@ -212,6 +222,16 @@ impl PendingHostedWork {
                     store.write(batch.document.clone(), batch.revision).await
                 };
                 Completion::Save { batch, result }
+            }
+            HostedOperation::Request(HostedRequest::Reconnect(request)) => {
+                let result = futures_util::future::Abortable::new(
+                    api.reconnect(&request.endpoint, &request.credentials, &request.request_id),
+                    request.registration,
+                )
+                .await;
+                Completion::Reconnect(result.unwrap_or_else(|_| {
+                    Err(String::from("The reconnect request was cancelled").into())
+                }))
             }
             HostedOperation::Request(HostedRequest::Connect(request)) => {
                 let result = async {
@@ -465,6 +485,9 @@ impl Game {
             generation: 0,
             pending: Vec::new(),
             connecting: false,
+            endpoint: None,
+            endpoint_account_id: None,
+            reconnect: None,
             retire_then_start: None,
             tutorial_declined: storage::tutorial_declined().unwrap_or(true),
             leave_checkpoint: None,
@@ -766,6 +789,7 @@ impl Game {
     }
 
     pub(super) fn poll_hosted(&mut self, now: f64) -> Result<(), String> {
+        self.poll_hosted_reconnect(now)?;
         self.apply_hosted_subscription_updates()?;
         #[cfg(target_arch = "wasm32")]
         self.update_boneyard_library()?;
@@ -802,7 +826,7 @@ impl Game {
             if self.is_hosted_observer() {
                 continue;
             }
-            if self.social.receive_hosted_message(&message)? {
+            if self.social.receive_hosted_message(&message, now)? {
                 continue;
             }
             if self.cheats.receive_hosted_message(&message)? {
@@ -869,6 +893,10 @@ impl Game {
                         &deployment_id,
                         deployment_sequence,
                     )?;
+                    if let Some(mut episode) = hosted.reconnect.take() {
+                        episode.cancel();
+                        set_status("");
+                    }
                     hosted.leave_checkpoint = None;
                     hosted.pending_transfer = None;
                     hosted.transfer_save_document = None;
@@ -1237,8 +1265,11 @@ impl Game {
             return Ok(());
         }
         match completed.completion {
+            Completion::Reconnect(result) => self.complete_hosted_reconnect(result)?,
             Completion::Connect { mut request, result } => match result {
                 Ok(endpoint) => {
+                    hosted.endpoint = Some(endpoint.url.clone());
+                    hosted.endpoint_account_id = hosted.account.as_ref().map(|account| account.id);
                     request.hello.credential = endpoint.credential;
                     if request.disable_mods {
                         hosted.active_mods.clear();

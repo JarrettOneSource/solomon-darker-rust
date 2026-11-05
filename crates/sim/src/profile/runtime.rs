@@ -56,6 +56,7 @@ pub struct PlayerSkillRuntimeState {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerSkillDerivedStats {
     pub cast_progress_factor: f64,
+    pub hand_cast_factor: f64,
     pub damage_resistance: f64,
     pub deflect_chance_percent: f64,
     pub experience_bonus: f64,
@@ -574,6 +575,17 @@ pub fn player_skill_derived_stats_with_stat_book(
         * modifiers.class_cast_speed_multiplier[class]
         + modifiers.class_cast_speed_flat[class])
         .max(0.0);
+    // HandCast1 latches the native class query at admission. Keep the existing
+    // equipped cadence contract while retaining each native float store here.
+    let hand_cast_factor = fround(
+        fround(
+            fround(
+                fround(modifiers.cast_speed_multiplier * fround(cast_base))
+                    + modifiers.cast_speed_flat,
+            ) * modifiers.class_cast_speed_multiplier[class],
+        ) + modifiers.class_cast_speed_flat[class],
+    )
+    .max(0.0);
     let mana_recovery = modifiers.mana_recovery.apply(
         PLAYER_MANA_RECOVERY_PER_TICK
             * f64::from(TICK_RATE_HZ)
@@ -602,6 +614,7 @@ pub fn player_skill_derived_stats_with_stat_book(
     };
     PlayerSkillDerivedStats {
         cast_progress_factor: multiply_hagatha_factor(cast_progress, hagatha.cast_speed_factor),
+        hand_cast_factor: multiply_hagatha_factor(hand_cast_factor, hagatha.cast_speed_factor),
         damage_resistance: modifiers.damage_resistance.clamp(0.0, 1.0),
         deflect_chance_percent: if staff_equipped { value(68, "mValue") } else { 0.0 },
         experience_bonus: economy.unforge_bonuses.experience,

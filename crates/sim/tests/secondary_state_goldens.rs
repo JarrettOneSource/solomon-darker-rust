@@ -11,6 +11,7 @@ mod native_bits;
 mod status_support;
 
 use serde_json::{Value, json};
+use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::golem::*;
 use solomon_sim::secondary::*;
 
@@ -30,6 +31,7 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
     assert_eq!(fixture["sourceRevision"], "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     for journey in fixture["journeys"].as_array().unwrap() {
         let mut state = read_state(&journey["initial"]);
+        let mut order = WorldPainterOrder::default();
         assert_snapshot(
             &source_value(&state_snapshot(&state)),
             &source_value(&journey["initial"]),
@@ -61,12 +63,15 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
                 }
                 "player-damage" => {
                     let applied = state.apply_player_damage(
-                        action["playerId"].as_str().unwrap(),
-                        action["amount"].as_f64().unwrap(),
-                        action["tick"].as_u64().unwrap(),
-                        point(&action["position"]),
-                        "boneyard:oracle",
-                        NativeSecondaryPlayerDamagePresentation::default(),
+                        NativeSecondaryPlayerDamageInput {
+                            player_id: action["playerId"].as_str().unwrap(),
+                            amount: action["amount"].as_f64().unwrap(),
+                            tick: action["tick"].as_u64().unwrap(),
+                            position: point(&action["position"]),
+                            world_key: "boneyard:oracle",
+                            presentation: NativeSecondaryPlayerDamagePresentation::default(),
+                        },
+                        &mut order,
                     );
                     result = json!({"absorbedDamage":applied.absorbed_damage,"healthDamage":applied.health_damage});
                 }
@@ -114,9 +119,33 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
             }
             let context = format!("{} record {index}", journey["name"]);
             assert_snapshot(&result, &record["result"], &context);
+            let mut expected_state = record["state"].clone();
+            if journey["name"].as_str().is_some_and(|name| name.starts_with("shield-")) {
+                // The retained direct-damage fixture predates callback-owned painter
+                // enrollment. Its actor mechanics stay exact; only birth ownership moves.
+                for (ordinal, actor) in
+                    expected_state["actors"].as_array_mut().unwrap().iter_mut().enumerate()
+                {
+                    if matches!(
+                        actor["kind"].as_str(),
+                        Some("shield-break" | "shield-explosion" | "shockwave")
+                    ) {
+                        assert_eq!(actor["painterRegistrations"], json!([]));
+                        actor["painterRegistrations"] = json!([{
+                            "managerLane": "transient", "registrationOrdinal": ordinal,
+                        }]);
+                        if actor["kind"] == "shockwave" {
+                            assert_eq!(actor["lightRegistration"], Value::Null);
+                            actor["lightRegistration"] = json!({
+                                "managerLane": "actor", "registrationOrdinal": 0,
+                            });
+                        }
+                    }
+                }
+            }
             assert_snapshot(
                 &source_value(&state_snapshot(&state)),
-                &source_value(&record["state"]),
+                &source_value(&expected_state),
                 &context,
             );
         }

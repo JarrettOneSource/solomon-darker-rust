@@ -88,7 +88,7 @@ impl PlayerPanels {
     pub(super) fn paint_inventory_flybys(
         &self,
         c: &PanelCanvas<'_, '_>,
-        _snapshot: &PlayerPanelSnapshot<'_>,
+        snapshot: &PlayerPanelSnapshot<'_>,
     ) -> Result<(), String> {
         let mut bounds = egui::Rect::NOTHING;
         let mut tick = 0;
@@ -108,11 +108,19 @@ impl PlayerPanels {
                         point.x,
                         point.y,
                         1,
+                        snapshot.selection.element,
                     )?);
                 }
                 if !flyby.trailing && frame.main_visible {
                     let point = hub_inventory_flyby_point(lane.from, lane.to, frame.main_progress);
-                    bounds = bounds.union(self.draw_item(c, &lane.item, point.x, point.y, 1)?);
+                    bounds = bounds.union(self.draw_item(
+                        c,
+                        &lane.item,
+                        point.x,
+                        point.y,
+                        1,
+                        snapshot.selection.element,
+                    )?);
                 }
             }
         }

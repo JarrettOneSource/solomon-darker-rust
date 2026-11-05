@@ -54,7 +54,11 @@ fn current_profile_envelopes_preserve_advanced_unlocks_and_hydrate_historical_sa
             &website_save::create_profile(&session, player_id, &profile.metadata).unwrap(),
         )
         .unwrap();
-        support::assert_website_json(&actual, &case["reencoded"], name, &[]);
+        // Keep the historical input and recording; fresh exports use the current envelope.
+        let mut expected = case["reencoded"].clone();
+        assert_eq!(expected["schemaVersion"], 51);
+        expected["schemaVersion"] = json!(website_save::SCHEMA_VERSION);
+        support::assert_website_json(&actual, &expected, name, &[]);
         assert_eq!(
             session
                 .participants

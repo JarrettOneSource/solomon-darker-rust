@@ -299,6 +299,7 @@ impl HostedGameHost {
                 .and_then(|profile| profile.metadata.native_source.clone()),
         };
         self.players.push(HostedPlayer {
+            reconnect_request_ids: std::collections::BTreeSet::new(),
             id: id.clone(),
             resume_token: token,
             content: admission.content.clone(),

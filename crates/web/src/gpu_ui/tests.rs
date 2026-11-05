@@ -1,5 +1,58 @@
 use super::*;
 
+/// Record actual egui shapes with real decoded stock dimensions. No GPU handle
+/// or pixel result is fabricated; these tests inspect typed paint submission.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn record_shapes(
+    ctx: &Context,
+    paths: &[&str],
+    mut paint: impl FnMut(&mut UiFrame<'_>),
+) -> Vec<egui::epaint::ClippedShape> {
+    let images = painter::Images::decoded_test_images(paths);
+    let widgets = RefCell::new(BTreeMap::new());
+    let previous_widgets = BTreeMap::new();
+    let announcements = RefCell::new(Vec::new());
+    let input_scope = RefCell::new(None);
+    let retired_images = RefCell::new(Vec::new());
+    let editors = RefCell::new(Vec::new());
+    let editor_errors = RefCell::new(Vec::new());
+    let mut shapes = Vec::new();
+    // New Areas first establish their bounds; inspect the settled paint pass.
+    for _ in 0..2 {
+        widgets.borrow_mut().clear();
+        let output = ctx.run_pass(
+            egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))),
+                ..Default::default()
+            },
+            |ctx| {
+                paint(&mut UiFrame {
+                    ctx,
+                    images: &images,
+                    widgets: &widgets,
+                    previous_widgets: &previous_widgets,
+                    key_codes: &[],
+                    blend: BlendMode::Normal,
+                    color_filter: ColorFilter::default(),
+                    announcements: &announcements,
+                    rotation: egui::emath::Rot2::IDENTITY,
+                    translation: Vec2::ZERO,
+                    input_scope: &input_scope,
+                    retired_images: &retired_images,
+                    focus_from_keyboard: false,
+                    editor_receipts: &[],
+                    editors: &editors,
+                    editor_errors: &editor_errors,
+                    native_click_count: None,
+                })
+            },
+        );
+        shapes = output.shapes.clone();
+        output.drop_without_applying_deltas();
+    }
+    shapes
+}
+
 fn frame(
     ctx: &Context,
     events: Vec<egui::Event>,
@@ -1267,4 +1320,136 @@ fn inherited_rotation_keeps_stock_and_glyph_vertices_in_one_paint_transform() {
         let scaled = frame.with_scale(pos2(100.0, 100.0), 0.5);
         assert!((scaled.paint_position(pos2(110.0, 100.0)) - pos2(105.0, 100.0)).length() < 0.0001);
     });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn player_card_feedback_context() -> (Context, fonts::PlatformFonts) {
+    let native_fonts = fonts::test_fonts();
+    fonts::with_fonts(|fonts| {
+        fonts.register_woff2(include_bytes!(
+            "../../../../web/assets/stock/fonts/cinzel-latin-500-normal.woff2"
+        ))?;
+        Ok(())
+    })
+    .unwrap();
+    let ctx = Context::default();
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.families.insert(
+        egui::FontFamily::Name("Cinzel".into()),
+        fonts.families[&egui::FontFamily::Proportional].clone(),
+    );
+    ctx.set_fonts(fonts);
+    (ctx, native_fonts)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn player_card_feedback_focus_and_keyboard_dismissal_release_the_real_control() {
+    use crate::social::player_card_request::PlayerCardRequests;
+
+    let (ctx, _fonts) = player_card_feedback_context();
+    let mut requests = PlayerCardRequests::default();
+    let id = requests.begin(0.0);
+    assert!(requests.complete(id, false, 10.0));
+    for _ in 0..2 {
+        frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    }
+    assert!(!requests.blocks_input(), "an unfocused notice leaves gameplay available");
+    let widgets = frame(
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }],
+        |frame| requests.paint(frame, false).unwrap(),
+    );
+    let dismiss = &widgets["social/card-feedback-dismiss"];
+    assert!(dismiss.focused);
+    assert!(requests.blocks_input(), "real keyboard focus seals gameplay shortcuts");
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            vec![egui::Event::Key {
+                key: egui::Key::Space,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            |frame| requests.paint(frame, false).unwrap(),
+        );
+    }
+    assert_eq!(requests.message(), None);
+    assert!(!requests.blocks_input());
+    assert!(ctx.memory(|memory| memory.focused()).is_none());
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(!widgets.contains_key("social/card-feedback-dismiss"));
+    assert!(!widgets.contains_key("social/card-feedback"));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn player_card_feedback_expiry_and_cover_release_focus_without_changing_the_deadline() {
+    use crate::social::player_card_request::PlayerCardRequests;
+
+    let (ctx, _fonts) = player_card_feedback_context();
+    let mut requests = PlayerCardRequests::default();
+    let id = requests.begin(0.0);
+    assert!(requests.complete(id, false, 10.0));
+    frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    let dismiss = widgets["social/card-feedback-dismiss"].egui_id.unwrap();
+    ctx.memory_mut(|memory| memory.request_focus(dismiss));
+    frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(requests.blocks_input());
+    requests.hide(&ctx);
+    assert!(!requests.blocks_input());
+    assert!(ctx.memory(|memory| memory.focused()).is_none());
+    requests.advance(5_009.0);
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(widgets.contains_key("social/card-feedback"));
+    ctx.memory_mut(|memory| memory.request_focus(dismiss));
+    frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(requests.blocks_input());
+    requests.advance(5_010.0);
+    assert!(!requests.blocks_input(), "expiry releases input before the next paint");
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, false).unwrap());
+    assert!(!widgets.contains_key("social/card-feedback-dismiss"));
+    assert!(ctx.memory(|memory| memory.focused()).is_none());
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn player_card_feedback_pointer_dismissal_uses_the_painted_touch_control() {
+    use crate::social::player_card_request::PlayerCardRequests;
+
+    let (ctx, _fonts) = player_card_feedback_context();
+    let mut requests = PlayerCardRequests::default();
+    let id = requests.begin(0.0);
+    assert!(requests.complete(id, false, 10.0));
+    frame(&ctx, vec![], |frame| requests.paint(frame, true).unwrap());
+    let widgets = frame(&ctx, vec![], |frame| requests.paint(frame, true).unwrap());
+    let control = &widgets["social/card-feedback-dismiss"];
+    assert!(control.bounds.height >= 44.0);
+    let pos = control.bounds.rect().center();
+    for pressed in [true, false] {
+        frame(
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            |frame| requests.paint(frame, true).unwrap(),
+        );
+    }
+    assert_eq!(requests.message(), None);
+    assert!(!requests.blocks_input());
 }

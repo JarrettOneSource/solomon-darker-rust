@@ -15,9 +15,9 @@ use solomon_sim::secondary::presentation::{
     native_secondary_presentation_plan,
 };
 use solomon_sim::secondary::{
-    NativeSecondaryDampenCandidates, NativeSecondaryPlayerDamagePresentation,
-    NativeSecondarySimulationState, NativeSecondaryTarget, NativeSecondaryTickContext,
-    NativeSecondaryWorld, enroll_native_secondary_painter_owners,
+    NativeSecondaryDampenCandidates, NativeSecondaryPlayerDamageInput,
+    NativeSecondaryPlayerDamagePresentation, NativeSecondarySimulationState, NativeSecondaryTarget,
+    NativeSecondaryTickContext, NativeSecondaryWorld,
 };
 use solomon_sim::{HubWizard, NativeRng, Vec2};
 use std::collections::BTreeMap;
@@ -119,17 +119,19 @@ fn current_stoneskin_retains_cast_and_hit_chips_through_actual_expiry() {
             let mut received = Value::Null;
             if [2, 3, 600, 601].contains(&tick) {
                 let result = state.apply_player_damage(
-                    "player",
-                    17.25,
-                    tick,
-                    wizard.position,
-                    "boneyard:oracle",
-                    NativeSecondaryPlayerDamagePresentation {
-                        physical: case["physical"].as_bool().unwrap(),
-                        enhanced_effects: case["enhanced"].as_bool().unwrap(),
+                    NativeSecondaryPlayerDamageInput {
+                        player_id: "player",
+                        amount: 17.25,
+                        tick,
+                        position: wizard.position,
+                        world_key: "boneyard:oracle",
+                        presentation: NativeSecondaryPlayerDamagePresentation {
+                            physical: case["physical"].as_bool().unwrap(),
+                            enhanced_effects: case["enhanced"].as_bool().unwrap(),
+                        },
                     },
+                    &mut order,
                 );
-                enroll_native_secondary_painter_owners(state.actors.iter_mut(), &mut order);
                 received = json!({"absorbedDamage": result.absorbed_damage,
                     "healthDamage": result.health_damage});
             }

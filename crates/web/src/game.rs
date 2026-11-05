@@ -57,7 +57,7 @@ use solomon_sim::hub::interaction::{
 use solomon_sim::hub::painter::courtyard_player_sort_bias;
 use solomon_sim::hub::teacher::hub_teacher_draw_plan;
 use solomon_sim::hub::{HUB_CAMERA_SCALE, hub_region_camera_origin_for_view};
-use solomon_sim::hud::{HudBeltEntry, HudState};
+use solomon_sim::hud::{HudBeltEntry, HudItemIcon, HudState};
 use solomon_sim::input::{
     GameplayAction, GameplayAim, GameplayInputSample, project_native_stick_aim,
     project_native_world_pointer,
@@ -2441,7 +2441,7 @@ impl Game {
                 Some(entry @ NativeBeltEntry::Item { .. }) => {
                     solomon_sim::belt::native_belt_entry_item(*entry, &player.economy).map(|item| {
                         HudBeltEntry::Item {
-                            record: item.icon_records.first().copied(),
+                            icon: HudItemIcon::from_item(item, player.selection.element),
                             count: item.quantity,
                         }
                     })
@@ -2679,6 +2679,8 @@ impl Game {
         self.wizard_view.set_player_presentation(WizardPlayerPresentation {
             player,
             secondary: session.secondary.players.get(&self.local_player_id),
+            stoneskin_warp: session.secondary.stoneskin_warp.as_deref(),
+            enhanced_effects: session.enhanced_effects,
             webbed: session
                 .boneyard
                 .as_ref()
@@ -3026,6 +3028,8 @@ impl Game {
                             participant,
                             &hub_equipment[index],
                             session.secondary.players.get(participant.id),
+                            session.secondary.stoneskin_warp.as_deref(),
+                            session.enhanced_effects,
                             self.menu.settings().complex_lighting,
                             presentation_tick,
                             clocks,
@@ -3143,6 +3147,8 @@ impl Game {
                                     participant,
                                     &hub_equipment[index],
                                     session.secondary.players.get(participant.id),
+                                    session.secondary.stoneskin_warp.as_deref(),
+                                    session.enhanced_effects,
                                     self.menu.settings().complex_lighting,
                                     presentation_tick,
                                     clocks,
@@ -3284,11 +3290,14 @@ impl Game {
 }
 
 /// One shared view is prepared from each actual Hub participant immediately before drawing.
+#[allow(clippy::too_many_arguments)] // One accepted participant plus shared world material inputs.
 fn prepare_hub_wizard(
     view: &mut WizardView,
     participant: solomon_sim::session::ParticipantRef<'_>,
     equipment: &crate::wizard::WizardEquipment,
     secondary: Option<&solomon_sim::secondary::NativeSecondaryPlayerState>,
+    stoneskin_warp: Option<&[f64]>,
+    enhanced_effects: bool,
     complex_lighting: bool,
     tick: f64,
     clocks: Option<&crate::presentation::PresentationClocks>,
@@ -3303,6 +3312,8 @@ fn prepare_hub_wizard(
     view.set_player_presentation(WizardPlayerPresentation {
         player,
         secondary,
+        stoneskin_warp,
+        enhanced_effects,
         webbed: None,
         overlay_effect_phase: participant.lighting.overlay_effect_phase,
         staff_action_pose: None,

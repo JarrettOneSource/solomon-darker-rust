@@ -184,6 +184,62 @@ fn order_snapshot(order: &WorldPainterOrder) -> Value {
     } })
 }
 
+fn expected_with_birth_registrations(case: &Value) -> Value {
+    let mut expected = case["expected"].clone();
+    // These frozen recordings predate the defensive-effect birth contract.
+    // Preserve their bytes and every field except the previously absent owners.
+    let kinds: &[(&str, usize)] = match case["name"].as_str().unwrap() {
+        "interception-31" | "interception-33" => &[("shield-break", 20)],
+        "interception-35" | "interception-36" => &[("stoneskin-chip", 1)],
+        "flash-11"
+        | "flash-15"
+        | "flash-19"
+        | "flash-20"
+        | "flash-23"
+        | "flash-24"
+        | "flash-27"
+        | "flash-28"
+        | "flash-31"
+        | "interleaved-2"
+        | "reversed-participants-2"
+        | "interleaved-3"
+        | "reversed-participants-3"
+        | "interleaved-6"
+        | "reversed-participants-6"
+        | "interleaved-12"
+        | "reversed-participants-12"
+        | "interleaved-14"
+        | "reversed-participants-14" => &[("flash-response-grow", 8), ("flash-response-fade", 4)],
+        "interleaved-5" | "reversed-participants-5" => &[
+            ("flash-response-grow", 8),
+            ("flash-response-fade", 4),
+            ("flash-response-grow", 8),
+            ("flash-response-fade", 4),
+        ],
+        _ => return expected,
+    };
+    assert_eq!(expected["painterOrder"]["nextRegistrationOrdinal"]["transient"], 500);
+    let first_birth = case["initialSecondary"]["nextActorId"].as_u64().unwrap();
+    let births = expected["secondary"]["actors"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .filter(|actor| actor["id"].as_u64().unwrap() >= first_birth)
+        .collect::<Vec<_>>();
+    let expected_kinds = kinds.iter().flat_map(|&(kind, count)| std::iter::repeat_n(kind, count));
+    let birth_count = kinds.iter().map(|(_, count)| count).sum::<usize>();
+    assert_eq!(births.len(), birth_count);
+    for (index, (actor, kind)) in births.into_iter().zip(expected_kinds).enumerate() {
+        assert_eq!(actor["kind"], kind);
+        assert_eq!(actor["painterRegistrations"], json!([]));
+        assert!(actor["lightRegistration"].is_null());
+        actor["painterRegistrations"] =
+            json!([{ "managerLane": "transient", "registrationOrdinal": 500 + index }]);
+    }
+    expected["painterOrder"]["nextRegistrationOrdinal"]["transient"] = json!(500 + birth_count);
+    expected
+}
+
 fn current_secondary_snapshot(
     state: &solomon_sim::secondary::NativeSecondarySimulationState,
 ) -> Value {
@@ -299,7 +355,7 @@ fn player_contacts_replay_delayed_statuses_reflections_web_births_and_feedback_e
         actual["secondary"] = secondary::state_snapshot(&secondary);
         actual["painterOrder"] = order_snapshot(&order);
         actual["outbox"] = outbox_snapshot(&result, &case["damage"]);
-        player::assert_snapshot(&actual, &case["expected"], label);
+        player::assert_snapshot(&actual, &expected_with_birth_registrations(case), label);
         assert_eq!(
             world.enemies.events, initial_enemy_events,
             "{label}: contact feedback preserves the incoming enemy event queue"
@@ -369,7 +425,7 @@ fn interleaved_participant_and_golem_contacts_keep_one_global_source_epoch() {
             "secondary": current_secondary_snapshot(&secondary), "painterOrder": order_snapshot(&order),
             "outbox": outbox_snapshot(&result, &case["damage"]),
         });
-        player::assert_snapshot(&actual, &case["expected"], label);
+        player::assert_snapshot(&actual, &expected_with_birth_registrations(case), label);
         assert!(world.enemies.events.is_empty(), "{label}: feedback stays in the contact outbox");
     }
 }

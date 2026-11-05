@@ -1,14 +1,19 @@
 //! Native panel painting and hit regions. This canvas is a direct GPU painter in
 //! native design coordinates; simulation actions remain in `PlayerPanels`.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod unforge_tests;
 use super::{
     PanelEvent, PlayerPanel, PlayerPanelSnapshot, PlayerPanels, Target, target_from_action,
 };
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, Pos2, Rect, Vec2};
-use solomon_sim::economy::{EquipmentType, HubInventoryItem};
+use solomon_sim::economy::HubInventoryItem;
 use solomon_sim::hub::interaction::HubNpcSelectorId;
-use solomon_sim::hud::HudRect;
+use solomon_sim::hud::{
+    HudRect, native_inventory_item_icon_tints, native_inventory_item_icon_transform,
+};
 use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextLayout, NativeUiTextSpec};
+use solomon_sim::profile::WizardElement;
 use std::cell::RefCell;
 
 #[derive(Clone)]
@@ -504,15 +509,14 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         r: HudRect,
     ) -> Result<Self, String> {
         let c = self.native_button_art(atlas, action, label, r)?;
-        c.text(&NativeUiTextSpec {
-            tint: 0xd9ba70,
-            ..NativeUiTextSpec::new(
-                NativeUiFontName::Menu,
-                label,
-                r.width / 2.0,
-                r.height / 2.0 + 9.0,
-            )
-        });
+        c.text(&crate::menu::widgets::stock_button_label_spec(
+            label,
+            rect(HudRect::new(0.0, 0.0, r.width, r.height)),
+            r.height as f32 / 69.0,
+            1.0,
+            false,
+            1.0,
+        ));
         Ok(c)
     }
 }
@@ -533,6 +537,7 @@ impl PlayerPanels {
         x: f64,
         y: f64,
         quantity: u64,
+        element: WizardElement,
     ) -> Result<Rect, String> {
         let mut bounds = Rect::NOTHING;
         if let Some(layers) = self.mod_icons.get(&item.id) {
@@ -553,22 +558,10 @@ impl PlayerPanels {
                 1.0,
             );
         } else {
-            let (offset, rotation) = match item.equipment_type {
-                Some(EquipmentType::Amulet) => ([0.0, -5.0], 0.0),
-                Some(EquipmentType::Staff) => ([-22.94306, 32.76608], 35.0),
-                Some(EquipmentType::Wand) => ([0.0, 0.0], 45.0),
-                _ => ([0.0, 0.0], 0.0),
-            };
-            let tints = item.clothing_tints();
+            let (offset, rotation) = native_inventory_item_icon_transform(item.equipment_type);
+            let tints = native_inventory_item_icon_tints(item, element);
             for (layer, record) in item.icon_records.iter().enumerate() {
-                let tint = if matches!(
-                    item.equipment_type,
-                    Some(EquipmentType::Hat | EquipmentType::Robe)
-                ) {
-                    tints.and_then(|colors| colors.get(layer).copied()).unwrap_or(0xffffff)
-                } else {
-                    0xffffff
-                };
+                let tint = tints.get(layer).copied().unwrap_or(0xffffff);
                 bounds = bounds.union(c.art(
                     &self.inventory,
                     *record,
@@ -682,7 +675,7 @@ impl PlayerPanels {
                     _ => item.map_or(0, |item| item.quantity as u64),
                 };
                 if let Some(item) = item {
-                    self.draw_item(c, item, x, y, quantity)?;
+                    self.draw_item(c, item, x, y, quantity, snapshot.selection.element)?;
                 }
             }
             c.button(
@@ -717,6 +710,9 @@ impl PlayerPanels {
             HudRect::new(48.0, 851.0, 130.0, 22.0),
             &snapshot.economy.gold.to_string(),
         );
+        if matches!(self.panel, Some(PlayerPanel::Inventory | PlayerPanel::Service(_))) {
+            c.frame.paint_unforge_target(&c.painter, &self.ui, self.now, c.alpha, c.origin)?;
+        }
         if matches!(
             self.panel,
             Some(
@@ -724,7 +720,6 @@ impl PlayerPanels {
                     | PlayerPanel::Service(solomon_sim::economy::HubTraderId::Luthacus)
             )
         ) {
-            c.art(&self.ui, 75, [1562.0, 868.0], [1.0, 1.0], 0.0, 0xffffff)?;
             c.button("unforge", "Unforge selected item", HudRect::new(1500.0, 800.0, 100.0, 100.0));
         }
         let effects = c.on_layer(belt_effects_layer_id());
@@ -763,7 +758,14 @@ impl PlayerPanels {
         } else if let Some(id) = press.inventory_item_id
             && let Some(item) = solomon_sim::belt::native_belt_owned_item(snapshot.economy, id)
         {
-            bounds = self.draw_item(c, item, self.pointer.x, self.pointer.y, 1)?;
+            bounds = self.draw_item(
+                c,
+                item,
+                self.pointer.x,
+                self.pointer.y,
+                1,
+                snapshot.selection.element,
+            )?;
             self.record_mod_item(c, item, self.pointer.x, self.pointer.y, bounds);
         }
         if bounds.is_positive() {

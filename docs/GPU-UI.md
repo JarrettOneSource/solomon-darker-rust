@@ -54,6 +54,14 @@ Brightness may exceed one, which a byte tint alone cannot express. Saturation us
 the .213/.715/.072 luminance matrix. `UiFrame::filtered_color` gives vector text
 and outlines the same operation as stock images and bitmap text.
 
+Stock item art retains every authored Inventory record. The gameplay belt,
+Inventory and its companion panels, and the mobile preview share the presentation
+tint and equipment-transform rules in `sim::hud`. Garment colors come from the
+item, then its recipe, then the wizard element; an absent tint lane leaves that
+texture layer white. Each layer multiplies its original RGB and preserves alpha.
+The HUD's item projection contains this art without copying Sack contents or
+inventory ownership. Equipment and quick-set activation remain session commands.
+
 Sprite shadows sample the selected atlas record's alpha and treat pixels outside
 its bounds as transparent. Neighboring records must not bleed into the blur.
 Shadow offsets and Gaussian sigma use design coordinates independently of the
@@ -64,6 +72,15 @@ text, into reusable targets. Child effects compose before parent effects. Clippi
 happens after filtering so off-clip pixels can contribute to a visible shadow.
 The renderer restores framebuffer, projection, blend, and sampling state after
 the group. Targets are reused by nesting depth and destroyed with their owner.
+
+Inventory and all four College service companions submit one native Unforge
+paint operation. It scrolls UI77 twice through the UI76 multiply mask in an
+owned 256-square target, then paints that target before pulsing UI75. The phase
+comes from application time, including while the world is paused; panel reveal
+and the stage transform move both layers together. This capture alone requests
+native integer pixel centers and native per-channel alpha. Enclosing UI groups
+retain their ordinary SourceOver contract. The GPU UI painter retains and retires
+the target; the three source records borrow the existing UI atlas.
 
 Outer and inner box shadows use opaque geometry as their caster, rather than the
 visible image's alpha. An outer shadow removes the original interior; an inner
@@ -114,6 +131,20 @@ fonts use complete shaped runs, including kerning, combining marks, Arabic joins
 and emoji clusters. Painting, caret movement, selection, wrapping, composition,
 and clipping use the same layout.
 
+Stock menu-font buttons fit complete glyph ink between the visible `UI.54`
+skulls. The shared label kernel uses the source cap's measured nontransparent
+edge in the label's vertical band and reserves the six-unit press displacement.
+It scales an overlong label uniformly around the button centre and keeps that
+size while pressed; short labels, chrome, hit rectangles and accessible names
+retain their authored values. Menus, social controls and player panels consume
+the same fit. This is adaptive client presentation for bounded controls, including
+Party's `LEAVE COLLEGE`, rather than a retail Party feature.
+Chrome scale and nominal text scale remain separate for compact player-panel
+buttons whose authored font is larger than their chrome scale.
+Raw notice actions, skill-book results and Sack Rename pass their existing text
+specification through the same fit, preserving their explicit baselines. This
+also keeps narrow `UNFORGE` and `CANCEL` notice labels between their skulls.
+
 Platform adapters provide native composition, clipboard access, and file dialogs.
 Native accessibility uses AccessKit and the operating system's accessibility tree.
 Loading exposes a status node for the transition's lifetime, including its artwork
@@ -149,8 +180,11 @@ Browser announcement delivery does not by itself verify hardware screen-reader a
 
 ## Accepted feedback and world notices
 
-`WorldNotifications` consumes accepted local loot, rank-book, overload, and
-Cheat Death events. Each lane retains its own cursor and source key; equal numeric
+`WorldNotifications` consumes accepted local loot, rank-book, overload, charm-loss
+and Cheat Death events. Charm loss shows `CHARM EFFECT LOST!`: the accepted event
+groups Reverie and Serendipity without identifying which effect ended. It does
+not infer a loss from current flags or remove an owned charm. Each lane retains
+its own cursor and source key; equal numeric
 IDs from different lanes are distinct events. Restore seeds cursors after retained
 receipts. Repeated display frames cannot replay them. Player/world changes, tick
 rewind, Game Over, and return to loadout reset the presentation and its baselines.

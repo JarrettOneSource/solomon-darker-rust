@@ -130,6 +130,8 @@ fn ordered_players_share_one_primary_epoch_and_retained_owner_queries() {
                     alive: true,
                     available_mana: mana[index],
                     cast_progress_factor: 1.0,
+                    hand_cast_factor: 1.0,
+                    action_time_factor: 1.0,
                     eligible: tick < 150,
                     plane_active: false,
                     primary_skill: &profiles[index],

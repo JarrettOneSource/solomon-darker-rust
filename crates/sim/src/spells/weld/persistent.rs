@@ -15,7 +15,10 @@ use crate::spells::earth_debris::{
     NativeWeldMeteorDebrisSeed, create_native_weld_ethereal_boulder_weak_debris_program,
 };
 use crate::spells::model::{EarthBoulderOrientation, PrimarySpellProjectilePhase};
-use crate::spells::targeting::direction_from_heading;
+use crate::spells::targeting::{
+    PrimarySpellTarget, direction_from_heading, native_heading_turn_direction,
+    select_ether_primary_target_at_point,
+};
 use crate::{NativeRng, Vec2};
 
 pub const NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS: usize = 3;
@@ -31,7 +34,14 @@ pub struct NativeWeldEtherealBoulderState {
     pub damage: f64,
     pub flight_ticks: u64,
     pub hit_target_ids: Vec<String>,
-    pub lifetime_ticks_remaining: u64,
+    pub flight_speed: f64,
+    pub heading_degrees: f64,
+    pub reacquires_target: bool,
+    #[cfg_attr(feature = "persistence", serde(deserialize_with = "required_boulder_target"))]
+    pub target_id: Option<String>,
+    pub tracking_ticks_remaining: u64,
+    pub turn_accumulator: f64,
+    pub turn_input: f64,
     pub maximum_scale: f64,
     pub orientation: EarthBoulderOrientation,
     pub phase: PrimarySpellProjectilePhase,
@@ -40,9 +50,35 @@ pub struct NativeWeldEtherealBoulderState {
     pub remaining_damage: f64,
     pub scale: f64,
     pub shell_scale: f64,
-    pub speed_factor: f64,
     pub toughness: f64,
     pub velocity: Vec2,
+}
+
+#[cfg(feature = "persistence")]
+fn required_boulder_target<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    // Nullable is still required on the gameplay wire; only disk migration defaults it.
+    <Option<String> as serde::Deserialize>::deserialize(deserializer)
+}
+
+impl NativeWeldEtherealBoulderState {
+    /// Required authoritative guidance fields cross checkpoint and wire boundaries.
+    pub fn validate_guidance(&self) -> Result<(), String> {
+        if !self.flight_speed.is_finite()
+            || self.flight_speed <= 0.0
+            || !self.heading_degrees.is_finite()
+            || !self.turn_input.is_finite()
+            || self.turn_input <= 0.0
+            || !self.turn_accumulator.is_finite()
+            || !(0.01_f32 as f64..=10.0).contains(&self.turn_accumulator)
+            || self.tracking_ticks_remaining > 9_007_199_254_740_991
+            || self.target_id.as_ref().is_some_and(|id| id.encode_utf16().count() > 256)
+        {
+            return Err("saved Boulder guidance is invalid".into());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -170,7 +206,20 @@ pub fn create_native_weld_persistent_actor(
             damage: vector[0],
             flight_ticks: 0,
             hit_target_ids: Vec::new(),
-            lifetime_ticks_remaining: (vector[3] * 1_000.0 + 250.0).floor() as u64,
+            flight_speed: 2.25,
+            heading_degrees: fround(heading_degrees_from_vector(
+                birth.direction.x,
+                birth.direction.y,
+            )),
+            reacquires_target: vector[3] > 1.0,
+            target_id: None,
+            tracking_ticks_remaining: if vector[3] > 1.0 {
+                (vector[3] * 1_000.0 + 250.0).trunc() as u64
+            } else {
+                250
+            },
+            turn_accumulator: 0.01_f32 as f64,
+            turn_input: fround(vector[3]),
             maximum_scale: 0.75,
             orientation: EARTH_BOULDER_IDENTITY_ORIENTATION,
             phase: PrimarySpellProjectilePhase::Held,
@@ -179,7 +228,6 @@ pub fn create_native_weld_persistent_actor(
             remaining_damage: vector[0],
             scale: initial_scale,
             shell_scale: initial_scale,
-            speed_factor: vector[3],
             toughness: vector[4],
             velocity: Vec2::ZERO,
         }),
@@ -240,7 +288,15 @@ pub fn update_native_weld_persistent_actor(
             update.release_requested = options.underpowered && actor.scale > 0.3_f32 as f64;
             actor.common.owner.age_ticks += 1;
             actor.common.direction = direction;
+            actor.heading_degrees = fround(heading_degrees_from_vector(direction.x, direction.y));
             actor.common.origin = origin;
+            actor.reacquires_target = !options.underpowered && actor.common.vector[3] > 1.0;
+            if options.underpowered {
+                actor.tracking_ticks_remaining = 150;
+            } else if actor.common.vector[3] > 1.0 {
+                actor.tracking_ticks_remaining =
+                    (actor.common.vector[3] * 1_000.0 + 250.0).trunc() as u64;
+            }
             actor.orientation = earth_boulder_held_orientation_step(actor.orientation, direction);
             actor.pulse_sequence += 1;
             actor.scale = scale;
@@ -249,7 +305,7 @@ pub fn update_native_weld_persistent_actor(
                 actor.damage = fround(actor.common.vector[0] * 0.5);
                 actor.quantity = 1;
                 actor.remaining_damage = fround(actor.remaining_damage * 0.5);
-                actor.speed_factor = 1.0;
+                actor.turn_input = 1.0;
             }
         }
         NativeWeldPersistentActorState::Hailstones(actor) => {
@@ -307,6 +363,7 @@ pub fn release_native_weld_persistent_actor(
     tick: u64,
     rng: &mut NativeRng,
     mut painters: Option<&mut WorldPainterOrder>,
+    targets: &[PrimarySpellTarget],
 ) -> NativeWeldPersistentRelease {
     match actor {
         NativeWeldPersistentActorState::MeteorField(_) => NativeWeldPersistentRelease {
@@ -370,8 +427,12 @@ pub fn release_native_weld_persistent_actor(
                         });
                 }
                 released.hit_target_ids.clear();
-                released.lifetime_ticks_remaining =
-                    (piece.speed_factor * 1_000.0 + 250.0).floor() as u64;
+                released.flight_speed = fround(2.25 * piece.motion_factor);
+                released.heading_degrees = piece.heading_degrees;
+                released.target_id =
+                    select_ether_primary_target_at_point(piece.origin, None, targets)
+                        .map(|target| target.id.clone());
+                released.reacquires_target &= released.target_id.is_some();
                 released.maximum_scale = actor.scale;
                 released.phase = PrimarySpellProjectilePhase::Flight;
                 released.flight_ticks = 0;
@@ -379,10 +440,10 @@ pub fn release_native_weld_persistent_actor(
                 released.quantity = 0;
                 released.remaining_damage =
                     native_earth_boulder_released_damage(actor.damage, actor.scale, 1.0);
-                released.speed_factor = piece.speed_factor;
+                released.turn_input = piece.turn_input;
                 released.velocity = Vec2::new(
-                    fround(piece.direction.x * 3.0 * piece.speed_factor),
-                    fround(piece.direction.y * 3.0 * piece.speed_factor),
+                    fround(piece.direction.x * released.flight_speed),
+                    fround(piece.direction.y * released.flight_speed),
                 );
                 actors.push(NativeWeldPersistentActorState::EtherealBoulder(released));
             }
@@ -436,10 +497,7 @@ pub fn step_native_weld_persistent_actor(
         return (true, None);
     }
     if let WeldPersistentMut::EtherealBoulder(boulder) = actor {
-        boulder.lifetime_ticks_remaining -= 1;
-        if boulder.lifetime_ticks_remaining == 0 {
-            return (false, None);
-        }
+        boulder.tracking_ticks_remaining = boulder.tracking_ticks_remaining.saturating_sub(1);
         boulder.common.origin = Vec2::new(
             fround(boulder.common.origin.x + boulder.velocity.x),
             fround(boulder.common.origin.y + boulder.velocity.y),
@@ -617,38 +675,92 @@ fn widen_hailstone_rock(rock: &mut NativeWeldHailstoneRockState, amount: f64) {
     offset.y = fround(offset.y + y);
 }
 
+/// Retail0x621450 guidance tail: shared movement and accepted contacts run first.
+pub fn finish_native_weld_ethereal_boulder_guidance(
+    actor: &mut NativeWeldEtherealBoulderState,
+    targets: &[PrimarySpellTarget],
+) {
+    if actor.phase != PrimarySpellProjectilePhase::Flight
+        || actor.flight_ticks == 0
+        || actor.tracking_ticks_remaining == 0
+        || actor.target_id.is_none()
+    {
+        return;
+    }
+    let target = targets.iter().find(|target| Some(&target.id) == actor.target_id.as_ref());
+    let Some(target) = target else {
+        let selected = if actor.reacquires_target {
+            select_ether_primary_target_at_point(actor.common.origin, None, targets)
+        } else {
+            None
+        };
+        actor.target_id = selected
+            .filter(|target| !actor.hit_target_ids.contains(&target.id))
+            .map(|target| target.id.clone());
+        actor.reacquires_target &= actor.target_id.is_some();
+        return;
+    };
+    let desired = heading_degrees_from_vector(
+        target.position.x - actor.common.origin.x,
+        target.position.y - actor.common.origin.y,
+    );
+    let turn = fround(
+        f64::from(native_heading_turn_direction(actor.heading_degrees, desired)) * 0.7_f32 as f64,
+    );
+    actor.heading_degrees =
+        fround(actor.heading_degrees + actor.turn_input * actor.turn_accumulator * turn);
+    actor.common.direction = direction_from_heading(actor.heading_degrees);
+    actor.turn_accumulator = fround(
+        actor.turn_accumulator
+            + if actor.turn_accumulator > 1.0 { 0.002_f32 as f64 } else { 0.05_f32 as f64 },
+    )
+    .min(10.0);
+    actor.velocity = Vec2::new(
+        fround(actor.common.direction.x * actor.flight_speed),
+        fround(actor.common.direction.y * actor.flight_speed),
+    );
+    if !target.active {
+        actor.target_id = None;
+    }
+}
+
 struct EtherealBoulderPiece {
     direction: Vec2,
     origin: Vec2,
-    speed_factor: f64,
+    heading_degrees: f64,
+    motion_factor: f64,
+    turn_input: f64,
 }
 
 fn ethereal_boulder_split(actor: &NativeWeldEtherealBoulderState) -> Vec<EtherealBoulderPiece> {
     let direction = actor.common.direction;
     let perpendicular = Vec2::new(direction.y, -direction.x);
-    let heading = heading_degrees_from_vector(direction.x, direction.y);
-    let piece =
-        |along: f64, across: f64, heading_offset: f64, speed_factor: f64| EtherealBoulderPiece {
-            direction: direction_from_heading(heading + heading_offset),
+    let piece = |along: f64, across: f64, offset: f64, factor: f64, original: bool| {
+        let heading = fround(actor.heading_degrees + offset);
+        EtherealBoulderPiece {
+            direction: direction_from_heading(heading),
+            heading_degrees: heading,
             origin: Vec2::new(
                 fround(actor.common.origin.x + direction.x * along + perpendicular.x * across),
                 fround(actor.common.origin.y + direction.y * along + perpendicular.y * across),
             ),
-            speed_factor: fround(speed_factor),
-        };
+            motion_factor: fround(factor),
+            turn_input: if original { actor.turn_input } else { fround(factor) },
+        }
+    };
     match actor.quantity {
-        1 => vec![piece(0.0, 0.0, 0.0, actor.speed_factor)],
-        2 => vec![piece(0.0, 30.0, 0.0, actor.speed_factor), piece(0.0, -30.0, 10.0, 1.0)],
+        1 => vec![piece(0.0, 0.0, 0.0, 1.0, true)],
+        2 => vec![piece(0.0, 30.0, 0.0, 1.0, true), piece(0.0, -30.0, 10.0, 1.0, false)],
         3 => vec![
-            piece(30.0, 0.0, 0.0, actor.speed_factor),
-            piece(0.0, 30.0, -10.0, 0.95),
-            piece(0.0, -30.0, 10.0, 0.95),
+            piece(30.0, 0.0, 0.0, 1.0, true),
+            piece(0.0, 30.0, -10.0, 0.95, false),
+            piece(0.0, -30.0, 10.0, 0.95, false),
         ],
         4 => vec![
-            piece(30.0, 0.0, 0.0, actor.speed_factor),
-            piece(0.0, 30.0, -10.0, 0.95),
-            piece(0.0, -30.0, 10.0, 0.95),
-            piece(-15.0, 0.0, 0.0, 0.9),
+            piece(30.0, 0.0, 0.0, 1.0, true),
+            piece(0.0, 30.0, -10.0, 0.95, false),
+            piece(0.0, -30.0, 10.0, 0.95, false),
+            piece(-15.0, 0.0, 0.0, 0.9, false),
         ],
         _ => panic!("native Ethereal Boulder quantity is outside 1..4"),
     }

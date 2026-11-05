@@ -83,6 +83,8 @@ fn elemental_casts_channels_release_and_terrain_replay_the_website() {
                     alive: true,
                     available_mana: mana,
                     cast_progress_factor: 1.0,
+                    hand_cast_factor: 1.0,
+                    action_time_factor: 1.0,
                     eligible: tick < 170,
                     plane_active: false,
                     primary_skill: &profile,

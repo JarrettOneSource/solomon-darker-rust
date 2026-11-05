@@ -9,7 +9,7 @@ use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::identity::GameContentIdentity;
 use solomon_sim::profile::NewGameSelection;
 
-pub const SCHEMA_VERSION: u64 = 51;
+pub const SCHEMA_VERSION: u64 = 52;
 pub const MAX_SAVE_BYTES: usize = 96 * 1024 * 1024;
 pub const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 

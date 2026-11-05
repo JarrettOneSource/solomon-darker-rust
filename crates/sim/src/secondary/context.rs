@@ -24,6 +24,7 @@ pub struct NativeSecondaryInput {
 
 pub struct NativeSecondaryPlayerSnapshot<'a> {
     pub alive: bool,
+    pub action_time_factor: f64,
     pub weapon_kind: Option<NativePlayerWeaponKind>,
     pub belt: &'a PlayerBeltComponent,
     pub character: &'a HubWizard,
@@ -37,6 +38,7 @@ pub struct NativeSecondaryPlayerSnapshot<'a> {
 
 pub struct NativeSecondaryPlayerAuthority<'a> {
     pub alive: bool,
+    pub action_time_factor: f64,
     pub weapon_kind: Option<NativePlayerWeaponKind>,
     pub belt: &'a PlayerBeltComponent,
     pub character: &'a HubWizard,
@@ -110,6 +112,7 @@ impl<'a> NativeSecondaryPlayerAuthority<'a> {
         // unlearned Iron Golem upgrade still contributes Raise Golem's base addition.
         Self {
             alive: snapshot.alive,
+            action_time_factor: snapshot.action_time_factor,
             weapon_kind: snapshot.weapon_kind,
             belt: snapshot.belt,
             character: snapshot.character,

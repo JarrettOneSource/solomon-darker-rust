@@ -16,6 +16,10 @@ pub(super) fn primary(value: &Value, version: u64) -> Result<Value, String> {
         let mut actor =
             record(value, &format!("game save primary spell transient {index}"))?.clone();
         let kind = value["kind"].as_str();
+        if version < 52 && kind == Some("weld-persistent") && value["buildId"] == 1006 {
+            crate::save_document::migrate_website_boulder_guidance(&mut actor)?;
+        }
+
         if (version < 29 && kind == Some("water-hail"))
             || (version < 40 && kind == Some("water-aura"))
         {

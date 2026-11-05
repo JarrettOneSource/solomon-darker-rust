@@ -67,7 +67,7 @@ impl SocialUi {
         }
         self.close_chat();
         self.requested_card = None;
-        self.hosted_card_request = None;
+        self.card_requests.dismiss();
         self.surface = Some(Surface::HubPlayer(player_id.to_owned()));
         self.focus_modal = true;
         true

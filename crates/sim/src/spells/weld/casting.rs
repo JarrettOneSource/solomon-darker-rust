@@ -67,6 +67,8 @@ impl SpellState {
                 endpoint = Some(obstruction.unwrap_or(view_endpoint));
                 terrain_contact = obstruction.is_some();
             }
+            let steam_cast_factor =
+                if profile.build_id == 1005 { authority.cast_progress_factor } else { 1.0 };
             let mut emission = channel_emission(
                 self.next_id,
                 authority.primary_skill,
@@ -75,9 +77,14 @@ impl SpellState {
                 wizard.position,
                 direction,
                 underpowered,
-                profile.common.mana_cost / 100.0,
+                profile.common.mana_cost / 100.0 * steam_cast_factor,
                 context,
             );
+            // Steam's weak branch replaces this rate multiplier with fixed .5.
+            // channel_emission already applied weak half strength to resolved damage.
+            if !underpowered {
+                emission.damage *= steam_cast_factor;
+            }
             if let Some((endpoint, midpoint, target_id)) = &lightning {
                 emission.flame_lash_presentation = Some(
                     native_flame_lash_main_presentation(NativeFlameMainPresentationInput {
@@ -269,6 +276,7 @@ impl SpellState {
                     context.tick,
                     rng,
                     Some(order),
+                    context.targets,
                 );
                 self.next_id = release.next_id;
                 self.transients.retain(|effect| effect.common().id != id);
@@ -334,6 +342,7 @@ impl SpellState {
         tick: u64,
         rng: &mut NativeRng,
         order: &mut WorldPainterOrder,
+        targets: &[crate::spells::targeting::PrimarySpellTarget],
     ) {
         let releasing_hail: Vec<_> = self
             .transients
@@ -380,6 +389,7 @@ impl SpellState {
                 tick,
                 rng,
                 Some(order),
+                targets,
             );
             self.next_id = release.next_id;
             let mut actors = release.actors.into_iter();

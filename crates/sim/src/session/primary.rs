@@ -159,6 +159,8 @@ impl GameSession {
                 alive: player.combat.life_state == crate::combat::PlayerLifeState::Alive,
                 available_mana: player.combat.current_mana,
                 cast_progress_factor: derived.cast_progress_factor,
+                hand_cast_factor: derived.hand_cast_factor,
+                action_time_factor: player.combat.movement_scale(),
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
                 plane_active: self
                     .secondary
@@ -259,6 +261,8 @@ impl GameSession {
                 alive: sample.alive,
                 available_mana: sample.available_mana,
                 cast_progress_factor: sample.cast_progress_factor,
+                hand_cast_factor: sample.hand_cast_factor,
+                action_time_factor: sample.action_time_factor,
                 eligible: sample.eligible,
                 plane_active: sample.plane_active,
             });
@@ -477,6 +481,8 @@ struct PrimaryPlayerSample {
     alive: bool,
     available_mana: f64,
     cast_progress_factor: f64,
+    hand_cast_factor: f64,
+    action_time_factor: f64,
     eligible: bool,
     plane_active: bool,
     region: HubRegion,

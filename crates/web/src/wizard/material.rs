@@ -21,6 +21,19 @@ impl WizardView {
         spells: &SpellView,
         pass: WizardDrawPass,
     ) {
+        self.draw_body_layers(renderer, camera, wizard, tick, spells, pass);
+        self.draw_magic_shield(renderer, camera, wizard);
+    }
+
+    pub(super) fn draw_body_layers(
+        &self,
+        renderer: &mut Renderer,
+        camera: &Camera,
+        wizard: &HubWizard,
+        tick: f64,
+        spells: &SpellView,
+        pass: WizardDrawPass,
+    ) {
         self.draw_actor(renderer, camera, wizard, tick, spells, pass);
         let state = &self.player_presentation;
         if state.hit_alpha > 0.0 {
@@ -28,6 +41,16 @@ impl WizardView {
                 self.draw_actor(renderer, camera, wizard, tick, spells, WizardDrawPass::Hit);
             });
         }
+        self.draw_late_selected_elements(renderer, camera, wizard, tick, spells);
+    }
+
+    pub(super) fn draw_magic_shield(
+        &self,
+        renderer: &mut Renderer,
+        camera: &Camera,
+        wizard: &HubWizard,
+    ) {
+        let state = &self.player_presentation;
         if let Some(shield) = state.magic_shield.filter(|shield| shield.visible) {
             let record = &self.records[NATIVE_PLAYER_MAGIC_SHIELD_ENTRY];
             let mut tint = tint_rgba(shield.tint);
@@ -63,6 +86,11 @@ impl WizardView {
         spells: &SpellView,
     ) {
         let state = &self.player_presentation;
+        if state.stoneskin {
+            self.draw_stoneskin_material(renderer, camera, wizard, tick, spells);
+            self.draw_selected_element(renderer, camera, wizard, tick, spells, Vec2::ZERO, true);
+            return;
+        }
         if state.harden_coating <= 0.0 && state.webbed.is_none() {
             return;
         }
@@ -109,7 +137,7 @@ impl WizardView {
                     0x3fbfff,
                 );
             }
-            self.draw_harden_orb(renderer, camera, wizard, tick, spells);
+            self.draw_selected_element(renderer, camera, wizard, tick, spells, Vec2::ZERO, true);
             return;
         }
         let web = state.webbed.expect("a material capture has Harden or Webbed ownership");
@@ -126,6 +154,7 @@ impl WizardView {
                 0xffffff,
             );
         }
+        self.draw_selected_element(renderer, camera, wizard, tick, spells, Vec2::ZERO, true);
         if web.severity >= 3.0 {
             let atlas = spells.dead_hawg();
             let record = &atlas.records[29];
@@ -198,64 +227,6 @@ impl WizardView {
         );
     }
 
-    fn draw_harden_orb(
-        &self,
-        renderer: &mut Renderer,
-        camera: &Camera,
-        wizard: &HubWizard,
-        tick: f64,
-        spells: &SpellView,
-    ) {
-        if wizard.primary_cast.selected_primary_id.is_none()
-            || self
-                .equipment
-                .appearance
-                .weapon
-                .as_ref()
-                .is_none_or(|weapon| weapon.kind() != NativePlayerWeaponKind::Staff)
-        {
-            return;
-        }
-        let state = &self.player_presentation;
-        let element =
-            selected_cast_element(wizard.primary_cast.selected_primary_id, self.equipment.element);
-        let poses = player_character_attachment_poses(
-            &wizard.primary_cast,
-            element,
-            state.staff_action_pose,
-            state.secondary_cast,
-        );
-        let offset = player_staff_attachment_offset(wizard.heading_index, poses.staff);
-        let gait =
-            wizard_draw_plan(wizard.heading_index, wizard.walk_cycle_primary, wizard.gait_degrees);
-        let position = Vec2::new(
-            wizard.position.x + offset.x + gait.front_attachment_offset.x,
-            wizard.position.y + offset.y + gait.front_attachment_offset.y,
-        );
-        self.draw_damage_x4(
-            renderer,
-            camera,
-            position,
-            tick,
-            player_equipped_element_effect_scale(state.overlay_effect_phase),
-            spells,
-        );
-        spells.draw_element_vfx(
-            renderer,
-            camera,
-            position,
-            &native_selected_primary_element_vfx_plan(
-                if state.plane_active {
-                    80
-                } else {
-                    wizard.primary_cast.selected_primary_id.unwrap()
-                },
-                tick,
-                player_equipped_element_effect_scale(state.overlay_effect_phase),
-            ),
-        );
-    }
-
     pub(super) fn draw_damage_x4(
         &self,
         renderer: &mut Renderer,
@@ -304,7 +275,7 @@ fn packed_alpha(alpha: f64) -> f32 {
 }
 
 #[allow(clippy::too_many_arguments)] // One authored sprite has a source, transform and material.
-fn draw_centered_texture(
+pub(super) fn draw_centered_texture(
     renderer: &mut Renderer,
     camera: &Camera,
     texture: &Texture,

@@ -49,6 +49,7 @@ pub struct EnemyViewFrame<'a> {
     pub application_tick: u64,
     pub complex_lighting: bool,
     pub complex_shadows: bool,
+    pub enhanced_effects: bool,
     pub view_height: f64,
     pub players: &'a [EnemyViewPlayer<'a>],
     pub light_at: &'a dyn Fn(Vec2) -> f64,
@@ -131,6 +132,12 @@ pub struct EnemyView {
 }
 
 impl EnemyView {
+    /// Ether Drain draws retained Demon capture art from this existing upload.
+    #[must_use]
+    pub fn demon_atlas(&self) -> crate::spells::StockAtlas {
+        self.art.demon_atlas()
+    }
+
     /// Reuse the primary view's two shared atlas uploads; only the four boss banks are new.
     pub async fn load(
         renderer: &Renderer,

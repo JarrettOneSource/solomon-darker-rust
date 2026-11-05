@@ -76,7 +76,11 @@ impl NativeSecondarySimulationState {
         self.spawn_actor(wave);
     }
 
-    pub fn materialize_player_flash_response(&mut self, input: NativePlayerFlashResponseInput<'_>) {
+    pub fn materialize_player_flash_response(
+        &mut self,
+        input: NativePlayerFlashResponseInput<'_>,
+        order: &mut WorldPainterOrder,
+    ) {
         let mut targets = input.target_ids.to_vec();
         targets.sort_unstable();
         targets.dedup();
@@ -104,6 +108,7 @@ impl NativeSecondarySimulationState {
             );
             child.lifetime_ticks = 20;
             child.scale = *scale;
+            child.painter_registrations.push(order.register(WorldManagerLane::Transient));
             self.spawn_actor(child);
         }
         for _ in 0..4 {
@@ -117,6 +122,7 @@ impl NativeSecondarySimulationState {
             );
             child.lifetime_ticks = 20;
             child.scale = 6.0;
+            child.painter_registrations.push(order.register(WorldManagerLane::Transient));
             self.spawn_actor(child);
         }
         let mut event = NativeSecondaryEventState::new(

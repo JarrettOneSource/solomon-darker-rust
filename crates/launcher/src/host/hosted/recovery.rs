@@ -183,6 +183,7 @@ impl HostedGameHost {
             SaveIntegrity::GlobalClean
         };
         self.players.push(HostedPlayer {
+            reconnect_request_ids: std::collections::BTreeSet::new(),
             id: id.clone(),
             resume_token,
             content: admission.content,

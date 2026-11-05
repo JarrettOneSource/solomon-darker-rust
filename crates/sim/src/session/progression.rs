@@ -100,10 +100,22 @@ impl GameSession {
     }
 
     pub fn replace_skill_with_mod(&mut self, id: &str, offer_sequence: u64) -> bool {
-        let Some(participant) = self.participants.get_mut(id) else { return false };
-        if !participant.player.replace_skill_with_mod(offer_sequence, &mut self.gameplay_rng) {
-            return false;
+        self.replace_skill_with_mod_with_extensions(id, offer_sequence, None)
+    }
+
+    pub fn replace_skill_with_mod_with_extensions(
+        &mut self,
+        id: &str,
+        offer_sequence: u64,
+        extensions: Option<&dyn GameSimulationExtensions>,
+    ) -> bool {
+        {
+            let Some(participant) = self.participants.get_mut(id) else { return false };
+            if !participant.player.replace_skill_with_mod(offer_sequence, &mut self.gameplay_rng) {
+                return false;
+            }
         }
+        self.assign_automatic_skill_choices_with_extensions(&[id.into()], extensions);
         self.update_pending_barrier();
         true
     }

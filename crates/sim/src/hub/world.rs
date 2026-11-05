@@ -8,6 +8,7 @@ use crate::hub::college_intro::{
     hub_participant_onboarding_collision_bypass_active, plan_hub_participant_movement,
     step_hub_participant_movement,
 };
+use crate::hub::fixed_actors::{HUB_STORY_OFFICE_POLISHER, HubFixedActorCollider};
 use crate::hub::npc::HubNpcState;
 use crate::hub::regions::HubRegion;
 use crate::hub::{
@@ -105,51 +106,22 @@ pub fn step_hub_participants(
         membership.push(HubBodyMembership::fixed(HubRegion::Courtyard));
         membership.last_mut().unwrap().static_collision = student.static_collision_enabled;
     }
-    for (id, position, radius) in [
-        ("perk-witch", Vec2::new(1340.0, 280.0), 15.0),
-        ("potion-trader", Vec2::new(1397.0, 664.0), 30.0),
-        ("annalist", Vec2::new(895.5, 455.5), 8.0),
-        ("items-trader", Vec2::new(1700.5, 449.5), 25.0),
-        ("teacher", Vec2::new(576.5, 710.5), 25.0),
-    ] {
-        append_fixed(&mut bodies, &mut membership, id, HubRegion::Courtyard, position, radius);
-    }
-    for region in [HubRegion::Mortuary, HubRegion::Library, HubRegion::Storeroom, HubRegion::Office]
-    {
-        for actor in region.room_actors() {
-            append_fixed(
-                &mut bodies,
-                &mut membership,
-                actor.id,
-                region,
-                actor.position,
-                actor.radius,
-            );
-        }
-        for prop in region.room_props() {
-            append_fixed(&mut bodies, &mut membership, prop.id, region, prop.position, prop.radius);
+    for region in HubRegion::ALL {
+        for actor in region.fixed_actor_colliders() {
+            append_fixed(&mut bodies, &mut membership, region, actor);
         }
     }
     if participants.iter().any(|participant| {
         participant.college_intro_pending && participant.wizard.region == HubRegion::Office
     }) {
-        append_fixed(
-            &mut bodies,
-            &mut membership,
-            "story-office-polisher",
-            HubRegion::Office,
-            Vec2::new(566.0, 735.0),
-            15.0,
-        );
+        append_fixed(&mut bodies, &mut membership, HubRegion::Office, HUB_STORY_OFFICE_POLISHER);
     }
     if let Some(skorcha) = npcs.skorcha.skorcha.as_ref() {
         append_fixed(
             &mut bodies,
             &mut membership,
-            "skorcha",
             HubRegion::Courtyard,
-            skorcha.position,
-            10.0,
+            HubFixedActorCollider::new("skorcha", skorcha.position, 10.0),
         );
     }
     let lookup: std::collections::HashMap<_, _> =
@@ -234,22 +206,10 @@ impl HubBodyMembership {
 fn append_fixed(
     bodies: &mut Vec<ActorPhysicsBody>,
     membership: &mut Vec<HubBodyMembership>,
-    id: &str,
     region: HubRegion,
-    position: Vec2,
-    radius: f64,
+    actor: HubFixedActorCollider,
 ) {
-    bodies.push(ActorPhysicsBody {
-        collision_recipient: true,
-        id: id.into(),
-        position,
-        delta: Vec2::ZERO,
-        radius,
-        push_resistance: 90.0,
-        push_strength: 0.0,
-        driven: false,
-        push_enabled: false,
-    });
+    bodies.push(actor.physics_body());
     membership.push(HubBodyMembership::fixed(region));
 }
 

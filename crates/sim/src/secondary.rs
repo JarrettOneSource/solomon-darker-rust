@@ -52,13 +52,15 @@ pub use feedback::{
     NativePlayerRescueInput, NativeScriptFire,
 };
 pub use player::{
-    NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS, NativeSecondaryCastAction, NativeSecondaryPlayerState,
-    native_plane_orb_damage, step_native_secondary_cast_action,
+    NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS, NativeHandCast2, NativeSecondaryCastAction,
+    NativeSecondaryCastStep, NativeSecondaryPlayerState, native_plane_orb_damage,
+    step_native_secondary_cast_action,
 };
 pub use simulation::{
     NativeSecondaryCameraDisplacement, NativeSecondaryEtherBurnInput, NativeSecondaryFireBurnInput,
-    NativeSecondaryGolemDamageResult, NativeSecondaryPlayerDamagePresentation,
-    NativeSecondaryPlayerDamageResult, NativeSecondarySimulationState,
+    NativeSecondaryGolemDamageResult, NativeSecondaryPlayerDamageInput,
+    NativeSecondaryPlayerDamagePresentation, NativeSecondaryPlayerDamageResult,
+    NativeSecondarySimulationState,
 };
 pub use storage::{
     SecondaryActorMut, SecondaryActorRead, SecondaryActorRef, SecondaryActorWrite, SecondaryActors,

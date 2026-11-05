@@ -8,7 +8,7 @@ behavior across native and WebAssembly builds.
 Native client saves and authority checkpoints share `solomon-storage`'s existing
 fsync/rename implementation. A separate persistent OS lock file covers every
 revision check and replacement; renaming the data file cannot release the lock.
-The client keeps complete schema51 documents and the established preference
+The client keeps complete schema52 documents and the established preference
 formats. Save I/O runs off the window thread; malformed or stale records fail
 without replacing the prior save. Browser storage still uses its original
 IndexedDB transaction. The previous Electron profile stays intact; the existing
@@ -144,6 +144,17 @@ follow their retained parent, or occupy its position when it retires, and also
 wait until the next pass. These rules keep Meteor debris, spent Embers and boss
 spells from receiving an extra update on their birth tick.
 
+Flash defensive responses can also be born during the post-secondary player
+contact or poison callback. The common actor pass cannot enroll those births
+after it has returned. Flash materialization owns eight grow and four fade
+children, and each needs a distinct transient painter registration at birth,
+in that order, from the session's world painter order. The same callback owner
+registers twenty Magic Shield break children, plus an explosion and shockwave
+when the shield is explosive. The shockwave's transient painter and separate
+actor-lane light both exist at birth. Physical Stoneskin contact registers its
+chip at the damage callback. These are producer invariants; snapshot validation
+still rejects missing ownership.
+
 Tick functions run in their declared sequence. Damage accepted by one phase can
 retire a target or create an effect before the next phase runs, and several phases
 consume the same random stream. Parallel work must preserve those dependencies
@@ -216,6 +227,14 @@ Accepted session state owns commands, audio, checkpoints, and saves.
 Boneyard frames interpolate without extrapolation; College prediction is limited
 to one snapshot interval of local movement.
 
+College prediction resolves the region's permanent fixed bodies, the Office
+polisher during pending admission, and Skorcha's latest accepted position/presence
+through the same actor solver as authority. Ordinary movement retains scenery
+placement; scripted movement retains its wall exemption. Prediction does not
+advance Skorcha's appearance timer or other participants. A scenery-rejected
+full circle correction still retains the root move, as recovered in Website
+parity ledger 013; this display correction does not change the bench-pocket rule.
+
 Immutable loaded scenes, static collision primitives, skill definitions, and
 unchanged scenery target tables use `Arc` storage to avoid per-frame deep copies.
 Mutable gates and actors remain private. Authored changes use copy-on-write;
@@ -242,6 +261,23 @@ The patch retains upstream metadata and licenses. Egui upgrades must review
 [the patch contract](../vendor/egui/SOLOMON-PATCH.md) and its focused regressions.
 
 ## Input and text
+
+### Optional Inventory and Skills navigation
+
+Inventory's configured binding returns one open Sack at a time, then closes at
+the backpack root. Menu and Escape close the whole optional Inventory, College
+service or Skills interface through the existing close/resume lifecycle. This
+is the approved Report 22 quality-of-life policy retained in Website ledger 299
+and release `4c6a1f5c`; it deliberately differs from the recovered stock
+Inventory-binding whole-close action. It does not redefine mandatory choices.
+
+Rename, notices, confirmations and dye editing own their cancellation before
+book navigation. Sack traversal still rejects another Back until its 37 native
+ticks settle. The first-cell parent Sack returns on an unselected primary
+press, and its release cannot return again. A selected backpack item retains
+click-to-parent transfer and drag-drop ownership. Website ledger 252 records
+the recovered first-press branch at `0x0056FA6A–0x0056FA85`, the parent composite
+and the unchanged 370 ms page clock.
 
 Sample gameplay input once per frame. The selected display camera projects aim.
 Held casts and queued belt presses are different inputs; both host and client
@@ -332,8 +368,8 @@ the canonical source spellings. Native checkpoints retain their own typed fields
 Portable item rarities retain `Epic` and `Rare`, including items inside nested
 Sacks. Earlier Rust exports wrote lowercase enum names; import accepts those
 values and re-export writes the canonical spelling. This preserves existing
-player inventories while keeping the shared schema-51 contract compatible with
-the original web client. Unknown rarities remain rejected.
+player inventories while keeping the shared portable-item contract compatible with
+earlier web documents. Unknown rarities remain rejected.
 
 ## Snapshot ordering
 
@@ -358,6 +394,13 @@ serde visitor avoids recursively cloning untagged intermediate values.
 Reconnect starts with a full publication. ACKs, controls, Flame history, and large
 Welcome/save transfers retain their separate sequencing contracts.
 
+Protocol version 3 requires the primary HandCast1 record and the bare secondary
+pose/terminal state. The authority owns the opening gameplay RNG draw, born rate,
+current pose and retained terminal frame; clients render those accepted values.
+An older matched-build protocol cannot silently ignore them. Existing disk saves
+without the optional fields remain readable without sampling RNG. The hosted
+deployment protocol remains version 2 because its publication contract is separate.
+
 ## Deployment identity and recovery
 
 The game recovery revision and website publication identity have separate roles.
@@ -372,6 +415,101 @@ Requiring an exact deployment UUID would strand a sleeping client that missed
 that publication. A later healthy sequence with the same target game revision
 can complete recovery. Idle website-only refresh uses its own publication path;
 an active game still observes the save and transport-retirement barrier.
+
+## Retained hosted authority after transport interruption
+
+An unexpected `1001`/`1006` after a playable hosted Welcome is a transport failure,
+not a saved restart. Hosted membership owns one absolute 30-second monotonic
+lease on the existing participant and world; an authenticated replacement can
+start the same deadline before the old Close arrives. The bound is an explicit
+operational policy, longer than ordinary open/Welcome progress intervals and
+shorter than an unclaimed ticket's 120-second lifetime. A large valid Welcome and
+actual renderer readiness must fit it on M2. HTTP redelivery, another reservation
+and partial transfer progress never extend it.
+
+`hosted/reconnect.rs` owns retained membership, neutral input, peer-generation
+binding and final cleanup. It keeps accepted state, action/transient history,
+RNG, party/VM/bot owners and monotonic save sequence without a second simulation.
+A recovering participant still occupies capacity; connected and recovering
+humans are counted separately, and private retirement waits. The affected
+private/party world uses existing loading/renderer holds; unrelated Hub worlds
+continue. Old peer events cannot route into the replacement generation.
+
+The Website admission owner accepts a logical Hub/private selector and resume
+capability, then forwards its current JWT subject to the configured supervisor.
+`supervisor/http.rs` checks the original anonymous/account binding, current live
+actor and capability before minting a fresh one-use reconnect-purpose ticket.
+It binds that ticket to the request and expected peer; redelivery returns the
+same pending credential, and a consumed ticket cannot replay or create an actor.
+Browser saves, content and permissions cannot replace retained authority state.
+No new WebSocket message family or save schema is needed: ordinary Hello without
+save/New Game intent receives a fresh full Welcome.
+
+`web::game::hosted::reconnect` owns at most two client attempts within that same
+absolute deadline, with one bounded one-second pause before the second. Only an
+uncertain HTTP transport response reuses its request ID; a sent Hello needs a
+new reservation. The existing native connection/presentation and hosted save
+coordinator survive, while transport input/command/replication cursors restart.
+The client keeps its last frame, stops prediction/input, and never replays an
+unacknowledged action. Full accepted Welcome plus real renderer readiness ends
+the transport lease and requests a complete current checkpoint. Existing pause,
+skill selection and resume controls still govern gameplay; solo readiness does
+not acquire a multiplayer countdown.
+
+Leave/destruction, account change, observer/editor/standalone/desktop sessions,
+authentication/protocol failure, announced deployment and host retirement are
+excluded. An accepted Close without a status is local code 1005 and uses ordinary
+cleanup, including intentional browser/native connection disposal. Only TCP loss
+without an accepted Close has no code and may retain the live actor. The transport
+replies to an empty Close with an empty frame, never a reserved 1005 wire code.
+The driver treats Tungstenite's `ResetWithoutClosingHandshake` as EOF; actual
+malformed frames remain protocol error 1002. A known close code and reason survive
+later I/O failure during that close handshake.
+Expiry uses ordinary cleanup once. Deployment has priority and retains
+its checkpoint/ACK/publication barrier. An open replacement still awaiting
+renderer readiness joins that same final checkpoint and storage ACK barrier;
+only a genuinely absent peer has no browser save owner to acknowledge.
+Failure reports the original transport
+cause and preserves prior durable storage; it never imports an older checkpoint
+or falls back to provisioning. Ordinary explicit active-run rejoin remains a
+separate contract and can recover only its last complete durable checkpoint.
+
+Focused public HTTP/WebSocket regressions cover membership and tickets. Closure
+also requires actual exact-built browser journeys through a local Caddy reload
+for both maintained clients. Compilation alone is not that acceptance.
+
+## Resume readiness and multiplayer countdown
+
+Renderer loading, resume acknowledgements, required rejoin members and mandatory
+skill-picker close presentation are authority barriers. They remain required even
+for a solo run. The two-second countdown after those barriers is a separate
+reorientation policy for two or more connected materialized human participants in
+that active run. Closing solo Pause, Inventory or full Skills resumes directly.
+A pending solo loading/recovery record clears only after its existing readiness
+checks pass; an active countdown clears when a departure leaves at most one human.
+
+This preserves the accepted Website product policy from `e3f100ae` (Report 103),
+published in `850064c8`, rather than introducing a new retail timing claim.
+`GameplayControl` owns the policy for standalone and hosted authorities. The
+intersection of its borrowed connected/materialized identities excludes bots,
+observers, lobby visitors, other runs and staged rejoin actors from the audience.
+Required absent recovery identities still hold the pending record before that
+audience check. The protocol, save shapes, input neutralization and scheduler
+remain shared.
+
+Ordinary party transfers recheck the existing Hub-only destination contract at
+Hello, after ticket preparation. A party that has entered combat cannot acquire
+a new College actor through an older ticket; that would mix world ownership and
+make owner-save partitioning invalid. The matching stale reservation is consumed
+before actor creation. Active-party recovery/rejoin has a separate retained-run
+admission and remains available. Valid Hub transfers and both owners' save
+documents retain their existing behavior.
+
+Public control regressions and actual standalone/hosted socket journeys cover
+direct solo release, lobby/run isolation, restart/rejoin readiness, both departure
+phases and retained multiplayer timing. The original host-control recording stays
+unchanged; its one older disconnect countdown expectation is explicitly superseded
+in the replay by this independently tested policy.
 
 ## Navigation and painter registration
 
@@ -419,6 +557,17 @@ route behavior. Graph, moving-gate, and catalog replacement tests cover that lif
 Painter registration belongs to the actor or transient owner. Fixed depth bands,
 row sorting, and owner overlays are explicit data.
 
+Ether Drain world callbacks enroll their newly born flares at the capture, loot
+consumption, or corpse consumption boundary, including Game Over. These callbacks
+run after the secondary actor pass; waiting for its next tick can publish an
+unregistered flare to the renderer. Existing actors retain their ordinals.
+
+`ZAnimSplit::Draw` at retail `0x005E0233` reads the current Enhanced Effects
+setting: painter bands are 25 units On and 50 Off. Air and Faculty ribbons keep
+their immutable born-quality geometry while their wrappers follow the current
+scene setting, as do Blizzard, Flame Lash and ElectricBurn. Changing quality
+does not change the actor's registration, clock, material or gameplay state.
+
 Owner overlays are promoted after row planning, preserving their owner-relative
 position and stable ties. Insertion bands retain the owner's registration rather
 than allocating a new ordinal for each visual layer. Released Ether Boulder
@@ -431,7 +580,8 @@ place among other actors.
 
 A disconnected private Tutorial retains its sole participant and freezes until
 resume. Removing that participant would violate the Tutorial checkpoint invariant.
-Ordinary party sessions use detach/remove/rejoin instead.
+Eligible hosted transport interruptions first use the bounded retained-authority
+lease above. Other ordinary party disconnects use detach/remove/rejoin.
 
 ## Authored content and Lua
 
@@ -605,3 +755,42 @@ checks the same error before accepting the collected PCM.
 Synthesized mono, stereo, 5.1 and multi-page fixtures exercise these contracts,
 including malformed input and errors after playback starts. The surround fixture
 also compares sampled frames against an independent FFmpeg/libopus decode.
+
+## Automatic equipment removal uses the open inventory root
+
+Double activation of removable equipment returns it to the first available slot
+of the currently open Sack. At the top-level backpack it retains ordinary
+top-level insertion. This explicitly requested convenience lets a player organize
+gear within a Sack without navigating back from the root after each removal.
+It is distinct from the recovered pointed-holder drag contract, which continues
+to preserve the exact selected destination.
+
+`PlayerPanels` supplies the current Sack ID and an absent slot through the
+existing `Unequip` command. The canonical economy retains ownership of first-hole
+insertion, item admission, capacity, feedback and persistence. Required Hat/Robe
+notices, the third Ring gate, transition input locks and all explicit drag
+destinations retain their existing rules. No protocol or save-schema change is
+needed. The real panel attach/update/action regression applies emitted commands
+through the canonical economy for all removable sinks, three inventory depths
+and Inventory plus the four trader companion panels.
+
+## Player Card lookup feedback belongs to its session
+
+Hosted Player Card lookup can legitimately return no profile after a chat author
+disconnects. The maintained Website contract in social ledger 136 treats this
+as dismissible feedback for five application seconds. Retail has no Website
+Player Card service, so this is a product UI contract rather than a recovered
+native lifetime. The lookup itself has a ten-second application deadline.
+
+One shared Rust owner keeps the latest request, its deadline and its feedback.
+Older replies cannot replace a newer pending request or result. Session replacement
+and transport retirement cancel the lookup without changing the retained world,
+and request IDs remain distinct across those boundaries. Feedback never enters a
+save. UI application time continues while gameplay ticks are paused.
+
+The real Dismiss control seals gameplay shortcuts only while focused; dismissal,
+expiry and a covering surface release that focus. Loading, leaving, routing and
+serious runtime errors retain rendering priority. College invitation failures keep
+their separate notice owner, and card expiry or dismissal cannot clear them.
+Controller and composed egui regressions protect the deadline, stale-reply,
+keyboard, pointer and focus lifetimes; actual built-game acceptance is separate.

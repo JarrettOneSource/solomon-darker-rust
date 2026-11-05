@@ -19,6 +19,7 @@ enum NativePhase {
     Title,
     Joining,
     Playing,
+    Recovering,
     Leaving,
     Updating,
 }
@@ -83,6 +84,38 @@ impl NativeGame {
     pub(super) fn is_playing(&self) -> bool {
         self.phase == NativePhase::Playing
     }
+    pub(super) fn can_reconnect(&self) -> bool {
+        matches!(self.phase, NativePhase::Playing | NativePhase::Recovering)
+            && self.resume.is_some()
+    }
+
+    pub(super) fn begin_reconnect(&mut self) -> Result<ResumeCredentials, String> {
+        let credentials =
+            self.resume.clone().ok_or("The game has no admitted reconnect identity")?;
+        if let Some(connection) = &mut self.connection {
+            connection.stop_input();
+        }
+        self.connection = None;
+        self.phase = NativePhase::Recovering;
+        self.pending_commands.clear();
+        self.receipts.clear();
+        self.pending_snapshot = None;
+        self.waiting_boneyard_frame = None;
+        self.listener = None;
+        self.resume_ready_snapshot = None;
+        Ok(credentials)
+    }
+
+    pub(super) fn install_reconnect(
+        &mut self,
+        endpoint: &str,
+        hello: ClientMessage,
+    ) -> Result<(), String> {
+        self.connection = Some(NativeSession::connect_to(endpoint, hello)?);
+        self.presentation.reset();
+        Ok(())
+    }
+
     pub(super) fn is_leaving(&self) -> bool {
         self.phase == NativePhase::Leaving
     }
@@ -231,6 +264,10 @@ impl Game {
         let Some(connection) = &mut native.connection else { return Ok(()) };
         let poll = connection.poll();
         for event in poll.events {
+            // Events already queued by a retired transport cannot enter a new generation.
+            if self.native.as_ref().is_none_or(|native| native.connection.is_none()) {
+                break;
+            }
             match event {
                 NetworkEvent::Opened => {
                     if let Some(loading) = &mut self.match_loading {
@@ -255,6 +292,9 @@ impl Game {
                         .is_some_and(|hosted| hosted.deployment_update.restarting())
                     {
                         self.finish_deployment_connection();
+                        continue;
+                    }
+                    if self.try_hosted_reconnect(code, &reason, now)? {
                         continue;
                     }
                     if self.native.as_ref().is_some_and(|native| {
@@ -303,6 +343,17 @@ impl Game {
                         frame,
                         hosted,
                     } => {
+                        if self
+                            .native
+                            .as_ref()
+                            .is_some_and(|native| native.phase == NativePhase::Recovering)
+                        {
+                            self.poll_hosted_reconnect(crate::platform::monotonic_ms())?;
+                            if self.native.as_ref().is_none_or(|native| native.connection.is_none())
+                            {
+                                break;
+                            }
+                        }
                         if let Some(loading) = &mut self.match_loading {
                             loading.advance(MatchLoadingStage::ReceivingHostCheckpoint);
                         }
@@ -326,6 +377,27 @@ impl Game {
                             Ok(observing) => observing,
                             Err(reason) => return self.native_disconnected(&reason),
                         };
+                        let reconnecting = self
+                            .native
+                            .as_ref()
+                            .is_some_and(|native| native.phase == NativePhase::Recovering);
+                        if reconnecting {
+                            let expected =
+                                self.native.as_ref().and_then(|native| native.resume.as_ref());
+                            let original =
+                                self.hosted.as_ref().and_then(|owner| owner.welcome.as_ref());
+                            if expected.is_none_or(|expected| {
+                                expected.player_id != credentials.player_id
+                                    || expected.token != credentials.token
+                            }) || original.zip(hosted.as_ref()).is_none_or(|(before, after)| {
+                                before.session_kind != after.session_kind
+                                    || before.content != after.content
+                                    || before.developer_access != after.developer_access
+                                    || after.observer
+                            }) {
+                                return self.native_disconnected("The reconnect admission changed the retained wizard or content.");
+                            }
+                        }
                         let keep_resume = !observing;
                         #[cfg(target_arch = "wasm32")]
                         let keep_resume = keep_resume && !self.is_editor_test();
@@ -336,10 +408,13 @@ impl Game {
                         native.resume = Some(credentials.clone());
                         if let Some(owner) = &mut self.hosted
                             && hosted.is_some()
+                            && !reconnecting
                         {
                             owner.content_pending = true;
                         }
-                        native.hosted_welcome = hosted;
+                        if !reconnecting {
+                            native.hosted_welcome = hosted;
+                        }
                         if !observing {
                             native.can_resume = true;
                         }
@@ -585,6 +660,12 @@ impl Game {
         if self.native.is_none() {
             return Ok(false);
         }
+        if self.native.as_ref().is_some_and(|native| native.phase == NativePhase::Recovering) {
+            if matches!(action, MenuAction::Leave) {
+                self.native_disconnected("")?;
+            }
+            return Ok(true);
+        }
         match action {
             MenuAction::Start(selection) => {
                 let native = self.native.as_ref().unwrap();
@@ -733,6 +814,9 @@ impl Game {
             return Err("An observer cannot send player commands.".into());
         }
         let native = self.native.as_mut().ok_or("No native game host")?;
+        if native.phase == NativePhase::Recovering {
+            return Ok(());
+        }
         let feedback = match command {
             GameCommand::ResetWizard { .. } | GameCommand::ArmCollegeIntro => {
                 CommandFeedback::CollegeIntro
@@ -754,6 +838,12 @@ impl Game {
         &mut self,
         received: ReceivedNativeSnapshot,
     ) -> Result<(), String> {
+        if self.native.as_ref().is_some_and(|native| native.phase == NativePhase::Recovering) {
+            self.poll_hosted_reconnect(crate::platform::monotonic_ms())?;
+            if self.native.as_ref().is_none_or(|native| native.connection.is_none()) {
+                return Ok(());
+            }
+        }
         if let Some(hosted) = &mut self.hosted
             && hosted.content_pending
         {
@@ -899,7 +989,8 @@ impl Game {
         self.has_game = true;
         let native = self.native.as_mut().unwrap();
         let joining = native.phase == NativePhase::Joining;
-        if joining {
+        let reattached = native.phase == NativePhase::Recovering;
+        if joining || reattached {
             native.phase = NativePhase::Playing;
         }
         native.selection = Some(
@@ -974,6 +1065,15 @@ impl Game {
             self.battle_views.consume_events(&world.enemy_events);
             self.world_screen_feedback
                 .consume_enemy_events(&world.loaded.run_id, &world.enemy_events);
+        }
+        if reattached {
+            // A retained battle renderer already owns this exact run; a newly materialized
+            // renderer reaches this point only after its real world preparation completed.
+            if let Some(world) = &self.session.boneyard {
+                connection
+                    .send(&ClientMessage::ReadyBoneyard { run_id: world.loaded.run_id.clone() })?;
+            }
+            self.finish_hosted_reconnect()?;
         }
         self.refresh_hud();
         self.update_combat_audio()?;
@@ -1061,6 +1161,9 @@ impl Game {
         held: bool,
     ) -> Result<(), String> {
         if let Some(native) = &mut self.native {
+            if native.phase == NativePhase::Recovering {
+                return Ok(());
+            }
             native.display = if native.phase == NativePhase::Playing {
                 native.presentation.sample(now, &self.local_player_id, input, held)?
             } else {
@@ -1197,6 +1300,9 @@ impl Game {
     }
 
     pub(super) fn send_native_message(&self, message: &ClientMessage) -> Result<(), String> {
+        if self.native.as_ref().is_some_and(|native| native.phase == NativePhase::Recovering) {
+            return Ok(());
+        }
         self.native
             .as_ref()
             .and_then(|native| native.connection.as_ref())

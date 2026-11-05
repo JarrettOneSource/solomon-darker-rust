@@ -142,14 +142,32 @@ pub fn serialize_archive(
 }
 
 pub fn decode_archive(bytes: &[u8]) -> Result<RunArchiveFile, String> {
-    let file: RunArchiveFile = serde_json::from_slice(bytes)
+    let stored: RunArchiveFile<serde_json::Value> = serde_json::from_slice(bytes)
         .map_err(|error| format!("Invalid private Rust run archive: {error}"))?;
+    let mut states = Vec::with_capacity(stored.states.len());
+    for mut state in stored.states {
+        if let Some(checkpoint) = state.get_mut("checkpoint") {
+            solomon_assets::save_document::migrate_checkpoint(checkpoint)
+                .map_err(|error| format!("Invalid private Rust run archive checkpoint: {error}"))?;
+        }
+        states
+            .push(serde_json::from_value(state).map_err(|error| {
+                format!("Invalid private Rust run archive checkpoint: {error}")
+            })?);
+    }
+    let file: RunArchiveFile = RunArchiveFile {
+        encoding: stored.encoding,
+        encoding_version: stored.encoding_version,
+        states,
+        archive: stored.archive,
+    };
     let metadata = &file.archive;
     if file.encoding != "solomon-rust-checkpoint-table"
         || file.encoding_version != 1
         || metadata.schema_version != 1
-        // Protocol 2 changes live snapshot encoding, not the archived checkpoint schema.
-        || !matches!(metadata.protocol_version, 1 | 2)
+        // Earlier complete checkpoints use the same disk migration as native saves.
+        // Protocol 3 retains authoritative action poses and Boulder guidance.
+        || !matches!(metadata.protocol_version, 1..=3)
         || metadata.revision.len() != 40
         || !metadata
             .revision

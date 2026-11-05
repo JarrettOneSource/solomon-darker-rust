@@ -22,7 +22,11 @@ impl HostedSupervisor {
         if let Some(college) =
             self.colleges.iter_mut().find(|college| college.host.connections.contains_key(&peer_id))
         {
-            let connection = college.host.connections.remove(&peer_id).unwrap();
+            let mut connection = college.host.connections.remove(&peer_id).unwrap();
+            if self.deployment.is_some() && connection.planned_disconnect.is_none() {
+                connection.planned_disconnect =
+                    Some(("deployment-restart", "game updating".into()));
+            }
             if let Some(social) = college.host.disconnected(connection, now_ms, close)? {
                 self.broker.close_connection(&social);
             }

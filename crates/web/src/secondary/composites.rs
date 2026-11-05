@@ -80,6 +80,7 @@ impl SecondaryView {
             atlas: NativeSecondaryAtlas::BadGuys,
             blend: NativeSecondaryBlend::Normal,
             color_mode: None,
+            clip: None,
             entry: mask.entry,
             offset: Vec2::ZERO,
             role: "leviathan-appendage-lower-mask".into(),

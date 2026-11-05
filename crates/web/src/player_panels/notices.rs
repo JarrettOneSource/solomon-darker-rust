@@ -206,10 +206,19 @@ impl PlayerPanels {
         _default_focus: bool,
     ) -> Result<(), String> {
         let button = c.native_button_art(&self.ui, action, label, r)?;
-        button.text(&NativeUiTextSpec {
-            tint: 0xd9ba70,
-            ..NativeUiTextSpec::new(NativeUiFontName::Menu, label, r.width / 2.0, baseline - r.y)
-        });
+        button.text(&solomon_sim::native_ui_text::buttons::fit_native_ui_button_label(
+            NativeUiTextSpec {
+                tint: 0xd9ba70,
+                ..NativeUiTextSpec::new(
+                    NativeUiFontName::Menu,
+                    label,
+                    r.width / 2.0,
+                    baseline - r.y,
+                )
+            },
+            HudRect::new(0.0, 0.0, r.width, r.height),
+            r.height / 69.0,
+        ));
         Ok(())
     }
 }

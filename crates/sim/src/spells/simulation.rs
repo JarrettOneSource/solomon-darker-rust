@@ -28,6 +28,8 @@ pub struct PrimarySpellCastAuthority<'a> {
     pub alive: bool,
     pub available_mana: f64,
     pub cast_progress_factor: f64,
+    pub hand_cast_factor: f64,
+    pub action_time_factor: f64,
     pub eligible: bool,
     pub plane_active: bool,
     pub primary_skill: &'a NativePrimarySkillProfile,
@@ -294,7 +296,7 @@ impl SpellState {
         } else {
             previous.aim_direction
         };
-        wizard.primary_cast.advance(raw_held, false, WizardElement::Fire, 1.0);
+        wizard.primary_cast.advance(raw_held, false, WizardElement::Fire, 1.0, 1.0);
         wizard.primary_cast.one_shot_attack_pose_held = false;
         wizard.primary_cast.selected_primary_age_ticks = previous.selected_primary_age_ticks + 1;
         wizard.primary_cast.weapon_pulse =
@@ -310,6 +312,7 @@ impl SpellState {
             });
         }
         wizard.primary_cast.action_tick = None;
+        wizard.primary_cast.hand_cast = None;
         wizard.primary_cast.channel_active = false;
         wizard.primary_cast.underpowered = false;
     }
@@ -340,14 +343,24 @@ impl SpellState {
             }
             _ => matches!(element, WizardElement::Ether | WizardElement::Fire),
         };
-        let mana_cost =
-            authority.primary_skill.common().mana_cost / if one_shot { 1.0 } else { 100.0 };
+        // Steam 0x00542D20 multiplies its per-tick debit by the class cast rate.
+        let steam_cast_factor = match authority.primary_skill {
+            NativePrimarySkillProfile::Weld(profile) if profile.build_id == 1005 => {
+                authority.cast_progress_factor
+            }
+            _ => 1.0,
+        };
+        let mana_cost = authority.primary_skill.common().mana_cost
+            / if one_shot { 1.0 } else { 100.0 }
+            * steam_cast_factor;
         let mut mana = ManaDebit { remaining: authority.available_mana, ..ManaDebit::default() };
         let raw_held = input.primary && input.aim.is_some();
         let pressed = raw_held && !previous.held;
         let released = !raw_held && previous.held;
         let action_available = previous.action_tick.is_none()
+            || previous.hand_cast.as_ref().is_some_and(|hand| hand.done())
             || (one_shot
+                && previous.hand_cast.is_none()
                 && !previous.channel_active
                 && previous
                     .action_tick
@@ -361,7 +374,17 @@ impl SpellState {
         } else {
             previous.aim_direction
         };
-        wizard.primary_cast.advance(raw_held, accepted, element, authority.cast_progress_factor);
+        wizard.primary_cast.advance(
+            raw_held,
+            accepted,
+            element,
+            authority.cast_progress_factor,
+            authority.action_time_factor,
+        );
+        if authority.weapon_kind.is_none() && previous.channel_active {
+            // HandConstant writes K2 on its first update even at zero time.
+            wizard.primary_cast.action_tick = Some(1.0);
+        }
         if !one_shot {
             wizard.primary_cast.one_shot_attack_pose_held = false;
         }
@@ -394,6 +417,7 @@ impl SpellState {
                 });
             }
             wizard.primary_cast.action_tick = None;
+            wizard.primary_cast.hand_cast = None;
             wizard.primary_cast.channel_active = false;
             wizard.primary_cast.one_shot_attack_pose_held = false;
             wizard.primary_cast.underpowered = false;
@@ -403,6 +427,16 @@ impl SpellState {
 
         let mut earth_accepted_underpowered = false;
         if accepted {
+            if one_shot && authority.weapon_kind.is_none() {
+                wizard.primary_cast.hand_cast = Some(super::hand_cast::NativeHandCast1::new(
+                    super::hand_cast::native_hand_cast1_rate(
+                        authority.primary_skill,
+                        authority.hand_cast_factor,
+                    ),
+                    previous.hand_cast.as_ref().map_or(0, |hand| hand.pose()),
+                    rng,
+                ));
+            }
             wizard.primary_cast.last_weld_playback_rate = None;
             wizard.primary_cast.last_weld_sound_variant = None;
             match authority.primary_skill {
@@ -442,10 +476,18 @@ impl SpellState {
         }
 
         let emission_progress = primary_cast_emission_progress(element);
-        if one_shot
-            && wizard.primary_cast.action_tick.is_some_and(|tick| tick >= emission_progress)
-            && previous.action_tick.unwrap_or(-1.0) < emission_progress
-        {
+        let crossed_marker = wizard.primary_cast.hand_cast.as_ref().map_or_else(
+            || {
+                wizard.primary_cast.action_tick.is_some_and(|tick| tick >= emission_progress)
+                    && previous.action_tick.unwrap_or(-1.0) < emission_progress
+            },
+            |hand| {
+                previous.hand_cast.as_ref().is_some_and(|previous| {
+                    native_forward_action_marker_crossed(previous.progress(), hand.progress(), 1.0)
+                })
+            },
+        );
+        if one_shot && crossed_marker {
             if element == WizardElement::Ether && authority.primary_skill.common().skill_id == 8 {
                 let charges =
                     native_ether_blast_release_charges(wizard.primary_cast.ether_blast_charge);
@@ -780,6 +822,7 @@ impl SpellState {
                 wizard.primary_cast.emission_sequence += 1;
             }
             wizard.primary_cast.action_tick = None;
+            wizard.primary_cast.hand_cast = None;
             wizard.primary_cast.channel_active = false;
             wizard.primary_cast.target_id = None;
             wizard.primary_cast.underpowered = false;
@@ -789,6 +832,7 @@ impl SpellState {
                     context.tick,
                     rng,
                     order,
+                    context.targets,
                 );
             }
         }

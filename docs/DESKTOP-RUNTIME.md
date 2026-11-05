@@ -58,7 +58,7 @@ An OS file lock gives one process ownership; a second launch requests focus from
 that owner and exits without opening another game.
 
 `solomon-storage` holds a separate OS lock across each revision check and atomic,
-synced document replacement. Client saves preserve the complete supported schema 51
+synced document replacement. Client saves preserve the complete supported schema 52
 document, separate from the direct launcher's schema 2 server file. Browser builds
 use IndexedDB through their own storage adapter.
 

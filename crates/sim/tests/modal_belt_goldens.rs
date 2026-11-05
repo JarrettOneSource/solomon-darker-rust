@@ -1,5 +1,7 @@
 #![cfg(feature = "persistence")]
 //! Actual current Inventory skill commands are accepted transactions, not input ticks.
+//! Independent equipment/Sack cases retain the exact-UID ownership contract from
+//! Website native-parity ledger 255 without regenerating the recorded skill fixture.
 
 #[path = "support/secondary.rs"]
 #[allow(dead_code)] // This Session fixture uses only the shared secondary row projection.
@@ -191,6 +193,188 @@ fn public_modal_skill_commands_commit_aim_contacts_and_flashes_without_advancing
                 &format!("case{index}.{step}"),
                 &[],
             );
+        }
+    }
+}
+
+fn equipment_session(run: bool) -> GameSession {
+    let mut session = GameSession::new(
+        "caster".into(),
+        NewGameSelection {
+            name: "Equipment caster".into(),
+            discipline: WizardDiscipline::Arcane,
+            element: WizardElement::Ether,
+        },
+        GameSessionOptions::default(),
+    );
+    if run {
+        session.install_boneyard(loaded()).unwrap();
+    }
+    let player = &mut session.participants.get_mut("caster").unwrap().player;
+    player.belt.entries.fill(None);
+    player.economy.backpack.clear();
+    player.economy.equipment = Default::default();
+    session
+}
+
+fn equipment(
+    kind: solomon_sim::economy::EquipmentType,
+    id: u64,
+) -> solomon_sim::economy::HubInventoryItem {
+    let recipe = solomon_sim::economy::DOWSING_EQUIPMENT_RECIPES
+        .iter()
+        .find(|recipe| recipe.equipment_type == kind)
+        .unwrap();
+    let mut item = solomon_sim::economy::create_equipment_inventory_item(recipe, id);
+    item.generated_level = Some(0);
+    item
+}
+
+fn sack(
+    id: u64,
+    contents: Vec<solomon_sim::economy::HubInventoryItem>,
+) -> solomon_sim::economy::HubInventoryItem {
+    let mut sack = solomon_sim::economy::create_fomentius_inventory_item(
+        &solomon_sim::economy::FOMENTIUS_STOCK_DEFINITIONS[5],
+        id,
+        1,
+    );
+    sack.contents = Some(contents);
+    sack
+}
+
+#[test]
+fn equipment_shortcuts_keep_exact_owning_roots_across_all_banks_and_scenes() {
+    use solomon_sim::belt::NativeBeltCommand;
+    use solomon_sim::economy::{EquipmentSlot, EquipmentType, find_inventory_item};
+
+    for (kind, sink) in [
+        (EquipmentType::Hat, EquipmentSlot::Hat),
+        (EquipmentType::Robe, EquipmentSlot::Robe),
+        (EquipmentType::Staff, EquipmentSlot::Weapon),
+        (EquipmentType::Wand, EquipmentSlot::Weapon),
+        (EquipmentType::Amulet, EquipmentSlot::Amulet),
+        (EquipmentType::Ring, EquipmentSlot::Ring0),
+    ] {
+        for slot in [0, 7, 8, 15, 16, 23] {
+            for nested in [false, true] {
+                for run in [false, true] {
+                    let mut session = equipment_session(run);
+                    let economy =
+                        &mut session.participants.get_mut("caster").unwrap().player.economy;
+                    let mut incoming = equipment(kind, 100);
+                    incoming.inventory_slot = Some(12);
+                    economy.backpack =
+                        vec![if nested { sack(200, vec![incoming]) } else { incoming }];
+                    economy.equipment.set(sink, Some(equipment(kind, 101)));
+                    if kind == EquipmentType::Ring {
+                        economy.equipment.rings[1] = Some(equipment(kind, 102));
+                    }
+                    economy.next_item_id = 300;
+                    assert!(
+                        session.bind_belt(
+                            "caster",
+                            NativeBeltCommand::BindItem { item_id: 100, slot }
+                        )
+                    );
+                    let expected_entry =
+                        session.participants.get("caster").unwrap().player.belt.entries[slot];
+                    let applied = session.activate_belt_slot("caster", slot, None);
+                    assert!(
+                        applied.transaction.accepted,
+                        "{kind:?}, slot {slot}, nested {nested}, run {run}: {:?}",
+                        applied.transaction.reason
+                    );
+                    let player = &session.participants.get("caster").unwrap().player;
+                    assert_eq!(
+                        player.economy.equipment.at(sink).as_ref().map(|item| item.id),
+                        Some(100)
+                    );
+                    assert_eq!(player.belt.entries[slot], expected_entry);
+                    assert!(find_inventory_item(&player.economy.backpack, 100).is_none());
+                    let owner = if nested {
+                        find_inventory_item(&player.economy.backpack, 200)
+                            .unwrap()
+                            .contents
+                            .as_ref()
+                            .unwrap()
+                    } else {
+                        &player.economy.backpack
+                    };
+                    assert!(
+                        owner.iter().any(|item| item.id == 101),
+                        "displaced item must return to the exact owning root"
+                    );
+                    let before_repeat = player.economy.clone();
+                    assert!(session.activate_belt_slot("caster", slot, None).transaction.accepted);
+                    assert_eq!(
+                        session.participants.get("caster").unwrap().player.economy,
+                        before_repeat,
+                        "equipped UID shortcut is a no-op"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn sack_shortcuts_keep_two_press_loadout_swaps_and_nested_contents() {
+    use solomon_sim::belt::NativeBeltCommand;
+    use solomon_sim::economy::{EquipmentSlot, EquipmentType, find_inventory_item};
+
+    for slot in [0, 7, 8, 15, 16, 23] {
+        for run in [false, true] {
+            let mut session = equipment_session(run);
+            let economy = &mut session.participants.get_mut("caster").unwrap().player.economy;
+            let members = [
+                (EquipmentType::Hat, EquipmentSlot::Hat),
+                (EquipmentType::Robe, EquipmentSlot::Robe),
+                (EquipmentType::Staff, EquipmentSlot::Weapon),
+                (EquipmentType::Amulet, EquipmentSlot::Amulet),
+                (EquipmentType::Ring, EquipmentSlot::Ring0),
+                (EquipmentType::Ring, EquipmentSlot::Ring1),
+            ];
+            let potion = solomon_sim::economy::create_fomentius_inventory_item(
+                &solomon_sim::economy::FOMENTIUS_STOCK_DEFINITIONS[0],
+                260,
+                3,
+            );
+            let mut contents = vec![sack(250, vec![equipment(EquipmentType::Hat, 251)]), potion];
+            for (index, (kind, sink)) in members.iter().enumerate() {
+                contents.push(equipment(*kind, 100 + index as u64));
+                economy.equipment.set(*sink, Some(equipment(*kind, 110 + index as u64)));
+            }
+            economy.backpack = vec![sack(200, contents)];
+            economy.next_item_id = 300;
+            assert!(
+                session.bind_belt("caster", NativeBeltCommand::BindItem { item_id: 200, slot })
+            );
+            let expected_entry =
+                session.participants.get("caster").unwrap().player.belt.entries[slot];
+            for (equipped_base, returned_base) in [(100, 110), (110, 100)] {
+                assert!(session.activate_belt_slot("caster", slot, None).transaction.accepted);
+                let player = &session.participants.get("caster").unwrap().player;
+                let contents = find_inventory_item(&player.economy.backpack, 200)
+                    .unwrap()
+                    .contents
+                    .as_ref()
+                    .unwrap();
+                for (index, (_, sink)) in members.iter().enumerate() {
+                    assert_eq!(
+                        player.economy.equipment.at(*sink).as_ref().map(|item| item.id),
+                        Some(equipped_base + index as u64)
+                    );
+                    assert!(contents.iter().any(|item| item.id == returned_base + index as u64));
+                }
+                assert_eq!(
+                    find_inventory_item(contents, 250).unwrap().contents.as_ref().unwrap()[0].id,
+                    251
+                );
+                assert_eq!(contents.iter().find(|item| item.id == 260).unwrap().quantity, 3);
+                assert_eq!(player.belt.entries[slot], expected_entry);
+                assert!(player.economy.inventory_is_valid());
+            }
         }
     }
 }

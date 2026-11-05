@@ -43,6 +43,7 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
         cast_action: value["castAction"].as_object().map(|_| NativeSecondaryCastAction {
             weapon_kind: weapon(&value["castAction"]["weaponKind"]),
             progress: value["castAction"]["progress"].as_f64().unwrap(),
+            hand: None,
         }),
         cast_sequence: value["castSequence"].as_u64().unwrap(),
         cast_spin_ticks_remaining: value["castSpinTicksRemaining"].as_u64().unwrap(),
@@ -573,6 +574,7 @@ pub fn authority_from_fixture<'a>(
         // Historical authority fixtures predate the separate alive input; their
         // retained characters are alive unless the current fixture says otherwise.
         alive: declared["alive"].as_bool().unwrap_or(true),
+        action_time_factor: 1.0,
         weapon_kind: weapon(&declared["weaponKind"]),
         belt,
         character: wizard,

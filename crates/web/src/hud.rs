@@ -7,7 +7,8 @@ use crate::hotbar::{HotbarControls, HotbarSelection};
 use solomon_sim::belt::NATIVE_BELT_SLOT_COUNT;
 use solomon_sim::hud::{
     HudBeltEntry, HudHealthLayerKind, HudRect, HudState, clamp_unit, native_health_hud_layers,
-    native_health_hud_presentation, native_hud_control_layout, native_mana_hud_presentation,
+    native_health_hud_presentation, native_hud_control_layout,
+    native_inventory_item_icon_transform, native_mana_hud_presentation,
 };
 use solomon_sim::mobile_ui::{MobileUiElementId, MobileUiLayoutState, default_mobile_ui_geometry};
 use std::cell::{Cell, RefCell};
@@ -804,7 +805,7 @@ impl Hud {
                 HudBeltEntry::ManaPotion { count } => {
                     (Some(47), false, *count, *count == 0, "Mana Potion")
                 }
-                HudBeltEntry::Item { record, count } => (*record, false, *count, false, "Item"),
+                HudBeltEntry::Item { count, .. } => (None, false, *count, false, "Item"),
             };
             let unavailable =
                 row.map_or(unavailable, |row| row.combat_disabled || row.insufficient_mana);
@@ -829,6 +830,22 @@ impl Hud {
                     rect.center(),
                     control_scale,
                 );
+            } else if let HudBeltEntry::Item { icon, .. } = entry {
+                let ([x, y], rotation) = native_inventory_item_icon_transform(icon.equipment_type);
+                let center = rect.center() + egui::vec2(x as f32, y as f32) * control_scale;
+                for (layer, record) in icon.records.iter().enumerate() {
+                    let tint = icon.tints.get(layer).copied().unwrap_or(0xffffff);
+                    self.inventory.paint_centered(
+                        &icon_frame,
+                        p,
+                        *record,
+                        center,
+                        control_scale,
+                        (rotation as f32).to_radians(),
+                        egui::Color32::from_rgb((tint >> 16) as u8, (tint >> 8) as u8, tint as u8)
+                            .gamma_multiply(alpha),
+                    )?;
+                }
             } else if let Some(record) = icon_record {
                 if skill {
                     self.skills.paint_centered(

@@ -41,8 +41,8 @@ use crate::profile::player_poison_duration_seconds;
 use crate::secondary::NativePlayerFlashResponseInput;
 use crate::secondary::golem::{NATIVE_GOLEM_REFLECT_DISTANCE_SQUARED, NativeGolemIncomingDamage};
 use crate::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryPlayerDamagePresentation,
-    NativeSecondarySimulationState,
+    NativeSecondaryActorKind, NativeSecondaryPlayerDamageInput,
+    NativeSecondaryPlayerDamagePresentation, NativeSecondarySimulationState,
 };
 use crate::spells::boneyard::boneyard_native_secondary_targets;
 use crate::{HubWizard, Vec2};
@@ -277,15 +277,18 @@ impl ContactStep<'_, '_> {
         let shield_active = self.shield_remaining() > 0.0;
         let first_shield_event = self.secondary.next_event_id;
         let intercepted = self.secondary.apply_player_damage(
-            self.participant.player_id,
-            contact.shield_damage,
-            self.tick,
-            position,
-            self.world_key,
-            NativeSecondaryPlayerDamagePresentation {
-                physical: damage.physical_damage > 0.0 && damage.magic_damage <= 0.0,
-                enhanced_effects: self.enhanced_effects,
+            NativeSecondaryPlayerDamageInput {
+                player_id: self.participant.player_id,
+                amount: contact.shield_damage,
+                tick: self.tick,
+                position,
+                world_key: self.world_key,
+                presentation: NativeSecondaryPlayerDamagePresentation {
+                    physical: damage.physical_damage > 0.0 && damage.magic_damage <= 0.0,
+                    enhanced_effects: self.enhanced_effects,
+                },
             },
+            self.painter_order,
         );
         self.secondary.write_screen_flashes_since(first_shield_event, self.flashes);
         let physical =
@@ -435,14 +438,17 @@ impl ContactStep<'_, '_> {
             .map(|target| target.id)
             .collect::<Vec<_>>();
             let first_flash_event = self.secondary.next_event_id;
-            self.secondary.materialize_player_flash_response(NativePlayerFlashResponseInput {
-                owner_id: self.participant.player_id,
-                position,
-                response: &response,
-                target_ids: &ids,
-                tick: self.tick,
-                world_key: self.world_key,
-            });
+            self.secondary.materialize_player_flash_response(
+                NativePlayerFlashResponseInput {
+                    owner_id: self.participant.player_id,
+                    position,
+                    response: &response,
+                    target_ids: &ids,
+                    tick: self.tick,
+                    world_key: self.world_key,
+                },
+                self.painter_order,
+            );
             self.secondary.write_screen_flashes_since(first_flash_event, self.flashes);
         }
         self.apply_crow_blindness(&damage);

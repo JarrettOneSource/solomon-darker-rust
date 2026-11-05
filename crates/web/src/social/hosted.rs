@@ -21,8 +21,10 @@ impl SocialUi {
             return;
         }
         self.hosted = hosted;
+        self.close_surfaces();
         self.hub_players.clear();
-        self.hosted_card_request = None;
+        self.card_requests.dismiss();
+        self.hosted_notice = None;
         self.college_invitations.clear();
         self.resolving_college = None;
         self.hosted_actions.clear();
@@ -32,22 +34,33 @@ impl SocialUi {
         std::mem::take(&mut self.hosted_actions)
     }
 
+    /// Pending profile replies belong to the retired transport, even when its world is retained.
+    pub fn cancel_player_card_request(&mut self) {
+        self.card_requests.dismiss();
+        self.hosted_actions.retain(|action| {
+            !matches!(action, HostedSocialAction::Command(command)
+                if matches!(command.as_ref(), HostedCommand::RequestPlayerCard { .. }))
+        });
+        if matches!(self.surface, Some(Surface::Card(_))) {
+            self.surface = None;
+        }
+    }
+
     /// False means this message belongs to another actual consumer (Lua, content,
     /// saves or admission); the caller must keep routing those messages there.
     pub fn receive_hosted_message(
         &mut self,
         message: &HostedServerMessage,
+        now: f64,
     ) -> Result<bool, String> {
         match message {
             HostedServerMessage::PlayerCard { profile, request_id } => {
-                if self.hosted_card_request != Some(*request_id) {
+                if !self.card_requests.complete(*request_id, profile.is_some(), now) {
                     return Ok(true);
                 }
-                self.hosted_card_request = None;
                 self.requested_card = None;
                 self.surface = profile.clone().map(Surface::Card);
                 self.focus_modal = self.surface.is_some();
-                self.hosted_notice = None;
             }
             HostedServerMessage::CollegeInvitations { invitations } => {
                 if self.college_invitations != *invitations {
@@ -85,9 +98,6 @@ impl SocialUi {
     }
 
     pub(super) fn request_hosted_card(&mut self, by_reference: bool, target: &str) {
-        if self.hosted_card_request.is_some() {
-            return;
-        }
         let reference = self
             .snapshot
             .as_ref()
@@ -101,14 +111,10 @@ impl SocialUi {
                 })
             })
             .map_or_else(|| target.to_owned(), |card| card.player_reference.clone());
-        self.next_hosted_request += 1;
-        self.hosted_card_request = Some(self.next_hosted_request);
-        self.hosted_notice = Some("Opening Player Card…".into());
+        let request_id = self.card_requests.begin(self.now);
+        self.surface = None;
         self.hosted_actions.push(HostedSocialAction::Command(Box::new(
-            HostedCommand::RequestPlayerCard {
-                request_id: self.next_hosted_request,
-                player_reference: reference,
-            },
+            HostedCommand::RequestPlayerCard { request_id, player_reference: reference },
         )));
     }
 

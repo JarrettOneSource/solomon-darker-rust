@@ -18,6 +18,7 @@ mod mod_epochs;
 mod mods;
 mod observer;
 mod publication;
+mod reconnect;
 mod recovery;
 mod rejoin;
 mod saves;
@@ -61,6 +62,7 @@ pub use worlds::HostedWorlds;
 /// Capabilities are received only through an authenticated, one-use supervisor ticket.
 /// The public browser hello never supplies any of these authority fields.
 pub struct HostedAdmission {
+    pub reconnect: Option<HostedReconnectAdmission>,
     pub content: Arc<MaterializedWebSessionContent>,
     pub developer_access: bool,
     pub leaderboard_user_id: Option<u32>,
@@ -71,6 +73,12 @@ pub struct HostedAdmission {
     pub observer: Option<HostedObserverTarget>,
 }
 
+pub struct HostedReconnectAdmission {
+    pub player_id: String,
+    pub request_id: String,
+    pub expected_peer_id: PeerId,
+}
+
 pub struct HostedObserverTarget {
     pub run_id: String,
     pub user_id: u32,
@@ -78,6 +86,7 @@ pub struct HostedObserverTarget {
 }
 
 pub struct HostedPlayer {
+    pub(super) reconnect_request_ids: BTreeSet<String>,
     pub id: String,
     pub resume_token: String,
     pub content: Arc<MaterializedWebSessionContent>,
@@ -128,6 +137,7 @@ pub struct HostedGameHost {
     leaderboard_runs: leaderboard::LeaderboardRunState,
     leaderboard_previous_runs: Vec<leaderboard::LeaderboardRunSnapshot>,
     pub players: Vec<HostedPlayer>,
+    reconnects: BTreeMap<String, reconnect::ReconnectLease>,
     pub(super) observers: BTreeMap<PeerId, HostedObserver>,
     pub(super) connections: BTreeMap<PeerId, HostConnection>,
     pub(super) content_loader: HostContent,
@@ -215,6 +225,7 @@ impl HostedGameHost {
             leaderboard_runs: leaderboard::LeaderboardRunState::default(),
             leaderboard_previous_runs: Vec::new(),
             players: Vec::new(),
+            reconnects: BTreeMap::new(),
             connections: BTreeMap::new(),
             observers: BTreeMap::new(),
             content_loader,

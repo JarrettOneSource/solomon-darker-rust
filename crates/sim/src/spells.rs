@@ -14,6 +14,7 @@ pub mod ether;
 pub mod ether_presentation;
 pub mod fire;
 pub mod fire_presentation;
+pub mod hand_cast;
 mod lifecycle;
 pub mod model;
 pub mod presentation;

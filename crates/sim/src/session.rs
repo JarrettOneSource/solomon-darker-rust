@@ -349,6 +349,16 @@ const fn first_mod_consumable_use_id() -> u64 {
 }
 
 fn validate_checkpoint(checkpoint: &GameCheckpoint) -> Result<(), String> {
+    use crate::spells::model::PrimaryTransientRef;
+    use crate::spells::weld::{WeldPersistentRef, WeldWorldRef};
+    for actor in checkpoint.spells.transients.iter() {
+        if let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
+            WeldPersistentRef::EtherealBoulder(actor),
+        )) = actor
+        {
+            actor.validate_guidance()?;
+        }
+    }
     for (id, session) in &checkpoint.inventory_dye_sessions {
         if !checkpoint.participants.contains_key(id)
             || session.id.is_empty()

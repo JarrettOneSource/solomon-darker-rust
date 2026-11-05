@@ -136,7 +136,7 @@ fn world(actor: WeldWorldRef<'_>) -> Value {
         WeldWorldRef::Persistent(actor) => {
             let physics = match actor {
                 WeldPersistentRef::EtherealBoulder(actor) => {
-                    json!({"scale":actor.scale,"damage":actor.damage,"remainingDamage":actor.remaining_damage,"hitTargetIds":actor.hit_target_ids,"pulseSequence":actor.pulse_sequence,"lifetimeTicksRemaining":actor.lifetime_ticks_remaining,"flightTicks":actor.flight_ticks,"quantity":actor.quantity,"assemblyScale":actor.assembly_scale,"shellScale":actor.shell_scale,"phase":if actor.phase==PrimarySpellProjectilePhase::Held {"held"}else{"flight"},"velocity":point(actor.velocity)})
+                    json!({"scale":actor.scale,"damage":actor.damage,"remainingDamage":actor.remaining_damage,"hitTargetIds":actor.hit_target_ids,"pulseSequence":actor.pulse_sequence,"lifetimeTicksRemaining":actor.tracking_ticks_remaining,"flightTicks":actor.flight_ticks,"quantity":actor.quantity,"assemblyScale":actor.assembly_scale,"shellScale":actor.shell_scale,"phase":if actor.phase==PrimarySpellProjectilePhase::Held {"held"}else{"flight"},"velocity":point(actor.velocity)})
                 }
                 WeldPersistentRef::Hailstones(actor) => {
                     json!({"scale":actor.scale,"damage":actor.damage,"pulseSequence":actor.pulse_sequence,"collisionRadius":actor.collision_radius,"releaseAgeTicks":actor.release_age_ticks,"phase":if actor.phase==PrimarySpellProjectilePhase::Held {"held"}else{"flight"},"rocks":actor.rocks.iter().map(|rock|json!([rock.rock_id,rock.damage_remaining,[rock.local_position.x,rock.local_position.y,rock.local_position.z],rock.release_offset.map(point),rock.phase,rock.decay])).collect::<Vec<_>>()})

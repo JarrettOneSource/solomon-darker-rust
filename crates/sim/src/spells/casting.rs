@@ -12,6 +12,13 @@ use crate::profile::WizardElement;
 pub const NATIVE_PLAYER_WEAPON_PULSE_DECAY: f64 = 0.9_f32 as f64;
 pub const NATIVE_ETHER_BLAST_WEAPON_PULSE: f64 = 0.25_f32 as f64;
 
+/// `0x00410E40` for nondecreasing action progress. Both endpoints are
+/// inclusive; an exact landing may deliver again on the next positive step.
+#[must_use]
+pub fn native_forward_action_marker_crossed(previous: f64, current: f64, marker: f64) -> bool {
+    previous <= marker && marker <= current && current > previous
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum NativePlayerWeaponKind {
@@ -23,6 +30,8 @@ pub enum NativePlayerWeaponKind {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerPrimaryCastState {
     pub action_tick: Option<f64>,
+    #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
+    pub hand_cast: Option<super::hand_cast::NativeHandCast1>,
     pub aim_direction: Vec2,
     pub cast_sequence: u64,
     pub channel_active: bool,
@@ -45,6 +54,7 @@ impl Default for PlayerPrimaryCastState {
     fn default() -> Self {
         Self {
             action_tick: None,
+            hand_cast: None,
             aim_direction: Vec2::new(0.0, 1.0),
             cast_sequence: 0,
             channel_active: false,
@@ -85,6 +95,7 @@ impl PlayerPrimaryCastState {
     /// aim direction, Ether charge and weapon pulse from the previous selection.
     pub fn reset_for_selection(&mut self, selected_primary_id: u32) {
         self.action_tick = None;
+        self.hand_cast = None;
         self.channel_active = false;
         self.held = false;
         self.last_weld_playback_rate = None;
@@ -104,12 +115,22 @@ impl PlayerPrimaryCastState {
         accepted: bool,
         element: WizardElement,
         progress_factor: f64,
+        action_time_factor: f64,
     ) {
         assert!(
             progress_factor.is_finite() && progress_factor >= 0.0,
             "primary cast progress factor must be finite and nonnegative"
         );
-        if let Some(action_tick) = self.action_tick {
+        assert!(action_time_factor.is_finite() && action_time_factor >= 0.0);
+        if let Some(hand) = &mut self.hand_cast {
+            if hand.done() {
+                self.hand_cast = None;
+                self.action_tick = None;
+            } else {
+                hand.step(action_time_factor);
+                self.action_tick = Some(self.action_tick.unwrap_or(0.0) + progress_factor);
+            }
+        } else if let Some(action_tick) = self.action_tick {
             self.action_tick = if self.channel_active {
                 Some((action_tick + progress_factor).min(1.0))
             } else if action_tick > primary_cast_completion_progress(element) {
@@ -120,6 +141,7 @@ impl PlayerPrimaryCastState {
         }
         if accepted {
             self.action_tick = Some(0.0);
+            self.hand_cast = None;
             self.cast_sequence += 1;
             self.underpowered = false;
         }
@@ -200,7 +222,7 @@ pub fn primary_spell_emitter_offset(
         ),
         Some(NativePlayerWeaponKind::Wand) => {
             let pose = player_wand_primary_pose(action_tick, channel_active, element);
-            WAND_OFFSETS[pose][heading]
+            player_wand_attachment_offset(heading, pose)
         }
     }
 }
@@ -208,6 +230,12 @@ pub fn primary_spell_emitter_offset(
 #[must_use]
 pub fn player_staff_attachment_offset(heading: usize, pose: usize) -> Vec2 {
     STAFF_OFFSETS[pose][heading % 24]
+}
+
+/// Clothes `796+24*pose+heading`, point1; the third row is Wand Cast2.
+#[must_use]
+pub fn player_wand_attachment_offset(heading: usize, pose: usize) -> Vec2 {
+    WAND_OFFSETS[pose][heading % 24]
 }
 
 #[must_use]
@@ -240,12 +268,12 @@ mod tests {
     #[test]
     fn ether_retains_the_action_on_the_tick_that_crosses_progress_four() {
         let mut cast = PlayerPrimaryCastState::default();
-        cast.advance(true, true, WizardElement::Ether, 1.0);
+        cast.advance(true, true, WizardElement::Ether, 1.0, 1.0);
         for _ in 0..54 {
-            cast.advance(true, false, WizardElement::Ether, 1.0);
+            cast.advance(true, false, WizardElement::Ether, 1.0, 1.0);
         }
         assert_eq!(cast.action_tick, Some(54.0));
-        cast.advance(true, false, WizardElement::Ether, 1.0);
+        cast.advance(true, false, WizardElement::Ether, 1.0, 1.0);
         assert_eq!(cast.action_tick, None);
     }
 }

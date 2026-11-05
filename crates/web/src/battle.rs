@@ -139,16 +139,18 @@ impl BattleViews {
     pub async fn load(renderer: &Renderer, spells: &SpellView) -> Result<Self, String> {
         let bad_guys = spells.bad_guys();
         let dead_hawg = spells.dead_hawg();
+        let enemies = EnemyView::load(
+            renderer,
+            bad_guys.records.clone(),
+            bad_guys.texture.clone(),
+            dead_hawg.records.clone(),
+            dead_hawg.texture.clone(),
+        )
+        .await?;
+        let secondary = SecondaryView::load(renderer, spells, enemies.demon_atlas()).await?;
         Ok(Self {
-            enemies: EnemyView::load(
-                renderer,
-                bad_guys.records.clone(),
-                bad_guys.texture.clone(),
-                dead_hawg.records.clone(),
-                dead_hawg.texture.clone(),
-            )
-            .await?,
-            secondary: SecondaryView::load(renderer, spells).await?,
+            enemies,
+            secondary,
             solomon: SolomonView::load(
                 renderer,
                 &bad_guys.records,
@@ -508,6 +510,7 @@ impl BattleViews {
                 application_tick: (frame.application_time_ms / 10.0).floor() as u64,
                 complex_lighting: frame.settings.complex_lighting,
                 complex_shadows: frame.settings.complex_shadows,
+                enhanced_effects: frame.enhanced_effects,
                 view_height: viewport.y,
                 players: &players,
                 light_at: &light_at,
@@ -824,6 +827,8 @@ impl BattleViews {
                             wizard.set_player_presentation(WizardPlayerPresentation {
                                 player,
                                 secondary: frame.secondary.players.get(participant.id),
+                                stoneskin_warp: frame.secondary.stoneskin_warp.as_deref(),
+                                enhanced_effects: frame.enhanced_effects,
                                 webbed: world.enemies.webbed_players.get(participant.id).copied(),
                                 overlay_effect_phase: participant.overlay_effect_phase,
                                 staff_action_pose: frame.spells.transients.iter().find_map(
@@ -921,6 +926,7 @@ impl BattleViews {
                     atlas: NativeSecondaryAtlas::DeadHawg,
                     blend: NativeSecondaryBlend::Normal,
                     color_mode: None,
+                    clip: None,
                     entry: 1,
                     offset: Vec2::ZERO,
                     role: "crow-blindness-stamp".to_owned(),

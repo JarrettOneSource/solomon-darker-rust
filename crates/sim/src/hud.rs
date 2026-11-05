@@ -64,12 +64,73 @@ pub struct HudHealthLayer {
     pub record: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum HudBeltEntry {
     Skill { record: usize, unavailable: bool },
     HealthPotion { count: u32 },
     ManaPotion { count: u32 },
-    Item { record: Option<usize>, count: u32 },
+    Item { icon: HudItemIcon, count: u32 },
+}
+
+/// The stock item artwork needed by a belt painter, without inventory ownership or contents.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HudItemIcon {
+    pub records: Vec<usize>,
+    pub tints: [u32; 2],
+    pub equipment_type: Option<crate::economy::EquipmentType>,
+}
+
+impl HudItemIcon {
+    #[must_use]
+    pub fn from_item(
+        item: &crate::economy::HubInventoryItem,
+        element: crate::profile::WizardElement,
+    ) -> Self {
+        Self {
+            records: item.icon_records.clone(),
+            tints: native_inventory_item_icon_tints(item, element),
+            equipment_type: item.equipment_type,
+        }
+    }
+}
+
+/// `NativeBeltItemIcon` keeps explicit garment colors before recipe and element
+/// defaults. A missing tint lane is untinted texture, including Combinator trim.
+#[must_use]
+pub fn native_inventory_item_icon_tints(
+    item: &crate::economy::HubInventoryItem,
+    element: crate::profile::WizardElement,
+) -> [u32; 2] {
+    use crate::economy::{DOWSING_EQUIPMENT_RECIPES, EquipmentType};
+    if !matches!(item.equipment_type, Some(EquipmentType::Hat | EquipmentType::Robe)) {
+        return [0xffffff; 2];
+    }
+    item.icon_tints
+        .or_else(|| {
+            item.recipe_index
+                .and_then(|index| DOWSING_EQUIPMENT_RECIPES.get(index))
+                .map(|recipe| recipe.icon_tints)
+        })
+        .unwrap_or([
+            Some(crate::appearance::equipment::native_wizard_icon_primary_tint(element)),
+            Some(0xffffff),
+        ])
+        .map(|tint| tint.unwrap_or(0xffffff))
+}
+
+/// Inventory icon transforms from Website `HUB_ITEM_ICON_TRANSFORMS`, shared by
+/// the gameplay belt, Inventory and its companions, and the mobile HUD preview.
+#[must_use]
+pub const fn native_inventory_item_icon_transform(
+    equipment_type: Option<crate::economy::EquipmentType>,
+) -> ([f64; 2], f64) {
+    use crate::economy::EquipmentType;
+    match equipment_type {
+        Some(EquipmentType::Amulet) => ([0.0, -5.0], 0.0),
+        Some(EquipmentType::Staff) => ([-22.94306, 32.76608], 35.0),
+        Some(EquipmentType::Wand) => ([0.0, 0.0], 45.0),
+        _ => ([0.0, 0.0], 0.0),
+    }
 }
 
 /// Values supplied by the local simulation or an authoritative runtime, never invented by
@@ -215,10 +276,85 @@ pub fn clamp_unit(value: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::economy::{
+        DOWSING_EQUIPMENT_RECIPES, EquipmentType, create_equipment_inventory_item,
+    };
+    use crate::profile::WizardElement;
 
     #[test]
     fn half_health_uses_quarter_fill_while_half_mana_uses_half_fill() {
         assert_eq!(native_health_hud_presentation(25.0, 50.0, 0.0, 0.0).fill_width, 25.0);
         assert_eq!(native_mana_hud_presentation(50.0, 100.0, 0.0).fill_width, 50.0);
+    }
+
+    #[test]
+    fn belt_item_art_retains_every_authored_equipment_layer_and_tint() {
+        for recipe in &DOWSING_EQUIPMENT_RECIPES {
+            let item = create_equipment_inventory_item(recipe, 100);
+            let icon = HudItemIcon::from_item(&item, WizardElement::Ether);
+            assert_eq!(icon.records, recipe.icon_records, "{} records", recipe.name);
+            assert_eq!(
+                icon.equipment_type,
+                Some(recipe.equipment_type),
+                "{} transform",
+                recipe.name
+            );
+            let expected_tints =
+                if matches!(recipe.equipment_type, EquipmentType::Hat | EquipmentType::Robe) {
+                    recipe.icon_tints.map(|tint| tint.unwrap_or(0xffffff))
+                } else {
+                    [0xffffff; 2]
+                };
+            assert_eq!(icon.tints, expected_tints, "{} tints", recipe.name);
+        }
+    }
+
+    #[test]
+    fn belt_garment_art_retains_dye_before_recipe_and_element_defaults() {
+        for kind in [EquipmentType::Hat, EquipmentType::Robe] {
+            let recipe = DOWSING_EQUIPMENT_RECIPES
+                .iter()
+                .find(|recipe| recipe.equipment_type == kind)
+                .unwrap();
+            let mut item = create_equipment_inventory_item(recipe, 100);
+            item.icon_tints = Some([Some(0x123456), Some(0xabcdef)]);
+            assert_eq!(
+                HudItemIcon::from_item(&item, WizardElement::Ether).tints,
+                [0x123456, 0xabcdef]
+            );
+            for (source, expected) in [
+                ([Some(0x123456), None], [0x123456, 0xffffff]),
+                ([None, Some(0xabcdef)], [0xffffff, 0xabcdef]),
+            ] {
+                item.icon_tints = Some(source);
+                assert_eq!(HudItemIcon::from_item(&item, WizardElement::Ether).tints, expected);
+            }
+            item.icon_tints = None;
+            item.recipe_index = None;
+            for (element, tint) in [
+                (WizardElement::Air, 0xa0c3c3),
+                (WizardElement::Earth, 0x90b390),
+                (WizardElement::Ether, 0x886688),
+                (WizardElement::Fire, 0x998077),
+                (WizardElement::Water, 0x5e6e81),
+            ] {
+                assert_eq!(HudItemIcon::from_item(&item, element).tints, [tint, 0xffffff]);
+            }
+        }
+    }
+
+    #[test]
+    fn item_icon_transforms_cover_every_equipment_family_and_plain_items() {
+        for (kind, offset, rotation) in [
+            (Some(EquipmentType::Amulet), [0.0, -5.0], 0.0),
+            (Some(EquipmentType::Hat), [0.0, 0.0], 0.0),
+            (Some(EquipmentType::Ring), [0.0, 0.0], 0.0),
+            (Some(EquipmentType::Robe), [0.0, 0.0], 0.0),
+            (Some(EquipmentType::Staff), [-22.94306, 32.76608], 35.0),
+            (Some(EquipmentType::Wand), [0.0, 0.0], 45.0),
+            (None, [0.0, 0.0], 0.0),
+        ] {
+            assert_eq!(native_inventory_item_icon_transform(kind), (offset, rotation));
+        }
     }
 }
