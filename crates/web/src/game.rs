@@ -1406,11 +1406,13 @@ impl Game {
                     .is_none_or(|hosted| !hosted.connecting && !hosted.content_pending);
             let world_ready = loading.flow == MatchLoadingFlow::Hub || self.battle.is_some();
             if admitted && prepared && world_ready {
-                let participants_pending = self
-                    .native
-                    .as_ref()
-                    .and_then(NativeGame::host_snapshot)
-                    .is_some_and(|host| !host.materializing_player_ids.is_empty());
+                // A wizard who rejoins with a level-up pending stays staged, outside the
+                // world, until it chooses. Its own staging must not keep the loading
+                // screen over the picker that ends it.
+                let participants_pending =
+                    self.native.as_ref().and_then(NativeGame::host_snapshot).is_some_and(|host| {
+                        host.materializing_player_ids.iter().any(|id| *id != self.local_player_id)
+                    });
                 if participants_pending {
                     loading.advance(MatchLoadingStage::WaitingForParticipants);
                 } else {

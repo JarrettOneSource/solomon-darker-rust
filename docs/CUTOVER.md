@@ -121,7 +121,8 @@ These must be finished before Rust moves to `/game`.
 | 7 | Community content in Rust | Not started | Published boneyards and mods load, and the Website editor's test-play uses Rust. |
 | 8 | Swap plan | Not started | Rust to `/game`, PixiJS to `/game-legacy` with a banner for a few weeks, `/game-rust` redirects to `/game`. Needs Website and Caddy changes. |
 | 9 | README play link | Done | It pointed at `/game/` (PixiJS); it now points at `/game-rust/` until the swap. |
-| 29 | Rejoin during a level-up | Not started | A wizard who reconnects while a level-up offer is pending stays on "Waiting for the coven...": the host's `game_rejoined` loading grace never ends. After a host restart, Last game is disabled. It reproduces on PR13's head as well, so it predates the storage change. |
+| 29 | Rejoin during a level-up | Done | A wizard who rejoins with a level-up pending stays staged outside the world until it chooses. The client kept its loading screen up while its own wizard was staged, so the picker never appeared and the run stayed on "Waiting for the coven..." (PR13's head too). The loading screen and the "Waiting on players" overlay now ignore the player's own staging. |
+| 30 | Rejoin placement | Not started | A wizard who rejoins a run in progress appears at the Boneyard's spawn point (`BoneyardWorld::spawn_wizard`), the same rule the Website host's tests assert. Once the arena seals, the camera stops at its edge, so the wizard shows at the top of the screen, partly behind the health bar. Compare PixiJS and decide where rejoiners should enter. |
 
 ### Standalone: no PixiJS baggage
 
