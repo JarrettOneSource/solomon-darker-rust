@@ -289,5 +289,5 @@ fn demon_birth_uses_a_connected_endpoint_when_the_wizard_is_beside_scenery() {
     assert!(result.advanced);
     let actors = &game.boneyard.as_ref().unwrap().enemies.actors;
     assert_eq!(actors.len(), 1);
-    assert_eq!(actors.get(0).unwrap().position, origin);
+    assert_eq!(actors.first().unwrap().position, origin);
 }

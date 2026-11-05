@@ -1,7 +1,6 @@
 //! Source `ml-bot-policy/world-state.ts`: pickups, allies and committed action history.
 
 use crate::Vec2;
-use crate::boneyard::loot::LootActorRead;
 use crate::combat::PlayerLifeState;
 use crate::economy::HubItemKind;
 use crate::float::hypot;
@@ -210,7 +209,7 @@ fn observe_pickups(session: &GameSession, position: Vec2) -> Vec<f32> {
     for (slot, actor) in actors.iter().take(4).enumerate() {
         let relative = Vec2::new(actor.position.x - position.x, actor.position.y - position.y);
         let direction = normalized(relative.x, relative.y);
-        let kind = actor.reward().item.as_ref().map(|item| item.kind);
+        let kind = actor.item.as_ref().map(|item| item.kind);
         write(
             &mut block,
             slot * 21,
@@ -222,15 +221,15 @@ fn observe_pickups(session: &GameSession, position: Vec2) -> Vec<f32> {
                 f64::from(actor.kind == NativeLootDropKind::Gold),
                 f64::from(
                     actor.kind == NativeLootDropKind::Orb
-                        && actor.reward().orb_kind == Some(NativeOrbKind::Health),
+                        && actor.orb_kind == Some(NativeOrbKind::Health),
                 ),
                 f64::from(
                     actor.kind == NativeLootDropKind::Orb
-                        && actor.reward().orb_kind == Some(NativeOrbKind::Mana),
+                        && actor.orb_kind == Some(NativeOrbKind::Mana),
                 ),
                 f64::from(actor.kind == NativeLootDropKind::Sack),
                 f64::from(actor.kind == NativeLootDropKind::Bonus),
-                f64::from(actor.kind == NativeLootDropKind::Sack && actor.reward().item.is_some()),
+                f64::from(actor.kind == NativeLootDropKind::Sack && actor.item.is_some()),
                 f64::from(kind == Some(HubItemKind::HealthPotion)),
                 f64::from(kind == Some(HubItemKind::ManaPotion)),
                 f64::from(kind == Some(HubItemKind::WizardChug)),
@@ -240,10 +239,8 @@ fn observe_pickups(session: &GameSession, position: Vec2) -> Vec<f32> {
                 f64::from(kind == Some(HubItemKind::ModPotion)),
                 f64::from(kind == Some(HubItemKind::Equipment)),
                 f64::from(kind == Some(HubItemKind::Key)),
-                count_scaled(
-                    actor.reward().item.as_ref().map_or(0.0, |item| f64::from(item.quantity)),
-                ),
-                count_scaled(actor.reward().amount as f64),
+                count_scaled(actor.item.as_ref().map_or(0.0, |item| f64::from(item.quantity))),
+                count_scaled(actor.amount as f64),
             ],
         );
     }

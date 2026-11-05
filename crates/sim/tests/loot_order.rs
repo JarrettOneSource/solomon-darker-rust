@@ -11,7 +11,7 @@ use solomon_sim::profile::WizardElement;
 
 #[test]
 fn retired_pickups_do_not_reorder_survivors_or_lose_saved_contents() {
-    let mut store = BoneyardLootStore::new("loot-ecs", &[]);
+    let mut store = BoneyardLootStore::new("loot-order", &[]);
     let mut order = WorldPainterOrder::default();
     let item = HubEconomyState::new(77, WizardElement::Air).backpack[0].clone();
     let drop =

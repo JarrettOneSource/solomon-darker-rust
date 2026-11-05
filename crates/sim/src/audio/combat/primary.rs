@@ -12,10 +12,12 @@ use crate::spells::earth::{
 };
 use crate::spells::fire::native_fire_impact_pitch;
 use crate::spells::model::{
-    FireExplosionPresentation, PrimaryProjectileRef, PrimarySpellProjectilePhase,
-    PrimarySpellTransientBase, PrimaryTransientRef,
+    FireExplosionPresentation, PrimarySpellProjectile, PrimarySpellProjectilePhase,
+    PrimarySpellTransient, PrimarySpellTransientBase,
 };
-use crate::spells::weld::{NativeWeldMeteorPhase, WeldPersistentRef, WeldWorldRef};
+use crate::spells::weld::{
+    NativeWeldMeteorPhase, NativeWeldPersistentActorState, NativeWeldWorldActor,
+};
 
 use super::skills::{
     active_weld_build, is_secondary_loop, native_weld_cast_sound_cues, selected_primary_element,
@@ -56,22 +58,22 @@ impl PrimarySoundMemory {
         for actor in frame.primary.transients.iter() {
             let common = actor.common();
             match actor {
-                PrimaryTransientRef::EtherBlast(_) => {
+                PrimarySpellTransient::EtherBlast(_) => {
                     memory.ether_blasts.insert(key(common));
                 }
-                PrimaryTransientRef::FireImpact(_) => {
+                PrimarySpellTransient::FireImpact(_) => {
                     memory.fire_impacts.insert(common.id);
                 }
-                PrimaryTransientRef::FireExplosion(_) => {
+                PrimarySpellTransient::FireExplosion(_) => {
                     memory.fire_explosions.insert(common.id);
                 }
-                PrimaryTransientRef::EarthImpact(_) => {
+                PrimarySpellTransient::EarthImpact(_) => {
                     memory.earth_impacts.insert(key(common));
                 }
-                PrimaryTransientRef::EtherImpact(_) => {
+                PrimarySpellTransient::EtherImpact(_) => {
                     memory.ether_impacts.insert(common.id);
                 }
-                PrimaryTransientRef::FireGoodImp(imp) => {
+                PrimarySpellTransient::FireGoodImp(imp) => {
                     memory.good_imps.insert(
                         key(common),
                         GoodImpSoundClock {
@@ -80,21 +82,21 @@ impl PrimarySoundMemory {
                         },
                     );
                 }
-                PrimaryTransientRef::WaterHail(hail) => {
+                PrimarySpellTransient::WaterHail(hail) => {
                     memory.hail_sequences.insert(common.id, hail.bounce_sound_sequence);
                 }
-                PrimaryTransientRef::Weld(weld) => match weld {
-                    WeldWorldRef::Meteor(meteor)
+                PrimarySpellTransient::Weld(weld) => match weld {
+                    NativeWeldWorldActor::Meteor(meteor)
                         if meteor.phase == NativeWeldMeteorPhase::Impact =>
                     {
                         memory.meteor_impacts.insert(key(common));
                     }
-                    WeldWorldRef::Impact(_) => {
+                    NativeWeldWorldActor::Impact(_) => {
                         memory.weld_impacts.insert(key(common));
                     }
-                    WeldWorldRef::Persistent(WeldPersistentRef::Hailstones(hail))
-                        if hail.phase == PrimarySpellProjectilePhase::Flight =>
-                    {
+                    NativeWeldWorldActor::Persistent(
+                        NativeWeldPersistentActorState::Hailstones(hail),
+                    ) if hail.phase == PrimarySpellProjectilePhase::Flight => {
                         memory.flying_hailstones.insert(key(common));
                     }
                     _ => {}
@@ -153,7 +155,7 @@ impl CombatAudioCursor {
             if player.cast.fizzle_sequence > previous.fizzle {
                 if element == WizardElement::Earth {
                     let boulder = frame.primary.projectiles.iter().find_map(|spell| match spell {
-                        PrimaryProjectileRef::Earth(earth)
+                        PrimarySpellProjectile::Earth(earth)
                             if earth.common.owner_id == player.id =>
                         {
                             Some(earth)
@@ -201,7 +203,7 @@ impl CombatAudioCursor {
         // Preserve the source's separate actor passes: their sound order is observable
         // when several different effects are born on one accepted snapshot.
         for actor in frame.primary.transients.iter() {
-            if let PrimaryTransientRef::EtherBlast(blast) = actor
+            if let PrimarySpellTransient::EtherBlast(blast) = actor
                 && blast.common.world_key == world_key
                 && !self.primary.ether_blasts.contains(&key(&blast.common))
                 && let Some(volume) = player_attenuation(frame, &blast.common.owner_id)
@@ -212,7 +214,7 @@ impl CombatAudioCursor {
             }
         }
         for actor in frame.primary.transients.iter() {
-            if let PrimaryTransientRef::FireImpact(impact) = actor
+            if let PrimarySpellTransient::FireImpact(impact) = actor
                 && impact.common.world_key == world_key
                 && !self.primary.fire_impacts.contains(&impact.common.id)
             {
@@ -225,7 +227,7 @@ impl CombatAudioCursor {
             }
         }
         for actor in frame.primary.transients.iter() {
-            if let PrimaryTransientRef::FireExplosion(explosion) = actor
+            if let PrimarySpellTransient::FireExplosion(explosion) = actor
                 && explosion.common.world_key == world_key
                 && !self.primary.fire_explosions.contains(&explosion.common.id)
             {
@@ -240,7 +242,7 @@ impl CombatAudioCursor {
         }
         self.project_weld_impacts(frame, output);
         for actor in frame.primary.transients.iter() {
-            if let PrimaryTransientRef::EarthImpact(impact) = actor
+            if let PrimarySpellTransient::EarthImpact(impact) = actor
                 && impact.common.world_key == world_key
                 && !self.primary.earth_impacts.contains(&key(&impact.common))
             {
@@ -254,7 +256,7 @@ impl CombatAudioCursor {
         self.project_releases_and_imps(frame, output);
         self.project_secondary_events(frame, output);
         for actor in frame.primary.transients.iter() {
-            if let PrimaryTransientRef::EtherImpact(impact) = actor
+            if let PrimarySpellTransient::EtherImpact(impact) = actor
                 && impact.common.world_key == world_key
                 && !self.primary.ether_impacts.contains(&impact.common.id)
             {
@@ -291,7 +293,7 @@ impl CombatAudioCursor {
     fn project_weld_impacts(&self, frame: &CombatAudioFrame<'_>, output: &mut CombatAudioOutput) {
         let listener = listener(frame).unwrap();
         for actor in frame.primary.transients.iter() {
-            if let PrimaryTransientRef::Weld(WeldWorldRef::Meteor(meteor)) = actor
+            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(meteor)) = actor
                 && meteor.common.owner.world_key == listener.world_key
                 && meteor.phase == NativeWeldMeteorPhase::Impact
                 && !self.primary.meteor_impacts.contains(&key(&meteor.common.owner))
@@ -313,7 +315,7 @@ impl CombatAudioCursor {
             }
         }
         for actor in frame.primary.transients.iter() {
-            let PrimaryTransientRef::Weld(WeldWorldRef::Impact(impact)) = actor else {
+            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Impact(impact)) = actor else {
                 continue;
             };
             if impact.common.owner.world_key != listener.world_key
@@ -359,8 +361,8 @@ impl CombatAudioCursor {
     ) {
         let listener = listener(frame).unwrap();
         for actor in frame.primary.transients.iter() {
-            if let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
-                WeldPersistentRef::Hailstones(hail),
+            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
+                NativeWeldPersistentActorState::Hailstones(hail),
             )) = actor
                 && hail.common.owner.world_key == listener.world_key
                 && hail.phase == PrimarySpellProjectilePhase::Flight
@@ -372,7 +374,7 @@ impl CombatAudioCursor {
             }
         }
         for actor in frame.primary.transients.iter() {
-            let PrimaryTransientRef::FireGoodImp(imp) = actor else { continue };
+            let PrimarySpellTransient::FireGoodImp(imp) = actor else { continue };
             if imp.common.world_key != listener.world_key {
                 continue;
             }
@@ -407,7 +409,7 @@ impl CombatAudioCursor {
             }
         }
         for actor in frame.primary.transients.iter() {
-            let PrimaryTransientRef::WaterHail(hail) = actor else { continue };
+            let PrimarySpellTransient::WaterHail(hail) = actor else { continue };
             if hail.common.world_key != listener.world_key {
                 continue;
             }

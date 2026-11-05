@@ -11,7 +11,6 @@ use crate::{NativeRng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldMeteorMarkerState {
     pub common: NativeWeldActorBase,
     pub alpha: f64,
@@ -51,7 +50,6 @@ pub enum NativeWeldMeteorPhase {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeWeldMeteorActorState {
     pub common: NativeWeldActorBase,
     pub landing_position: Vec2,

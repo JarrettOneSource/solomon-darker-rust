@@ -92,7 +92,7 @@ fn secondary_burn_replacement_shield_damage_owner_cleanup_and_golem_death_replay
                     result = json!({"ignored":applied.ignored,"killed":applied.killed,"ownerId":applied.owner_id,"reflectedDamage":applied.reflected_damage});
                 }
                 "actor-age" => {
-                    let mut actor = state
+                    let actor = state
                         .actors
                         .iter_mut()
                         .find(|actor| Some(actor.id) == action["id"].as_u64())

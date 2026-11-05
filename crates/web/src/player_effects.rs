@@ -144,7 +144,7 @@ impl PlayerEffectsView {
         run_id: &str,
         tick: f64,
         players: &[PlayerEffectPlayer<'_>],
-        weapons: &solomon_sim::ComponentEntities<NativeDeathWeaponActor>,
+        weapons: &[NativeDeathWeaponActor],
     ) {
         if self.run_id.as_deref() != Some(run_id) {
             self.reset();

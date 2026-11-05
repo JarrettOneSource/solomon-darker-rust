@@ -7,7 +7,6 @@ use super::targeting::target_eligible;
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
 use crate::combat::PuppetHitState;
-use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::spells::targeting::{PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,7 +41,6 @@ pub struct EnemyPuppetTarget {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct EnemyPuppetHit {
     pub feedback: PuppetHitState,
     pub hit_tick: u64,

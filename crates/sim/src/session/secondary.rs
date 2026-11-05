@@ -8,7 +8,6 @@ use crate::boneyard::projectile_world::BoneyardProjectileViewport;
 use crate::boneyard::world::{BoneyardPlayerBody, BoneyardPlayerStatus};
 use crate::combat::PlayerLifeState;
 use crate::enemies::model::EnemyDamageRequest;
-use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::float::fround;
 use crate::hub::interaction::BoastFailureProducer;
 use crate::player::PlayerState;
@@ -70,7 +69,7 @@ impl GameSession {
                 action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
-                character: participant.wizard,
+                character: &participant.wizard,
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
@@ -132,7 +131,11 @@ impl GameSession {
         unstepped_ids: &[u64],
         extensions: Option<&dyn GameSimulationExtensions>,
     ) -> Result<NativeSecondaryTickResult, String> {
-        let unstepped = self.secondary.actors.extract_if(|actor| unstepped_ids.contains(&actor.id));
+        let unstepped: Vec<_> = self
+            .secondary
+            .actors
+            .extract_if(.., |actor| unstepped_ids.contains(&actor.id))
+            .collect();
         let previous_mindstars: std::collections::BTreeSet<_> = self
             .secondary
             .players
@@ -167,7 +170,7 @@ impl GameSession {
                 action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
-                character: participant.wizard,
+                character: &participant.wizard,
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
@@ -271,7 +274,7 @@ impl GameSession {
                 && let Some(participant) = self.participants.get_mut(id)
             {
                 super::extensions::apply_filtered_mana_delta(
-                    participant.player,
+                    &mut participant.player,
                     id,
                     -*amount,
                     crate::modding::extensions::GameSimulationManaSource::SecondaryCast,
@@ -288,7 +291,7 @@ impl GameSession {
             if let Some(participant) = self.participants.get_mut(id) {
                 let cost = participant.player.combat.current_mana;
                 super::extensions::apply_filtered_mana_delta(
-                    participant.player,
+                    &mut participant.player,
                     id,
                     -cost,
                     crate::modding::extensions::GameSimulationManaSource::Overload,
@@ -445,7 +448,7 @@ impl GameSession {
         self.apply_ether_drain_enemy_contacts(&result.ether_drain_contacts, tick);
         let world = self.boneyard.as_mut().unwrap();
         for change in &result.target_heading_changes {
-            if let Some(mut actor) =
+            if let Some(actor) =
                 world.enemies.actors.iter_mut().find(|actor| actor.id == change.target_id)
             {
                 let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {
@@ -457,7 +460,7 @@ impl GameSession {
                 if change.mode == NativeSecondaryHeadingMode::Absolute {
                     actor.path.wander_heading_deg = actor.heading_deg;
                 }
-            } else if let Some(mut actor) =
+            } else if let Some(actor) =
                 world.enemies.maggots.iter_mut().find(|actor| actor.id == change.target_id)
             {
                 let heading = if change.mode == NativeSecondaryHeadingMode::Absolute {
@@ -487,7 +490,7 @@ impl GameSession {
                 .actors
                 .iter()
                 .find(|actor| actor.id == knockback.source_actor_id)
-                .map(|actor| &actor.common.owner_id)
+                .map(|actor| &actor.owner_id)
                 .or_else(|| {
                     previous_owners
                         .iter()
@@ -522,7 +525,7 @@ impl GameSession {
         let Some(participant) = self.participants.get_mut(id) else {
             return;
         };
-        super::extensions::fail_player_boast(participant.player, producer, extensions);
+        super::extensions::fail_player_boast(&mut participant.player, producer, extensions);
     }
 }
 
@@ -535,7 +538,7 @@ pub(super) fn player_weapon(player: &PlayerState) -> Option<NativePlayerWeaponKi
 }
 
 pub(super) fn boneyard_player_bodies<'a>(
-    participants: &'a Participants,
+    participants: &'a BTreeMap<String, SessionParticipant>,
     order: &[String],
     run: &crate::game_run::GameRunLifecycle,
 ) -> Vec<BoneyardPlayerBody<'a>> {
@@ -545,7 +548,7 @@ pub(super) fn boneyard_player_bodies<'a>(
             let participant = participants.get(id).expect("participant exists");
             BoneyardPlayerBody {
                 status: BoneyardPlayerStatus {
-                    id: participant.id,
+                    id: &participant.id,
                     alive: participant.player.combat.life_state == PlayerLifeState::Alive,
                     eligible: run.eligible_player_ids.contains(id),
                     collision_enabled: participant.player.combat.collision_enabled_after_tick(),

@@ -60,7 +60,7 @@ fn step(world: &mut EnemyWorld, players: &[EnemyTarget], tick: u64, order: &mut 
 
 #[test]
 fn mixed_controllers_keep_identity_and_order_after_retirement_and_restore() {
-    let mut live = EnemyWorld::new("enemy-ecs", 50);
+    let mut live = EnemyWorld::new("enemy-order", 50);
     let mut order = WorldPainterOrder::default();
     let players = [EnemyTarget {
         id: "wizard".into(),
@@ -124,9 +124,9 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
     use solomon_sim::enemies::projectile_emission::{
         SpawnEnemyProjectileOptions, spawn_projectile,
     };
-    use solomon_sim::enemies::projectiles::{EnemyProjectileKind, EnemyProjectileRead};
+    use solomon_sim::enemies::projectiles::EnemyProjectileKind;
 
-    let mut live = EnemyWorld::new("projectile-ecs", 50);
+    let mut live = EnemyWorld::new("projectile-order", 50);
     let mut order = WorldPainterOrder::default();
     live.spawn(
         &[EnemySpawnIntent::new(EnemyToken::SkeletonArcher, Vec2::new(100.0, 100.0), 1, 0, 31)],
@@ -170,11 +170,9 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
         serde_json::to_value(&live.projectiles).unwrap(),
         serde_json::to_value(&records).unwrap()
     );
-    {
-        let bomb = live.projectiles.get_mut(3).unwrap();
-        bomb.state.speed = 0.0;
-        bomb.state.settled_ticks_remaining = 1;
-    }
+    let bomb = live.projectiles[3].state_mut();
+    bomb.speed = 0.0;
+    bomb.settled_ticks_remaining = 1;
     let admitted: Vec<_> = live.projectiles.iter().map(|p| p.state().id).collect();
     step(&mut live, &[], 1, &mut order);
     assert_eq!(
@@ -221,7 +219,7 @@ fn projectile_retirement_birth_and_restore_preserve_motion_and_event_order() {
 fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
     use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellOwner, NativeBossSpell};
 
-    let mut live = EnemyWorld::new("boss-spell-ecs", 50);
+    let mut live = EnemyWorld::new("boss-spell-order", 50);
     let mut order = WorldPainterOrder::default();
     let kinds = [
         BossSpellKind::HeartmongerFlicker { phase_deg: 0.0 },
@@ -276,7 +274,7 @@ fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
             assert_eq!(spells[index + 1].owner.id, 2);
             assert_eq!(child.owner.age_ticks, 0);
             assert_eq!(child.owner.spawn_tick, tick);
-            let BossSpellKind::FallingBone { height, .. } = *child.kind else {
+            let BossSpellKind::FallingBone { height, .. } = child.kind else {
                 panic!("Rain of Bones births a falling bone");
             };
             assert_eq!(height, -175.0);
@@ -305,9 +303,9 @@ fn boss_spell_children_precede_the_parent_and_wait_for_the_next_tick() {
 
 #[test]
 fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
-    use solomon_sim::enemies::model::{CoffinPhase, EnemyBrain, MaggotMovementPhase, MaggotRead};
+    use solomon_sim::enemies::model::{CoffinPhase, EnemyBrain, MaggotMovementPhase};
 
-    let mut live = EnemyWorld::new("maggot-ecs", 50);
+    let mut live = EnemyWorld::new("maggot-order", 50);
     let mut order = WorldPainterOrder::default();
     live.spawn(
         &[EnemySpawnIntent::new(EnemyToken::Coffin, Vec2::new(200.0, 200.0), 1, 0, 31)],
@@ -322,14 +320,16 @@ fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
     );
     {
         let coffin = live.actors.get_mut(0).unwrap();
-        let EnemyBrain::Coffin(brain) = coffin.brain else { panic!("Coffin has its controller") };
+        let EnemyBrain::Coffin(brain) = &mut coffin.brain else {
+            panic!("Coffin has its controller")
+        };
         brain.phase = CoffinPhase::Open;
         brain.maggot_charge = 0.0;
     }
     step(&mut live, &[], 1, &mut order);
     let admitted: Vec<_> = live.maggots.iter().map(|maggot| maggot.id).collect();
     assert_eq!(admitted.len(), 3);
-    assert!(live.maggots.iter().all(|maggot| maggot.controller().emergence_tick == 0));
+    assert!(live.maggots.iter().all(|maggot| maggot.emergence_tick == 0));
     // Stop further releases while the existing brood emerges.
     live.actors.get_mut(0).unwrap().staff_movement_factor = 0.0;
     let middle = live.maggots.get(1).unwrap();
@@ -359,11 +359,7 @@ fn emerging_maggots_keep_their_motion_after_capture_and_restore() {
         );
         assert_eq!(restored_order, order);
     }
-    assert!(
-        live.maggots
-            .iter()
-            .all(|maggot| maggot.controller().movement_phase == MaggotMovementPhase::Crawl)
-    );
+    assert!(live.maggots.iter().all(|maggot| maggot.movement_phase == MaggotMovementPhase::Crawl));
     live.actors.remove(0);
     restored.actors.remove(0);
     step(&mut live, &[], 61, &mut order);

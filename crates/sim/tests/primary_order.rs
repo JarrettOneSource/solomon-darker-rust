@@ -48,7 +48,7 @@ fn cast(
                 player_light_registration: None,
                 view_scale: 1.2,
                 owner_id: "wizard",
-                world_key: "boneyard:ecs",
+                world_key: "boneyard:order",
                 targets: &[],
                 can_place: &|_, _, _| true,
                 can_traverse: &|_, _, _, _, _| true,
@@ -106,11 +106,8 @@ fn mixed_primary_flight_retirement_birth_and_restore_preserve_order() {
         cast(WizardElement::Fire, false, 3, &mut rng, &mut order),
         cast(WizardElement::Ether, true, 4, &mut rng, &mut order),
     ];
-    let mut live = SpellState {
-        next_id: 10,
-        projectiles: records.clone().into_iter().collect(),
-        ..SpellState::default()
-    };
+    let mut live =
+        SpellState { next_id: 10, projectiles: records.to_vec(), ..SpellState::default() };
     assert_eq!(
         serde_json::to_value(&live.projectiles).unwrap(),
         serde_json::to_value(&records).unwrap()
@@ -122,7 +119,7 @@ fn mixed_primary_flight_retirement_birth_and_restore_preserve_order() {
         live.projectiles.iter().map(|spell| spell.common().id).collect::<Vec<_>>(),
         [1, 3, 4]
     );
-    let held = live.projectiles.get(0).unwrap().common();
+    let held = live.projectiles[0].common();
     assert_eq!(held.phase, PrimarySpellProjectilePhase::Held);
     assert_eq!(held.flight_ticks, 0);
     assert_eq!(held.age_ticks, records[0].common().age_ticks + 6);
@@ -156,10 +153,9 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
     use solomon_sim::spells::fire::NATIVE_FIRE_IMPACT_LIFETIME_TICKS;
     use solomon_sim::spells::model::{
         PrimarySpellFireImpact, PrimarySpellTransient, PrimarySpellTransientBase,
-        PrimaryTransientRef,
     };
     use solomon_sim::spells::weld::{
-        NativeWeldActorBirth, NativeWeldMeteorSpawnProgram, NativeWeldWorldActor, WeldWorldRef,
+        NativeWeldActorBirth, NativeWeldMeteorSpawnProgram, NativeWeldWorldActor,
         create_native_weld_meteor,
     };
 
@@ -172,7 +168,7 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
                 id,
                 age_ticks,
                 owner_id: "wizard".into(),
-                world_key: "boneyard:ecs".into(),
+                world_key: "boneyard:order".into(),
                 light_registration: Some(registration),
                 painter_registrations: vec![registration],
             },
@@ -188,7 +184,7 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
             tick: 0,
             build_id: 1007,
             owner_id: "wizard",
-            world_key: "boneyard:ecs",
+            world_key: "boneyard:order",
             origin: Vec2::new(100.0, 200.0),
             direction: Vec2::new(1.0, 0.0),
             vector: &[0.0; 8],
@@ -222,7 +218,10 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
     assert_eq!(effects[0].common().id, 1);
     assert_eq!(effects[0].common().age_ticks, 1);
     assert_eq!(effects[1].common().id, 3);
-    assert!(matches!(effects[2], PrimaryTransientRef::Weld(WeldWorldRef::MeteorFlash(_))));
+    assert!(matches!(
+        effects[2],
+        PrimarySpellTransient::Weld(NativeWeldWorldActor::MeteorFlash(_))
+    ));
     assert_eq!(effects.last().unwrap().common().id, 4);
     assert_eq!(effects.last().unwrap().common().age_ticks, 1);
     assert_eq!(

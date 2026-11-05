@@ -30,7 +30,6 @@ pub struct NativeSilkCreation {
 }
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct EnemySilkActor {
     pub native_registration_order: usize,
     pub native_cell_binding_order: usize,

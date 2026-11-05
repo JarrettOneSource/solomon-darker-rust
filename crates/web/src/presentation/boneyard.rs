@@ -3,7 +3,6 @@
 use std::collections::BTreeMap;
 
 use solomon_sim::boneyard::BoneyardBounds;
-use solomon_sim::boneyard::loot::LootActorRead;
 use solomon_sim::boneyard::world_light::{
     BoneyardLightEnvironment, WorldLightPlayer, WorldLightScene, boneyard_world_light_query,
 };
@@ -11,7 +10,7 @@ use solomon_sim::combat::PuppetHitState;
 use solomon_sim::enemies::actor_presentation::{
     EnemyActorAppearanceContext, EnemySpiderOutlineTarget,
 };
-use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellRead, BossSpells};
+use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpells};
 use solomon_sim::enemies::model::EnemyBrain;
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::float::fround;
@@ -58,7 +57,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
             secondary_abilities: Some(&session.secondary),
         },
     );
-    let actor_context = |actor: &solomon_sim::enemies::model::EnemyActorRef<'_>| {
+    let actor_context = |actor: &solomon_sim::enemies::model::EnemyActor| {
         let target = actor.target_player_id.as_ref().and_then(|id| session.participants.get(id));
         let pike_target_position = match &actor.brain {
             EnemyBrain::Skeleton(brain) => brain.pike.as_ref().map(|pike| {
@@ -177,12 +176,12 @@ pub(super) fn project(
         next.loot.actors.iter(),
         blend,
         |actor| actor.id,
-        |actor| actor.snapshot(),
-        |first, next, blend| {
+        |&actor| actor.clone(),
+        |&first, &next, blend| {
             if first.kind != next.kind {
-                return first.snapshot();
+                return first.clone();
             }
-            let mut actor = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
+            let mut actor = if blend < 1.0 { first.clone() } else { next.clone() };
             actor.alpha = lerp(first.alpha, next.alpha, blend);
             actor.animation_phase =
                 lerp_cycle(first.animation_phase, next.animation_phase, blend, 360.0);
@@ -193,12 +192,10 @@ pub(super) fn project(
             actor.scatter_progress = lerp(first.scatter_progress, next.scatter_progress, blend);
             actor
         },
-    )
-    .into_iter()
-    .collect();
+    );
     let (effects, ages) =
         enemies::interpolate_death_effects(&first.loot.effects, &next.loot.effects, blend);
-    world.loot.effects = effects.into_iter().collect();
+    world.loot.effects = effects;
     metadata.death_effects.extend(ages);
     if older.run.phase == GameRunPhase::GameOver
         && newer.run.phase == GameRunPhase::GameOver
@@ -226,9 +223,9 @@ fn project_boss_spells(older: &BossSpells, newer: &BossSpells, blend: f64) -> Bo
     older
         .iter()
         .map(|first| {
-            let mut spell = first.snapshot();
+            let mut spell = first.clone();
             let Some(next) = by_id.get(&first.owner.id) else { return spell };
-            if std::mem::discriminant(first.kind) != std::mem::discriminant(next.kind)
+            if std::mem::discriminant(&first.kind) != std::mem::discriminant(&next.kind)
                 || matches!(first.kind, BossSpellKind::MouthBeamSegment { .. })
             {
                 return spell;
@@ -287,17 +284,17 @@ fn project_boss_spells(older: &BossSpells, newer: &BossSpells, blend: f64) -> Bo
 }
 
 fn project_puppet_hits(
-    older: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
-    newer: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
+    older: &[EnemyPuppetHit],
+    newer: &[EnemyPuppetHit],
     blend: f64,
     tick: f64,
     clocks: &mut PresentationClocks,
-) -> solomon_sim::ComponentEntities<EnemyPuppetHit> {
+) -> Vec<EnemyPuppetHit> {
     clocks.puppet_hits.clear();
     clocks.puppet_hit_timers.clear();
     let mut previous: BTreeMap<_, _> =
         older.iter().map(|hit| (hit.target_id.as_str(), hit)).collect();
-    let mut output = solomon_sim::ComponentEntities::default();
+    let mut output = Vec::new();
     for next in newer {
         let before = previous.remove(next.target_id.as_str());
         if next.hit_tick as f64 > tick {

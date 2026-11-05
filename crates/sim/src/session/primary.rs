@@ -267,7 +267,7 @@ impl GameSession {
                 plane_active: sample.plane_active,
             });
             players.push(PrimarySpellPlayer {
-                wizard: participant.wizard,
+                wizard: &mut participant.wizard,
                 authority,
                 input: PrimarySpellInput { aim: sample.input.aim, primary: sample.input.primary },
                 context: PrimarySpellWorldContext {
@@ -317,7 +317,7 @@ impl GameSession {
         for player in &result.players {
             if player.mana_spent > 0.0 {
                 super::extensions::apply_filtered_mana_delta(
-                    self.participants.get_mut(&player.owner_id).unwrap().player,
+                    &mut self.participants.get_mut(&player.owner_id).unwrap().player,
                     &player.owner_id,
                     -player.mana_spent,
                     crate::modding::extensions::GameSimulationManaSource::PrimaryCast,
@@ -345,7 +345,7 @@ impl GameSession {
             .iter()
             .map(|id| BoneyardPrimaryContactPlayer {
                 owner_id: id,
-                player: self.participants.get(id).expect("participant exists").player,
+                player: &self.participants.get(id).expect("participant exists").player,
                 viewport: inputs[id].viewport,
             })
             .collect();

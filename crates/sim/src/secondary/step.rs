@@ -38,7 +38,7 @@ pub(super) struct StepEngine<'state, 'context, 'player, W> {
 impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
     pub fn candidates(
         &self,
-        actor: &impl SecondaryActorRead,
+        actor: &NativeSecondaryActorState,
         radius: f64,
     ) -> Vec<NativeSecondaryTarget> {
         let targets = self.world.targets(&actor.world_key, actor.position, radius);
@@ -93,7 +93,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
 
     pub fn merge(
         &mut self,
-        actor: &impl SecondaryActorRead,
+        actor: &NativeSecondaryActorState,
         target_id: usize,
         patch: NativeSecondaryTargetEffectPatch,
     ) {
@@ -107,7 +107,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
 
     pub fn damage(
         &mut self,
-        actor: &impl SecondaryActorRead,
+        actor: &NativeSecondaryActorState,
         target: &NativeSecondaryTarget,
         amount: f64,
         kind: NativeSecondaryDamageKind,
@@ -156,17 +156,17 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
 
     pub fn event(
         &mut self,
-        actor: &impl SecondaryActorRead,
+        actor: &NativeSecondaryActorState,
         cue: Option<NativeSecondaryAudioCue>,
         kind: NativeSecondaryEventKind,
     ) {
         self.state.emit_event(actor_event(actor, self.context.tick, kind, cue));
     }
 
-    fn advance(&mut self, actor: &mut impl SecondaryActorWrite) -> bool {
+    fn advance(&mut self, actor: &mut NativeSecondaryActorState) -> bool {
         if actor.kind == NativeSecondaryActorKind::GolemDeath {
             let animation =
-                actor.golem_death_mut().expect("Golem death retains its mutable fragments");
+                actor.golem_death.as_mut().expect("Golem death retains its mutable fragments");
             crate::death_animations::step_native_golem_death_animation(
                 animation,
                 self.context.tick,
@@ -183,7 +183,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
         if owner.world_key != actor.world_key {
             return false;
         }
-        let source = actor.snapshot();
+        let source = actor.clone();
         advance_actor(actor);
         let mut retain = actor.age_ticks < actor.lifetime_ticks;
         use NativeSecondaryActorKind::*;
@@ -248,7 +248,7 @@ impl NativeSecondarySimulationState {
         // query cannot replace this: dying and emerging actors still own modifiers.
         self.target_effects
             .retain(|effect| world.target_exists(&effect.world_key, effect.target_id));
-        let old_effects: Vec<_> = self.target_effects.iter().cloned().collect();
+        let old_effects = self.target_effects.clone();
         self.events.retain(|event| event.tick >= context.tick.saturating_sub(200));
         for effect in self.target_effects.iter_mut() {
             effect.step();
@@ -277,7 +277,7 @@ impl NativeSecondarySimulationState {
                 NativeSecondaryActorKind::Leviathan
                     | NativeSecondaryActorKind::EarthquakeSceneryWobble
             ) {
-                engine.sources.insert(source.id, source.snapshot());
+                engine.sources.insert(source.id, source.clone());
             }
             if source.kind == NativeSecondaryActorKind::LeviathanAppendage
                 && let Some(parent) = source.hit_target_ids.first()
@@ -296,7 +296,7 @@ impl NativeSecondarySimulationState {
         actors
             .extend(engine.state.deferred_births.take().expect("actor phase owns birth commands"));
         engine.state.actors = actors;
-        for mut actor in engine.state.actors.iter_mut() {
+        for actor in engine.state.actors.iter_mut() {
             if let Some(phase) = engine.wobble_phases.get(&actor.id) {
                 actor.phase = *phase;
             }
@@ -309,15 +309,11 @@ impl NativeSecondarySimulationState {
         for request in std::mem::take(&mut engine.fire_burns) {
             engine.state.apply_fire_burn(NativeSecondaryFireBurnInput {
                 damage: request.damage,
-                owner_id: request.actor.common.owner_id,
-                rank: request.actor.common.rank,
-                skill_id: request
-                    .actor
-                    .common
-                    .skill_id
-                    .expect("fire contact retains its source skill"),
+                owner_id: request.actor.owner_id,
+                rank: request.actor.rank,
+                skill_id: request.actor.skill_id.expect("fire contact retains its source skill"),
                 target: request.target,
-                world_key: request.actor.common.world_key,
+                world_key: request.actor.world_key,
             });
         }
         for request in std::mem::take(&mut engine.electric_burns) {
@@ -340,7 +336,7 @@ fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: Burn
         return;
     }
     let damage = fround(request.damage / 100.0);
-    if let Some(mut actor) = state.actors.iter_mut().find(|actor| {
+    if let Some(actor) = state.actors.iter_mut().find(|actor| {
         actor.kind == NativeSecondaryActorKind::ElectricBurn
             && actor.world_key == request.actor.world_key
             && actor.target_id == Some(request.target.id)
@@ -351,10 +347,10 @@ fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: Burn
         actor.damage = damage;
         actor.phase = 0.0;
         actor.light_registration = Some(request.target.light_registration);
-        actor.owner_id = request.actor.common.owner_id;
+        actor.owner_id = request.actor.owner_id;
         actor.position = request.target.position;
-        actor.rank = request.actor.common.rank;
-        actor.skill_id = request.actor.common.skill_id;
+        actor.rank = request.actor.rank;
+        actor.skill_id = request.actor.skill_id;
         return;
     }
     let mut actor = actor(

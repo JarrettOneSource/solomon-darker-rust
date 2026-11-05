@@ -5,7 +5,7 @@ use solomon_sim::game_run::GameRunLifecycle;
 use solomon_sim::hub::regions::HubTransitionPhase;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::score::NativeHallOfFameRunState;
-use solomon_sim::session::{ParticipantRead, PlayerLightingState};
+use solomon_sim::session::{PlayerLightingState, SessionParticipant};
 
 pub fn registration(value: PainterRegistration) -> Value {
     json!({"managerLane":match value.manager_lane {
@@ -13,11 +13,10 @@ pub fn registration(value: PainterRegistration) -> Value {
     }, "registrationOrdinal":value.registration_ordinal})
 }
 
-pub fn character(session: &impl ParticipantRead) -> Value {
-    let session = session.view();
-    let wizard = &session.wizard;
+pub fn character(participant: &SessionParticipant) -> Value {
+    let wizard = &participant.wizard;
     let primary = &wizard.primary_cast;
-    let selection = &session.player.selection;
+    let selection = &participant.player.selection;
     json!({"config":{"displayName":selection.name,"element":selection.element.as_str(),
         "discipline":selection.discipline.as_str()},
         "footstepTick":wizard.footstep_tick,"gaitDegrees":wizard.gait_degrees,
@@ -61,10 +60,9 @@ pub fn score(score: &NativeHallOfFameRunState) -> Value {
         "portraitScale":score.portrait_scale,"startedAtTick":score.started_at_tick})
 }
 
-pub fn hub_participant(session: &impl ParticipantRead) -> Value {
-    let session = session.view();
-    let wizard = &session.wizard;
-    let intro = session.college_intro.map(|intro| json!({
+pub fn hub_participant(participant: &SessionParticipant) -> Value {
+    let wizard = &participant.wizard;
+    let intro = participant.college_intro.map(|intro| json!({
         "contactCounter":intro.contact_counter,"coverAlpha":intro.cover_alpha,
         "dialogueSequence":intro.dialogue_sequence,"officeSpeed":intro.office_speed,
         "pathCursor":intro.path_cursor,"phase":intro.phase.as_str(),"titleCursor":intro.title_cursor}));

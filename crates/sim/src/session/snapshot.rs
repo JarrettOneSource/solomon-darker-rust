@@ -27,7 +27,7 @@ pub struct GameSnapshot<'a> {
     pub run: &'a GameRunLifecycle,
     pub level_up_barrier: &'a Option<PlayerLevelUpBarrier>,
     pub next_level_up_barrier_id: &'a u64,
-    pub mod_effects: &'a crate::ComponentEntities<GameSimulationModEffect>,
+    pub mod_effects: &'a [GameSimulationModEffect],
     pub next_mod_consumable_use_id: &'a u64,
     pub ticks: &'a u64,
     pub boneyard: Option<BoneyardSnapshot<'a>>,
@@ -105,17 +105,17 @@ impl GameSession {
 /// A normal frame borrows only the retained map. Rejoin staging borrows that
 /// same map plus one privately projected participant, without cloning the world.
 pub struct GameSnapshotParticipants<'a> {
-    pub(super) retained: &'a Participants,
+    pub(super) retained: &'a BTreeMap<String, SessionParticipant>,
     pub(super) detached: Option<&'a SessionParticipant>,
 }
 
 impl<'a> GameSnapshotParticipants<'a> {
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<ParticipantRef<'a>> {
+    pub fn get(&self, id: &str) -> Option<&'a SessionParticipant> {
         if let Some(participant) = self.detached
             && participant.id == id
         {
-            Some(participant.view())
+            Some(participant)
         } else {
             self.retained.get(id)
         }

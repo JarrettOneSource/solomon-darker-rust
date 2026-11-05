@@ -3,7 +3,6 @@
 use solomon_sim::death_animations::NativeGolemDeathAnimation;
 use solomon_sim::secondary::{
     NativeSecondaryActorKind as Kind, NativeSecondaryActorState, NativeSecondarySimulationState,
-    SecondaryActorRead,
 };
 
 fn burst(lifetime_ticks: u64) -> NativeSecondaryActorState {
@@ -41,7 +40,8 @@ fn retirement_and_birth_preserve_order_through_checkpoint_continuation() {
     live.spawn_actor(death);
     live.spawn_actor(burst(3));
 
-    // A different component layout sits between the retiring burst and its survivor.
+    // A Golem death, the only row here with optional state, sits between the retiring
+    // burst and its survivor.
     live.step_mindblast_presentation(1);
     assert_eq!(ids(&live), [2, 3]);
     assert_eq!(live.spawn_actor(burst(3)), 4);
@@ -64,7 +64,7 @@ fn retirement_and_birth_preserve_order_through_checkpoint_continuation() {
     assert_eq!(ids(&live), [2]);
     live.remove_owner("wizard");
     assert_eq!(ids(&live), [2], "Golem fragments survive their owner's departure");
-    assert!(live.actors.get(0).unwrap().golem_death().is_some());
+    assert!(live.actors[0].golem_death.is_some());
 }
 
 #[test]
@@ -99,7 +99,7 @@ fn ability_owner_removal_preserves_other_players_and_shared_target_modifiers() {
     owned.frost_burn_ticks = 10;
     owned.frost_burn_damage_per_tick = 3.0;
     owned.frost_burn_owner_id = Some("middle".into());
-    live.target_effects = [shared, owned].into_iter().collect();
+    live.target_effects = vec![shared, owned];
     live.remove_owner("middle");
     assert_eq!(live.players.keys().map(String::as_str).collect::<Vec<_>>(), ["alpha", "zeta"]);
     assert_eq!(live.target_effects.len(), 1);

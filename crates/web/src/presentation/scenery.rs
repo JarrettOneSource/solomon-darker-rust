@@ -34,7 +34,7 @@ pub fn scenery_actor_poses(
                 sample
             } else {
                 fallback = native_enemy_presentation_input(
-                    &actor,
+                    actor,
                     EnemyActorAppearanceContext {
                         tick: world.ticks,
                         application_tick: world.ticks,

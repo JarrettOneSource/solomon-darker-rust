@@ -4,9 +4,7 @@ use super::layers::*;
 use super::model::*;
 use super::sample::*;
 use crate::Vec2;
-use crate::enemies::model::{
-    DemonExtremity, DemonPhase, EnemyActorRead, EnemyBrain, EnemyLifeState,
-};
+use crate::enemies::model::{DemonExtremity, DemonPhase, EnemyActor, EnemyBrain, EnemyLifeState};
 use crate::float;
 
 #[derive(Clone, Copy)]
@@ -19,8 +17,8 @@ pub(super) struct DemonArticulationVisual {
     pub controller_pose: usize,
 }
 
-pub(super) fn articulation(actor: &impl EnemyActorRead, tick: u64) -> DemonArticulationVisual {
-    let EnemyBrain::Demon(brain) = actor.brain() else { unreachable!("Demon brain") };
+pub(super) fn articulation(actor: &EnemyActor, tick: u64) -> DemonArticulationVisual {
+    let EnemyBrain::Demon(brain) = &actor.brain else { unreachable!("Demon brain") };
     let pose = if brain.phase == DemonPhase::Bomb {
         [0, 0, 0, 1, 1, 1, 1, 1, 0][bounded_pose(brain.action_progress, 8)]
     } else {
@@ -58,7 +56,7 @@ pub(super) fn articulation(actor: &impl EnemyActorRead, tick: u64) -> DemonArtic
 }
 
 pub(super) fn presentation(
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     facing: usize,
     sample: &NativeEnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
@@ -184,7 +182,7 @@ pub(super) fn presentation(
 }
 
 pub(super) fn death(
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     sample: &NativeEnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
     let pose = sampled_articulation(sample);

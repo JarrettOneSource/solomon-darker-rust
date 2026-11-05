@@ -1,6 +1,7 @@
 //! Input admission and the one shared movement/world epoch of the public Game tick.
 
-use crate::spells::transient_storage::{PrimaryTransientRef, StaffTransientRef};
+use crate::spells::model::PrimarySpellTransient;
+use crate::spells::staff::NativePlayerStaffTransient;
 
 use super::*;
 use crate::Vec2;
@@ -78,7 +79,7 @@ impl GameSession {
                 }
             }
             let acting_staff = self.spells.transients.iter().any(|effect| match effect {
-                PrimaryTransientRef::Staff(StaffTransientRef::Action(actor)) => {
+                PrimarySpellTransient::Staff(NativePlayerStaffTransient::Action(actor)) => {
                     actor.common().owner_id == *id
                 }
                 _ => false,
@@ -129,7 +130,7 @@ impl GameSession {
             let id = &self.participant_order[0];
             let participant = self.participants.get_mut(id).unwrap();
             self.boneyard.as_mut().unwrap().step_tutorial(
-                participant.wizard,
+                &mut participant.wizard,
                 BoneyardTutorialPlayer {
                     combat: &participant.player.combat,
                     economy: &participant.player.economy,
@@ -193,13 +194,13 @@ impl GameSession {
             let status = crate::boneyard::world::BoneyardPlayerStatus {
                 id,
                 alive: player.combat.life_state == crate::combat::PlayerLifeState::Alive,
-                eligible: self.run.eligible_player_ids.contains(participant.id),
+                eligible: self.run.eligible_player_ids.contains(&participant.id),
                 collision_enabled: player.combat.collision_enabled(),
                 movement_scale: player.combat.movement_scale() * derived.movement_factor,
             };
             let input = inputs[id];
             rows.push(BoneyardWorldParticipant {
-                wizard: participant.wizard,
+                wizard: &mut participant.wizard,
                 combat: BoneyardPlayerCombatStatus {
                     status,
                     advanced_unlocks: &player.book.advanced_unlocks,
@@ -305,15 +306,15 @@ impl GameSession {
                 ordered_participants_mut(&mut self.participants, &self.participant_order)
             {
                 rows.push(crate::hub::world::HubParticipantMotion {
-                    id: participant.id,
+                    id: &participant.id,
                     movement: inputs[participant.id.as_str()].movement,
                     movement_scale: participant.player.combat.movement_scale()
                         * participant.player.derived_stats().movement_factor,
                     force_movement_facing: participant.player.combat.dazzle_ticks_remaining > 0,
                     college_intro_pending: participant.player.economy.college_intro_pending,
                     renderer_ready: ready.is_none_or(|ids| ids.contains(participant.id.as_str())),
-                    wizard: participant.wizard,
-                    college_intro: participant.college_intro,
+                    wizard: &mut participant.wizard,
+                    college_intro: &mut participant.college_intro,
                 });
             }
             crate::hub::world::step_hub_participants(
@@ -330,7 +331,7 @@ impl GameSession {
             if result.region_changed {
                 participant.lighting.light_registration =
                     self.painter_order.register(WorldManagerLane::Actor);
-                *participant.marker_epoch = HubNpcMarkerEpoch::new(
+                participant.marker_epoch = HubNpcMarkerEpoch::new(
                     self.hub_trader_animation_seed,
                     self.ticks + 1,
                     &participant.player.economy.npc.help_flags,

@@ -1,7 +1,6 @@
 //! Secondary actor records and native painter/light enrollment.
 //! Field meanings and registration order mirror native-secondary-abilities.ts.
 
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 use std::collections::BTreeMap;
 
 use super::golem::NativeSecondaryGolemState;
@@ -225,17 +224,23 @@ impl NativeSecondaryActorKind {
     }
 }
 
-/// Common effect state. Articulated summons and drain fields own separate components.
-#[derive(Clone, Debug, PartialEq, bevy_ecs::component::Component)]
+/// One secondary effect actor. Fields follow the save record's order.
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct SecondaryActor {
+pub struct NativeSecondaryActorState {
     pub age_ticks: u64,
     pub alpha: f64,
     pub damage: f64,
     pub enhanced: bool,
     pub endpoint: Vec2,
+    /// Ether Drain fills this on its first tick, when it discovers its targets.
+    pub ether_drain: Option<super::ether_drain::NativeEtherDrainState>,
     pub frame: f64,
     pub freeze_ticks: u64,
+    /// Set on Golem summons.
+    pub golem: Option<NativeSecondaryGolemState>,
+    /// Set on Golem deaths.
+    pub golem_death: Option<crate::death_animations::NativeGolemDeathAnimation>,
     /// This source field holds both enemy IDs and parent secondary actor IDs.
     pub hit_target_ids: Vec<u64>,
     pub id: u64,
@@ -263,18 +268,6 @@ pub struct SecondaryActor {
     pub world_key: String,
 }
 
-/// Owned actor used for births, checkpoints, and retained pre-tick inputs.
-/// Runtime actors are queried through `SecondaryActors`.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
-#[cfg_attr(feature = "persistence", serde(from = "super::storage::SecondaryActorFields"))]
-pub struct NativeSecondaryActorState {
-    pub common: SecondaryActor,
-    pub ether_drain: Option<super::ether_drain::NativeEtherDrainState>,
-    pub golem: Option<NativeSecondaryGolemState>,
-    pub golem_death: Option<crate::death_animations::NativeGolemDeathAnimation>,
-}
-
 impl NativeSecondaryActorState {
     /// The exact `actorSeed` defaults; ability constructors overwrite their authored fields.
     #[must_use]
@@ -289,38 +282,36 @@ impl NativeSecondaryActorState {
             ether_drain: None,
             golem: None,
             golem_death: None,
-            common: SecondaryActor {
-                age_ticks: 0,
-                alpha: 1.0,
-                damage: 0.0,
-                enhanced: false,
-                endpoint: Vec2::ZERO,
-                frame: 0.0,
-                freeze_ticks: 0,
-                hit_target_ids: Vec::new(),
-                id,
-                kind,
-                lifetime_ticks: 60,
-                light_registration: None,
-                midpoint: Vec2::ZERO,
-                misc_light_append_ordinal: None,
-                owner_id,
-                painter_registrations: Vec::new(),
-                phase: 0.0,
-                position: Vec2::ZERO,
-                presentation_rng: None,
-                quantity: 0.0,
-                radius: 0.0,
-                rank: 1,
-                rotation_radians: 0.0,
-                scale: 1.0,
-                skill_id,
-                slow_factor: 0.0,
-                target_id: None,
-                variant: 0,
-                velocity: Vec2::ZERO,
-                world_key,
-            },
+            age_ticks: 0,
+            alpha: 1.0,
+            damage: 0.0,
+            enhanced: false,
+            endpoint: Vec2::ZERO,
+            frame: 0.0,
+            freeze_ticks: 0,
+            hit_target_ids: Vec::new(),
+            id,
+            kind,
+            lifetime_ticks: 60,
+            light_registration: None,
+            midpoint: Vec2::ZERO,
+            misc_light_append_ordinal: None,
+            owner_id,
+            painter_registrations: Vec::new(),
+            phase: 0.0,
+            position: Vec2::ZERO,
+            presentation_rng: None,
+            quantity: 0.0,
+            radius: 0.0,
+            rank: 1,
+            rotation_radians: 0.0,
+            scale: 1.0,
+            skill_id,
+            slow_factor: 0.0,
+            target_id: None,
+            variant: 0,
+            velocity: Vec2::ZERO,
+            world_key,
         }
     }
 }
@@ -392,7 +383,7 @@ pub enum NativeSecondaryLightDisposition {
 
 #[must_use]
 pub fn native_secondary_light_disposition(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
 ) -> NativeSecondaryLightDisposition {
     use NativeSecondaryActorKind::*;
     match actor.kind {
@@ -417,11 +408,11 @@ pub fn native_secondary_painter_manager_lane(kind: NativeSecondaryActorKind) -> 
     }
 }
 
-pub fn enroll_native_secondary_painter_owners(
-    actors: impl IntoIterator<Item = impl SecondaryActorWrite>,
+pub fn enroll_native_secondary_painter_owners<'a>(
+    actors: impl IntoIterator<Item = &'a mut NativeSecondaryActorState>,
     order: &mut WorldPainterOrder,
 ) {
-    for mut actor in actors {
+    for actor in actors {
         let lane = native_secondary_painter_manager_lane(actor.kind);
         let count = if actor.kind == NativeSecondaryActorKind::GolemDeath {
             crate::death_animations::NATIVE_GOLEM_DEATH_PAINTER_COUNT
@@ -447,17 +438,17 @@ pub fn enroll_native_secondary_painter_owners(
 }
 
 pub fn enroll_native_secondary_light_owners(
-    actors: &mut super::SecondaryActors,
+    actors: &mut [super::NativeSecondaryActorState],
     order: Option<&mut WorldPainterOrder>,
     target_light: impl Fn(&str, usize) -> Option<PainterRegistration>,
 ) {
-    let mut retained_order = retained_world_manager_order(actors.iter());
+    let mut retained_order = retained_world_manager_order(actors);
     let order = order.unwrap_or(&mut retained_order);
     // Source registers every painter first, then allocates any extra light-only owners.
     enroll_native_secondary_painter_owners(actors.iter_mut(), order);
     let mut next_modifier_ordinal: BTreeMap<(String, usize), usize> = BTreeMap::new();
-    for mut actor in actors.iter_mut() {
-        let disposition = native_secondary_light_disposition(&actor);
+    for actor in actors.iter_mut() {
+        let disposition = native_secondary_light_disposition(actor);
         if disposition == NativeSecondaryLightDisposition::None {
             actor.light_registration = None;
             actor.misc_light_append_ordinal = None;
@@ -505,9 +496,7 @@ pub fn enroll_native_secondary_light_owners(
     }
 }
 
-fn retained_world_manager_order(
-    actors: impl IntoIterator<Item = impl SecondaryActorRead>,
-) -> WorldPainterOrder {
+fn retained_world_manager_order(actors: &[NativeSecondaryActorState]) -> WorldPainterOrder {
     let mut order = WorldPainterOrder::default();
     for actor in actors {
         for registration in

@@ -60,9 +60,9 @@ impl ContactWork<'_, '_> {
             .source
             .transients
             .iter()
-            .chain(self.impact_transients.iter().map(|effect| effect.view()))
+            .chain(self.impact_transients.iter())
             .filter_map(|effect| {
-                if let PrimaryTransientRef::FireExplosion(explosion) = effect
+                if let PrimarySpellTransient::FireExplosion(explosion) = effect
                     && explosion.common.age_ticks == 0
                 {
                     Some(explosion.clone())

@@ -5,12 +5,12 @@ use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use solomon_sim::spells::casting::NativePlayerWeaponKind;
 use solomon_sim::spells::model::{
-    PrimarySpellFlameLashPresentation, PrimaryTransientRef, SpellState,
+    PrimarySpellFlameLashPresentation, PrimarySpellTransient, SpellState,
 };
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
 };
-use solomon_sim::spells::weld::{NativeWeldFlameLashFadeVariant, WeldWorldRef};
+use solomon_sim::spells::weld::{NativeWeldFlameLashFadeVariant, NativeWeldWorldActor};
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
 use solomon_sim::{NativeRng, Vec2};
 #[path = "support/website_rows.rs"]
@@ -142,11 +142,11 @@ fn current_flame_cast_reserves_before_factory_and_clips_the_actual_view() {
                 )
                 .unwrap();
             let roots:Vec<_>=spells.transients.iter().map(|actor|{
-                let PrimaryTransientRef::Weld(actor)=actor else{unreachable!()};
+                let PrimarySpellTransient::Weld(actor)=actor else{unreachable!()};
                 let common=actor.common();
                 let (kind,variant)=match actor{
-                    WeldWorldRef::Channel(channel)=>("weld-channel",json!(channel.variant)),
-                    WeldWorldRef::FlameLashFade(fade)=>("weld-flame-lash-fade",json!(match fade.variant{
+                    NativeWeldWorldActor::Channel(channel)=>("weld-channel",json!(channel.variant)),
+                    NativeWeldWorldActor::FlameLashFade(fade)=>("weld-flame-lash-fade",json!(match fade.variant{
                         NativeWeldFlameLashFadeVariant::Source=>"source",NativeWeldFlameLashFadeVariant::Endpoint=>"endpoint",
                         NativeWeldFlameLashFadeVariant::Chain=>"chain"})),_=>unreachable!(),
                 };

@@ -134,7 +134,7 @@ fn current_stationary_roots_settle_then_resist_external_impulses_even_while_held
             world.actors.get_mut(0).unwrap().position.x += 100.0;
             world.actors.get_mut(0).unwrap().position.y += 80.0;
             let effects = [(
-                world.actors.get(0).unwrap().id,
+                world.actors.first().unwrap().id,
                 EnemyAbilityEffect {
                     time_scale: if (5..9).contains(&tick) || (25..30).contains(&tick) {
                         0.0
@@ -167,7 +167,7 @@ fn current_stationary_roots_settle_then_resist_external_impulses_even_while_held
                 Some(&mut order),
                 None,
             );
-            let actor = world.actors.get(0).unwrap();
+            let actor = world.actors.first().unwrap();
             let anchor = match &actor.brain {
                 EnemyBrain::Coffin(brain) => Some(brain.anchor_position),
                 EnemyBrain::Portal(brain) => brain.anchor_position,

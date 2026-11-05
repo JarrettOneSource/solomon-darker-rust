@@ -10,12 +10,12 @@ use super::{
 };
 use crate::Vec2;
 use crate::float::{fround, hypot};
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
+use crate::secondary::NativeSecondaryActorState;
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     let owner = &engine.context.players[&actor.owner_id];
@@ -106,7 +106,7 @@ pub(super) fn step<W: NativeSecondaryWorld>(
                         }
                         if actor.variant == 2 {
                             engine.electric_burns.push(BurnRequest {
-                                actor: actor.snapshot(),
+                                actor: actor.clone(),
                                 damage: amount,
                                 target,
                             });
@@ -123,7 +123,7 @@ pub(super) fn step<W: NativeSecondaryWorld>(
                         }
                         if actor.variant == 1 {
                             engine.fire_burns.push(BurnRequest {
-                                actor: actor.snapshot(),
+                                actor: actor.clone(),
                                 damage: owner.fire_burn_damage,
                                 target,
                             });

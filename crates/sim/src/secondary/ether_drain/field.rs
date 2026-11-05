@@ -3,6 +3,7 @@
 use super::kernel::inside_broad_ellipse;
 use super::*;
 use crate::float::fround;
+use crate::secondary::NativeSecondaryActorState;
 use crate::secondary::program::MAX_NATIVE_TICKS;
 use crate::secondary::program::{actor as new_actor, actor_event, screen_flash};
 use crate::secondary::step::StepEngine;
@@ -11,12 +12,11 @@ use crate::secondary::{
     NativeSecondaryEventKind as Event, NativeSecondarySimulationState as State,
     NativeSecondaryWorld,
 };
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 
 pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     let phase_at_entry = source.phase;
@@ -73,7 +73,7 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
         None => fallback_targets(engine, source, actor, refresh < 1.0),
     };
     let (refreshed, mut field) = refresh_native_ether_drain_targets(
-        source.ether_drain(),
+        source.ether_drain.as_ref(),
         &targets,
         actor.position,
         refresh < 1.0,
@@ -83,7 +83,7 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
         &mut field,
         &world_animations,
         actor.position,
-        source.ether_drain().is_some_and(|field| field.targets_initialized),
+        source.ether_drain.as_ref().is_some_and(|field| field.targets_initialized),
     );
     let scenery = engine.world.scenery_targets(
         &actor.world_key,
@@ -151,15 +151,13 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
             let existing = engine
                 .sources
                 .values()
-                .map(|actor| actor.view())
                 .chain(
                     engine
                         .state
                         .deferred_births
                         .as_ref()
                         .expect("actor phase owns birth commands")
-                        .iter()
-                        .map(|birth| birth.view()),
+                        .iter(),
                 )
                 .find(|candidate| {
                     candidate.kind == Kind::EarthquakeSceneryWobble
@@ -247,16 +245,16 @@ pub(in crate::secondary) fn step_field<W: NativeSecondaryWorld>(
         spawn_pulse(engine.state, actor, parameter, engine.context.tick);
         actor.slow_factor = 2.0;
     }
-    actor.set_ether_drain(field);
+    actor.ether_drain = Some(field);
 }
 
 fn fallback_targets<W: NativeSecondaryWorld>(
     engine: &StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &impl SecondaryActorRead,
+    source: &NativeSecondaryActorState,
+    actor: &NativeSecondaryActorState,
     refresh: bool,
 ) -> Vec<NativeEtherDrainTarget> {
-    let targets = match source.ether_drain().filter(|_| !refresh) {
+    let targets = match source.ether_drain.as_ref().filter(|_| !refresh) {
         None => engine.candidates(actor, NATIVE_ETHER_DRAIN_BROAD_RADIUS),
         Some(field) => field
             .queried
@@ -282,7 +280,7 @@ fn fallback_targets<W: NativeSecondaryWorld>(
         .collect()
 }
 
-fn spawn_pulse(state: &mut State, parent: &impl SecondaryActorRead, parameter: f64, tick: u64) {
+fn spawn_pulse(state: &mut State, parent: &NativeSecondaryActorState, parameter: f64, tick: u64) {
     if parameter < 1.0 {
         return;
     }
@@ -312,7 +310,7 @@ impl State {
         tick: u64,
         after_parent_tick: bool,
     ) {
-        let Some(mut parent) = self
+        let Some(parent) = self
             .actors
             .iter_mut()
             .find(|actor| actor.id == actor_id && actor.kind == Kind::EtherDrain)
@@ -320,7 +318,7 @@ impl State {
             return;
         };
         parent.slow_factor = if after_parent_tick { 2.0 } else { fround(2.0 - (0.1_f32 as f64)) };
-        let parent = parent.snapshot();
+        let parent = parent.clone();
         spawn_pulse(self, &parent, parameter, tick);
     }
 
@@ -334,7 +332,7 @@ impl State {
             .actors
             .iter()
             .find(|actor| actor.id == field_id && actor.kind == Kind::EtherDrain)
-            .map(|actor| actor.snapshot())
+            .cloned()
         else {
             return;
         };
@@ -352,8 +350,8 @@ impl State {
                 );
             }
         }
-        let mut actor = self.actors.iter_mut().find(|actor| actor.id == field_id).unwrap();
-        let field = actor.ether_drain_mut().get_or_insert_default();
+        let actor = self.actors.iter_mut().find(|actor| actor.id == field_id).unwrap();
+        let field = actor.ether_drain.get_or_insert_default();
         field.animations.clear();
         if let Some(image) = image {
             field.animations.push(NativeEtherDrainAnimation::Captured {

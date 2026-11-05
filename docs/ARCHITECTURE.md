@@ -61,8 +61,8 @@ for deadlines, account binding, readiness, cleanup and deployment exclusions.
 ### Tick ordering
 
 The [session tick](../crates/sim/src/session/tick.rs) owns the sequence across
-systems. Participant components have a keyed entity index and an explicit
-`participant_order` for ordered work. Key order is not a substitute for admission order. Level-up
+systems. Participants are keyed by player ID, with an explicit `participant_order`
+for ordered work. Key order is not a substitute for admission order. Level-up
 cohorts and secondary-spell player order have their own sorting rules.
 
 Existing actors advance once per global tick, with participant phases between
@@ -90,52 +90,57 @@ placement algorithms and strict rejection of impossible births remain unchanged.
 
 ### Runtime entity storage
 
-[`sim::ecs`](../crates/sim/src/ecs.rs) owns admission-ordered component queries.
-Domain stores define the components and expose borrowed views to their callers.
-Enemy views combine body and controller state; Maggots separate their body from
-the controller that owns emergence, admission and navigation. Secondary views include the
-ability-specific components present on that entity; loot views combine the body
-and pickup reward. Enemy projectiles pair flight and contact state with their motion
-program; boss spells pair identity and lifetime with their spell program. Small
-particle and effect lifecycles, including authored consumable effects, use
-`ComponentEntities`. Spider web modifiers use keyed components for each affected player.
+Each population is a plain collection owned by its domain store: a `Vec` in
+admission order, an `Option` for a single optional actor, or a `BTreeMap` keyed by
+player ID. Removing from the middle of a `Vec` keeps the survivors in order, and
+painter registration, contact selection and random-number draws depend on that
+order. Callers borrow records as `&T` or `&mut T`.
 
-Player-fired projectiles pair common flight state with an Earth, Ether, Fire or
-Weld program. Motion updates those components directly. The contact transaction
-reads the completed motion state, then commits retained projectile changes after
-resolving contacts in game-ID order.
+Enemies are `EnemyActor` records, each holding its family's controller state in
+`brain`. Maggots have their own `Vec<EnemyMaggotActor>` beside them; a Maggot's
+record carries its emergence, admission and navigation state. An enemy projectile
+keeps flight, contact and motion state in one record, and a boss spell pairs its
+owner with its spell kind. Ground loot keeps the body and its pickup reward
+together. Small particle and effect lists, including authored consumable effects,
+are `Vec`s. Spider web modifiers are a `BTreeMap` keyed by the affected player's ID.
 
-Primary transients use one concrete effect component per entity, so a short fade
-does not reserve the space of a persistent spell. Their shared ordered store
-preserves the mixed Staff, Weld, Harden and elemental queue. Lifecycle systems
-update retained components and admit children at their original position in that
-queue; renderers borrow the same components.
+Player-fired projectiles are `PrimarySpellProjectile` values: an Earth, Ether, Fire
+or Weld record that holds the shared flight state in `common` beside its family's
+fields. Motion updates the records in place. The contact transaction reads the
+completed motion state, then commits retained projectile changes after resolving
+contacts in game-ID order.
 
-Secondary ability clocks and mana reserves are keyed player components; their
-iteration follows sorted player IDs. Target modifier components retain their
-application order. A tick reads the previous modifier values before applying
-expiry and damage, and commits player ability transactions to the same entities.
+Primary transients share one ordered `PrimaryTransients` list, so Staff, Weld,
+Harden and elemental effects keep a single update and painter order. A lifecycle
+pass steps each effect once; the children an effect creates enter just behind it
+and take their first step on the next pass. Renderers borrow the same records.
 
-Participants separate identity, character transactions, movement and aim, Hub
-state, lighting, run score, and screen feedback. `PlayerState` keeps inventory,
-skill choices, derived combat values and their transaction rules together.
-`ParticipantRef` and `ParticipantMut` borrow the live components; an owned
-`SessionParticipant` carries saves, detach transactions and private prediction.
+Secondary effect actors are flat records whose Golem, Golem death and Ether Drain
+parts are optional fields. Actors born during the actor pass become live together
+after it. Ability clocks and mana reserves are a `BTreeMap` keyed by player ID, so
+iteration follows sorted player IDs. Target modifiers keep their application
+order. A tick reads the previous modifier values before applying expiry and
+damage, and commits player ability transactions to the same records.
 
-Courtyard students separate body and route/wander components. All routes read
-the preceding population, then collision resolution commits the planned bodies
-to their existing entities. Skorcha is an optional actor component; its appearance
-schedule remains a world resource. Fixed scenery animation clocks remain resources.
+Participants are `SessionParticipant` records in a `BTreeMap` keyed by player ID,
+with `participant_order` holding admission order. A participant groups identity,
+character state, movement and aim, Hub state, lighting, run score and screen
+feedback. `PlayerState` keeps inventory, skill choices, derived combat values and
+their transaction rules together. The same record carries saves, detach
+transactions and private prediction.
 
-The store's private ECS handles identify live component allocations. Game IDs
-and painter registrations remain the identities used by contacts, saves, and
-network snapshots. Constructing or restoring an owned record enrolls its
-components; serialization reads them in admission order. Enemy controller working
-copies commit back to the same entity after each action. Projectile and effect
-systems update their queried components in place.
+Courtyard students are `HubStudentState` records in admission order. All routes
+read the preceding population, then collision resolution commits the planned
+bodies to the same records. Skorcha is an `Option` inside its appearance schedule.
+Fixed scenery animation clocks are plain world state.
 
-The [component-storage decision](DECISIONS.md#component-storage-and-simulation-order)
-explains the ordering and persistence constraints.
+Game IDs and painter registrations identify actors in contacts, saves and network
+snapshots. Serialization writes each collection in its stored order. Enemy
+controllers update a working copy of their record and write it back in one
+assignment; projectile and effect passes update their records in place.
+
+The [storage decision](DECISIONS.md#entity-storage-and-simulation-order) explains
+the ordering and persistence constraints.
 
 ### Client frame
 

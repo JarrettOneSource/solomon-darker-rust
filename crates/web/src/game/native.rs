@@ -236,8 +236,12 @@ impl Game {
                         PauseSource::PauseMenu => None,
                     },
                 }),
-                resume_grace: host.and_then(|host| host.resume_grace.as_ref()).map(|grace| {
-                    ResumeGraceView {
+                // A staged wizard is the player this grace waits for, choosing its
+                // level-up; "Waiting on players" would only cover its picker.
+                resume_grace: host
+                    .filter(|host| !host.materializing_player_ids.contains(&self.local_player_id))
+                    .and_then(|host| host.resume_grace.as_ref())
+                    .map(|grace| ResumeGraceView {
                         reason: match grace.reason {
                             ResumeGraceReason::GameRejoined => "game-rejoined",
                             ResumeGraceReason::GameRestarted => "game-restarted",
@@ -250,8 +254,7 @@ impl Game {
                         },
                         remaining_ms: grace.remaining_ms,
                         sequence: grace.sequence,
-                    }
-                }),
+                    }),
             },
             now,
             self.surface.logical_width(),

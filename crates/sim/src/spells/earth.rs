@@ -3,8 +3,8 @@
 
 use super::model::PrimarySpellTransientBase;
 use super::model::{
-    EarthBoulderOrientation, EarthProjectileProgram, PrimarySpellEarthCalledRock,
-    PrimarySpellProjectilePhase, ProjectileRef,
+    EarthBoulderOrientation, PrimarySpellEarthCalledRock, PrimarySpellEarthProjectile,
+    PrimarySpellProjectilePhase,
 };
 use super::visual::visual_unit_random;
 use crate::float;
@@ -214,10 +214,7 @@ fn rotate_orientation(
 }
 
 #[must_use]
-pub fn earth_called_rock_emits(
-    boulder: ProjectileRef<'_, EarthProjectileProgram>,
-    tick: u64,
-) -> bool {
+pub fn earth_called_rock_emits(boulder: &PrimarySpellEarthProjectile, tick: u64) -> bool {
     boulder.common.charge < 0.25
         || earth_visual_random_int(boulder.common.id, 0x3000_u32.wrapping_add(tick as u32), 3) == 1
 }
@@ -225,7 +222,7 @@ pub fn earth_called_rock_emits(
 #[must_use]
 pub fn create_earth_called_rock(
     id: u64,
-    boulder: ProjectileRef<'_, EarthProjectileProgram>,
+    boulder: &PrimarySpellEarthProjectile,
     registration: PainterRegistration,
 ) -> PrimarySpellEarthCalledRock {
     let angle = visual_unit_random(id, 0x4000) * std::f64::consts::PI * 2.0;
@@ -262,7 +259,7 @@ pub fn create_earth_called_rock(
 
 pub fn advance_earth_called_rock(
     rock: &mut PrimarySpellEarthCalledRock,
-    parent: Option<ProjectileRef<'_, EarthProjectileProgram>>,
+    parent: Option<&PrimarySpellEarthProjectile>,
 ) -> bool {
     if rock.falling {
         let height = fround(rock.height + rock.fall_velocity);

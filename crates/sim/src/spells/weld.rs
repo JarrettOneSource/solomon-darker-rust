@@ -35,8 +35,3 @@ pub use presentation::*;
 pub use projectiles::*;
 pub use steam::*;
 pub use world::enroll_native_weld_actor_painter;
-
-pub use crate::spells::transient_storage::{
-    WeldHailChildMut, WeldHailChildRef, WeldPersistentMut, WeldPersistentRef, WeldWorldMut,
-    WeldWorldRef,
-};

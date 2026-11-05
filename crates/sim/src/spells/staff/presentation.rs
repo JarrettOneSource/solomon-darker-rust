@@ -1,7 +1,7 @@
 //! Exact stock draw values from `renderer/player-staff-vfx-presentation.ts`.
 //! Pike debris replays a private presentation snapshot; gameplay RNG is untouched.
 
-use super::{NativePlayerStaffPikeBreakVfx, StaffVfxRef};
+use super::{NativePlayerStaffPikeBreakVfx, NativePlayerStaffVfx};
 use crate::float;
 use crate::float::fround;
 use crate::secondary::presentation::NativeSecondaryBlend;
@@ -20,12 +20,14 @@ pub struct PlayerStaffVfxRenderPlan {
 }
 
 #[must_use]
-pub fn native_player_staff_vfx_render_plan(state: StaffVfxRef<'_>) -> PlayerStaffVfxRenderPlan {
+pub fn native_player_staff_vfx_render_plan(
+    state: &NativePlayerStaffVfx,
+) -> PlayerStaffVfxRenderPlan {
     let (alpha, entry, position, rotation, scale, tint) = match state {
-        StaffVfxRef::Smoke(state) => {
+        NativePlayerStaffVfx::Smoke(state) => {
             (state.alpha, state.entry, state.position, state.rotation_degrees, state.scale, None)
         }
-        StaffVfxRef::MoveFade(state) => (
+        NativePlayerStaffVfx::MoveFade(state) => (
             state.alpha,
             state.entry,
             state.position,
@@ -33,7 +35,7 @@ pub fn native_player_staff_vfx_render_plan(state: StaffVfxRef<'_>) -> PlayerStaf
             state.scale,
             Some(state.tint),
         ),
-        StaffVfxRef::PerspectiveFade(state) => (
+        NativePlayerStaffVfx::PerspectiveFade(state) => (
             state.alpha,
             state.entry,
             state.position,

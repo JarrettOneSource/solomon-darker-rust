@@ -23,7 +23,6 @@ use solomon_sim::loot::{NativeLootDropKind, NativeLootDropSource, NativeLootDrop
 use solomon_sim::painter::WorldManagerLane;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::NativeSecondaryActorKind;
-use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::session::{
     GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
@@ -81,9 +80,9 @@ fn snapshot(state: &GameSession) -> Value {
         .actors
         .iter()
         .map(|actor| {
-            let mut value = secondary::actor_snapshot(&actor);
-            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain().is_some() {
-                value["etherDrain"] = serde_json::to_value(actor.ether_drain()).unwrap();
+            let mut value = secondary::actor_snapshot(actor);
+            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
+                value["etherDrain"] = serde_json::to_value(actor.ether_drain.as_ref()).unwrap();
             }
             value
         })
@@ -296,7 +295,7 @@ fn painter_session() -> (GameSession, NavigationSet) {
         &std::collections::BTreeMap::from([("owner".into(), input)]),
         GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
     );
-    let mut field = state
+    let field = state
         .secondary
         .actors
         .iter_mut()
@@ -694,7 +693,7 @@ fn consumed_loot_enrolls_its_flare_on_the_contact_tick() {
         state.ticks,
         &mut state.painter_order,
     );
-    for mut loot in state.boneyard.as_mut().unwrap().loot.actors.iter_mut() {
+    for loot in state.boneyard.as_mut().unwrap().loot.actors.iter_mut() {
         loot.position = Vec2::new(250.0, 250.0);
         loot.activation_delay_ticks = 0;
     }

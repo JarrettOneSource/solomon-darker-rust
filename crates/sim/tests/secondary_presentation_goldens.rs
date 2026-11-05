@@ -7,7 +7,6 @@ mod native_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::enemies::presentation::*;
-use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::secondary::golem::{NativeGolemPhase, NativeSecondaryGolemState};
 use solomon_sim::secondary::presentation::*;
 use solomon_sim::secondary::{
@@ -299,7 +298,7 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
     for case in fixture["owners"].as_array().unwrap() {
         let actors = case["actors"].as_array().unwrap().iter().map(read_actor).collect::<Vec<_>>();
         let entries = native_secondary_composite_owner_entries(
-            actors.iter().map(|actor| actor.view()),
+            actors.iter(),
             case["worldKey"].as_str().unwrap(),
         );
         assert_eq!(json!(entries), case["entries"], "live composite ownership");

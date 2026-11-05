@@ -237,7 +237,7 @@ pub fn golem_snapshot(value: NativeSecondaryGolemState) -> Value {
     })
 }
 
-pub fn actor_snapshot(value: &impl SecondaryActorRead) -> Value {
+pub fn actor_snapshot(value: &NativeSecondaryActorState) -> Value {
     json!({
     "ageTicks":value.age_ticks,
     "alpha":value.alpha,
@@ -246,7 +246,7 @@ pub fn actor_snapshot(value: &impl SecondaryActorRead) -> Value {
     "endpoint":point_snapshot(value.endpoint),
     "frame":value.frame,
     "freezeTicks":value.freeze_ticks,
-    "golem":value.golem().copied().map(golem_snapshot),
+    "golem":value.golem.map(golem_snapshot),
     "hitTargetIds":value.hit_target_ids,
     "id":value.id,
     "kind":value.kind.as_str(),
@@ -304,7 +304,7 @@ pub fn event_snapshot(value: &NativeSecondaryEventState) -> Value {
 }
 
 pub fn state_snapshot(state: &NativeSecondarySimulationState) -> Value {
-    let actors: Vec<_> = state.actors.iter().map(|actor| actor_snapshot(&actor)).collect();
+    let actors: Vec<_> = state.actors.iter().map(actor_snapshot).collect();
     let events: Vec<_> = state.events.iter().map(event_snapshot).collect();
     let mut players = json!({});
     for (id, player) in state.players.iter() {

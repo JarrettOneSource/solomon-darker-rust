@@ -75,13 +75,13 @@ fn current_captures_suppress_family_death_children_and_effects_but_retain_reward
             case.seed
         );
         assert_eq!(
-            world.actors.get(0).unwrap().ether_drain_captured,
+            world.actors.first().unwrap().ether_drain_captured,
             case.captured,
             "{} captured",
             case.seed
         );
         let spider_captured = matches!(
-            world.actors.get(0).unwrap().brain,
+            &world.actors[0].brain,
             EnemyBrain::Spider(brain) if brain.phase == SpiderPhase::Captured
         );
         assert_eq!(spider_captured, case.spider_phase_captured, "{} Spider phase", case.seed);

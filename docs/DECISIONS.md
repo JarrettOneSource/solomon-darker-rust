@@ -127,22 +127,35 @@ Game rules live in `solomon-sim`. Browser, native, hosted, and modded play use t
 same session types and update order. Contacts, actor admission, and random-number
 consumption retain their defined order on both targets.
 
-## Component storage and simulation order
+## Entity storage and simulation order
 
-`bevy_ecs` supplies component storage and typed queries. Domain stores own their
-entity handles, admission order, and checkpoint conversion. Enemy bodies and
-controller brains are separate components; ground loot separates its body from
-the reward collected by a player. A small particle keeps its related fields together.
+Each entity population is a plain collection owned by its domain store: a `Vec` in
+admission order, an `Option` for one optional actor, or a `BTreeMap` keyed by
+player ID. Domain stores own admission order and checkpoint conversion. Enemies
+are records in a `Vec`, each holding its family's controller state in `brain`.
+Ground loot keeps its body with the reward a player collects. A small particle
+keeps its related fields together.
 
-Removing an entity can move another entity within an ECS table. The ordered
-handle index preserves survivor order, which determines contact selection, RNG
-draws, and painter registration. Births enter at the owning system's boundary:
-secondary effects wait for the next actor pass, while terminal enemy children
-can advance later in the same pass. Boss spell children enter before their retained
-parent and receive their first update on the next pass. Primary transient children
-follow their retained parent, or occupy its position when it retires, and also
-wait until the next pass. These rules keep Meteor debris, spent Embers and boss
-spells from receiving an extra update on their birth tick.
+From October to November 2026 most populations were stored in `bevy_ecs`. The
+game used it only as storage, with no systems or schedules. Ticks and session
+copies were slower with it than with plain collections, both before it arrived
+and after it left ([Performance](PERFORMANCE.md#entity-storage)), and its handle,
+query and view types made the simulation harder to read. A storage change is
+accepted only when the session benchmark shows no regression and every final
+checkpoint stays byte-identical, which also shows that painter, contact and
+random-number order are unchanged. The Boneyard cases must reach combat: casting
+stays locked until Solomon's entrance finishes, so the benchmark plays the
+entrance before timing.
+
+Removing an entity from the middle of a `Vec` keeps survivor order, which
+determines contact selection, RNG draws, and painter registration. Births enter at
+the owning system's boundary: secondary effects wait for the next actor pass,
+while terminal enemy children can advance later in the same pass. Boss spell
+children enter before their retained parent and receive their first update on the
+next pass. Primary transient children follow their retained parent, or occupy its
+position when it retires, and also wait until the next pass. These rules keep
+Meteor debris, spent Embers and boss spells from receiving an extra update on
+their birth tick.
 
 Flash defensive responses can also be born during the post-secondary player
 contact or poison callback. The common actor pass cannot enroll those births
@@ -160,18 +173,19 @@ retire a target or create an effect before the next phase runs, and several phas
 consume the same random stream. Parallel work must preserve those dependencies
 and demonstrate a benefit on an equivalent workload before changing that sequence.
 
-Enemy controllers use a working record and commit its components together. Peer
-queries during the action observe the previous committed record. Mutating the
-live body throughout an action would change those queries. Read-only targeting
-and rendering borrow components; they do not need working copies. Student route
-plans similarly read the preceding population before any movement commits, so
-crowd following and collision responses do not depend on table layout.
+Enemy controllers update a working copy of their record and write it back in one
+assignment. Peer queries during the action observe the previous committed record.
+Mutating the live record throughout an action would change those queries.
+Read-only targeting and rendering borrow records; they do not need working copies.
+Student route plans similarly read the preceding population before any movement
+commits, so crowd following and collision responses do not depend on which
+student moves first.
 
 Save and snapshot fields retain their supported layout and game identities.
-ECS handles stay local to the store. The flat deserialization records also retain
-their declared struct names: supported save-import decoders use typed field and
+Records derive serde with their fields in the save record's order and under the
+save record's struct name: supported save-import decoders use typed field and
 enum visitors to translate values. `serde(flatten)` buffers untyped values and
-would bypass those conversions.
+would bypass those conversions, so records stay flat instead.
 
 ## Numeric contract
 

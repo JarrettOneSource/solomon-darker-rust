@@ -81,7 +81,7 @@ impl EnemyWorld {
                 *registration = *resolved;
             }
         };
-        for mut projectile in self.projectiles.iter_mut() {
+        for projectile in self.projectiles.iter_mut() {
             let state = projectile.state_mut();
             resolve(&mut state.painter_registration);
             if let Some(registration) = &mut state.light_registration {
@@ -128,7 +128,7 @@ impl EnemyWorld {
         }
         for spell in self.boss_spells.iter_mut() {
             resolve(&mut spell.owner.painter_registration);
-            if let super::boss_spell::BossSpellKind::GreenFire { fire, .. } = &mut *spell.kind {
+            if let super::boss_spell::BossSpellKind::GreenFire { fire, .. } = &mut spell.kind {
                 for registration in &mut fire.common.painter_registrations {
                     resolve(registration);
                 }

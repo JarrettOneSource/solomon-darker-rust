@@ -85,7 +85,7 @@ pub fn present_native_secondary_screen_overlay(
 
 #[must_use]
 pub fn native_secondary_world_shake(
-    actors: impl IntoIterator<Item = impl crate::secondary::SecondaryActorRead>,
+    actors: &[crate::secondary::NativeSecondaryActorState],
     world_key: &str,
     current: Vec2,
 ) -> Vec2 {
@@ -107,7 +107,6 @@ pub fn native_secondary_world_shake(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeSecondaryScreenFeedbackPresentation {
     pub alpha: f64,
     pub blue: f64,

@@ -17,8 +17,8 @@ use solomon_sim::secondary::presentation::native_secondary_presentation_plan;
 use solomon_sim::session::{
     GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
-use solomon_sim::spells::model::PrimaryTransientRef;
-use solomon_sim::spells::transient_storage::WeldWorldRef;
+use solomon_sim::spells::model::PrimarySpellTransient;
+use solomon_sim::spells::weld::NativeWeldWorldActor;
 
 fn drain_session() -> (GameSession, NavigationSet) {
     let mut session = GameSession::new_participants(
@@ -245,7 +245,7 @@ fn a_living_player_at_the_center_does_not_expand_the_capture_pulse() {
         {
             field_ticks += 1;
             assert_eq!(field.slow_factor, 0.0, "living contact is not capture");
-            let plan = native_secondary_presentation_plan(&field, session.ticks as f64, 1.0);
+            let plan = native_secondary_presentation_plan(field, session.ticks as f64, 1.0);
             assert!(!plan.draws.iter().any(|draw| draw.role == "ether-drain-capture-pulse"));
         }
     }
@@ -286,7 +286,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                     ..Default::default()
                 },
             );
-            let mut enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
+            let enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
             enemy.config.maximum_health = 100_000.0;
             enemy.current_health = 100_000.0;
             let mut emissions = 0;
@@ -310,7 +310,8 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                     assert_eq!(emission.underpowered, reserve.is_some());
                 }
                 for actor in session.spells.transients.iter() {
-                    let PrimaryTransientRef::Weld(WeldWorldRef::Steam(particle)) = actor else {
+                    let PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(particle)) = actor
+                    else {
                         continue;
                     };
                     contact_particles += usize::from(particle.contact_enabled);
@@ -320,7 +321,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                 }
             }
             assert!(emissions > 100, "the held Steam cast must reach its channel");
-            let enemy = session.boneyard.as_ref().unwrap().enemies.actors.get(0).unwrap();
+            let enemy = session.boneyard.as_ref().unwrap().enemies.actors.first().unwrap();
             assert!(
                 enemy.current_health < enemy.config.maximum_health,
                 "{caster} {reserve:?}: retail weak normal Steam still damages a mob"
@@ -333,19 +334,17 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                     GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
                 );
             }
-            assert!(
-                !session.spells.transients.iter().any(|actor| matches!(
-                    actor,
-                    PrimaryTransientRef::Weld(WeldWorldRef::Steam(_))
-                ))
-            );
+            assert!(!session.spells.transients.iter().any(|actor| matches!(
+                actor,
+                PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(_))
+            )));
         }
     }
 }
 
 #[test]
 fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
-    use solomon_sim::spells::weld::WeldPersistentRef;
+    use solomon_sim::spells::weld::NativeWeldPersistentActorState;
     for funded in [true, false] {
         let (mut session, navigation) = drain_session();
         let player = &mut session.participants.get_mut("owner").unwrap().player;
@@ -368,7 +367,7 @@ fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
             },
         );
         {
-            let mut enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
+            let enemy = session.boneyard.as_mut().unwrap().enemies.actors.get_mut(0).unwrap();
             enemy.config.maximum_health = 100_000.0;
             enemy.current_health = 100_000.0;
         }
@@ -389,8 +388,8 @@ fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
                 GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
             );
             for actor in session.spells.transients.iter() {
-                let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
-                    WeldPersistentRef::EtherealBoulder(rock),
+                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
+                    NativeWeldPersistentActorState::EtherealBoulder(rock),
                 )) = actor
                 else {
                     continue;

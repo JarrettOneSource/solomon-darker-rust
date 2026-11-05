@@ -1,6 +1,6 @@
 //! Faculty spell births, contacts and retained ticks from `enemies/boss-spells.ts`.
 
-use super::boss_spell::{BossSpellKind, BossSpellLight, BossSpellMut, BossSpellRead};
+use super::boss_spell::{BossSpellKind, BossSpellLight, NativeBossSpell};
 use super::config::EnemyFamilyConfig;
 use super::effects::{
     BouncerOptions, DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec,
@@ -34,7 +34,7 @@ struct ContactModifiers {
 
 pub fn spawn_faculty_spell(
     world: &mut EnemyWorld,
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     action: FacultyActionKind,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
@@ -245,7 +245,7 @@ pub fn spawn_faculty_spell(
     );
 }
 
-fn emit_faculty_throw(world: &mut EnemyWorld, actor: &impl EnemyActorRead, tick: u64) {
+fn emit_faculty_throw(world: &mut EnemyWorld, actor: &EnemyActor, tick: u64) {
     let first_pitch = 1.5 - world.draw_unit() * 0.25;
     world.emit_action_sound(
         DeathEffectOwner::from(actor),
@@ -270,7 +270,7 @@ impl EnemyWorld {
     ) {
         let mut population = std::mem::take(&mut self.boss_spells);
         let has_long_ultra_banish = population.iter().any(|spell| {
-            matches!(spell.kind, BossSpellKind::UltraBanish { remaining_ticks, .. } if *remaining_ticks > 100)
+            matches!(spell.kind, BossSpellKind::UltraBanish { remaining_ticks, .. } if remaining_ticks > 100)
         });
         self.boss_spells.collect_births();
         population.advance(|spell| {
@@ -284,12 +284,12 @@ impl EnemyWorld {
 
 fn step_boss_spell(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &mut EnemyStepContext<'_>,
     has_long_ultra_banish: bool,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    match &mut *spell.kind {
+    match &mut spell.kind {
         BossSpellKind::UltraBanish { .. } | BossSpellKind::UnholySoul { .. } => {
             super::ultra_banish::step_ultra_banish_spell(
                 world,
@@ -352,11 +352,11 @@ fn step_boss_spell(
 
 fn spawn_blightning(
     world: &mut EnemyWorld,
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
-    let EnemyBrain::Faculty(brain) = actor.brain() else {
+    let EnemyBrain::Faculty(brain) = &actor.brain else {
         panic!("Blightning requires a Faculty caster")
     };
     let start = native_faculty_lightning_source(
@@ -444,22 +444,22 @@ fn spawn_blightning_fade(
 
 fn step_skull(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    let BossSpellKind::SkullMissile { target_player_id, .. } = &*spell.kind else { unreachable!() };
+    let BossSpellKind::SkullMissile { target_player_id, .. } = &spell.kind else { unreachable!() };
     let target = target_by_id(target_player_id.as_deref(), context.players)
         .filter(|target| target_eligible(target));
     let motion = step_native_guided_missile(
-        spell.view().guided_missile_state(),
+        spell.guided_missile_state(),
         target.map(|target| target.position),
         1.0,
     );
     spell.set_guided_missile_state(motion.state);
     spell.owner.age_ticks += 1;
     if target.is_none()
-        && let BossSpellKind::SkullMissile { target_player_id, .. } = &mut *spell.kind
+        && let BossSpellKind::SkullMissile { target_player_id, .. } = &mut spell.kind
     {
         *target_player_id = None;
     }
@@ -471,7 +471,7 @@ fn step_skull(
     });
     let mut impacted = false;
     if !outside {
-        let BossSpellKind::SkullMissile { target_player_id, .. } = &*spell.kind else {
+        let BossSpellKind::SkullMissile { target_player_id, .. } = &spell.kind else {
             unreachable!()
         };
         if let Some(player) = first_guided_missile_contact(
@@ -538,11 +538,11 @@ fn step_skull(
 
 fn step_dark(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    let source = spell.view().dark_fireball_state();
+    let source = spell.dark_fireball_state();
     let step = step_native_dark_fireball(source, 1.0);
     let obstruction = step.spell.age_ticks.is_multiple_of(10)
         && !projectile_line_clear(
@@ -602,12 +602,11 @@ fn step_dark(
 
 fn impact_dark(
     world: &mut EnemyWorld,
-    spell: &impl BossSpellRead,
+    spell: &NativeBossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
-    let spell_view = spell.view();
-    let state = spell_view.dark_fireball_state();
+    let state = spell.dark_fireball_state();
     if state.arc_phase_step > 0.0 {
         spawn_faculty_projectile_smoke(
             world,
@@ -621,16 +620,16 @@ fn impact_dark(
     }
     for player in context.players {
         if target_eligible(player)
-            && distance_squared(spell_view.owner.position, player.position)
+            && distance_squared(spell.owner.position, player.position)
                 < 150.0 * 150.0 + player.collision_radius * player.collision_radius
         {
             contact(
                 world,
                 context,
-                spell_view.owner.owner_actor_id,
+                spell.owner.owner_actor_id,
                 &player.id,
-                spell_view.owner.damage * 0.5,
-                spell_view.owner.damage * 0.5,
+                spell.owner.damage * 0.5,
+                spell.owner.damage * 0.5,
                 ContactModifiers {
                     source: Some(contact_source(spell, 20.0)),
                     ..ContactModifiers::default()
@@ -642,12 +641,12 @@ fn impact_dark(
         spawn_fire_burst(
             world,
             ProjectileEffectOwner {
-                id: spell_view.owner.id,
-                owner_actor_id: spell_view.owner.owner_actor_id,
-                age_ticks: spell_view.owner.age_ticks,
+                id: spell.owner.id,
+                owner_actor_id: spell.owner.owner_actor_id,
+                age_ticks: spell.owner.age_ticks,
             },
             context.tick,
-            spell_view.owner.position,
+            spell.owner.position,
             1.75,
             0.25,
             order,
@@ -658,13 +657,12 @@ fn impact_dark(
     spell_impact(world, spell, context, None, order);
 }
 
-fn retire_projectile(world: &mut EnemyWorld, spell: &impl BossSpellRead, tick: u64) {
-    let spell_view = spell.view();
+fn retire_projectile(world: &mut EnemyWorld, spell: &NativeBossSpell, tick: u64) {
     let mut event =
-        EnemyEvent::new(EnemyEventKind::ProjectileRetired, spell_view.owner.owner_actor_id, tick);
-    event.projectile_id = Some(spell_view.owner.id);
+        EnemyEvent::new(EnemyEventKind::ProjectileRetired, spell.owner.owner_actor_id, tick);
+    event.projectile_id = Some(spell.owner.id);
     event.target_player_id =
-        Some(if let BossSpellKind::SkullMissile { target_player_id, .. } = spell_view.kind {
+        Some(if let BossSpellKind::SkullMissile { target_player_id, .. } = &spell.kind {
             target_player_id.clone()
         } else {
             None
@@ -674,11 +672,11 @@ fn retire_projectile(world: &mut EnemyWorld, spell: &impl BossSpellRead, tick: u
 
 fn step_rain(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    let step = step_native_rain_of_bones(spell.view().rain_state(), &mut world.steering_rng);
+    let step = step_native_rain_of_bones(spell.rain_state(), &mut world.steering_rng);
     if let Some(bone) = step.bone {
         let falling = world.create_boss_spell(
             spell.owner.owner_actor_id,
@@ -718,7 +716,7 @@ fn step_rain(
     if step.state.alpha > 0.0 {
         let state = step.state;
         spell.owner.age_ticks += 1;
-        *spell.kind = BossSpellKind::RainOfBones {
+        spell.kind = BossSpellKind::RainOfBones {
             alpha: state.alpha,
             phase: state.phase,
             remaining_ticks: state.remaining_ticks,
@@ -733,11 +731,11 @@ fn step_rain(
 
 fn step_falling_bone(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    let BossSpellKind::FallingBone { entry, height, color_ramp, .. } = &mut *spell.kind else {
+    let BossSpellKind::FallingBone { entry, height, color_ramp, .. } = &mut spell.kind else {
         unreachable!()
     };
     let fall = world.steering_rng.draw_scaled_float(2.0, false);
@@ -785,11 +783,11 @@ fn step_falling_bone(
 
 fn step_circle(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> bool {
-    let BossSpellKind::TragicCircle { remaining_ticks } = &mut *spell.kind else { unreachable!() };
+    let BossSpellKind::TragicCircle { remaining_ticks } = &mut spell.kind else { unreachable!() };
     *remaining_ticks -= 1;
     let remaining = *remaining_ticks;
     let source_age = spell.owner.age_ticks;
@@ -849,10 +847,10 @@ fn step_circle(
 
 fn step_fire(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &EnemyStepContext<'_>,
 ) -> bool {
-    let BossSpellKind::DireFire(source) = *spell.kind else { unreachable!() };
+    let BossSpellKind::DireFire(source) = spell.kind else { unreachable!() };
     let state = step_native_dire_fire(source, &mut world.steering_rng);
     if context.tick.is_multiple_of(3) {
         for player in context.players {
@@ -878,7 +876,7 @@ fn step_fire(
         }
     }
     if state.alpha > 0.0 {
-        *spell.kind = BossSpellKind::DireFire(state);
+        spell.kind = BossSpellKind::DireFire(state);
         spell.owner.age_ticks += 1;
         true
     } else {
@@ -888,12 +886,11 @@ fn step_fire(
 
 fn spawn_dire_fires(
     world: &mut EnemyWorld,
-    source: &impl BossSpellRead,
+    source: &NativeBossSpell,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
-    let source_view = source.view();
-    let BossSpellKind::DarkFireball { ground_fire_damage, .. } = *source_view.kind else {
+    let BossSpellKind::DarkFireball { ground_fire_damage, .. } = source.kind else {
         unreachable!()
     };
     let mut first = create_native_dire_fire(&mut world.steering_rng);
@@ -902,10 +899,10 @@ fn spawn_dire_fires(
     first.alpha = fround(5.0 + alpha);
     first.scale = fround(0.75 + scale);
     let spell = world.create_boss_spell(
-        source_view.owner.owner_actor_id,
+        source.owner.owner_actor_id,
         tick,
         ground_fire_damage,
-        source_view.owner.position,
+        source.owner.position,
         BossSpellKind::DireFire(first),
         order,
     );
@@ -917,14 +914,12 @@ fn spawn_dire_fires(
     second.alpha = 5.0;
     second.glow = false;
     second.scale = fround(0.600_000_023_841_857_9 + size);
-    let position = Vec2::new(
-        fround(source_view.owner.position.x + sign),
-        fround(source_view.owner.position.y + 5.0),
-    );
+    let position =
+        Vec2::new(fround(source.owner.position.x + sign), fround(source.owner.position.y + 5.0));
     let spell = world.create_boss_spell(
-        source_view.owner.owner_actor_id,
+        source.owner.owner_actor_id,
         tick,
-        source_view.owner.damage,
+        source.owner.damage,
         position,
         BossSpellKind::DireFire(second),
         order,
@@ -934,21 +929,17 @@ fn spawn_dire_fires(
 
 fn spell_impact(
     world: &mut EnemyWorld,
-    spell: &impl BossSpellRead,
+    spell: &NativeBossSpell,
     context: &EnemyStepContext<'_>,
     target: Option<&str>,
     order: &mut WorldPainterOrder,
 ) {
-    let spell_view = spell.view();
-    let mut event = EnemyEvent::new(
-        EnemyEventKind::ProjectileImpact,
-        spell_view.owner.owner_actor_id,
-        context.tick,
-    );
-    event.projectile_id = Some(spell_view.owner.id);
+    let mut event =
+        EnemyEvent::new(EnemyEventKind::ProjectileImpact, spell.owner.owner_actor_id, context.tick);
+    event.projectile_id = Some(spell.owner.id);
     event.target_player_id = Some(target.map(str::to_owned));
     world.emit_event(event);
-    let skull = matches!(*spell_view.kind, BossSpellKind::SkullMissile { .. });
+    let skull = matches!(spell.kind, BossSpellKind::SkullMissile { .. });
     if skull {
         let pitch = fround(1.0 + world.steering_rng.draw_scaled_float(0.1, false));
         world.emit_action_sound(
@@ -958,10 +949,10 @@ fn spell_impact(
             pitch,
         );
         let fade = world.create_boss_spell(
-            spell_view.owner.owner_actor_id,
+            spell.owner.owner_actor_id,
             context.tick,
             0.0,
-            spell_view.owner.position,
+            spell.owner.position,
             BossSpellKind::DeathMagic {
                 scale: 2.0,
                 alpha: 2.0,
@@ -990,12 +981,9 @@ fn spell_impact(
         0.0,
         order,
     );
-    let mut event = EnemyEvent::new(
-        EnemyEventKind::EnemyScreenFlash,
-        spell_view.owner.owner_actor_id,
-        context.tick,
-    );
-    event.source_position = Some(spell_view.owner.position);
+    let mut event =
+        EnemyEvent::new(EnemyEventKind::EnemyScreenFlash, spell.owner.owner_actor_id, context.tick);
+    event.source_position = Some(spell.owner.position);
     event.screen_flash = Some(EnemyScreenFlash {
         alpha: 1.0,
         red: 0.0,
@@ -1029,15 +1017,13 @@ fn contact(
     world.player_damage.push(damage);
 }
 
-fn effect_owner(spell: &impl BossSpellRead) -> DeathEffectOwner {
-    let spell_view = spell.view();
-    DeathEffectOwner { id: spell_view.owner.owner_actor_id, position: spell_view.owner.position }
+fn effect_owner(spell: &NativeBossSpell) -> DeathEffectOwner {
+    DeathEffectOwner { id: spell.owner.owner_actor_id, position: spell.owner.position }
 }
 
-fn contact_source(spell: &impl BossSpellRead, collision_radius: f64) -> EnemyPlayerDamageSource {
-    let spell_view = spell.view();
+fn contact_source(spell: &NativeBossSpell, collision_radius: f64) -> EnemyPlayerDamageSource {
     EnemyPlayerDamageSource {
-        position: spell_view.owner.position,
+        position: spell.owner.position,
         collision_radius,
         reflectable_actor_id: None,
     }
@@ -1059,14 +1045,13 @@ fn line_clear(context: &EnemyStepContext<'_>, start: Vec2, end: Vec2) -> bool {
 
 fn projectile_line_clear(
     context: &EnemyStepContext<'_>,
-    spell: &impl BossSpellRead,
+    spell: &NativeBossSpell,
     start: Vec2,
     end: Vec2,
     mask: u32,
 ) -> bool {
-    let spell_view = spell.view();
     !context.geometry.projectile_world_blocked(EnemyProjectileWorldQuery::Line {
-        projectile_id: spell_view.owner.id,
+        projectile_id: spell.owner.id,
         start,
         end,
         native_exclusion_mask: mask,

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use solomon_sim::boneyard::{BoneyardWorld, LoadedBoneyard};
 use solomon_sim::heading::HEADING_COUNT;
 use solomon_sim::profile::{NATIVE_SKILL_ROW_COUNT, native_weld_build};
-use solomon_sim::session::{GameCheckpoint, ParticipantRead};
+use solomon_sim::session::{GameCheckpoint, SessionParticipant};
 
 // Schema 2 replaces the single local player and world-owned wizard with ordered
 // participants. Earlier candidate saves cannot identify that ownership reliably.
@@ -171,8 +171,7 @@ fn migrate_boulder_guidance_fields(
 
 /// Host files also retain detached records outside the live map. Apply the same
 /// constructor/index preconditions before either kind of participant is admitted.
-pub fn validate_participant(participant: &impl ParticipantRead) -> Result<(), String> {
-    let participant = participant.view();
+pub fn validate_participant(participant: &SessionParticipant) -> Result<(), String> {
     let book = &participant.player.book;
     if book.primary_skill_id >= NATIVE_SKILL_ROW_COUNT
         || book.element_root >= 8
@@ -242,7 +241,7 @@ mod tests {
             .secondary
             .players
             .insert("local".into(), solomon_sim::secondary::NativeSecondaryPlayerState::default());
-        *session.participants.get_mut("local").unwrap().world_aim = Some(Vec2::new(230.5, 510.75));
+        session.participants.get_mut("local").unwrap().world_aim = Some(Vec2::new(230.5, 510.75));
         session
     }
 
@@ -489,8 +488,8 @@ mod tests {
         assert_eq!(saved["turnAccumulator"], serde_json::json!(0.61_f32 as f64));
         assert_eq!(saved["flightSpeed"], 2.25);
         assert_eq!(
-            restored.session.spells.transients.iter().next().unwrap().snapshot(),
-            session.spells.transients.iter().next().unwrap().snapshot()
+            restored.session.spells.transients.iter().next().unwrap(),
+            session.spells.transients.iter().next().unwrap()
         );
         for legacy in ["lifetimeTicksRemaining", "speedFactor"] {
             let mut mixed = projected.clone();

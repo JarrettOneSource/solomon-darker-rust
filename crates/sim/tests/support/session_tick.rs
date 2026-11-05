@@ -4,15 +4,13 @@ use super::{player_combat, player_snapshot, secondary_state, session_snapshot, t
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::BoneyardLootEventType;
-use solomon_sim::boneyard::loot::LootActorRead;
 use solomon_sim::enemies::model::EnemyLifeState;
-use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use solomon_sim::harden_effects::NativeHardenEffect;
 use solomon_sim::loot::NativeLootDropKind;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::session::GameSession;
-use solomon_sim::spells::model::PrimaryTransientRef;
-use solomon_sim::spells::model::{PrimaryProjectileRef, PrimarySpellProjectilePhase};
+use solomon_sim::spells::model::PrimarySpellTransient;
+use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellProjectilePhase};
 
 fn point(position: Vec2) -> Value {
     json!([position.x, position.y])
@@ -28,29 +26,29 @@ fn registration(registration: PainterRegistration) -> Value {
     ])
 }
 
-fn transient_kind(effect: PrimaryTransientRef<'_>) -> &'static str {
+fn transient_kind(effect: &PrimarySpellTransient) -> &'static str {
     match effect {
-        PrimaryTransientRef::Harden(NativeHardenEffect::Shard { .. }) => "harden-shard",
-        PrimaryTransientRef::Harden(NativeHardenEffect::Burst { .. }) => "harden-burst",
-        PrimaryTransientRef::Staff(actor) => actor.kind(),
-        PrimaryTransientRef::Weld(_) => unreachable!("these journeys cast the five elements"),
-        PrimaryTransientRef::AirHurricane(_) => "air-hurricane",
-        PrimaryTransientRef::WaterAura(_) => "water-aura",
-        PrimaryTransientRef::WaterHail(_) => "water-hail",
-        PrimaryTransientRef::Air(_) => "air",
-        PrimaryTransientRef::Water(_) => "water",
-        PrimaryTransientRef::EarthBoulderBit(_) => "earth-boulder-bit",
-        PrimaryTransientRef::EarthImpact(_) => "earth-impact",
-        PrimaryTransientRef::EarthCalledRock(_) => "earth-called-rock",
-        PrimaryTransientRef::EtherImpact(_) => "ether-impact",
-        PrimaryTransientRef::EtherPierceStreak(_) => "ether-pierce-streak",
-        PrimaryTransientRef::EtherBlast(_) => "ether-blast",
-        PrimaryTransientRef::FireParticle(_) => "fire",
-        PrimaryTransientRef::FireImpact(_) => "fire-impact",
-        PrimaryTransientRef::FireEmber(_) => "fire-ember",
-        PrimaryTransientRef::FireExplosion(_) => "fire-explosion",
-        PrimaryTransientRef::FireGoodImp(_) => "fire-good-imp",
-        PrimaryTransientRef::FirePatch(_) => "fire-patch",
+        PrimarySpellTransient::Harden(NativeHardenEffect::Shard { .. }) => "harden-shard",
+        PrimarySpellTransient::Harden(NativeHardenEffect::Burst { .. }) => "harden-burst",
+        PrimarySpellTransient::Staff(actor) => actor.kind(),
+        PrimarySpellTransient::Weld(_) => unreachable!("these journeys cast the five elements"),
+        PrimarySpellTransient::AirHurricane(_) => "air-hurricane",
+        PrimarySpellTransient::WaterAura(_) => "water-aura",
+        PrimarySpellTransient::WaterHail(_) => "water-hail",
+        PrimarySpellTransient::Air(_) => "air",
+        PrimarySpellTransient::Water(_) => "water",
+        PrimarySpellTransient::EarthBoulderBit(_) => "earth-boulder-bit",
+        PrimarySpellTransient::EarthImpact(_) => "earth-impact",
+        PrimarySpellTransient::EarthCalledRock(_) => "earth-called-rock",
+        PrimarySpellTransient::EtherImpact(_) => "ether-impact",
+        PrimarySpellTransient::EtherPierceStreak(_) => "ether-pierce-streak",
+        PrimarySpellTransient::EtherBlast(_) => "ether-blast",
+        PrimarySpellTransient::FireParticle(_) => "fire",
+        PrimarySpellTransient::FireImpact(_) => "fire-impact",
+        PrimarySpellTransient::FireEmber(_) => "fire-ember",
+        PrimarySpellTransient::FireExplosion(_) => "fire-explosion",
+        PrimarySpellTransient::FireGoodImp(_) => "fire-good-imp",
+        PrimarySpellTransient::FirePatch(_) => "fire-patch",
     }
 }
 
@@ -62,10 +60,10 @@ fn primary_snapshot(session: &GameSession) -> Value {
         .map(|projectile| {
             let common = projectile.common();
             let kind = match projectile {
-                PrimaryProjectileRef::Earth(_) => "earth",
-                PrimaryProjectileRef::Ether(_) => "ether",
-                PrimaryProjectileRef::Fire(_) => "fire",
-                PrimaryProjectileRef::Weld(_) => "weld",
+                PrimarySpellProjectile::Earth(_) => "earth",
+                PrimarySpellProjectile::Ether(_) => "ether",
+                PrimarySpellProjectile::Fire(_) => "fire",
+                PrimarySpellProjectile::Weld(_) => "weld",
             };
             let phase = match common.phase {
                 PrimarySpellProjectilePhase::Flight => "flight",
@@ -105,10 +103,10 @@ fn primary_snapshot(session: &GameSession) -> Value {
 
 fn world_snapshot(session: &GameSession, id: &str) -> Value {
     let Some(world) = &session.boneyard else {
-        return json!({"kind":"hub","participant":session_snapshot::hub_participant(&session.participants.get(id).expect("participant exists")),
+        return json!({"kind":"hub","participant":session_snapshot::hub_participant(session.participants.get(id).expect("participant exists")),
             "collisionRng":session.collision_rng,
             "students":session.npcs.students.students.iter().map(|student| json!([
-                student.id,point(student.position),student.controller.tick,student.controller.rng_state,
+                student.id,point(student.position),student.tick,student.rng_state,
                 student.registration_ordinal])).collect::<Vec<_>>()});
     };
     let enemies = &world.enemies;
@@ -159,8 +157,8 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
                 kind,
                 point(actor.position),
                 actor.age_ticks,
-                actor.reward().amount,
-                actor.reward().item.as_ref().map(|item| item.native_type_id)
+                actor.amount,
+                actor.item.as_ref().map(|item| item.native_type_id)
             ])
         })
         .collect();
@@ -172,7 +170,7 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
             waves.state.low_population_ticks,waves.state.spawn_countdown,player_snapshot::rng_snapshot(&waves.state.rng)])),
         "tutorial":world.tutorial.as_ref().map(tutorial_snapshot::state_row),
         "feedback":{"accumulator":world.enemy_world_feedback.accumulator,"magnitude":world.enemy_world_feedback.magnitude},
-        "score":session_snapshot::score(session.participants.get(id).expect("participant exists").score),"ouchDeadline":world.player_ouch_deadline_tick,
+        "score":session_snapshot::score(&session.participants.get(id).expect("participant exists").score),"ouchDeadline":world.player_ouch_deadline_tick,
         "actors":actors,
         "projectiles":enemies.projectiles.iter().map(|projectile| {
             let state=projectile.state();json!([state.id,projectile.kind().id(),point(state.position),
@@ -193,7 +191,7 @@ fn world_snapshot(session: &GameSession, id: &str) -> Value {
 
 pub fn snapshot(session: &GameSession, id: &str) -> Value {
     let player = player_combat::player_snapshot(
-        session.participants.get(id).expect("participant exists").player,
+        &session.participants.get(id).expect("participant exists").player,
     );
     let progression = &player["progression"];
     let barrier = session.level_up_barrier.as_ref().map(|barrier| {
@@ -203,11 +201,11 @@ pub fn snapshot(session: &GameSession, id: &str) -> Value {
         "pendingPlayerIds":barrier.pending_player_ids,"runId":barrier.run_id,
         "sourcePlayerId":barrier.source_player_id})
     });
-    json!({"tick":session.ticks,"player":player_snapshot::snapshot(session.participants.get(id).expect("participant exists").player,&session.gameplay_rng),
+    json!({"tick":session.ticks,"player":player_snapshot::snapshot(&session.participants.get(id).expect("participant exists").player,&session.gameplay_rng),
         "combat":player["combat"],"potionClocks":[progression["damageX4TicksRemaining"],
             progression["mindChugTicksRemaining"],progression["poisonImmunityTicksRemaining"],progression["hagathaRuntime"]],
-        "runtime":player["runtime"],"character":session_snapshot::character(&session.participants.get(id).expect("participant exists")),
-        "lighting":session_snapshot::lighting(session.participants.get(id).expect("participant exists").lighting),
+        "runtime":player["runtime"],"character":session_snapshot::character(session.participants.get(id).expect("participant exists")),
+        "lighting":session_snapshot::lighting(&session.participants.get(id).expect("participant exists").lighting),
         "combatRng":player_snapshot::rng_snapshot(&session.combat_rng),
         "secondary":secondary_state::state_snapshot(&session.secondary),"primary":primary_snapshot(session),
         "barrier":barrier,"run":session_snapshot::run(&session.run),

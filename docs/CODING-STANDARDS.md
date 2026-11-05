@@ -258,6 +258,59 @@ operations, with supporting implementation and tests close enough to follow.
 Use the existing `hub.rs` with `hub/` children pattern when responsibilities need
 separate files. File layout should help a reader find the public contract.
 
+## Simple Rust
+
+Write Rust that a contributor who knows the basics can follow without studying
+advanced language features. When two versions work, choose the one with fewer
+concepts on the screen, even if it is a few lines longer.
+
+- **Concrete types first.** Add a trait or a generic parameter only when two real
+  types need the same behavior. A function that takes `&EnemyActor` is easier to
+  read and to jump to than one that takes `&impl EnemyActorRead`.
+- **No `Deref` on game types.** `Deref` is for smart pointers. Reach a field
+  through its owner (`actor.brain.state`) or flatten the struct instead of making
+  one type pretend to be another.
+- **Plain collections for game objects.** Store a population as `Vec<T>` in
+  admission order, a single optional object as `Option<T>`, and a keyed
+  population as `BTreeMap<K, T>` so iteration order is deterministic. Removing
+  from the middle of a `Vec` keeps the survivors in order, which painter
+  registration, contact selection and random-number draws rely on.
+- **Few lifetimes in interfaces.** If a public type needs a lifetime parameter to
+  hand out views of stored data, return `&T` or `&mut T` to the stored value, or
+  use an index or ID.
+- **Loops for work, chains for queries.** A short iterator chain that filters,
+  maps or sums is fine. Use a `for` loop when the body changes state, can fail or
+  takes more than a line.
+- **Call functions directly.** Avoid passing closures through several layers to
+  customize behavior; give each case a named function.
+- **No macros in game logic.** Derives and test helpers are fine.
+- **Unknown data is an error at the boundary.** Content, saves and network input
+  convert integer codes into enums when they load. Simulation code should not
+  `panic!` on a value that a file could contain.
+- **Names say what a thing is in the game**, not which port or file it came from.
+  Avoid prefixes such as `native_`, `kernel_` or `website_` on new items.
+- **Comments never refer to the old client.** "Matches Pixi" or "from
+  `native-crow.ts`" means nothing once that code is gone. State the rule and,
+  when it needs a source, cite the original game.
+
+For example, a view type that borrows two separately stored halves of an enemy
+needs a lifetime, a trait and `Deref` before callers can read one field:
+
+```rust
+pub struct EnemyActorRef<'a> {
+    pub body: &'a EnemyBody,
+    pub brain: &'a EnemyBrain,
+}
+impl Deref for EnemyActorRef<'_> { /* ... */ }
+fn is_alive(actor: &impl EnemyActorRead) -> bool { /* ... */ }
+```
+
+Storing whole enemies in a `Vec<EnemyActor>` removes all three:
+
+```rust
+fn is_alive(actor: &EnemyActor) -> bool { /* ... */ }
+```
+
 ## Worked example: the teacher's frame
 
 The [teacher frame sampler](../crates/sim/src/hub/teacher.rs) brings these choices

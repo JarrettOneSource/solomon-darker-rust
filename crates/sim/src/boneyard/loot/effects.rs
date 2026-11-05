@@ -13,12 +13,12 @@ use crate::float::fround;
 use crate::loot::{NativeLootDropKind, NativeLootPlacement};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
-use super::{BoneyardGoodieState, BoneyardLootStore, LootActorRead};
+use super::{BoneyardGoodieState, BoneyardLootActor, BoneyardLootStore};
 
 impl BoneyardLootStore {
     pub(super) fn spawn_pickup_effects(
         &mut self,
-        actor: &impl LootActorRead,
+        actor: &BoneyardLootActor,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
     ) {

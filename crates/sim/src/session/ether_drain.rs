@@ -1,21 +1,18 @@
 //! Source EtherDrain world projections and accepted forces from
 //! `core-server/native-ether-drain-world.ts` and `boneyard-world-placement.ts`.
 
-use crate::spells::transient_storage::{PrimaryTransientRef, WeldHailChildRef, WeldWorldRef};
-
-use crate::spells::transient_storage::{PrimaryTransientMut, WeldHailChildMut, WeldWorldMut};
+use crate::spells::model::PrimarySpellTransient;
+use crate::spells::weld::{NativeWeldHailChildActorState, NativeWeldWorldActor};
 
 use super::*;
 use crate::Vec2;
 use crate::boneyard::BoneyardWorld;
 use crate::combat::PlayerLifeState;
-use crate::enemies::model::EnemyActorRead;
 use crate::enemies::model::{EnemyDeathEffectKind, EnemyEventKind, EnemyLifeState};
 use crate::float::fround;
 use crate::loot::NativeLootDropKind;
 use crate::secondary::ether_drain::*;
 use crate::secondary::{NativeSecondaryActorKind as Kind, NativeSecondarySimulationState};
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 use crate::spells::boneyard::boneyard_native_secondary_targets;
 
 /// Source callbacks see the accepted pre-secondary store. This copied query
@@ -86,7 +83,7 @@ impl SessionEtherDrainSnapshot {
             });
         }
         for actor in session.secondary.actors.iter() {
-            if actor.kind == Kind::Golem && actor.world_key == key && actor.golem().is_some() {
+            if actor.kind == Kind::Golem && actor.world_key == key && actor.golem.is_some() {
                 targets.push(NativeEtherDrainTarget {
                     activation_delay_ticks: 0,
                     force_factor: 0.25,
@@ -146,13 +143,13 @@ fn capture_world_animations(
         let reference =
             NativeEtherDrainWorldAnimationRef::PrimaryTransient { id: effect.common().id };
         match effect {
-            PrimaryTransientRef::WaterHail(actor) => {
+            PrimarySpellTransient::WaterHail(actor) => {
                 push(actor.saved_bounce_velocity, actor.position, reference)
             }
-            PrimaryTransientRef::Weld(WeldWorldRef::HailChild(
-                WeldHailChildRef::TerrainBouncer(actor),
+            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
+                NativeWeldHailChildActorState::TerrainBouncer(actor),
             )) => push(actor.bounce_velocity, actor.position, reference),
-            PrimaryTransientRef::Weld(WeldWorldRef::BoulderDebris(actor)) => {
+            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(actor)) => {
                 push(actor.debris.bounce_velocity, actor.position, reference)
             }
             _ => {}
@@ -163,7 +160,7 @@ fn capture_world_animations(
             continue;
         }
         if actor.kind == Kind::GolemDeath
-            && let Some(death) = actor.golem_death()
+            && let Some(death) = actor.golem_death.as_ref()
         {
             for (index, fragment) in death.fragments.iter().enumerate() {
                 if let Some(fragment) = fragment {
@@ -226,12 +223,12 @@ impl GameSession {
                     })
                 }
                 NativeEtherDrainWorldAnimationRef::GolemFragment { id, index } => {
-                    if let Some(mut actor) = self
+                    if let Some(actor) = self
                         .secondary
                         .actors
                         .iter_mut()
                         .find(|actor| actor.id == id && actor.kind == Kind::GolemDeath)
-                        && let Some(death) = actor.golem_death_mut()
+                        && let Some(death) = actor.golem_death.as_mut()
                         && let Some(fragment) = death.fragments.get_mut(index)
                     {
                         if contact.consume {
@@ -247,21 +244,23 @@ impl GameSession {
                             return true;
                         }
                         match effect {
-                            PrimaryTransientMut::WaterHail(actor) => {
+                            PrimarySpellTransient::WaterHail(actor) => {
                                 if contact.consume {
                                     return false;
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimaryTransientMut::Weld(WeldWorldMut::HailChild(
-                                WeldHailChildMut::TerrainBouncer(actor),
+                            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
+                                NativeWeldHailChildActorState::TerrainBouncer(actor),
                             )) => {
                                 if contact.consume {
                                     return false;
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimaryTransientMut::Weld(WeldWorldMut::BoulderDebris(actor)) => {
+                            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(
+                                actor,
+                            )) => {
                                 if contact.consume {
                                     return false;
                                 }
@@ -380,10 +379,10 @@ impl GameSession {
             ordered_participants_mut(&mut self.participants, &self.participant_order)
                 .into_iter()
                 .map(|participant| super::player_contacts::PlayerContactPlayer {
-                    player_id: participant.id,
-                    player: participant.player,
-                    wizard: participant.wizard,
-                    lighting: participant.lighting,
+                    player_id: &participant.id,
+                    player: &mut participant.player,
+                    wizard: &mut participant.wizard,
+                    lighting: &mut participant.lighting,
                 })
                 .collect();
         let world = self.boneyard.as_mut().unwrap();
@@ -436,11 +435,7 @@ impl GameSession {
                 continue;
             }
             let enemies = &self.boneyard.as_ref().unwrap().enemies;
-            let victim = enemies
-                .actors
-                .iter()
-                .find(|actor| actor.id as u64 == id)
-                .map(|actor| actor.snapshot());
+            let victim = enemies.actors.iter().find(|actor| actor.id as u64 == id).cloned();
             let position = victim.as_ref().map(|actor| actor.position).or_else(|| {
                 enemies
                     .maggots

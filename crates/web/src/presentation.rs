@@ -51,7 +51,7 @@ impl PresentationClocks {
         for transient in session.spells.transients.iter() {
             let common = transient.common();
             clocks.primary.insert(common.id, common.age_ticks as f64);
-            if let solomon_sim::spells::model::PrimaryTransientRef::FireGoodImp(imp) = transient
+            if let solomon_sim::spells::model::PrimarySpellTransient::FireGoodImp(imp) = transient
                 && let Some(age) = imp.contact_age_ticks
             {
                 clocks.primary_contact.insert(common.id, age as f64);

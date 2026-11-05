@@ -23,7 +23,7 @@ use solomon_sim::boneyard::world_light::{
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::crow_blindness::native_crow_blindness_frame;
 use solomon_sim::enemies::EnemyToken;
-use solomon_sim::enemies::model::{EnemyActorRef, EnemyEvent};
+use solomon_sim::enemies::model::{EnemyActor, EnemyEvent};
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHitKind;
 use solomon_sim::enemies::underlay::native_enemy_directional_shadow_family;
 use solomon_sim::hub::painter::PainterLayer;
@@ -90,7 +90,7 @@ pub struct BattleFrame<'a> {
     pub players: &'a [BattlePlayer<'a>],
     pub spells: &'a SpellState,
     pub secondary: &'a NativeSecondarySimulationState,
-    pub mod_effects: &'a solomon_sim::ComponentEntities<GameSimulationModEffect>,
+    pub mod_effects: &'a [GameSimulationModEffect],
     pub mod_catalog: &'a [ModConsumableCatalogEntry],
     pub camera: &'a Camera,
     pub viewport: Vec2,
@@ -456,7 +456,7 @@ impl BattleViews {
             &effect_players,
             &world.death_weapons,
         );
-        let actor_tint = |actor: &EnemyActorRef<'_>| {
+        let actor_tint = |actor: &EnemyActor| {
             native_secondary_target_material_tint(
                 tint_at(actor.position),
                 native_secondary_target_effect(
@@ -466,7 +466,7 @@ impl BattleViews {
                 ),
             )
         };
-        let actor_shadows = |actor: &EnemyActorRef<'_>| {
+        let actor_shadows = |actor: &EnemyActor| {
             let enabled = native_enemy_directional_shadow_family(actor.config.enemy_token)
                 && (frame.settings.complex_shadows
                     || actor.config.enemy_token == EnemyToken::Heartmonger);
@@ -656,7 +656,7 @@ impl BattleViews {
                 if effect.common().world_key != world_key {
                     return None;
                 }
-                let solomon_sim::spells::model::PrimaryTransientRef::Staff(staff) = effect else {
+                let solomon_sim::spells::model::PrimarySpellTransient::Staff(staff) = effect else {
                     return None;
                 };
                 SecondaryView::staff_painter(staff).map(|painter| {
@@ -681,7 +681,7 @@ impl BattleViews {
         };
         let displacement = if frame.settings.zoom_effects {
             native_secondary_world_shake(
-                frame.secondary.actors.iter(),
+                &frame.secondary.actors,
                 &world_key,
                 frame.screen_feedback.camera_displacement,
             )
@@ -833,8 +833,8 @@ impl BattleViews {
                                 overlay_effect_phase: participant.overlay_effect_phase,
                                 staff_action_pose: frame.spells.transients.iter().find_map(
                                     |effect| match effect {
-                                        solomon_sim::spells::model::PrimaryTransientRef::Staff(
-                                            solomon_sim::spells::staff::StaffTransientRef::Action(action),
+                                        solomon_sim::spells::model::PrimarySpellTransient::Staff(
+                                            solomon_sim::spells::staff::NativePlayerStaffTransient::Action(action),
                                         ) if action.common().owner_id == participant.id => {
                                             Some(solomon_sim::spells::staff::native_player_staff_action_pose(action))
                                         }
@@ -881,7 +881,7 @@ impl BattleViews {
                             self.player_effects.draw(renderer, camera, *index, spells, tint)
                         }
                         BattlePainter::Staff(index) => {
-                            let solomon_sim::spells::model::PrimaryTransientRef::Staff(staff) =
+                            let solomon_sim::spells::model::PrimarySpellTransient::Staff(staff) =
                                 frame.spells.transients.get(*index).expect("staff painter refers to a live effect")
                             else {
                                 unreachable!("prepared staff painter")

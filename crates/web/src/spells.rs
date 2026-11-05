@@ -30,9 +30,10 @@ use solomon_sim::spells::model::*;
 use solomon_sim::spells::presentation::*;
 use solomon_sim::spells::water::*;
 use solomon_sim::spells::weld::{
-    NativeFlameLashBounds, NativeWeldLineDraw, NativeWeldMeshUvSpace, NativeWeldPresentationState,
-    NativeWeldSpriteDraw, WeldPersistentRef, WeldWorldRef, build_native_flame_lash_split_bands,
-    native_flame_region_clipped_band, native_weld_visual_plan_at_age,
+    NativeFlameLashBounds, NativeWeldLineDraw, NativeWeldMeshUvSpace,
+    NativeWeldPersistentActorState, NativeWeldPresentationState, NativeWeldSpriteDraw,
+    NativeWeldWorldActor, build_native_flame_lash_split_bands, native_flame_region_clipped_band,
+    native_weld_visual_plan_at_age,
 };
 
 use crate::courtyard::Camera;
@@ -148,14 +149,14 @@ impl SpellView {
         world_key: &str,
         presentation_frame: u64,
         point_gain: &dyn Fn(Vec2) -> f64,
-        puppet_hits: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
+        puppet_hits: &[EnemyPuppetHit],
         clocks: Option<&PresentationClocks>,
         enhanced_effects: bool,
         region_view: Option<NativeFlameLashBounds>,
     ) {
         self.fire_explosion_point_gains.retain(|id, _| {
             spells.transients.iter().any(|effect| {
-                matches!(effect, PrimaryTransientRef::FireExplosion(spell) if spell.common.id == *id && spell.common.world_key == world_key)
+                matches!(effect, PrimarySpellTransient::FireExplosion(spell) if spell.common.id == *id && spell.common.world_key == world_key)
             })
         });
         self.roots.clear();
@@ -185,11 +186,11 @@ impl SpellView {
             let first_root = self.roots.len();
             self.admit_view(common.id);
             let plan = match spell {
-                PrimaryProjectileRef::Earth(spell) => {
+                PrimarySpellProjectile::Earth(spell) => {
                     // EarthBoulderView uses actor age for its cosmetic program too.
                     earth_boulder_sprite_plan_at_age(spell, age, age)
                 }
-                PrimaryProjectileRef::Ether(spell) => {
+                PrimarySpellProjectile::Ether(spell) => {
                     let mut plan = ether_primary_flight_plan(
                         common.id,
                         age,
@@ -202,14 +203,14 @@ impl SpellView {
                     plan.world_y = common.position.y;
                     plan
                 }
-                PrimaryProjectileRef::Fire(spell) => native_fireball_plan(
+                PrimarySpellProjectile::Fire(spell) => native_fireball_plan(
                     NativeFireballPresentationState {
                         age_ticks: age,
                         ..NativeFireballPresentationState::from(spell)
                     },
                     presentation_frame,
                 ),
-                PrimaryProjectileRef::Weld(spell) => {
+                PrimarySpellProjectile::Weld(spell) => {
                     let target_id = format!("primary:{}", common.id);
                     let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
                     self.append_weld(
@@ -227,7 +228,7 @@ impl SpellView {
                 }
             };
             self.append_plan(plan, common.registration);
-            if matches!(spell, PrimaryProjectileRef::Earth(_)) {
+            if matches!(spell, PrimarySpellProjectile::Earth(_)) {
                 self.roots
                     .last_mut()
                     .expect("Earth Boulder owns a world root")
@@ -249,8 +250,8 @@ impl SpellView {
             self.admit_view(common.id);
             match effect {
                 // Staff views share SecondaryView's stock atlas.
-                PrimaryTransientRef::Staff(_) => {}
-                PrimaryTransientRef::AirHurricane(spell) => {
+                PrimarySpellTransient::Staff(_) => {}
+                PrimarySpellTransient::AirHurricane(spell) => {
                     let mut plan = plan_at(spell.position);
                     for draw in native_hurricane_visual_plan(spell) {
                         let core = draw.role == NativeHurricaneSpriteRole::Core;
@@ -272,7 +273,7 @@ impl SpellView {
                         .painter
                         .overlay_owner_id = Some(common.owner_id.clone());
                 }
-                PrimaryTransientRef::WaterAura(spell) => {
+                PrimarySpellTransient::WaterAura(spell) => {
                     let draw = native_water_aura_visual_plan(spell);
                     let mut plan = plan_at(spell.origin);
                     plan.draws.push(NativeSpellSprite {
@@ -284,7 +285,7 @@ impl SpellView {
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
-                PrimaryTransientRef::WaterHail(spell) => {
+                PrimarySpellTransient::WaterHail(spell) => {
                     let draw = native_hail_visual_plan(spell);
                     let mut plan = plan_at(spell.position);
                     plan.draws.push(NativeSpellSprite {
@@ -295,16 +296,16 @@ impl SpellView {
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
-                PrimaryTransientRef::Weld(spell) => {
+                PrimarySpellTransient::Weld(spell) => {
                     let target_id = format!("primary:{}", common.id);
                     let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
                     // The pinned JS split spreads the parent's painter list onto
                     // every Boulder piece, which its strict planner rejects.
                     // Each piece already has its own actual Actor registration.
                     let registration = match spell {
-                        WeldWorldRef::Persistent(WeldPersistentRef::EtherealBoulder(_)) => {
-                            common.light_registration.expect("Boulder owns an Actor registration")
-                        }
+                        NativeWeldWorldActor::Persistent(
+                            NativeWeldPersistentActorState::EtherealBoulder(_),
+                        ) => common.light_registration.expect("Boulder owns an Actor registration"),
                         _ => common.painter_registrations[0],
                     };
                     self.append_weld(
@@ -312,17 +313,17 @@ impl SpellView {
                         presentation_frame,
                         age,
                         registration,
-                        matches!(spell, WeldWorldRef::Channel(_)),
+                        matches!(spell, NativeWeldWorldActor::Channel(_)),
                         puppet_hit,
                         enhanced_effects,
                         region_view,
                     );
                 }
-                PrimaryTransientRef::Harden(effect) => self.append_plan(
+                PrimarySpellTransient::Harden(effect) => self.append_plan(
                     native_harden_effect_plan(effect),
                     common.painter_registrations[0],
                 ),
-                PrimaryTransientRef::EarthBoulderBit(spell) => {
+                PrimarySpellTransient::EarthBoulderBit(spell) => {
                     let debris = &spell.debris.common;
                     let position = Vec2::new(
                         spell.position.x + debris.position.x,
@@ -350,9 +351,9 @@ impl SpellView {
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
-                PrimaryTransientRef::Air(spell) => self.append_air(spell, enhanced_effects),
-                PrimaryTransientRef::Water(spell) => self.append_water(spell),
-                PrimaryTransientRef::EarthImpact(spell) => {
+                PrimarySpellTransient::Air(spell) => self.append_air(spell, enhanced_effects),
+                PrimarySpellTransient::Water(spell) => self.append_water(spell),
+                PrimarySpellTransient::EarthImpact(spell) => {
                     let seed = EarthImpactSeed {
                         birth_tick: spell.birth_tick,
                         charge: spell.charge,
@@ -380,7 +381,7 @@ impl SpellView {
                         self.append_plan(plan, common.painter_registrations[fragment.index]);
                     }
                 }
-                PrimaryTransientRef::EarthCalledRock(spell) => {
+                PrimarySpellTransient::EarthCalledRock(spell) => {
                     let mut plan = plan_at(spell.position);
                     if spell.height < 0.0 {
                         plan.draws.push(NativeSpellSprite::new(
@@ -395,13 +396,13 @@ impl SpellView {
                     });
                     self.append_plan(plan, common.painter_registrations[0]);
                 }
-                PrimaryTransientRef::EtherImpact(spell) => self
+                PrimarySpellTransient::EtherImpact(spell) => self
                     .append_plan(ether_primary_impact_plan(spell), common.painter_registrations[0]),
-                PrimaryTransientRef::EtherPierceStreak(spell) => self.append_plan(
+                PrimarySpellTransient::EtherPierceStreak(spell) => self.append_plan(
                     ether_primary_pierce_streak_plan(spell),
                     common.painter_registrations[0],
                 ),
-                PrimaryTransientRef::EtherBlast(spell) => {
+                PrimarySpellTransient::EtherBlast(spell) => {
                     let particles = create_native_ether_blast_particle_program(
                         &mut spell.presentation_rng.clone(),
                     );
@@ -426,15 +427,15 @@ impl SpellView {
                         self.append_plan(plan, common.painter_registrations[index]);
                     }
                 }
-                PrimaryTransientRef::FireParticle(spell) => self.append_plan(
+                PrimarySpellTransient::FireParticle(spell) => self.append_plan(
                     native_fire_particle_plan_at_age(spell, age),
                     common.painter_registrations[0],
                 ),
-                PrimaryTransientRef::FireImpact(spell) => self.append_plan(
+                PrimarySpellTransient::FireImpact(spell) => self.append_plan(
                     native_fire_impact_plan_at_age(spell, age),
                     common.painter_registrations[0],
                 ),
-                PrimaryTransientRef::FireExplosion(spell) => {
+                PrimarySpellTransient::FireExplosion(spell) => {
                     let gain = *self
                         .fire_explosion_point_gains
                         .entry(common.id)
@@ -450,7 +451,7 @@ impl SpellView {
                         common.painter_registrations[0],
                     );
                 }
-                PrimaryTransientRef::FireEmber(spell) => {
+                PrimarySpellTransient::FireEmber(spell) => {
                     let root_index = self.roots.len();
                     self.append_plan(
                         native_fire_ember_plan(
@@ -474,9 +475,9 @@ impl SpellView {
                         );
                     }
                 }
-                PrimaryTransientRef::FireGoodImp(spell) => self
+                PrimarySpellTransient::FireGoodImp(spell) => self
                     .append_plan(native_fire_good_imp_plan(spell), common.painter_registrations[0]),
-                PrimaryTransientRef::FirePatch(spell) => self.append_plan(
+                PrimarySpellTransient::FirePatch(spell) => self.append_plan(
                     native_fire_patch_plan(spell, presentation_frame),
                     common.painter_registrations[0],
                 ),

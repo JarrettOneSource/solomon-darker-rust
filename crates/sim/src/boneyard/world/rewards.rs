@@ -1,7 +1,6 @@
 //! Ordered terminal loot composition from `boneyard-world.ts:539–621`.
 
 use crate::Vec2;
-use crate::boneyard::loot::LootActorRead;
 use crate::boneyard::waves::programs::BossKind;
 use crate::economy::HubInventoryItem;
 use crate::enemies::EnemyToken;
@@ -80,7 +79,7 @@ impl BoneyardWorld {
             };
             let world_has_health_potion_sack = self.loot.actors.iter().any(|actor| {
                 actor.kind == NativeLootDropKind::Sack
-                    && actor.reward().item.as_ref().is_some_and(|item| {
+                    && actor.item.as_ref().is_some_and(|item| {
                         item.native_type_id == 7001 && item.native_subtype == Some(0)
                     })
             });

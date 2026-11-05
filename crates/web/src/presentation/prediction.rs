@@ -36,7 +36,7 @@ impl LocalHubPrediction {
         received_at_ms: f64,
         snapshot_rate: u32,
     ) -> Option<Self> {
-        let participant = session.participants.get(id)?.snapshot();
+        let participant = session.participants.get(id)?.clone();
         let received_region = participant.wizard.region;
         Some(Self {
             id: id.to_owned(),

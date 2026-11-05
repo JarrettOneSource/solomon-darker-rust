@@ -5,10 +5,10 @@ use super::model::*;
 use super::sample::*;
 use crate::Vec2;
 use crate::enemies::EnemyToken;
-use crate::enemies::model::EnemyActorRead;
+use crate::enemies::model::EnemyActor;
 
 pub(super) fn imp(
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     facing: usize,
     sample: &NativeEnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
@@ -39,7 +39,7 @@ pub(super) fn imp(
 }
 
 pub(super) fn portal(
-    _actor: &impl EnemyActorRead,
+    _actor: &EnemyActor,
     sample: &NativeEnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
     if sample.alpha <= 0.0 {
@@ -73,7 +73,7 @@ pub(super) fn portal(
     EnemyFamilyPresentation::body(layers)
 }
 
-pub(super) fn wraith(actor: &impl EnemyActorRead, facing: usize) -> EnemyFamilyPresentation {
+pub(super) fn wraith(actor: &EnemyActor, facing: usize) -> EnemyFamilyPresentation {
     EnemyFamilyPresentation::body(vec![EnemySpriteLayer {
         blend: EnemyArtBlend::Add,
         offset: Vec2::new(0.0, 15.0 / actor.config.scale),
@@ -83,7 +83,7 @@ pub(super) fn wraith(actor: &impl EnemyActorRead, facing: usize) -> EnemyFamilyP
 }
 
 pub(super) fn coffin(
-    _actor: &impl EnemyActorRead,
+    _actor: &EnemyActor,
     sample: &NativeEnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
     let state = match sample.coffin_state {
@@ -104,7 +104,7 @@ pub(super) fn coffin(
 }
 
 pub(super) fn spider(
-    _actor: &impl EnemyActorRead,
+    _actor: &EnemyActor,
     facing: usize,
     sample: &NativeEnemyPresentationInput,
 ) -> EnemyFamilyPresentation {

@@ -4,7 +4,7 @@
 use super::effects::{DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec};
 use super::model::{EnemyDeathEffect, EnemyDeathEffectKind, EnemyEffectAtlas, EnemyEffectBlend};
 use super::world::EnemyWorld;
-use crate::enemies::model::EnemyActorRead;
+use crate::enemies::model::EnemyActor;
 use crate::float::{self, fround};
 use crate::painter::WorldPainterOrder;
 use crate::spells::earth_debris::{NativeBoulderDebrisMotion, step_native_boulder_debris_motion};
@@ -80,7 +80,7 @@ pub fn create_native_coffin_emergence(
 
 pub(super) fn spawn_coffin_emergence(
     world: &mut EnemyWorld,
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     tick: u64,
     enhanced: bool,
     order: &mut WorldPainterOrder,

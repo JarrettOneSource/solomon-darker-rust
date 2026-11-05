@@ -37,7 +37,7 @@ impl BoneyardWorld {
         }
         let mut safety_bodies = Vec::new();
         for actor in self.enemies.actors.iter() {
-            safety_bodies.push((actor.position, boneyard_enemy_collision_radius(&actor)));
+            safety_bodies.push((actor.position, boneyard_enemy_collision_radius(actor)));
         }
         for maggot in self.enemies.maggots.iter() {
             safety_bodies.push((maggot.position, maggot.collision_radius));

@@ -2,7 +2,6 @@
 //! Reflections and adjusted status rows are returned for the session's later
 //! source phases. Immediate resources, facing, web ownership and births live here.
 
-use crate::secondary::SecondaryActorWrite;
 use std::collections::BTreeMap;
 
 use super::PlayerLightingState;
@@ -47,7 +46,7 @@ use crate::secondary::{
 use crate::spells::boneyard::boneyard_native_secondary_targets;
 use crate::{HubWizard, Vec2};
 
-/// Mutable participant components borrowed from the session's canonical rows.
+/// The parts of one participant that player contacts change, borrowed from the session.
 pub struct PlayerContactPlayer<'a> {
     pub player_id: &'a str,
     pub player: &'a mut PlayerState,
@@ -162,17 +161,16 @@ fn apply_golem_contact(
     id: u64,
     result: &mut PlayerContactResult,
 ) {
-    let Some(index) = context
+    let Some(actor) = context
         .secondary
         .actors
-        .iter()
-        .position(|actor| actor.id == id && actor.kind == NativeSecondaryActorKind::Golem)
+        .iter_mut()
+        .find(|actor| actor.id == id && actor.kind == NativeSecondaryActorKind::Golem)
     else {
         return;
     };
-    let mut actor = context.secondary.actors.get_mut(index).expect("Golem index is live");
     if damage.tragic_circle
-        && let Some(golem) = actor.golem_mut()
+        && let Some(golem) = actor.golem.as_mut()
     {
         golem.circle_slow_ticks = 20;
         return;
@@ -630,7 +628,7 @@ fn player_contact_source(
     if let Some(actor) = world.enemies.actors.iter().find(|actor| actor.id == damage.actor_id) {
         return Some(EnemyPlayerDamageSource {
             position: actor.position,
-            collision_radius: boneyard_enemy_collision_radius(&actor),
+            collision_radius: boneyard_enemy_collision_radius(actor),
             reflectable_actor_id: Some(actor.id),
         });
     }

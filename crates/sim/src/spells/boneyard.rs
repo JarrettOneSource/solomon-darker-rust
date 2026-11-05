@@ -10,7 +10,7 @@ use super::contacts::{
     BoneyardSpecialDeathResult, BoneyardSpellCombatContext, BoneyardSpellCombatResult,
     BoneyardSpellHitKind, resolve_boneyard_spell_combat,
 };
-use super::model::{PrimaryProjectileRef, PrimarySpellTickResult, SpellState};
+use super::model::{PrimarySpellProjectile, PrimarySpellTickResult, SpellState};
 use super::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
     native_primary_view_ray_endpoint,
@@ -30,7 +30,7 @@ use crate::boneyard::{
 };
 use crate::combat::PlayerLifeState;
 use crate::economy::EquipmentType;
-use crate::enemies::model::{EnemyActorRef, EnemyLifeState, MaggotRef};
+use crate::enemies::model::{EnemyActor, EnemyLifeState, EnemyMaggotActor};
 use crate::enemies::path::EnemyNavigation;
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::enemies::world::EnemyWorld;
@@ -404,8 +404,8 @@ pub fn boneyard_native_secondary_targets(
     targets
 }
 
-fn secondary_actor_target(actor: EnemyActorRef<'_>) -> Option<NativeSecondaryTarget> {
-    if actor.life_state != EnemyLifeState::Alive || boneyard_enemy_actor_flags(&actor) & 0x2 == 0 {
+fn secondary_actor_target(actor: &EnemyActor) -> Option<NativeSecondaryTarget> {
+    if actor.life_state != EnemyLifeState::Alive || boneyard_enemy_actor_flags(actor) & 0x2 == 0 {
         return None;
     }
     Some(NativeSecondaryTarget {
@@ -418,13 +418,13 @@ fn secondary_actor_target(actor: EnemyActorRef<'_>) -> Option<NativeSecondaryTar
         native_flags: Some(0x2),
         registration_order: Some(actor.native_registration_order),
         position: actor.position,
-        radius: boneyard_enemy_collision_radius(&actor),
+        radius: boneyard_enemy_collision_radius(actor),
         scale: actor.config.scale,
         shield_health: actor.shield_health,
     })
 }
 
-fn secondary_maggot_target(maggot: MaggotRef<'_>) -> Option<NativeSecondaryTarget> {
+fn secondary_maggot_target(maggot: &EnemyMaggotActor) -> Option<NativeSecondaryTarget> {
     if maggot.life_state != EnemyLifeState::Alive || !maggot.combat_active {
         return None;
     }
@@ -570,7 +570,7 @@ impl BoneyardPrimaryGeometry<'_> {
         }
         let ignored = if matches!(
             spell,
-            PrimarySpellTraversalActor::Projectile(PrimaryProjectileRef::Earth(_))
+            PrimarySpellTraversalActor::Projectile(PrimarySpellProjectile::Earth(_))
                 | PrimarySpellTraversalActor::EtherealBoulder(_)
         ) {
             self.gravestones

@@ -15,6 +15,8 @@ content, and editing.
   protocol, or dependency contract.
 - [Glossary](CONTEXT.md) for game terms.
 - [Work queue](docs/WORK-QUEUE.md) for open work.
+- [Standalone cutover](docs/CUTOVER.md) for retiring the PixiJS client: the
+  decisions, the hitlist and what must hold before Rust moves to `/game`.
 
 Use current Rust behavior and supported player data as the compatibility baseline.
 The original C++ Solomon Dark 0.72.5 executable, assets, recordings, and recovered

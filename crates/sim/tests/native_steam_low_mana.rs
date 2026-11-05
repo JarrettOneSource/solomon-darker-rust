@@ -175,10 +175,10 @@ fn steam_cast_rate_scales_funded_damage_and_debit_but_not_weak_strength() {
                     &mut rng,
                     None,
                 );
-                use solomon_sim::spells::model::PrimaryTransientRef;
-                use solomon_sim::spells::transient_storage::WeldWorldRef;
+                use solomon_sim::spells::model::PrimarySpellTransient;
+                use solomon_sim::spells::weld::NativeWeldWorldActor;
                 let particle = state.transients.iter().find_map(|actor| match actor {
-                    PrimaryTransientRef::Weld(WeldWorldRef::Steam(actor))
+                    PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(actor))
                         if actor.common.birth_tick == tick =>
                     {
                         Some(actor)

@@ -2,7 +2,7 @@
 //! constructors own their random programs; this phase owns only IDs, queue order
 //! and the player's shared cast clock.
 
-use crate::spells::transient_storage::{PrimaryTransientRef, WeldPersistentRef, WeldWorldRef};
+use crate::spells::weld::{NativeWeldPersistentActorState, NativeWeldWorldActor};
 
 use super::*;
 use crate::float::fround;
@@ -185,7 +185,8 @@ impl SpellState {
                 meteor_program = Some((center, damage));
             }
             let current = self.transients.iter().position(|effect| {
-                let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(actor)) = effect else {
+                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect
+                else {
                     return false;
                 };
                 actor.common().owner.owner_id == context.owner_id
@@ -194,16 +195,13 @@ impl SpellState {
             });
             let mut update = NativeWeldPersistentUpdate::default();
             let actor = if let Some(index) = current {
-                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(mut actor)) = self
-                    .transients
-                    .get(index)
-                    .expect("selected persistent spell remains live")
-                    .snapshot()
+                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) =
+                    self.transients.get_mut(index).expect("selected persistent spell remains live")
                 else {
                     unreachable!()
                 };
                 update = update_native_weld_persistent_actor(
-                    &mut actor,
+                    actor,
                     origin,
                     direction,
                     NativeWeldPersistentUpdateOptions {
@@ -213,7 +211,7 @@ impl SpellState {
                     },
                     rng,
                 );
-                actor
+                actor.clone()
             } else {
                 let actor = create_native_weld_persistent_actor(
                     NativeWeldActorBirth { id: self.next_id, ..birth },
@@ -224,20 +222,11 @@ impl SpellState {
                         Some(fround(1.5 - rng.draw_scaled_float(0.5_f32 as f64, false)));
                 }
                 self.next_id += 1;
-                actor
-            };
-            if let Some(index) = current {
-                self.transients
-                    .get_mut(index)
-                    .expect("selected persistent spell remains live")
-                    .replace(PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                        actor.clone(),
-                    )));
-            } else {
                 self.transients.push(PrimarySpellTransient::Weld(
                     NativeWeldWorldActor::Persistent(actor.clone()),
                 ));
-            }
+                actor
+            };
             let common = actor.common();
             let child_birth = NativeWeldActorBirth {
                 build_id: common.build_id,
@@ -348,8 +337,8 @@ impl SpellState {
             .transients
             .iter()
             .filter_map(|effect| {
-                if let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(
-                    WeldPersistentRef::Hailstones(hail),
+                if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
+                    NativeWeldPersistentActorState::Hailstones(hail),
                 )) = effect
                     && hail.common.owner.owner_id == owner_id
                     && hail.phase == crate::spells::model::PrimarySpellProjectilePhase::Held
@@ -362,29 +351,24 @@ impl SpellState {
             .collect();
         let mut population = std::mem::take(&mut self.transients);
         population.advance(|effect| {
-            let mut step = crate::ecs::EntityStep {
-                retained: true,
-                births_before: Vec::new(),
-                births_after: Vec::new(),
-            };
-            if let PrimaryTransientRef::Weld(WeldWorldRef::HailRockFade(fade)) = effect.view()
+            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::HailRockFade(fade)) = effect
                 && fade.common.owner.owner_id == owner_id
                 && releasing_hail.iter().any(|(world, birth)| {
                     fade.common.owner.world_key == *world && fade.common.birth_tick >= *birth
                 })
             {
-                step.retained = false;
-                return step;
+                return (false, Vec::new());
             }
-            let PrimaryTransientRef::Weld(WeldWorldRef::Persistent(actor)) = effect.view() else {
-                return step;
+            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect
+            else {
+                return (true, Vec::new());
             };
             if actor.common().owner.owner_id != owner_id || !actor.held() {
-                return step;
+                return (true, Vec::new());
             }
             let parent_id = actor.common().owner.id;
             let release = release_native_weld_persistent_actor(
-                actor.snapshot(),
+                actor.clone(),
                 self.next_id,
                 tick,
                 rng,
@@ -393,24 +377,21 @@ impl SpellState {
             );
             self.next_id = release.next_id;
             let mut actors = release.actors.into_iter();
-            if let Some(parent) = actors.next() {
+            let retained = if let Some(parent) = actors.next() {
                 // Boulder and Hail retain their first released body and its painter identity.
                 assert_eq!(parent.common().owner.id, parent_id);
-                effect
-                    .replace(PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(parent)));
+                *effect = PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(parent));
+                true
             } else {
-                step.retained = false;
-            }
-            step.births_after.extend(
-                actors.map(|actor| {
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor))
-                }),
-            );
+                false
+            };
+            let mut births: Vec<_> = actors
+                .map(|actor| PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)))
+                .collect();
             if let Some(fade) = release.frost_fade {
-                step.births_after
-                    .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::FrostFade(fade)));
+                births.push(PrimarySpellTransient::Weld(NativeWeldWorldActor::FrostFade(fade)));
             }
-            step
+            (retained, births)
         });
         self.transients = population;
     }

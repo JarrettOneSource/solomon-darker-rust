@@ -4,8 +4,7 @@ use super::actor_update::{step_damage_presentation_timers, step_living_actor};
 use super::boss_spell::BossSpellKind;
 use super::config::{EnemyClassification, EnemyFamilyConfig};
 use super::dampen::spawn_dampened_mage_smoke;
-use super::model::{EnemyActorRead, EnemyBrain, EnemyLifeState, EnemyTarget};
-use super::projectiles::EnemyProjectileRead;
+use super::model::{EnemyBrain, EnemyLifeState, EnemyTarget};
 use super::targeting::primary_cell_changed;
 use super::world::{EnemyStepContext, EnemyWorld};
 use super::{EnemySpawnIntent, EnemyToken};
@@ -134,7 +133,7 @@ impl EnemyWorld {
 
         let mut index = 0;
         while index < self.actors.len() {
-            let mut actor = self.actors.get(index).expect("enemy index is live").snapshot();
+            let mut actor = self.actors[index].clone();
             let before = actor.position;
             let authored_config = actor.config.clone();
             if let EnemyBrain::DemonSkull(brain) = &mut actor.brain {
@@ -158,7 +157,7 @@ impl EnemyWorld {
                     self.next_native_cell_binding_order += 1;
                 }
                 actor.config = authored_config;
-                self.actors.replace(index, actor);
+                self.actors[index] = actor;
                 index += 1;
             } else {
                 self.actors.remove(index);
@@ -174,7 +173,7 @@ impl EnemyWorld {
         let maggot_positions: Vec<_> =
             self.maggots.iter().map(|actor| (actor.id, actor.position)).collect();
         self.step_maggots(&context, elapsed, order);
-        for mut actor in self.maggots.iter_mut() {
+        for actor in self.maggots.iter_mut() {
             if maggot_positions.iter().any(|(id, position)| {
                 *id == actor.id && primary_cell_changed(*position, actor.position)
             }) {
@@ -190,7 +189,7 @@ impl EnemyWorld {
         self.step_projectiles(&context, order);
         self.step_silks(&context, order);
         self.step_boss_spells(&mut context, order);
-        for mut projectile in self.projectiles.iter_mut() {
+        for projectile in self.projectiles.iter_mut() {
             let state = projectile.state_mut();
             if projectile_positions.iter().any(|(id, position)| {
                 *id == state.id && primary_cell_changed(*position, state.position)
@@ -230,12 +229,12 @@ impl EnemyWorld {
     }
 
     fn step_paused_timestamps(&mut self, tick: u64) {
-        for mut actor in self.actors.iter_mut() {
+        for actor in self.actors.iter_mut() {
             if actor.hit_feedback.timer != 0.0 {
                 actor.hit_feedback.tick = tick;
             }
         }
-        for mut actor in self.maggots.iter_mut() {
+        for actor in self.maggots.iter_mut() {
             if actor.hit_feedback.timer != 0.0 {
                 actor.hit_feedback.tick = tick;
             }
@@ -246,7 +245,7 @@ impl EnemyWorld {
         for knockback in self.projectile_knockbacks.iter_mut() {
             knockback.last_step_tick = tick;
         }
-        for mut projectile in self.projectiles.iter_mut() {
+        for projectile in self.projectiles.iter_mut() {
             projectile.state_mut().last_step_tick = tick;
         }
         for effect in self.projectile_effects.iter_mut() {

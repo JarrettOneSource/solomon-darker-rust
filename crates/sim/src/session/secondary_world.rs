@@ -8,7 +8,6 @@ use crate::boneyard::{BoneyardBounds, BoneyardWorld};
 use crate::enemies::EnemyToken;
 use crate::enemies::boss_spell::BossSpellKind;
 use crate::enemies::model::EnemyLifeState;
-use crate::enemies::projectiles::EnemyProjectileRead;
 use crate::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::enemies::world::EnemyProjectileWorldQuery;
@@ -34,7 +33,7 @@ impl SessionSecondaryWorld<'_> {
     pub fn collect_teleport_bodies(
         world: Option<&BoneyardWorld>,
         positions: &[Vec2],
-        actors: &crate::secondary::SecondaryActors,
+        actors: &[crate::secondary::NativeSecondaryActorState],
     ) -> Vec<BoneyardNativeTeleportBody> {
         let mut bodies: Vec<_> = positions
             .iter()
@@ -44,10 +43,10 @@ impl SessionSecondaryWorld<'_> {
             return bodies;
         };
         for actor in world.enemies.actors.iter() {
-            if boneyard_enemy_actor_flags(&actor) != 0 {
+            if boneyard_enemy_actor_flags(actor) != 0 {
                 bodies.push(BoneyardNativeTeleportBody {
                     position: actor.position,
-                    radius: boneyard_enemy_collision_radius(&actor),
+                    radius: boneyard_enemy_collision_radius(actor),
                 });
             }
         }

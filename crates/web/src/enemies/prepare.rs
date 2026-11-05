@@ -16,7 +16,6 @@ use solomon_sim::enemies::presentation::{
 use solomon_sim::enemies::projectile_presentation::{
     enemy_projectile_effect_bypasses_world_tint, native_enemy_projectile_effect_plan_with_input,
 };
-use solomon_sim::enemies::projectiles::EnemyProjectileRead;
 use solomon_sim::enemies::projectiles::{
     EnemyProjectileEffectKind, EnemyProjectileKind, EnemyProjectilePayload,
 };
@@ -70,16 +69,16 @@ impl EnemyView {
             let sample = frame.presentation.and_then(|metadata| metadata.actors.get(&actor.id));
             let plan = match sample {
                 Some(sample) => {
-                    native_enemy_actor_plan_with_input(&actor, context, sample, &self.art)
+                    native_enemy_actor_plan_with_input(actor, context, sample, &self.art)
                 }
-                None => native_enemy_actor_plan(&actor, context, &self.art),
+                None => native_enemy_actor_plan(actor, context, &self.art),
             };
             let mut group = EnemyDrawGroup::at(actor.position);
             if let Some(origin) = plan.attack_effect_origin {
                 self.attack_origins.insert(actor.id, origin);
             }
             group.scale = plan.root_scale;
-            group.material_tint = Some((frame.actor_tint)(&actor));
+            group.material_tint = Some((frame.actor_tint)(actor));
             for layer in plan.layers {
                 for segment in &plan.segments {
                     if segment.before_role == layer.role {
@@ -98,10 +97,10 @@ impl EnemyView {
                 None,
                 group,
             );
-            let shadows = (frame.actor_shadows)(&actor);
+            let shadows = (frame.actor_shadows)(actor);
             let layers = match sample {
                 Some(sample) => native_enemy_underlay_plan_with_input(
-                    &actor,
+                    actor,
                     frame.tick,
                     &shadows.records,
                     shadows.light_scalar,
@@ -110,7 +109,7 @@ impl EnemyView {
                     sample,
                 ),
                 None => native_enemy_underlay_plan(
-                    &actor,
+                    actor,
                     frame.tick,
                     &shadows.records,
                     shadows.light_scalar,
@@ -147,9 +146,9 @@ impl EnemyView {
                 maggot.position,
                 match frame.presentation.and_then(|metadata| metadata.maggots.get(&maggot.id)) {
                     Some(sample) => {
-                        native_maggot_plan_with_input(&maggot, sample, frame.complex_lighting)
+                        native_maggot_plan_with_input(maggot, sample, frame.complex_lighting)
                     }
-                    None => native_maggot_plan(&maggot, frame.tick, frame.complex_lighting),
+                    None => native_maggot_plan(maggot, frame.tick, frame.complex_lighting),
                 },
                 true,
             );
@@ -400,9 +399,7 @@ impl EnemyView {
         for spell in world.boss_spells.iter() {
             if matches!(spell.kind, BossSpellKind::Blightning { .. }) {
                 let layers =
-                    solomon_sim::enemies::lightning_presentation::native_dark_lightning_body(
-                        &spell,
-                    );
+                    solomon_sim::enemies::lightning_presentation::native_dark_lightning_body(spell);
                 Self::append_lightning_body(
                     &mut self.roots,
                     spell.owner.position,
@@ -412,11 +409,11 @@ impl EnemyView {
                 );
                 continue;
             }
-            let plan = native_boss_spell_plan(&spell, frame.tick, frame.view_height);
+            let plan = native_boss_spell_plan(spell, frame.tick, frame.view_height);
             let mut group = EnemyDrawGroup::at(spell.owner.position);
             group.draws.extend(plan.gradients.into_iter().map(EnemyDraw::Gradient));
             if let BossSpellKind::MouthBeamSegment { vertices, uv_offset, start_alpha, end_alpha } =
-                *spell.kind
+                spell.kind
             {
                 group.draws.push(EnemyDraw::MouthBeam {
                     vertices,
@@ -429,15 +426,15 @@ impl EnemyView {
                 let rain = self
                     .rain_clouds
                     .entry(spell.owner.id)
-                    .or_insert_with(|| NativeRainCloud::new(&spell, frame.tick));
-                for layer in rain.update(&spell, frame.tick) {
+                    .or_insert_with(|| NativeRainCloud::new(spell, frame.tick));
+                for layer in rain.update(spell, frame.tick) {
                     group.draws.push(EnemyDraw::Sprite { layer, region_tint: false });
                 }
             }
             for layer in plan.layers {
                 group.draws.push(EnemyDraw::Sprite { layer, region_tint: false });
             }
-            let bias = match *spell.kind {
+            let bias = match spell.kind {
                 BossSpellKind::UltraBanish { .. } => 50.0,
                 BossSpellKind::GreenFire { .. } => -25.0,
                 BossSpellKind::HeartmongerFlicker { .. } => -200.0,

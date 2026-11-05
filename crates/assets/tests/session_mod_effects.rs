@@ -68,12 +68,7 @@ fn effects_follow_source_tick_and_run_boundaries_and_survive_native_checkpoints(
             other => panic!("unknown source operation {other}"),
         }
         assert_eq!(state.ticks, row.tick, "{}", row.operation);
-        assert_eq!(
-            state.mod_effects.iter().cloned().collect::<Vec<_>>(),
-            row.effects,
-            "{}",
-            row.operation
-        );
+        assert_eq!(state.mod_effects, row.effects, "{}", row.operation);
         assert_eq!(state.next_mod_consumable_use_id, row.next_use_id, "{}", row.operation);
         {
             let bytes = serde_json::to_vec(&state.snapshot()).unwrap();

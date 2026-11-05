@@ -1,5 +1,11 @@
 # Open work
 
+## Standalone cutover
+
+Retiring the PixiJS client is tracked in [Standalone cutover](CUTOVER.md), which
+holds the decisions, the hitlist and the checks that must pass before Rust moves
+to `/game`.
+
 ## Native desktop
 
 The current source builds a native Rust window, platform services, durable saves

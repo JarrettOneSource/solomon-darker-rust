@@ -11,7 +11,6 @@ use solomon_sim::boneyard::loot::{BoneyardGoodieState, BoneyardLootActor, Boneya
 use solomon_sim::enemies::puppet_hits::EnemyPuppetHit;
 use solomon_sim::hub::painter::hub_painter_order;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::secondary::SecondaryActorRead;
 use solomon_sim::secondary::golem::{NativeGolemPhase, NativeSecondaryGolemState};
 use solomon_sim::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
 use solomon_sim::spells::model::PrimarySpellTransientBase;
@@ -105,7 +104,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
         view.secondary
             .prepare(
                 &mut view.renderer,
-                actors.iter().map(|actor| actor.view()),
+                actors.iter(),
                 input["worldKey"].as_str().unwrap(),
                 input["frame"].as_f64(),
                 None,
@@ -134,7 +133,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
         let secondary_count = layers.len();
         for actor in &staff {
             layers.push(
-                SecondaryView::staff_painter(actor.view())
+                SecondaryView::staff_painter(&actor)
                     .expect("fixture admits visible staff rows")
                     .layer,
             );
@@ -147,7 +146,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
                 view.secondary.draw_staff_transient(
                     &mut view.renderer,
                     &camera,
-                    staff[index - secondary_count].view(),
+                    &staff[index - secondary_count],
                     world_tint,
                 );
             }
@@ -343,9 +342,8 @@ pub fn render_loot_fixture(input: &str) -> Result<String, JsValue> {
         .map_err(|error| JsValue::from_str(&error.to_string()))?;
     let goodies: Vec<BoneyardGoodieState> = serde_json::from_value(input["goodies"].clone())
         .map_err(|error| JsValue::from_str(&error.to_string()))?;
-    let hits: solomon_sim::ComponentEntities<EnemyPuppetHit> =
-        serde_json::from_value(input["hits"].clone())
-            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+    let hits: Vec<EnemyPuppetHit> = serde_json::from_value(input["hits"].clone())
+        .map_err(|error| JsValue::from_str(&error.to_string()))?;
     FIXTURE.with(|fixture| {
         let mut fixture = fixture.borrow_mut();
         let view = fixture.as_mut().expect("secondary_fixture_init completes before rendering");
@@ -360,8 +358,8 @@ pub fn render_loot_fixture(input: &str) -> Result<String, JsValue> {
             [31.0 / 255.0, 31.0 / 255.0, 31.0 / 255.0, 1.0],
         );
         let mut store = BoneyardLootStore::new("fixture", &[]);
-        store.actors = actors.into_iter().collect();
-        store.goodies = goodies.into_iter().collect();
+        store.actors = actors;
+        store.goodies = goodies;
         if input["reset"].as_bool().unwrap() {
             view.loot.reset();
         }
@@ -402,11 +400,10 @@ pub fn render_harden_fixture(input: &str) -> Result<String, JsValue> {
     let spells: solomon_sim::spells::model::SpellState =
         serde_json::from_value(input["spells"].clone())
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
-    let puppet_hits: solomon_sim::ComponentEntities<EnemyPuppetHit> = match input.get("puppetHits")
-    {
+    let puppet_hits: Vec<EnemyPuppetHit> = match input.get("puppetHits") {
         Some(rows) => serde_json::from_value(rows.clone())
             .map_err(|error| JsValue::from_str(&error.to_string()))?,
-        None => solomon_sim::ComponentEntities::default(),
+        None => Vec::new(),
     };
     FIXTURE.with(|fixture| {
         let mut fixture = fixture.borrow_mut();

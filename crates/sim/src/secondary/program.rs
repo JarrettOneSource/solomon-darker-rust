@@ -7,7 +7,6 @@ use super::{
     NativeSecondarySimulationState, NativeSecondaryTarget,
 };
 use crate::float::{fround, hypot};
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 use crate::{NativeRng, Vec2};
 
 pub(crate) const MAX_NATIVE_TICKS: u64 = 9_007_199_254_740_991;
@@ -109,7 +108,7 @@ pub(crate) fn cast_event(
     event
 }
 pub(crate) fn actor_event(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     tick: u64,
     kind: NativeSecondaryEventKind,
     cue: Option<NativeSecondaryAudioCue>,
@@ -231,7 +230,7 @@ pub(crate) fn firewalker_patch(
     state.spawn_actor(patch);
 }
 
-pub(crate) fn advance_actor(actor: &mut impl SecondaryActorWrite) {
+pub(crate) fn advance_actor(actor: &mut NativeSecondaryActorState) {
     use NativeSecondaryActorKind::*;
     let moves = !matches!(
         actor.kind,

@@ -227,12 +227,12 @@ pub fn spawn_fire_burst(
 
 pub fn spawn_projectile_impact_effects(
     world: &mut EnemyWorld,
-    projectile: &impl EnemyProjectileRead,
+    kind: EnemyProjectileKind,
+    state: &EnemyProjectileState,
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
-    let state = projectile.state();
-    match projectile.kind() {
+    match kind {
         EnemyProjectileKind::Arrow => {
             if state.payload == EnemyProjectilePayload::Fire {
                 spawn_fire_burst(
@@ -306,11 +306,11 @@ impl EnemyWorld {
             "Arrow Chill accumulator must be finite and within [0,1]"
         );
         let Some(projectile) = self.projectiles.iter_mut().find(|projectile| {
-            projectile.state.id == id && projectile.kind() == EnemyProjectileKind::Arrow
+            projectile.state().id == id && projectile.kind() == EnemyProjectileKind::Arrow
         }) else {
             return false;
         };
-        projectile.state.chill_tumble_accumulator = accumulator;
+        projectile.state_mut().chill_tumble_accumulator = accumulator;
         true
     }
 

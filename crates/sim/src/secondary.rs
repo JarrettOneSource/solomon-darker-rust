@@ -27,13 +27,12 @@ mod spawns;
 mod status;
 mod step;
 mod stoneskin;
-mod storage;
 
 pub use actors::{
     NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryDamageContact,
     NativeSecondaryDamageKind, NativeSecondaryHeadingMode, NativeSecondaryKnockbackContact,
     NativeSecondaryLightDisposition, NativeSecondaryTarget, NativeSecondaryTargetHeadingChange,
-    SecondaryActor, enroll_native_secondary_light_owners, enroll_native_secondary_painter_owners,
+    enroll_native_secondary_light_owners, enroll_native_secondary_painter_owners,
     native_secondary_light_disposition, native_secondary_painter_manager_lane,
 };
 pub use context::{
@@ -62,10 +61,6 @@ pub use simulation::{
     NativeSecondaryPlayerDamagePresentation, NativeSecondaryPlayerDamageResult,
     NativeSecondarySimulationState,
 };
-pub use storage::{
-    SecondaryActorMut, SecondaryActorRead, SecondaryActorRef, SecondaryActorWrite, SecondaryActors,
-};
-
 pub use status::{
     NativeSecondaryElectricBurnEffectState, NativeSecondaryMovementModifierKind,
     NativeSecondarySteamedEffectState, NativeSecondaryTargetEffectPatch,

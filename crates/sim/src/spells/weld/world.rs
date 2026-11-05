@@ -5,11 +5,11 @@ use super::*;
 use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::spells::model::{
-    PrimaryProjectilePartsMut, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
+    PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
 };
 use crate::spells::simulation::{PrimarySpellEpochContext, PrimarySpellTraversalActor};
 use crate::spells::targeting::NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK;
-use crate::spells::transient_storage::{WeldPersistentRef, WeldWorldMut, WeldWorldRef};
+use crate::spells::weld::{NativeWeldPersistentActorState, NativeWeldWorldActor};
 use crate::{NativeRng, Vec2};
 
 pub fn enroll_native_weld_actor_painter(
@@ -29,16 +29,16 @@ pub fn enroll_native_weld_actor_painter(
 impl SpellState {
     pub(crate) fn advance_projectile_with_presentation(
         &mut self,
-        spell: &mut PrimaryProjectilePartsMut<'_>,
+        spell: &mut PrimarySpellProjectile,
         targets: &[crate::spells::targeting::PrimarySpellTarget],
         tick: u64,
         rng: &mut NativeRng,
     ) {
         crate::spells::projectiles::advance_projectile(spell, targets);
-        let PrimaryProjectilePartsMut::Weld(weld) = spell else { return };
+        let PrimarySpellProjectile::Weld(weld) = spell else { return };
         step_native_weld_projectile_presentation(weld, rng);
         if weld.build_id == 1009 {
-            let fades = create_native_weld_ground_spark_fade_program(weld.view(), rng);
+            let fades = create_native_weld_ground_spark_fade_program(weld, rng);
             for seed in fades {
                 let actor = create_native_weld_ground_spark_fade_actor(
                     NativeWeldActorBirth {
@@ -63,12 +63,13 @@ impl SpellState {
 
     pub(crate) fn advance_weld_world_actor(
         &mut self,
-        actor: &mut WeldWorldMut<'_>,
+        actor: &mut NativeWeldWorldActor,
         context: &PrimarySpellEpochContext<'_>,
         rng: &mut NativeRng,
         order: &mut WorldPainterOrder,
     ) -> bool {
-        if let WeldWorldRef::Persistent(WeldPersistentRef::Hailstones(hail)) = actor.view()
+        if let NativeWeldWorldActor::Persistent(NativeWeldPersistentActorState::Hailstones(hail)) =
+            actor
             && hail.phase == PrimarySpellProjectilePhase::Flight
         {
             let origin = hail.common.origin;
@@ -101,9 +102,9 @@ impl SpellState {
             }
         }
         let already_impacting =
-            matches!(actor.view(), WeldWorldRef::Meteor(meteor) if meteor.impact_due);
-        let can_advance = |persistent: WeldPersistentRef<'_>, from, to| {
-            let WeldPersistentRef::EtherealBoulder(boulder) = persistent else {
+            matches!(actor, NativeWeldWorldActor::Meteor(meteor) if meteor.impact_due);
+        let can_advance = |persistent: &NativeWeldPersistentActorState, from, to| {
+            let NativeWeldPersistentActorState::EtherealBoulder(boulder) = persistent else {
                 return true;
             };
             (context.can_traverse)(
@@ -131,7 +132,7 @@ impl SpellState {
             return false;
         }
         let mut children = Vec::new();
-        if let WeldWorldRef::Meteor(meteor) = actor.view()
+        if let NativeWeldWorldActor::Meteor(meteor) = actor
             && meteor.impact_due
             && !already_impacting
         {
@@ -167,8 +168,8 @@ impl SpellState {
     /// Source enrollment runs after every actor epoch and new cast. A logical
     /// actor-lane light may share its painter; transient-lane lights do not.
     pub(crate) fn enroll_weld_painters(&mut self, order: &mut WorldPainterOrder) {
-        for mut effect in self.transients.iter_mut() {
-            let crate::spells::model::PrimaryTransientMut::Weld(actor) = &mut effect else {
+        for effect in self.transients.iter_mut() {
+            let PrimarySpellTransient::Weld(actor) = effect else {
                 continue;
             };
             enroll_native_weld_actor_painter(actor.common_mut(), order);

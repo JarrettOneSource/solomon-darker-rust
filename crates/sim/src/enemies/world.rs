@@ -3,13 +3,12 @@
 
 use super::config::EnemyArenaScalars;
 use super::model::{
-    EnemyDeathEffect, EnemyEvent, EnemyPlayerDamage, EnemyPlayerKnockback, EnemyTarget,
-    MaggotActors, WebbedState,
+    EnemyDeathEffect, EnemyEvent, EnemyMaggotActor, EnemyPlayerDamage, EnemyPlayerKnockback,
+    EnemyTarget, WebbedState,
 };
 use super::path::EnemyNavigation;
 use super::projectiles::{
-    EnemyProjectileEffect, EnemyProjectileKnockback, EnemyProjectileRead, EnemyProjectiles,
-    MageLightningPulse,
+    EnemyProjectile, EnemyProjectileEffect, EnemyProjectileKnockback, MageLightningPulse,
 };
 pub use super::step::EnemyLiveCounts;
 use super::voices::BossNarration;
@@ -216,9 +215,9 @@ pub struct EnemyWorld {
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(super) deferred_projectile_painters:
         Option<super::deferred_painters::DeferredEnemyPainterRegistrations>,
-    pub actors: super::model::EnemyActors,
-    pub maggots: MaggotActors,
-    pub webbed_players: crate::KeyedComponents<WebbedState>,
+    pub actors: Vec<super::model::EnemyActor>,
+    pub maggots: Vec<EnemyMaggotActor>,
+    pub webbed_players: BTreeMap<String, WebbedState>,
     pub rng_state: u32,
     pub steering_rng: NativeRng,
     pub locomotion_rng: NativeRng,
@@ -240,25 +239,25 @@ pub struct EnemyWorld {
     pub demon_skull_encounter: DemonSkullEncounter,
     pub spawned_actor_ids: Vec<usize>,
     pub events: Vec<EnemyEvent>,
-    pub death_effects: crate::ComponentEntities<EnemyDeathEffect>,
+    pub death_effects: Vec<EnemyDeathEffect>,
     pub player_damage: Vec<EnemyPlayerDamage>,
     pub player_knockbacks: Vec<EnemyPlayerKnockback>,
     pub player_positions: BTreeMap<String, Vec2>,
     pub pending_spawn_intents: Vec<EnemySpawnIntent>,
-    pub projectiles: EnemyProjectiles,
-    pub mage_lightning_pulses: crate::ComponentEntities<MageLightningPulse>,
-    pub projectile_effects: crate::ComponentEntities<EnemyProjectileEffect>,
-    pub projectile_knockbacks: crate::ComponentEntities<EnemyProjectileKnockback>,
+    pub projectiles: Vec<EnemyProjectile>,
+    pub mage_lightning_pulses: Vec<MageLightningPulse>,
+    pub projectile_effects: Vec<EnemyProjectileEffect>,
+    pub projectile_knockbacks: Vec<EnemyProjectileKnockback>,
     pub target_cell_bindings: BTreeMap<String, EnemyTargetCellBinding>,
     pub retired: Vec<super::model::EnemyRetirement>,
     pub rewards: Vec<super::model::EnemyReward>,
-    pub silks: crate::ComponentEntities<super::silk::EnemySilkActor>,
-    pub silk_fragments: crate::ComponentEntities<super::silk_force::NativeFadeLineActor>,
+    pub silks: Vec<super::silk::EnemySilkActor>,
+    pub silk_fragments: Vec<super::silk_force::NativeFadeLineActor>,
     pub spider_spit_ticks_remaining: u64,
-    pub spider_remains: crate::ComponentEntities<super::spider_remains::SpiderRemains>,
-    pub detached_crows: crate::ComponentEntities<super::heartmonger::DetachedCrow>,
+    pub spider_remains: Vec<super::spider_remains::SpiderRemains>,
+    pub detached_crows: Vec<super::heartmonger::DetachedCrow>,
     pub boss_spells: super::boss_spell::BossSpells,
-    pub puppet_hits: crate::ComponentEntities<super::puppet_hits::EnemyPuppetHit>,
+    pub puppet_hits: Vec<super::puppet_hits::EnemyPuppetHit>,
 }
 
 impl EnemyWorld {
@@ -266,9 +265,9 @@ impl EnemyWorld {
     pub fn new(seed: &str, native_registration_base: usize) -> Self {
         Self {
             deferred_projectile_painters: None,
-            actors: super::model::EnemyActors::default(),
-            maggots: MaggotActors::default(),
-            webbed_players: crate::KeyedComponents::default(),
+            actors: Vec::new(),
+            maggots: Vec::new(),
+            webbed_players: BTreeMap::new(),
             rng_state: seed_from_text(&format!("{seed}:enemy-actors")),
             steering_rng: NativeRng::new(i64::from(seed_from_text(&format!(
                 "{seed}:enemy-steering"
@@ -296,25 +295,25 @@ impl EnemyWorld {
             demon_skull_encounter: DemonSkullEncounter::default(),
             spawned_actor_ids: Vec::new(),
             events: Vec::new(),
-            death_effects: crate::ComponentEntities::default(),
+            death_effects: Vec::new(),
             player_damage: Vec::new(),
             player_knockbacks: Vec::new(),
             player_positions: BTreeMap::new(),
             pending_spawn_intents: Vec::new(),
-            projectiles: EnemyProjectiles::default(),
-            mage_lightning_pulses: crate::ComponentEntities::default(),
-            projectile_effects: crate::ComponentEntities::default(),
-            projectile_knockbacks: crate::ComponentEntities::default(),
+            projectiles: Vec::new(),
+            mage_lightning_pulses: Vec::new(),
+            projectile_effects: Vec::new(),
+            projectile_knockbacks: Vec::new(),
             target_cell_bindings: BTreeMap::new(),
             retired: Vec::new(),
             rewards: Vec::new(),
-            silks: crate::ComponentEntities::default(),
-            silk_fragments: crate::ComponentEntities::default(),
+            silks: Vec::new(),
+            silk_fragments: Vec::new(),
             spider_spit_ticks_remaining: 0,
-            spider_remains: crate::ComponentEntities::default(),
-            detached_crows: crate::ComponentEntities::default(),
+            spider_remains: Vec::new(),
+            detached_crows: Vec::new(),
             boss_spells: super::boss_spell::BossSpells::default(),
-            puppet_hits: crate::ComponentEntities::default(),
+            puppet_hits: Vec::new(),
         }
     }
 

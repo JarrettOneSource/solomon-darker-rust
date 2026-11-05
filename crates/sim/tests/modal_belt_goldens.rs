@@ -87,7 +87,7 @@ fn initial(case: &Value) -> GameSession {
         session.install_boneyard(loaded()).unwrap();
     }
     let participant = session.participants.get_mut("caster").unwrap();
-    let player = participant.player;
+    let player = &mut participant.player;
     player.book = secondary_rows::read_book(&case["inputs"]["book"]);
     player.skill_runtime.refresh_with_stat_book(
         &mut player.book,
@@ -134,7 +134,7 @@ fn initial(case: &Value) -> GameSession {
             &OpenArena,
             Some(&mut session.painter_order),
         );
-        for mut actor in world.enemies.actors.iter_mut() {
+        for actor in world.enemies.actors.iter_mut() {
             actor.heading_deg = 180.0;
             actor.next_movement_tick = 9_007_199_254_740_991;
         }

@@ -147,8 +147,8 @@ pub fn apply_mage_provider_gate_after_action(actor: &mut EnemyActor) {
 impl EnemyWorld {
     pub fn step_mage_shields(&mut self, context: &EnemyStepContext<'_>) {
         for index in 0..self.actors.len() {
-            let source = self.actors.get(index).expect("enemy index is live");
-            let EnemyBrain::Mage(brain) = source.brain else {
+            let source = &self.actors[index];
+            let EnemyBrain::Mage(brain) = &source.brain else {
                 continue;
             };
             let EnemyFamilyConfig::Mage {
@@ -171,7 +171,7 @@ impl EnemyWorld {
             let remaining = brain.shield_ticks_remaining.saturating_sub(1);
             let waiting = remaining > 0 || brain.disabled_primary_ticks > 0;
             let position = source.position;
-            let mut mage = self.actors.get_mut(index).expect("mage index is live");
+            let mage = &mut self.actors[index];
             let EnemyBrain::Mage(mage_brain) = &mut mage.brain else { unreachable!() };
             if waiting {
                 mage_brain.shield_ticks_remaining = remaining;
@@ -179,7 +179,7 @@ impl EnemyWorld {
             }
             mage_brain.shield_ticks_remaining = (shield_interval * 100.0).round().max(1.0) as u64;
             if self_shield && self_shield_health > 0.0 {
-                refresh_shield(mage.body, self_shield_health);
+                refresh_shield(mage, self_shield_health);
             }
             if !other_shield || other_shield_health <= 0.0 {
                 continue;
@@ -209,15 +209,12 @@ impl EnemyWorld {
                 }
             }
             if let Some(index) = selected {
-                refresh_shield(
-                    self.actors.get_mut(index).expect("selected ally is live").body,
-                    other_shield_health,
-                );
+                refresh_shield(&mut self.actors[index], other_shield_health);
             }
         }
     }
 }
-fn refresh_shield(actor: &mut EnemyBody, strength: f64) {
+fn refresh_shield(actor: &mut EnemyActor, strength: f64) {
     actor.shield_health = actor.shield_health.max(strength);
     actor.shield_maximum_health = actor.shield_maximum_health.max(actor.shield_health);
     actor.shield_pulse = 3.0;

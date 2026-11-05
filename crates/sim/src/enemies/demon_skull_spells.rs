@@ -1,6 +1,6 @@
 //! Discorporeal eye, bite, spit and mouth authority from `enemies/demon-skull-spells.ts`.
 
-use super::boss_spell::{BossSpellKind, BossSpellMut, BossSpellRead, NativeBossSpell};
+use super::boss_spell::{BossSpellKind, NativeBossSpell};
 use super::demon_skull_attachments::DEMON_SKULL_EYE_ATTACHMENTS;
 use super::demon_skull_effects::*;
 use super::effects::{DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec};
@@ -114,7 +114,7 @@ pub fn fire_demon_skull_eyes(
         }
     }
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else { unreachable!() };
-    brain.recoil = direction(actor.body.heading_deg + 180.0, 10.0);
+    brain.recoil = direction(actor.heading_deg + 180.0, 10.0);
 }
 
 pub fn bite_demon_skull(
@@ -272,13 +272,13 @@ pub fn spit_demon_skull_fire(
 
 pub fn step_demon_skull_spell(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &mut EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) -> bool {
     let source_age = spell.owner.age_ticks;
     let age = source_age + 1;
-    match &mut *spell.kind {
+    match &mut spell.kind {
         BossSpellKind::MouthBeamSegment { .. } => {
             if age > 1 {
                 false
@@ -407,40 +407,39 @@ pub fn step_demon_skull_spell(
 
 fn impact_eye(
     world: &mut EnemyWorld,
-    spell: &impl BossSpellRead,
+    spell: &NativeBossSpell,
     context: &EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
-    let spell_view = spell.view();
     let pitch = fround(0.8 + world.steering_rng.draw_scaled_float(0.1, true));
     action_sound_gain(world, owner(spell), context.tick, EnemySound::FireballHit, pitch, 2.0);
     action_sound_gain(world, owner(spell), context.tick, EnemySound::ThrowFire, fround(0.6), 2.0);
     spawn_unholy_impact_ground(world, owner(spell), context.tick, true, order);
     spawn_rising_burst(world, spell, context.tick, true, order);
-    let BossSpellKind::EyeLaser { velocity, .. } = *spell_view.kind else { unreachable!() };
+    let BossSpellKind::EyeLaser { velocity, .. } = spell.kind else { unreachable!() };
     for player in context.players {
         if player.summoned
             || !target_eligible(player)
-            || squared(spell_view.owner.position, player.position) > 82.5 * 82.5
+            || squared(spell.owner.position, player.position) > 82.5 * 82.5
         {
             continue;
         }
         let event_id = contact(
             world,
-            spell_view.owner.owner_actor_id,
+            spell.owner.owner_actor_id,
             &player.id,
             EnemyPlayerDamageSource {
-                position: spell_view.owner.position,
+                position: spell.owner.position,
                 collision_radius: 0.0,
                 reflectable_actor_id: None,
             },
-            spell_view.owner.damage * 0.5,
-            spell_view.owner.damage * 0.5,
+            spell.owner.damage * 0.5,
+            spell.owner.damage * 0.5,
             context.tick,
             1.0,
         );
         world.projectile_knockbacks.push(EnemyProjectileKnockback {
-            actor_id: spell_view.owner.owner_actor_id,
+            actor_id: spell.owner.owner_actor_id,
             delta: velocity,
             event_id,
             last_step_tick: context.tick,
@@ -452,11 +451,10 @@ fn impact_eye(
 
 fn impact_spit(
     world: &mut EnemyWorld,
-    spell: &impl BossSpellRead,
+    spell: &NativeBossSpell,
     context: &mut EnemyStepContext<'_>,
     order: &mut WorldPainterOrder,
 ) {
-    let spell_view = spell.view();
     spawn_unholy_impact_ground(world, owner(spell), context.tick, false, order);
     spawn_rising_burst(world, spell, context.tick, false, order);
     for (base, range) in [(0.8, 0.1), (1.0, 0.1), (1.0, 0.25)] {
@@ -464,12 +462,11 @@ fn impact_spit(
         world.emit_action_sound(owner(spell), context.tick, EnemySound::FireballHit, pitch);
     }
     let mut event =
-        EnemyEvent::new(EnemyEventKind::EnemyStream, spell_view.owner.owner_actor_id, context.tick);
+        EnemyEvent::new(EnemyEventKind::EnemyStream, spell.owner.owner_actor_id, context.tick);
     event.stream = Some("trap".to_owned());
-    event.source_position = Some(spell_view.owner.position);
+    event.source_position = Some(spell.owner.position);
     world.emit_event(event);
-    let BossSpellKind::UnholySpit { spawn_fire, spawn_imps, spread_direction, .. } =
-        *spell_view.kind
+    let BossSpellKind::UnholySpit { spawn_fire, spawn_imps, spread_direction, .. } = spell.kind
     else {
         unreachable!()
     };
@@ -480,10 +477,10 @@ fn impact_spit(
         let scale = fround(2.0 + world.steering_rng.draw_scaled_float(0.2, false));
         spawn_green_fire(
             world,
-            spell_view.owner.owner_actor_id,
-            spell_view.owner.damage,
+            spell.owner.owner_actor_id,
+            spell.owner.damage,
             context.tick,
-            Vec2::new(spell_view.owner.position.x, spell_view.owner.position.y - 10.0),
+            Vec2::new(spell.owner.position.x, spell.owner.position.y - 10.0),
             scale,
             20.0,
             true,
@@ -494,10 +491,10 @@ fn impact_spit(
         let scale = fround(1.2 + world.steering_rng.draw_scaled_float(0.2, false));
         spawn_green_fire(
             world,
-            spell_view.owner.owner_actor_id,
-            spell_view.owner.damage,
+            spell.owner.owner_actor_id,
+            spell.owner.damage,
             context.tick,
-            Vec2::new(spell_view.owner.position.x + offset, spell_view.owner.position.y + 5.0),
+            Vec2::new(spell.owner.position.x + offset, spell.owner.position.y + 5.0),
             scale,
             20.0,
             false,
@@ -506,7 +503,7 @@ fn impact_spit(
         return;
     }
     let length = 150.0 + world.steering_rng.draw_integer(101) as f64;
-    let root = advance(spell_view.owner.position, spread_direction, -length * 0.5);
+    let root = advance(spell.owner.position, spread_direction, -length * 0.5);
     let count = length / 20.0;
     for index in 0..=count.floor() as usize {
         let along = advance(root, spread_direction, index as f64 * 20.0);
@@ -518,13 +515,13 @@ fn impact_spit(
         );
         spawn_green_fire(
             world,
-            spell_view.owner.owner_actor_id,
-            spell_view.owner.damage,
+            spell.owner.owner_actor_id,
+            spell.owner.damage,
             context.tick,
             position,
             scale,
             20.0,
-            squared(position, spell_view.owner.position) < 400.0,
+            squared(position, spell.owner.position) < 400.0,
             order,
         );
     }
@@ -534,7 +531,7 @@ fn impact_spit(
     for index in 0..=(length / 40.0).floor() as usize {
         let position = advance(root, spread_direction, index as f64 * 40.0);
         if context.geometry.projectile_world_blocked(EnemyProjectileWorldQuery::Point {
-            projectile_id: spell_view.owner.id,
+            projectile_id: spell.owner.id,
             position,
             radius: 10.0,
         }) {
@@ -549,7 +546,7 @@ fn impact_spit(
         );
         world.next_synthetic_spawn_intent_id += 1;
         intent.native_type_id = 2044;
-        intent.green_imp_spit_damage = Some(spell_view.owner.damage);
+        intent.green_imp_spit_damage = Some(spell.owner.damage);
         world.materialize_step_intents(&[intent], context, None, order);
     }
 }
@@ -605,17 +602,16 @@ pub fn spawn_green_fire(
 
 fn spawn_rising_burst(
     world: &mut EnemyWorld,
-    source: &impl BossSpellRead,
+    source: &NativeBossSpell,
     tick: u64,
     eye: bool,
     order: &mut WorldPainterOrder,
 ) {
-    let source_view = source.view();
     let spell = world.create_boss_spell(
-        source_view.owner.owner_actor_id,
+        source.owner.owner_actor_id,
         tick,
         0.0,
-        source_view.owner.position,
+        source.owner.position,
         BossSpellKind::UnholyBurst {
             frame_phase: 0.0,
             frame_velocity: 0.625,
@@ -630,7 +626,7 @@ fn spawn_rising_burst(
 
 pub fn step_demon_skull_mouth_beam(
     world: &mut EnemyWorld,
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     context: &EnemyStepContext<'_>,
     power: f64,
     order: &mut WorldPainterOrder,
@@ -789,7 +785,7 @@ fn contact(
 
 pub(super) fn flash(
     world: &mut EnemyWorld,
-    actor: &impl EnemyActorRead,
+    actor: &EnemyActor,
     tick: u64,
     screen: EnemyScreenFlash,
 ) {
@@ -813,9 +809,8 @@ fn action_sound_gain(
     event.gain_scale = Some(gain);
     world.emit_event(event);
 }
-fn owner(spell: &impl BossSpellRead) -> DeathEffectOwner {
-    let spell_view = spell.view();
-    DeathEffectOwner { id: spell_view.owner.owner_actor_id, position: spell_view.owner.position }
+fn owner(spell: &NativeBossSpell) -> DeathEffectOwner {
+    DeathEffectOwner { id: spell.owner.owner_actor_id, position: spell.owner.position }
 }
 fn direction(heading: f64, length: f64) -> Vec2 {
     let angle = heading * std::f64::consts::PI / 180.0;

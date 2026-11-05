@@ -91,7 +91,7 @@ fn ambient_world(value: &Value) -> EnemyWorld {
         Some(&mut order),
     );
     assert_eq!(world.actors.len(), 1);
-    let mut actor = world.actors.get_mut(0).unwrap();
+    let actor = world.actors.get_mut(0).unwrap();
     actor.id = input["id"].as_u64().unwrap() as usize;
     actor.life_state = if input["animation"]["state"] == "death" {
         EnemyLifeState::Dying
@@ -129,7 +129,7 @@ fn ambient_world(value: &Value) -> EnemyWorld {
             },
             &mut order,
         );
-        let template = world.maggots.get(0).unwrap().snapshot();
+        let template = world.maggots[0].clone();
         let count = value["world"]["maggots"].as_array().unwrap().len();
         while world.maggots.len() > count {
             world.maggots.remove(world.maggots.len() - 1);

@@ -39,7 +39,6 @@ pub struct NativeSecondarySteamedEffectState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-#[derive(bevy_ecs::component::Component)]
 pub struct NativeSecondaryTargetEffectState {
     pub circle_slow_factor: f64,
     pub circle_slow_ticks: u64,
@@ -346,7 +345,7 @@ impl NativeSecondaryTargetEffectState {
 }
 
 pub fn apply_native_secondary_target_effect(
-    effects: &mut crate::ComponentEntities<NativeSecondaryTargetEffectState>,
+    effects: &mut Vec<NativeSecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
     patch: NativeSecondaryTargetEffectPatch,
@@ -364,7 +363,7 @@ pub fn apply_native_secondary_target_effect(
 }
 
 pub fn apply_native_secondary_dazzle(
-    effects: &mut crate::ComponentEntities<NativeSecondaryTargetEffectState>,
+    effects: &mut Vec<NativeSecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
     duration_ticks: u64,

@@ -19,3 +19,5 @@ command_arguments = ["../scripts/prepare-trunk-client.py"]
 addresses = ["127.0.0.1"]
 port = 4180
 open = false
+# Trunk's auto-reload is an inline script, which the post-build hook rejects.
+no_autoreload = true

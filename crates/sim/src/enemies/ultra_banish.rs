@@ -1,6 +1,6 @@
 //! Discorporeal terminal spell lifetimes from `enemies/ultra-banish.ts`.
 
-use super::boss_spell::{BossSpellKind, BossSpellMut, NativeBossSpell};
+use super::boss_spell::{BossSpellKind, NativeBossSpell};
 use super::demon_skull_effects::UNHOLY_GREEN;
 use super::effects::{
     BouncerOptions, DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec, radial_vector,
@@ -14,14 +14,14 @@ use crate::painter::WorldPainterOrder;
 
 pub fn step_ultra_banish_spell(
     world: &mut EnemyWorld,
-    spell: &mut BossSpellMut<'_>,
+    spell: &mut NativeBossSpell,
     context: &EnemyStepContext<'_>,
     has_long_ultra_banish: bool,
     order: &mut WorldPainterOrder,
 ) -> bool {
     spell.owner.age_ticks += 1;
     let owner = DeathEffectOwner { id: spell.owner.owner_actor_id, position: spell.owner.position };
-    match &mut *spell.kind {
+    match &mut spell.kind {
         BossSpellKind::UnholySoul {
             origin,
             angle_deg,
