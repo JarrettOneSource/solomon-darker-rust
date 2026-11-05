@@ -10,15 +10,11 @@ fn student_route_retirement_birth_and_saved_continuation_preserve_population_ord
     let mut records: Vec<_> = (1..=3)
         .map(|id| HubStudentState::new(&splines, id, 0, id as u32 * 19, 0.75, id + 40))
         .collect();
-    records[1].controller.path_cursor = -1.0;
+    records[1].path_cursor = -1.0;
     let mut live = HubStudentPopulation::cold(718, 44);
     live.spawning_enabled = false;
     live.next_id = 4;
-    live.students = records.clone().into_iter().collect();
-    assert_eq!(
-        serde_json::to_value(&live.students).unwrap(),
-        serde_json::to_value(&records).unwrap()
-    );
+    live.students = records;
     live.step_routes(None);
     assert_eq!(live.students.iter().map(|student| student.id).collect::<Vec<_>>(), [1, 3]);
     live.students.push(HubStudentState::new(&splines, 4, 1, 91, 0.9, 44));

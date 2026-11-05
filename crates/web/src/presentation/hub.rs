@@ -1,8 +1,6 @@
 //! Hub/player field projection from `client/hub-presentation-timeline.ts` and
 //! `client/boneyard-presentation-timeline.ts::interpolatePlayer`.
 
-use solomon_sim::hub::npc::StudentRead;
-
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::hub::college_intro::NativeCollegeIntroPhase;
 use solomon_sim::hub::regions::{
@@ -186,17 +184,15 @@ pub(super) fn project_world(
             particle.scale = lerp(first.scale, next.scale, blend);
             particle
         },
-    )
-    .into_iter()
-    .collect();
+    );
     output.npcs.students.students = super::math::interpolate_projected_members(
         older.npcs.students.students.iter(),
         newer.npcs.students.students.iter(),
         blend,
         |student| student.id,
-        |student| student.snapshot(),
-        |first, next, blend| {
-            let mut student = if blend < 1.0 { first.snapshot() } else { next.snapshot() };
+        |&student| student.clone(),
+        |&first, &next, blend| {
+            let mut student = if blend < 1.0 { first.clone() } else { next.clone() };
             student.frame_phase = lerp_cycle(first.frame_phase, next.frame_phase, blend, 5.0);
             student.gait_degrees = lerp_cycle(first.gait_degrees, next.gait_degrees, blend, 360.0);
             student.heading = lerp_cycle(first.heading, next.heading, blend, 360.0);
@@ -207,9 +203,7 @@ pub(super) fn project_world(
             student.position = lerp_vec(first.position, next.position, blend);
             student
         },
-    )
-    .into_iter()
-    .collect();
+    );
 }
 
 /// Hub alone replaces its local timeline player with the newest endpoint. Its
