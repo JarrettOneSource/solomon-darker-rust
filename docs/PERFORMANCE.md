@@ -124,13 +124,14 @@ remaining rounds and packet averages exclude the first full publication.
 Preparation and compression are host costs and remain included in the browser-suite
 host measurements.
 
-## Component storage
+## Entity storage
 
-Native session measurements compare component storage at `c1017a5` with the
-pre-cutover `dc16cfca` implementation on an Apple M5 Pro. Both use Rust 1.98.1,
-optimization level 3, no LTO and 16 codegen units. The table contains medians from
-five alternating runs after a paired warm-up. Benchmark builds completed before
-timing; ordinary background services remained running.
+Entity populations are plain `Vec`, `Option` and `BTreeMap` collections. They
+replaced `bevy_ecs` component storage in November 2026, which had itself replaced
+plain collections in October. Both changes were measured with the same native
+session driver, built with Rust 1.98.1, optimization level 3, no LTO and 16
+codegen units. Runs alternate between the two builds after a paired warm-up;
+builds complete before timing, and ordinary background services keep running.
 
 College cases advance 1,000 movement ticks. Boneyard cases advance 300 ticks with
 held primary casting and 32 or 128 mixed Skeleton, Skeleton Archer, Zombie and Imp
@@ -139,26 +140,37 @@ and combat continues throughout the measurement. Every requested tick advances
 in the expected run phase; all players remain alive. Seeds, inputs and navigation
 are identical, and all final checkpoints match byte for byte. The first admission
 tick is measured separately and excluded from the retained-tick timings below.
+Clone timings cover construction and destruction of 500 complete session copies
+per run.
 
-| Scene | Previous tick, µs | ECS tick, µs | Previous clone, µs | ECS clone, µs |
+The current storage (`68fb9390`) compared with `bevy_ecs` storage (`bf9d8644`) on
+an Apple M2, as medians of 20 alternating pairs:
+
+| Scene | ECS tick, µs | Plain tick, µs | ECS clone, µs | Plain clone, µs |
 | --- | ---: | ---: | ---: | ---: |
-| College, one player | 24.72 | 29.09 | 4.36 | 30.34 |
-| College, four players | 45.87 | 52.40 | 10.54 | 37.80 |
-| 32 enemies, one player | 190.29 | 195.68 | 35.10 | 61.64 |
-| 128 enemies, four players | 471.04 | 494.45 | 48.47 | 92.73 |
+| College, one player | 40.97 | 35.94 | 40.22 | 6.40 |
+| College, four players | 71.84 | 64.60 | 53.06 | 15.35 |
+| 32 enemies, one player | 256.53 | 249.06 | 82.96 | 48.80 |
+| 128 enemies, four players | 641.71 | 626.54 | 123.79 | 66.51 |
 
-Tick costs increase by 3–18% in these workloads. Clone timings cover construction
-and destruction of 500 complete session copies per run. Serialized snapshots cost
-98–641 µs before the cutover and 99–650 µs with components. Process peak RSS rises
-by 1.4–2.4 MiB; it includes asset loading, setup and temporary copies. The inline
-`GameSession` grows from 11,064 to 12,080 bytes. Component ownership improves
-structural consistency but does not produce an overall speedup in these cases.
+Ticks are 2–12% faster and session copies 1.7–6.3× faster, by median per-pair
+ratio. Serializing 100 network snapshots costs the same within 2%. Process peak
+RSS, which includes asset loading, setup and temporary copies, falls by
+0.8–1.5 MiB. Every primary transient now takes the space of the largest effect
+variant, 512 bytes, yet sessions tick and copy faster with that one contiguous
+list than they did with a table per effect type.
+
+The October change (`c1017a5` compared with `dc16cfca` on an Apple M5 Pro, medians
+of five alternating runs) went the other way: ticks became 3–18% slower, session
+copies 2–7× slower, peak RSS rose by 1.4–2.4 MiB and the inline `GameSession` grew
+from 11,064 to 12,080 bytes.
 
 These measurements establish the cost of the tested native simulation workloads.
 They do not establish browser frame rate, GPU cost or long-session memory use.
-The reproducible driver, raw samples and checkpoint checksums are retained in
-`~/codex-runs/solomon-ecs-cutover-20261026/`: `session-bench.rs`,
-`session-benchmark.py`, `session-benchmark.json` and `REPORT.md`.
+The reproducible drivers, raw samples and checkpoints are retained in
+`~/codex-runs/solomon-ecs-cutover-20261026/` for October and
+`~/codex-runs/solomon-standalone-cutover-20261104/bench/` for November:
+`session-bench.rs`, `session-benchmark.py` and the per-run results.
 
 ## Implementation constraints
 

@@ -65,14 +65,16 @@ rule.
 
 **Storage follows performance evidence.** Entity storage moved to `bevy_ecs` in
 October 2026 to gain structure and, it was hoped, speed. The measurements in
-[Performance](PERFORMANCE.md#component-storage) show the opposite: simulation
+[Performance](PERFORMANCE.md#entity-storage) showed the opposite: simulation
 ticks became 3–18% slower and session copies 2–7× slower, with no workload faster.
-The game uses `bevy_ecs` only as storage (no systems or schedules), and the
-wrapper types that adapt it add most of the hard-to-read syntax in `solomon-sim`.
-The replacement uses plain `Vec`, `Option` and `BTreeMap` collections. A storage
-change is accepted only when the session benchmark shows no regression and every
-final checkpoint stays byte-identical, which also proves painter, contact and
-random-number order are unchanged.
+The game used `bevy_ecs` only as storage (no systems or schedules), and the
+wrapper types that adapted it added most of the hard-to-read syntax in
+`solomon-sim`. Storage is now plain `Vec`, `Option` and `BTreeMap` collections
+again, and the same benchmark shows ticks 2–12% faster and session copies
+1.7–6.3× faster than with `bevy_ecs`. A storage change is accepted only when the
+session benchmark shows no regression and every final checkpoint stays
+byte-identical, which also proves painter, contact and random-number order are
+unchanged.
 
 **Simple Rust.** Prefer code a newcomer can read over code that is short or
 general. [Coding standards](CODING-STANDARDS.md#simple-rust) lists the concrete
@@ -132,7 +134,7 @@ These must be finished before Rust moves to `/game`.
 
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
-| 15 | Replace `bevy_ecs` storage with plain collections | In progress | Enemies first, then the remaining stores. See the storage decision above for the acceptance bar. |
+| 15 | Replace `bevy_ecs` storage with plain collections | Done | Every population is a `Vec`, `Option` or `BTreeMap` of plain records, and `bevy_ecs` is no longer a dependency. Checkpoints stay byte-identical; [Performance](PERFORMANCE.md#entity-storage) has the measurements. |
 | 16 | `Game` as explicit states | Not started | `crates/web/src/game.rs` has an ~80-field struct with flags such as `has_game`, `world_loading`, `save_requested` and `save_in_flight`. Enums make impossible combinations unrepresentable. |
 | 17 | Integer codes to enums | Not started | `native_weld_primary_cast_mode(build_id: u32)` and the loot `range_mode: u32` panic on unknown values. Parse into enums when content loads. Give player IDs a `PlayerId` type. |
 | 18 | Port-era names | Not started | The `native_` prefix (about 1,300 items) meant "matches the original game" and now reads as "desktop". Drop it, along with `kernel`, `Website` and `current_` in names. Rename the `solomon-web` crate, which also runs the desktop app, to `solomon-client`. |
@@ -175,7 +177,7 @@ Draft. Rust moves to `/game` only when all of these hold:
 
 ## Evidence
 
-- Component storage cost: [Performance](PERFORMANCE.md#component-storage).
+- Entity storage cost: [Performance](PERFORMANCE.md#entity-storage).
 - Numeric contract and why the math is custom: [Decisions](DECISIONS.md#numeric-contract).
 - Fixture provenance: [Reference data](REFERENCE-DATA.md).
 - Release download (about 600 MB) by type: PNG 490 MB, WAV 64 MB, MP3 29 MB.
