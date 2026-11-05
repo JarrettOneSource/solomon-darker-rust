@@ -182,7 +182,7 @@ impl GameSession {
         });
         for id in self.participant_order.clone() {
             let participant = self.participants.get_mut(&id).unwrap();
-            let player = participant.player;
+            let player = &mut participant.player;
             let world = self.boneyard.as_ref().unwrap();
             let derived = player.derived_stats();
             let input = inputs[&id];

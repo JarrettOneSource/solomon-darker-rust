@@ -87,7 +87,7 @@ fn initial(case: &Value) -> GameSession {
         session.install_boneyard(loaded()).unwrap();
     }
     let participant = session.participants.get_mut("caster").unwrap();
-    let player = participant.player;
+    let player = &mut participant.player;
     player.book = secondary_rows::read_book(&case["inputs"]["book"]);
     player.skill_runtime.refresh_with_stat_book(
         &mut player.book,

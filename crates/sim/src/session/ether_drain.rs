@@ -379,10 +379,10 @@ impl GameSession {
             ordered_participants_mut(&mut self.participants, &self.participant_order)
                 .into_iter()
                 .map(|participant| super::player_contacts::PlayerContactPlayer {
-                    player_id: participant.id,
-                    player: participant.player,
-                    wizard: participant.wizard,
-                    lighting: participant.lighting,
+                    player_id: &participant.id,
+                    player: &mut participant.player,
+                    wizard: &mut participant.wizard,
+                    lighting: &mut participant.lighting,
                 })
                 .collect();
         let world = self.boneyard.as_mut().unwrap();

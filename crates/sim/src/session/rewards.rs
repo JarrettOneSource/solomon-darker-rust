@@ -46,7 +46,7 @@ impl GameSession {
             let Some(participant) = self.participants.get_mut(&pickup.player_id) else {
                 continue;
             };
-            let player = participant.player;
+            let player = &mut participant.player;
             match pickup.kind {
                 NativeLootDropKind::Gold => player.economy.credit_loot_gold(pickup.amount),
                 NativeLootDropKind::Sack => {

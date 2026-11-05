@@ -151,7 +151,7 @@ impl Game {
             &self.session.participants.get(&self.local_player_id).expect("participant exists");
         self.session.boneyard.is_some()
             || !solomon_sim::hub::college_intro::hub_college_admission_pre_loadout(
-                local.wizard,
+                &local.wizard,
                 local.player.economy.college_intro_pending,
             )
     }

@@ -4,9 +4,6 @@
 //! game IDs and checkpoint fields remain with the domain. Removing an entity never
 //! reorders survivors, even when Bevy moves its table row.
 
-mod keyed;
-pub(crate) use keyed::KeyedEntities;
-
 use bevy_ecs::entity::{Entity, EntityHashSet, EntityIndexSet};
 use bevy_ecs::query::{IterQueryData, QueryItem, QueryState};
 use bevy_ecs::world::{EntityRef, EntityWorldMut, World};

@@ -260,7 +260,7 @@ fn apply_damage(
         .context
         .get("participant_id")
         .and_then(LuaValue::as_str)
-        .filter(|id| game.participants.contains_key(id));
+        .filter(|id| game.participants.contains_key(*id));
     let modifier = fields
         .get("modifier")
         .and_then(LuaValue::as_str)
@@ -381,7 +381,7 @@ pub fn target_player<'a>(
         _ => None,
     };
     candidate
-        .filter(|id| game.participants.contains_key(id))
+        .filter(|id| game.participants.contains_key(*id))
         .ok_or_else(|| "mod intent target player is unavailable".into())
 }
 
@@ -404,7 +404,7 @@ fn damage_player_target(
         Some(LuaValue::Object(fields)) => fields.get("participant_id").and_then(LuaValue::as_str),
         _ => None,
     };
-    candidate.filter(|id| game.participants.contains_key(id)).map(str::to_owned)
+    candidate.filter(|id| game.participants.contains_key(*id)).map(str::to_owned)
 }
 
 fn damage_enemy_target(

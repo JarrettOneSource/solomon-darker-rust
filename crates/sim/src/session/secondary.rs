@@ -69,7 +69,7 @@ impl GameSession {
                 action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
-                character: participant.wizard,
+                character: &participant.wizard,
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
@@ -166,7 +166,7 @@ impl GameSession {
                 action_time_factor: player.combat.movement_scale(),
                 weapon_kind: player_weapon(player),
                 belt: &player.belt,
-                character: participant.wizard,
+                character: &participant.wizard,
                 current_mana: player.combat.current_mana,
                 maximum_mana: player.combat.maximum_mana,
                 eligible: player.combat.can_cast() && player.progression.pending_offer.is_none(),
@@ -270,7 +270,7 @@ impl GameSession {
                 && let Some(participant) = self.participants.get_mut(id)
             {
                 super::extensions::apply_filtered_mana_delta(
-                    participant.player,
+                    &mut participant.player,
                     id,
                     -*amount,
                     crate::modding::extensions::GameSimulationManaSource::SecondaryCast,
@@ -287,7 +287,7 @@ impl GameSession {
             if let Some(participant) = self.participants.get_mut(id) {
                 let cost = participant.player.combat.current_mana;
                 super::extensions::apply_filtered_mana_delta(
-                    participant.player,
+                    &mut participant.player,
                     id,
                     -cost,
                     crate::modding::extensions::GameSimulationManaSource::Overload,
@@ -521,7 +521,7 @@ impl GameSession {
         let Some(participant) = self.participants.get_mut(id) else {
             return;
         };
-        super::extensions::fail_player_boast(participant.player, producer, extensions);
+        super::extensions::fail_player_boast(&mut participant.player, producer, extensions);
     }
 }
 
@@ -534,7 +534,7 @@ pub(super) fn player_weapon(player: &PlayerState) -> Option<NativePlayerWeaponKi
 }
 
 pub(super) fn boneyard_player_bodies<'a>(
-    participants: &'a Participants,
+    participants: &'a BTreeMap<String, SessionParticipant>,
     order: &[String],
     run: &crate::game_run::GameRunLifecycle,
 ) -> Vec<BoneyardPlayerBody<'a>> {
@@ -544,7 +544,7 @@ pub(super) fn boneyard_player_bodies<'a>(
             let participant = participants.get(id).expect("participant exists");
             BoneyardPlayerBody {
                 status: BoneyardPlayerStatus {
-                    id: participant.id,
+                    id: &participant.id,
                     alive: participant.player.combat.life_state == PlayerLifeState::Alive,
                     eligible: run.eligible_player_ids.contains(id),
                     collision_enabled: participant.player.combat.collision_enabled_after_tick(),

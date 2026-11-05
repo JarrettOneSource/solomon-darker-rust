@@ -105,17 +105,17 @@ impl GameSession {
 /// A normal frame borrows only the retained map. Rejoin staging borrows that
 /// same map plus one privately projected participant, without cloning the world.
 pub struct GameSnapshotParticipants<'a> {
-    pub(super) retained: &'a Participants,
+    pub(super) retained: &'a BTreeMap<String, SessionParticipant>,
     pub(super) detached: Option<&'a SessionParticipant>,
 }
 
 impl<'a> GameSnapshotParticipants<'a> {
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<ParticipantRef<'a>> {
+    pub fn get(&self, id: &str) -> Option<&'a SessionParticipant> {
         if let Some(participant) = self.detached
             && participant.id == id
         {
-            Some(participant.view())
+            Some(participant)
         } else {
             self.retained.get(id)
         }

@@ -162,7 +162,7 @@ fn owner_projection(state: &GameSession, player_id: &str) -> Result<GameSession,
 
 fn disk_projection(state: &mut GameSession) {
     for participant in state.participants.values_mut() {
-        let player = participant.player;
+        let player = &mut participant.player;
         disk_economy(&mut player.economy);
         player.progression.damage_x4_ticks_remaining = 0;
         player.progression.mind_chug_ticks_remaining = 0;

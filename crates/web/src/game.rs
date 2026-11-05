@@ -1215,6 +1215,7 @@ impl Game {
                         .get(&self.local_player_id)
                         .expect("participant exists")
                         .player
+                        .as_ref()
                 })
                 .is_some_and(|player| player.progression.pending_offer.is_some())
     }
@@ -1297,8 +1298,14 @@ impl Game {
         let Some(entry) = solomon_sim::hall_of_fame::completed_hall_of_fame_entry(
             &world.loaded.run_id,
             self.session.run.phase,
-            self.session.participants.get(&self.local_player_id).expect("participant exists").score,
-            self.session
+            &self
+                .session
+                .participants
+                .get(&self.local_player_id)
+                .expect("participant exists")
+                .score,
+            &self
+                .session
                 .participants
                 .get(&self.local_player_id)
                 .expect("participant exists")
@@ -1631,6 +1638,7 @@ impl Game {
                     .get(&self.local_player_id)
                     .expect("participant exists")
                     .player
+                    .as_ref()
             }),
             self.session.secondary.players.get(&self.local_player_id),
             &self.menu.settings().controls,
@@ -1671,7 +1679,7 @@ impl Game {
             self.session.boneyard.as_ref().filter(|_| !self.menu.covers_world()).map(|world| {
                 TutorialFrame {
                     world,
-                    player: self
+                    player: &self
                         .session
                         .participants
                         .get(&self.local_player_id)
@@ -1725,6 +1733,7 @@ impl Game {
                     .get(&self.local_player_id)
                     .expect("participant exists")
                     .player
+                    .as_ref()
             })
             .filter(|_| !self.menu.covers_world());
         self.skill_picker.update(
@@ -2315,6 +2324,7 @@ impl Game {
                         .get(&self.local_player_id)
                         .expect("participant exists")
                         .player
+                        .as_ref()
                 })
                 .is_some_and(|player| player.economy.college_intro_pending),
         }
@@ -2840,7 +2850,7 @@ impl Game {
                 &session.participants.get(&self.local_player_id).expect("participant exists");
             let level_up = self.level_up.entry(self.local_player_id.clone()).or_default().sample(
                 &world.loaded.run_id,
-                local.player,
+                &local.player,
                 session.level_up_barrier.as_ref().map(|barrier| barrier.barrier_id),
                 self.last_time.unwrap_or(0.0),
                 (local.wizard.position.y - camera.origin.y) * camera.scale,
@@ -2853,8 +2863,8 @@ impl Game {
                     let lighting = &participant.lighting;
                     BattlePlayer {
                         id,
-                        player: participant.player,
-                        wizard: participant.wizard,
+                        player: &participant.player,
+                        wizard: &participant.wizard,
                         light_registration: lighting.light_registration,
                         // `host/game-snapshot.ts` projects both action and weapon phases.
                         overlay_effect_phase: participant
@@ -3012,7 +3022,7 @@ impl Game {
                     &mut self.renderer,
                     &camera,
                     &PrivateRoomFrame {
-                        local_wizard: session
+                        local_wizard: &session
                             .participants
                             .get(&self.local_player_id)
                             .expect("participant exists")
@@ -3027,7 +3037,7 @@ impl Game {
                             &mut self.wizard_view,
                             participant,
                             &hub_equipment[index],
-                            session.secondary.players.get(participant.id),
+                            session.secondary.players.get(&participant.id),
                             session.secondary.stoneskin_warp.as_deref(),
                             session.enhanced_effects,
                             self.menu.settings().complex_lighting,
@@ -3037,7 +3047,7 @@ impl Game {
                         self.wizard_view.draw(
                             renderer,
                             &camera,
-                            participant.wizard,
+                            &participant.wizard,
                             presentation_tick,
                             &self.spell_view,
                         );
@@ -3146,7 +3156,7 @@ impl Game {
                                     &mut self.wizard_view,
                                     participant,
                                     &hub_equipment[index],
-                                    session.secondary.players.get(participant.id),
+                                    session.secondary.players.get(&participant.id),
                                     session.secondary.stoneskin_warp.as_deref(),
                                     session.enhanced_effects,
                                     self.menu.settings().complex_lighting,
@@ -3156,7 +3166,7 @@ impl Game {
                                 self.wizard_view.draw(
                                     renderer,
                                     &camera,
-                                    participant.wizard,
+                                    &participant.wizard,
                                     presentation_tick,
                                     &self.spell_view,
                                 );
@@ -3293,7 +3303,7 @@ impl Game {
 #[allow(clippy::too_many_arguments)] // One accepted participant plus shared world material inputs.
 fn prepare_hub_wizard(
     view: &mut WizardView,
-    participant: solomon_sim::session::ParticipantRef<'_>,
+    participant: &solomon_sim::session::SessionParticipant,
     equipment: &crate::wizard::WizardEquipment,
     secondary: Option<&solomon_sim::secondary::NativeSecondaryPlayerState>,
     stoneskin_warp: Option<&[f64]>,
@@ -3320,7 +3330,7 @@ fn prepare_hub_wizard(
         complex_lighting,
         tick,
         damage_x4_ticks_remaining: clocks
-            .and_then(|clocks| clocks.player_damage_x4.get(participant.id))
+            .and_then(|clocks| clocks.player_damage_x4.get(&participant.id))
             .copied()
             .unwrap_or(player.progression.damage_x4_ticks_remaining as f64),
     });

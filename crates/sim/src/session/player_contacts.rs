@@ -47,7 +47,7 @@ use crate::secondary::{
 use crate::spells::boneyard::boneyard_native_secondary_targets;
 use crate::{HubWizard, Vec2};
 
-/// Mutable participant components borrowed from the session's canonical rows.
+/// The parts of one participant that player contacts change, borrowed from the session.
 pub struct PlayerContactPlayer<'a> {
     pub player_id: &'a str,
     pub player: &'a mut PlayerState,

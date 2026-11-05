@@ -43,7 +43,7 @@ impl GameSession {
         if !self.can_edit_books(id) || self.hub_primary_unset(id) {
             return false;
         }
-        let mut participant = self.participants.get_mut(id).unwrap();
+        let participant = self.participants.get_mut(id).unwrap();
         let previous = participant.selected_primary_id();
         let accepted = participant.player.select_primary(skill_id);
         participant.synchronize_primary_selection(previous);
@@ -54,7 +54,7 @@ impl GameSession {
         if !self.can_edit_books(id) {
             return false;
         }
-        let mut participant = self.participants.get_mut(id).unwrap();
+        let participant = self.participants.get_mut(id).unwrap();
         let previous = participant.selected_primary_id();
         let accepted = participant.player.select_concentration(skill_id);
         participant.synchronize_primary_selection(previous);
@@ -70,7 +70,7 @@ impl GameSession {
         if !self.can_edit_books(id) {
             return false;
         }
-        let mut participant = self.participants.get_mut(id).unwrap();
+        let participant = self.participants.get_mut(id).unwrap();
         let previous = participant.selected_primary_id();
         let accepted = participant.player.select_concentration_slot(skill_id, slot);
         participant.synchronize_primary_selection(previous);
@@ -109,7 +109,7 @@ impl GameSession {
         {
             return Ok(rejected(HubEconomyRejection::ServiceUnavailable));
         }
-        let mut participant = self.participants.get_mut(id).unwrap();
+        let participant = self.participants.get_mut(id).unwrap();
         let consumed = match action {
             HubInventoryAction::Consume { item_id } => {
                 find_inventory_item(&participant.player.economy.backpack, *item_id).cloned()

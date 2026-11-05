@@ -122,7 +122,7 @@ fn endpoint(base: &GameSession, tick: u64, shift: f64) -> GameSession {
     session.ticks = tick;
     for (index, id) in session.participant_order.clone().iter().enumerate() {
         let participant = session.participants.get_mut(id).unwrap();
-        let wizard = &mut *participant.wizard;
+        let wizard = &mut participant.wizard;
         let tick = tick as f64;
         wizard.position = Vec2::new(
             100.0 + index as f64 * 200.0 + tick * 2.0 + shift,

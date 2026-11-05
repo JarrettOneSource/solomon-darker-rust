@@ -25,9 +25,7 @@ mod tick;
 mod world_step;
 pub use detached::DetachedSessionProjection;
 pub use membership::{DetachedSessionParticipant, ParticipantProfile, SessionPartition};
-pub use participant::{
-    ParticipantMut, ParticipantRead, ParticipantRef, Participants, SessionParticipant,
-};
+pub use participant::SessionParticipant;
 pub use snapshot::GameSnapshot;
 pub use tick::{GameSessionTickContext, GameSessionTickResult};
 pub use world_step::GameSessionInput;
@@ -36,6 +34,8 @@ pub mod harden;
 pub mod player_combat;
 pub mod player_contacts;
 pub mod player_feedback;
+
+use std::collections::BTreeMap;
 
 use crate::boneyard::world::BoneyardCheckpoint;
 use crate::boneyard::{BoneyardWorld, LoadedBoneyard};
@@ -115,11 +115,10 @@ pub struct PlayerLevelUpBarrier {
 #[derive(Clone, Debug)]
 pub struct GameSession {
     /// Painting permission belongs to the open live menu, never a durable save.
-    pub inventory_dye_sessions:
-        std::collections::BTreeMap<String, crate::economy::NativeInventoryDyeSession>,
+    pub inventory_dye_sessions: BTreeMap<String, crate::economy::NativeInventoryDyeSession>,
     pub screen_flashes: crate::screen_flash::NativeScreenFlashState,
     pub enhanced_effects: bool,
-    pub participants: Participants,
+    pub participants: BTreeMap<String, SessionParticipant>,
     /// Source entity/Record order. Sorted barrier cohorts deliberately use their own order.
     pub participant_order: Vec<String>,
     pub next_entity_id: u64,
@@ -151,11 +150,10 @@ pub struct GameSession {
 pub struct GameCheckpoint {
     // Network views admit the live menu state; file checkpoints deliberately omit it.
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing))]
-    pub inventory_dye_sessions:
-        std::collections::BTreeMap<String, crate::economy::NativeInventoryDyeSession>,
+    pub inventory_dye_sessions: BTreeMap<String, crate::economy::NativeInventoryDyeSession>,
     pub screen_flashes: crate::screen_flash::NativeScreenFlashState,
     pub enhanced_effects: bool,
-    pub participants: std::collections::BTreeMap<String, SessionParticipant>,
+    pub participants: BTreeMap<String, SessionParticipant>,
     pub participant_order: Vec<String>,
     // Zero identifies earlier standalone documents which did not retain entity IDs.
     #[cfg_attr(feature = "persistence", serde(default))]
@@ -202,13 +200,13 @@ impl GameSession {
     }
 
     #[must_use]
-    pub fn participant(&self, id: &str) -> Option<ParticipantRef<'_>> {
+    pub fn participant(&self, id: &str) -> Option<&SessionParticipant> {
         self.participants.get(id)
     }
 
     #[must_use]
     pub fn wizard(&self, id: &str) -> Option<&HubWizard> {
-        self.participant(id).map(|participant| participant.wizard)
+        self.participant(id).map(|participant| &participant.wizard)
     }
 
     #[must_use]
@@ -223,10 +221,10 @@ impl GameSession {
     #[must_use]
     pub fn checkpoint(&self) -> GameCheckpoint {
         GameCheckpoint {
-            inventory_dye_sessions: std::collections::BTreeMap::new(),
+            inventory_dye_sessions: BTreeMap::new(),
             screen_flashes: self.screen_flashes.clone(),
             enhanced_effects: self.enhanced_effects,
-            participants: self.participants.records(),
+            participants: self.participants.clone(),
             participant_order: self.participant_order.clone(),
             next_entity_id: self.next_entity_id,
             npcs: self.npcs.clone(),
@@ -267,7 +265,7 @@ impl GameSession {
 
 fn validate_participants(
     order: &[String],
-    players: &std::collections::BTreeMap<String, SessionParticipant>,
+    players: &BTreeMap<String, SessionParticipant>,
 ) -> Result<(), String> {
     let mut seen = std::collections::HashSet::new();
     if order.len() != players.len() {
@@ -281,16 +279,16 @@ fn validate_participants(
     Ok(())
 }
 
-/// Borrow participant components in admission order without copying their state.
+/// Borrow participants in admission order without copying their state.
 fn ordered_participants_mut<'a>(
-    participants: &'a mut Participants,
+    participants: &'a mut BTreeMap<String, SessionParticipant>,
     order: &[String],
-) -> Vec<ParticipantMut<'a>> {
+) -> Vec<&'a mut SessionParticipant> {
     let mut rows: Vec<_> = participants.values_mut().collect();
     rows.sort_by_key(|participant| {
         order
             .iter()
-            .position(|id| id == participant.id)
+            .position(|id| *id == participant.id)
             .expect("participant order covers every record")
     });
     rows

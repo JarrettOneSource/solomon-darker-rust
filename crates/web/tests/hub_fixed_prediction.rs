@@ -80,7 +80,7 @@ fn session_at(region: HubRegion, position: Vec2) -> GameSession {
     participant.wizard.region = region;
     participant.wizard.position = position;
     participant.wizard.transition = None;
-    *participant.college_intro = None;
+    participant.college_intro = None;
     participant.player.economy.college_intro_pending = false;
     session.npcs.students = HubStudentPopulation::cold(1, 100);
     session.npcs.students.spawning_enabled = false;
@@ -112,8 +112,8 @@ fn step_authority(session: &mut GameSession, movement: Vec2) {
         &mut [HubParticipantMotion {
             id: "local",
             college_intro_pending: participant.player.economy.college_intro_pending,
-            wizard: participant.wizard,
-            college_intro: participant.college_intro,
+            wizard: &mut participant.wizard,
+            college_intro: &mut participant.college_intro,
             renderer_ready: true,
             movement,
             movement_scale: scale,

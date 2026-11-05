@@ -83,7 +83,7 @@ impl GameSession {
         extensions: Option<&dyn GameSimulationExtensions>,
     ) -> bool {
         {
-            let Some(mut participant) = self.participants.get_mut(id) else {
+            let Some(participant) = self.participants.get_mut(id) else {
                 return false;
             };
             let previous = participant.selected_primary_id();
@@ -155,7 +155,7 @@ impl GameSession {
             self.run
                 .eligible_player_ids
                 .iter()
-                .filter(|id| self.participants.contains_key(id))
+                .filter(|id| self.participants.contains_key(*id))
                 .cloned()
                 .collect()
         } else {
@@ -200,7 +200,7 @@ impl GameSession {
         cohort
             .iter()
             .filter(|id| {
-                self.participants.get(id).is_some_and(|participant| {
+                self.participants.get(*id).is_some_and(|participant| {
                     participant.player.progression.pending_offer.is_some()
                         || !participant.player.progression.pending_levels.is_empty()
                 })

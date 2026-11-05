@@ -125,7 +125,7 @@ impl GameSession {
         let participant =
             self.participants.get(id).ok_or("active-run detach has no matching player")?;
         Ok(DetachedSessionParticipant {
-            participant: participant.snapshot(),
+            participant: participant.clone(),
             next_entity_id: self.next_entity_id,
             run_id: self.run.run_id.clone().ok_or("active-run detach has no run identity")?,
         })
@@ -209,7 +209,7 @@ impl GameSession {
         }
         for id in &source.participant_order {
             self.import_hub_participant(
-                source.participants.get(id).expect("participant exists").snapshot(),
+                source.participants.get(id).expect("participant exists").clone(),
             )?;
         }
         Ok(())
@@ -286,7 +286,7 @@ impl GameSession {
             .participants
             .get_mut(id)
             .ok_or("game save profile owner is absent from the fresh game")?;
-        migrate_starter_equipment_appearance(participant.player);
+        migrate_starter_equipment_appearance(&mut participant.player);
         Ok(())
     }
 
@@ -358,7 +358,7 @@ impl GameSession {
 
     fn refresh_rejoin_barrier(&mut self, id: &str, milestone: Option<&SharedPlayerLevelMilestone>) {
         let (barrier, next_id) = self.project_rejoin_barrier(
-            &self.participants.get(id).expect("participant exists"),
+            self.participants.get(id).expect("participant exists"),
             milestone,
         );
         self.level_up_barrier = barrier;
@@ -367,22 +367,21 @@ impl GameSession {
 
     pub(super) fn project_rejoin_barrier(
         &self,
-        participant: &impl ParticipantRead,
+        participant: &SessionParticipant,
         milestone: Option<&SharedPlayerLevelMilestone>,
     ) -> (Option<PlayerLevelUpBarrier>, u64) {
-        let participant = participant.view();
         let mut cohort: Vec<_> = self.participants.keys().cloned().collect();
-        if !self.participants.contains_key(participant.id) {
+        if !self.participants.contains_key(&participant.id) {
             cohort.push(participant.id.clone());
             cohort.sort();
         }
         let pending: Vec<_> = cohort
             .iter()
             .filter(|id| {
-                let player = if *id == participant.id {
+                let player = if *id == &participant.id {
                     &participant.player
                 } else {
-                    &self.participants.get(id).expect("participant exists").player
+                    &self.participants.get(*id).expect("participant exists").player
                 };
                 player.progression.pending_offer.is_some()
                     || !player.progression.pending_levels.is_empty()

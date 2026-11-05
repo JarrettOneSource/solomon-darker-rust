@@ -173,8 +173,8 @@ impl HostedGameHost {
                         let Some(entry) = completed_hall_of_fame_entry(
                             &world.loaded.run_id,
                             state.run.phase,
-                            participant.score,
-                            participant.player,
+                            &participant.score,
+                            &participant.player,
                             wave,
                             completed_at,
                         ) else {
