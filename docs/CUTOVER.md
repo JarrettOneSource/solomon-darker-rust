@@ -121,6 +121,7 @@ These must be finished before Rust moves to `/game`.
 | 7 | Community content in Rust | Not started | Published boneyards and mods load, and the Website editor's test-play uses Rust. |
 | 8 | Swap plan | Not started | Rust to `/game`, PixiJS to `/game-legacy` with a banner for a few weeks, `/game-rust` redirects to `/game`. Needs Website and Caddy changes. |
 | 9 | README play link | Done | It pointed at `/game/` (PixiJS); it now points at `/game-rust/` until the swap. |
+| 29 | Rejoin during a level-up | Not started | A wizard who reconnects while a level-up offer is pending stays on "Waiting for the coven...": the host's `game_rejoined` loading grace never ends. After a host restart, Last game is disabled. It reproduces on PR13's head as well, so it predates the storage change. |
 
 ### Standalone: no PixiJS baggage
 
