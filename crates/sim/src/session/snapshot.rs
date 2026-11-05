@@ -27,7 +27,7 @@ pub struct GameSnapshot<'a> {
     pub run: &'a GameRunLifecycle,
     pub level_up_barrier: &'a Option<PlayerLevelUpBarrier>,
     pub next_level_up_barrier_id: &'a u64,
-    pub mod_effects: &'a crate::ComponentEntities<GameSimulationModEffect>,
+    pub mod_effects: &'a [GameSimulationModEffect],
     pub next_mod_consumable_use_id: &'a u64,
     pub ticks: &'a u64,
     pub boneyard: Option<BoneyardSnapshot<'a>>,

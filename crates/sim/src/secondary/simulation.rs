@@ -1,5 +1,7 @@
 //! Secondary actor ownership, burn replacement and shield/Golem damage contracts.
 
+use std::collections::BTreeMap;
+
 use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
 
 use super::golem::{
@@ -28,9 +30,9 @@ pub struct NativeSecondarySimulationState {
     pub firewalker_geometry_sequence: u32,
     pub next_actor_id: u64,
     pub next_event_id: u64,
-    pub players: crate::KeyedComponents<NativeSecondaryPlayerState>,
+    pub players: BTreeMap<String, NativeSecondaryPlayerState>,
     pub rng: NativeRng,
-    pub target_effects: crate::ComponentEntities<NativeSecondaryTargetEffectState>,
+    pub target_effects: Vec<NativeSecondaryTargetEffectState>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -107,9 +109,9 @@ impl NativeSecondarySimulationState {
             firewalker_geometry_sequence: 0,
             next_actor_id: 1,
             next_event_id: 1,
-            players: crate::KeyedComponents::default(),
+            players: BTreeMap::new(),
             rng: NativeRng::new(seed),
-            target_effects: crate::ComponentEntities::default(),
+            target_effects: Vec::new(),
         }
     }
 

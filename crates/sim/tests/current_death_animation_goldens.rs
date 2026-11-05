@@ -120,7 +120,7 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
             &mut rng,
         )]
         .into_iter()
-        .collect::<solomon_sim::ComponentEntities<_>>();
+        .collect::<Vec<_>>();
         let mut tick = 10;
         for frame in case.frames {
             while tick < frame.tick {

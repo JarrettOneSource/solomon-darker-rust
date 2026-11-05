@@ -148,7 +148,7 @@ impl SpellView {
         world_key: &str,
         presentation_frame: u64,
         point_gain: &dyn Fn(Vec2) -> f64,
-        puppet_hits: &solomon_sim::ComponentEntities<EnemyPuppetHit>,
+        puppet_hits: &[EnemyPuppetHit],
         clocks: Option<&PresentationClocks>,
         enhanced_effects: bool,
         region_view: Option<NativeFlameLashBounds>,

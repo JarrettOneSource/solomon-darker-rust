@@ -92,13 +92,13 @@ placement algorithms and strict rejection of impossible births remain unchanged.
 
 [`sim::ecs`](../crates/sim/src/ecs.rs) owns admission-ordered component queries.
 Domain stores define the components and expose borrowed views to their callers.
-Enemy views combine body and controller state; Maggots separate their body from
-the controller that owns emergence, admission and navigation. Secondary views include the
-ability-specific components present on that entity; loot views combine the body
-and pickup reward. Enemy projectiles pair flight and contact state with their motion
+Enemies are plain records in a `Vec`, each holding its family's controller state in
+`brain`. Maggots separate their body from the controller that owns emergence,
+admission and navigation. Secondary views include the ability-specific components
+present on that entity; loot views combine the body and pickup reward. Enemy projectiles pair flight and contact state with their motion
 program; boss spells pair identity and lifetime with their spell program. Small
-particle and effect lifecycles, including authored consumable effects, use
-`ComponentEntities`. Spider web modifiers use keyed components for each affected player.
+particle and effect lifecycles, including authored consumable effects, are plain
+`Vec`s. Spider web modifiers are a `BTreeMap` keyed by the affected player's ID.
 
 Player-fired projectiles pair common flight state with an Earth, Ether, Fire or
 Weld program. Motion updates those components directly. The contact transaction
@@ -111,7 +111,7 @@ preserves the mixed Staff, Weld, Harden and elemental queue. Lifecycle systems
 update retained components and admit children at their original position in that
 queue; renderers borrow the same components.
 
-Secondary ability clocks and mana reserves are keyed player components; their
+Secondary ability clocks and mana reserves are a `BTreeMap` keyed by player ID, so
 iteration follows sorted player IDs. Target modifier components retain their
 application order. A tick reads the previous modifier values before applying
 expiry and damage, and commits player ability transactions to the same entities.

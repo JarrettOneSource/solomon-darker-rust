@@ -162,8 +162,8 @@ pub struct BoneyardGoodieState {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardLootStore {
     pub actors: LootActors,
-    pub effects: crate::ComponentEntities<EnemyDeathEffect>,
-    pub goodies: crate::ComponentEntities<BoneyardGoodieState>,
+    pub effects: Vec<EnemyDeathEffect>,
+    pub goodies: Vec<BoneyardGoodieState>,
     pub last_step_tick: Option<u64>,
     pub last_key_needed_tick: i64,
     pub last_successful_item_level: i32,
@@ -274,7 +274,7 @@ impl BoneyardLootStore {
         let next_key_drop_level = initial_native_key_drop_level(&mut shared_rng);
         Self {
             actors: LootActors::default(),
-            effects: crate::ComponentEntities::default(),
+            effects: Vec::new(),
             goodies: goodies.into_iter().collect(),
             last_step_tick: None,
             last_key_needed_tick: -NATIVE_GOODIE_KEY_FEEDBACK_INTERVAL_TICKS - 1,

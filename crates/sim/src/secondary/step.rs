@@ -248,7 +248,7 @@ impl NativeSecondarySimulationState {
         // query cannot replace this: dying and emerging actors still own modifiers.
         self.target_effects
             .retain(|effect| world.target_exists(&effect.world_key, effect.target_id));
-        let old_effects: Vec<_> = self.target_effects.iter().cloned().collect();
+        let old_effects = self.target_effects.clone();
         self.events.retain(|event| event.tick >= context.tick.saturating_sub(200));
         for effect in self.target_effects.iter_mut() {
             effect.step();

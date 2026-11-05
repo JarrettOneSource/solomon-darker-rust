@@ -85,7 +85,7 @@ fn session_at(region: HubRegion, position: Vec2) -> GameSession {
     session.npcs.students = HubStudentPopulation::cold(1, 100);
     session.npcs.students.spawning_enabled = false;
     session.npcs.students.spawn_request_pending = false;
-    session.npcs.skorcha.skorcha = None.into();
+    session.npcs.skorcha.skorcha = None;
     session.npcs.skorcha.transition_ticks_remaining = 1_000_000;
     session
 }
@@ -203,7 +203,7 @@ fn assert_fixed_contact(actor: FixedActor, pending: bool, skorcha: Option<HubSko
         let mut session = session_at(actor.region, start);
         session.participants.get_mut("local").unwrap().player.economy.college_intro_pending =
             pending;
-        session.npcs.skorcha.skorcha = skorcha.clone().into();
+        session.npcs.skorcha.skorcha = skorcha.clone();
         let movement = Vec2::new(-angle.cos(), -angle.sin());
         let mut timeline = timeline_for(&session, movement);
         for _ in 0..70 {
@@ -268,7 +268,7 @@ fn hub_prediction_updates_skorcha_presence_only_from_accepted_snapshots() {
     let input = GameSessionInput { movement, ..Default::default() };
     let mut session = session_at(HubRegion::Courtyard, start);
     session.participants.get_mut("local").unwrap().wizard.velocity = Vec2::new(-90.0, 0.0);
-    session.npcs.skorcha.skorcha = Some(skorcha.clone()).into();
+    session.npcs.skorcha.skorcha = Some(skorcha.clone());
     session.npcs.skorcha.transition_ticks_remaining = 1;
     let mut timeline = timeline_for(&session, movement);
     let blocked = timeline.sample(50.0, "local", input, false).unwrap().unwrap();
@@ -279,14 +279,14 @@ fn hub_prediction_updates_skorcha_presence_only_from_accepted_snapshots() {
 
     session.ticks = 5;
     session.participants.get_mut("local").unwrap().wizard.position = blocked;
-    session.npcs.skorcha.skorcha = None.into();
+    session.npcs.skorcha.skorcha = None;
     timeline.push(&session, 50.0, "local", None).unwrap();
     let absent = timeline.sample(60.0, "local", input, false).unwrap().unwrap();
     assert!(absent.session.wizard("local").unwrap().position.x < blocked.x);
 
     session.ticks = 10;
     session.participants.get_mut("local").unwrap().wizard.position = start;
-    session.npcs.skorcha.skorcha = Some(skorcha.clone()).into();
+    session.npcs.skorcha.skorcha = Some(skorcha.clone());
     timeline.push(&session, 100.0, "local", None).unwrap();
     let returned = timeline.sample(150.0, "local", input, false).unwrap().unwrap();
     assert!(returned.session.wizard("local").unwrap().position.x - skorcha.position.x >= 35.0);

@@ -228,7 +228,7 @@ pub fn create_native_death_weapon_actor(
 }
 
 pub fn step_native_death_weapon_actors(
-    actors: &mut crate::ComponentEntities<NativeDeathWeaponActor>,
+    actors: &mut Vec<NativeDeathWeaponActor>,
     tick: u64,
     rng: &mut NativeRng,
 ) {

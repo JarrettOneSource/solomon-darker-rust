@@ -346,7 +346,7 @@ impl NativeSecondaryTargetEffectState {
 }
 
 pub fn apply_native_secondary_target_effect(
-    effects: &mut crate::ComponentEntities<NativeSecondaryTargetEffectState>,
+    effects: &mut Vec<NativeSecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
     patch: NativeSecondaryTargetEffectPatch,
@@ -364,7 +364,7 @@ pub fn apply_native_secondary_target_effect(
 }
 
 pub fn apply_native_secondary_dazzle(
-    effects: &mut crate::ComponentEntities<NativeSecondaryTargetEffectState>,
+    effects: &mut Vec<NativeSecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
     duration_ticks: u64,

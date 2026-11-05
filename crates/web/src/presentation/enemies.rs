@@ -563,7 +563,7 @@ fn merge_pulses<'a>(
     older: impl IntoIterator<Item = &'a MageLightningPulse>,
     newer: impl IntoIterator<Item = &'a MageLightningPulse>,
     tick: f64,
-) -> solomon_sim::ComponentEntities<MageLightningPulse> {
+) -> Vec<MageLightningPulse> {
     let mut pulses = BTreeMap::new();
     for pulse in older.into_iter().chain(newer) {
         if pulse.tick as f64 > tick || tick - pulse.tick as f64 >= MAGE_LIGHTNING_MAX_PULSE_AGES {

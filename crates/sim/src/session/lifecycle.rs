@@ -78,7 +78,7 @@ impl GameSession {
             run: GameRunLifecycle::new(),
             level_up_barrier: None,
             next_level_up_barrier_id: 1,
-            mod_effects: crate::ComponentEntities::default(),
+            mod_effects: Vec::new(),
             next_mod_consumable_use_id: 1,
             ticks: 0,
             boneyard: None,

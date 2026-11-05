@@ -44,7 +44,7 @@ impl ModConsumableEffectsView {
 
     pub fn update(
         &mut self,
-        effects: &solomon_sim::ComponentEntities<GameSimulationModEffect>,
+        effects: &[GameSimulationModEffect],
         tick: f64,
         player_position: &dyn Fn(&str) -> Option<Vec2>,
         tint_at: &dyn Fn(Vec2) -> u32,

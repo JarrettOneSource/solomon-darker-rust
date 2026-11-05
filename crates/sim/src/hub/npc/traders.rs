@@ -156,7 +156,7 @@ impl HubHagathaParticle {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubHagathaClock {
     pub next_particle_id: u64,
-    pub particles: crate::ComponentEntities<HubHagathaParticle>,
+    pub particles: Vec<HubHagathaParticle>,
     pub phase: f64,
     pub rng: NativeRng,
     pub velocity: f64,
@@ -167,7 +167,7 @@ impl HubHagathaClock {
     pub fn new(seed: u32) -> Self {
         Self {
             next_particle_id: 0,
-            particles: crate::ComponentEntities::default(),
+            particles: Vec::new(),
             phase: 0.0,
             rng: NativeRng::new(i64::from(seed)),
             velocity: 0.05_f32 as f64,
@@ -299,7 +299,7 @@ impl HubSkorcha {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubSkorchaSchedule {
     pub rng: NativeRng,
-    pub skorcha: crate::OptionalEntity<HubSkorcha>,
+    pub skorcha: Option<HubSkorcha>,
     pub transition_ticks_remaining: u64,
     hidden_ticks: Option<u64>,
     visible_ticks: Option<u64>,
@@ -333,13 +333,8 @@ impl HubSkorchaSchedule {
         } else {
             None
         };
-        let mut schedule = Self {
-            rng,
-            skorcha: skorcha.into(),
-            transition_ticks_remaining: 0,
-            hidden_ticks,
-            visible_ticks,
-        };
+        let mut schedule =
+            Self { rng, skorcha, transition_ticks_remaining: 0, hidden_ticks, visible_ticks };
         schedule.schedule_window();
         schedule
     }
@@ -353,12 +348,12 @@ impl HubSkorchaSchedule {
             return;
         }
         if self.skorcha.is_some() {
-            self.skorcha.set(None);
+            self.skorcha = None;
         } else {
             let variant = self.rng.draw_integer(3) as usize;
             let skorcha = HubSkorcha::at_variant(self.rng.clone(), variant);
             self.rng = skorcha.rng.clone();
-            self.skorcha.set(Some(skorcha));
+            self.skorcha = Some(skorcha);
         }
         self.schedule_window();
     }
