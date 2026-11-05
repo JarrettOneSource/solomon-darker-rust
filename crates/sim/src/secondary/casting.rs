@@ -17,7 +17,6 @@ use crate::float;
 use crate::float::{atan2, fround, hypot};
 use crate::heading::heading_vector;
 use crate::profile::{NATIVE_SKILL_CATALOG, native_skill_stat, native_weld_build};
-use crate::secondary::SecondaryActorRead;
 use crate::{NativeRng, Vec2};
 
 pub(crate) struct SecondaryCastResult {
@@ -480,9 +479,10 @@ pub(crate) fn cast_ability(
                 .collect();
             if owned.len() >= cap {
                 owned.sort_by(|left, right| {
-                    left.golem()
+                    left.golem
+                        .as_ref()
                         .map_or(0.0, |golem| golem.current_health)
-                        .total_cmp(&right.golem().map_or(0.0, |golem| golem.current_health))
+                        .total_cmp(&right.golem.as_ref().map_or(0.0, |golem| golem.current_health))
                         .then(left.id.cmp(&right.id))
                 });
                 let id = owned[0].id;

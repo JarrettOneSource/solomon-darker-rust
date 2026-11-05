@@ -245,7 +245,7 @@ fn a_living_player_at_the_center_does_not_expand_the_capture_pulse() {
         {
             field_ticks += 1;
             assert_eq!(field.slow_factor, 0.0, "living contact is not capture");
-            let plan = native_secondary_presentation_plan(&field, session.ticks as f64, 1.0);
+            let plan = native_secondary_presentation_plan(field, session.ticks as f64, 1.0);
             assert!(!plan.draws.iter().any(|draw| draw.role == "ether-drain-capture-pulse"));
         }
     }

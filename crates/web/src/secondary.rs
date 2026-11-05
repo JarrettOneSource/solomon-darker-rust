@@ -17,7 +17,7 @@ use solomon_sim::secondary::electric_burn::{
 };
 use solomon_sim::secondary::presentation::*;
 use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryPlayerState, SecondaryActorRef,
+    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryPlayerState,
 };
 use solomon_sim::spells::air::{
     NativeAirLightningInput, NativeAirLightningPlan, build_native_air_lightning_plan,
@@ -128,7 +128,7 @@ impl SecondaryView {
     pub fn prepare<'a>(
         &mut self,
         renderer: &mut Renderer,
-        actors: impl Iterator<Item = SecondaryActorRef<'a>> + Clone,
+        actors: impl Iterator<Item = &'a NativeSecondaryActorState> + Clone,
         world_key: &str,
         presentation_frame: Option<f64>,
         presentation_ages: Option<&BTreeMap<u64, f64>>,
@@ -178,7 +178,7 @@ impl SecondaryView {
                     self.actors.push(ActorPlan {
                         id: actor.id,
                         kind: actor.kind,
-                        plan: native_golem_death_member_plan(&actor, age_ticks, member),
+                        plan: native_golem_death_member_plan(actor, age_ticks, member),
                         scale: actor.scale,
                         lightning: None,
                         electric_arc: None,
@@ -187,7 +187,7 @@ impl SecondaryView {
                 continue;
             }
             let plan = native_secondary_presentation_plan_at_age(
-                &actor,
+                actor,
                 age_ticks,
                 presentation_frame.unwrap_or(age_ticks),
                 gain,
@@ -216,7 +216,7 @@ impl SecondaryView {
             };
             indexes.insert(actor.id, self.actors.len());
             let electric_arc = if actor.kind == NativeSecondaryActorKind::ElectricBurnArc {
-                native_electric_burn_arc_plan(&actor, age_ticks, enhanced_effects)
+                native_electric_burn_arc_plan(actor, age_ticks, enhanced_effects)
             } else {
                 None
             };

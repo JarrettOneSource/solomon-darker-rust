@@ -2,7 +2,7 @@
 //! native actor order; target effects are applied before later actors query them.
 
 use crate::float;
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
+use crate::secondary::NativeSecondaryActorState;
 use std::collections::BTreeSet;
 
 use super::program::*;
@@ -190,8 +190,8 @@ pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     match actor.kind {
@@ -225,7 +225,7 @@ pub(super) fn step<W: NativeSecondaryWorld>(
                     let response = engine.state.rng.draw_scaled_float(0.5, false);
                     let burn = engine.context.players[&actor.owner_id].fire_burn_damage;
                     engine.fire_burns.push(BurnRequest {
-                        actor: actor.snapshot(),
+                        actor: actor.clone(),
                         damage: burn,
                         target: target.clone(),
                     });
@@ -314,7 +314,7 @@ pub(super) fn step<W: NativeSecondaryWorld>(
             {
                 engine.damage(actor, &target, actor.damage, Damage::Fire);
                 engine.fire_burns.push(BurnRequest {
-                    actor: actor.snapshot(),
+                    actor: actor.clone(),
                     damage: engine.context.players[&actor.owner_id].fire_burn_damage,
                     target,
                 });
@@ -380,7 +380,7 @@ pub(super) fn step<W: NativeSecondaryWorld>(
 
 fn burn<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    actor: &mut impl SecondaryActorWrite,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     let Some(target) = actor.target_id.and_then(|id| engine.world.target(&actor.world_key, id))
@@ -436,8 +436,8 @@ fn ordered_hit_target_ids(ids: &[u64]) -> Vec<u64> {
 
 fn wave<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     assert!(source.quantity > 0.0, "native shockwave retains radius growth");
@@ -458,7 +458,7 @@ fn wave<W: NativeSecondaryWorld>(
             }
             if actor.kind == Kind::Shockwave {
                 engine.fire_burns.push(BurnRequest {
-                    actor: actor.snapshot(),
+                    actor: actor.clone(),
                     damage: engine.context.players[&actor.owner_id].fire_burn_damage,
                     target: target.clone(),
                 });
@@ -497,8 +497,8 @@ fn wave<W: NativeSecondaryWorld>(
 
 fn advance_wave<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     growth: f64,
     fade_threshold: f64,
 ) -> bool {
@@ -526,7 +526,7 @@ fn advance_wave<W: NativeSecondaryWorld>(
 
 fn maximum_explosion<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    wave: &impl SecondaryActorRead,
+    wave: &NativeSecondaryActorState,
     target: &NativeSecondaryTarget,
 ) {
     let seed = engine.state.rng.draw_integer(1_000_001);
@@ -606,7 +606,7 @@ fn maximum_explosion<W: NativeSecondaryWorld>(
             .expect("actor phase owns birth commands")
             .iter()
             .find(|actor| actor.id == contact.spell_id && actor.kind == Kind::RingFireFragment)
-            .map(|actor| actor.snapshot())
+            .cloned()
         else {
             continue;
         };
@@ -636,7 +636,7 @@ fn maximum_explosion<W: NativeSecondaryWorld>(
         .retain(|actor| !consumed.contains(&actor.id));
 }
 
-fn step_fragment(source: &impl SecondaryActorRead, actor: &mut impl SecondaryActorWrite) {
+fn step_fragment(source: &NativeSecondaryActorState, actor: &mut NativeSecondaryActorState) {
     let mut ember = PrimarySpellFireEmber {
         common: PrimarySpellTransientBase {
             age_ticks: source.age_ticks,
@@ -659,11 +659,11 @@ fn step_fragment(source: &impl SecondaryActorRead, actor: &mut impl SecondaryAct
         vertical_velocity: source.slow_factor,
     };
     if !step_native_fire_ember(&mut ember).retained {
-        **actor = (**source).clone();
+        *actor = source.clone();
         actor.alpha = 0.0;
         return;
     };
-    **actor = (**source).clone();
+    *actor = source.clone();
     actor.age_ticks = ember.common.age_ticks;
     actor.alpha = ember.life;
     actor.frame = ember.phase;
@@ -677,8 +677,8 @@ fn step_fragment(source: &impl SecondaryActorRead, actor: &mut impl SecondaryAct
 
 fn storm<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     let mut flash = source.frame;
@@ -762,7 +762,7 @@ fn storm<W: NativeSecondaryWorld>(
 
 fn weather_drop<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    parent: &impl SecondaryActorRead,
+    parent: &NativeSecondaryActorState,
     index: i32,
     acid: bool,
 ) {
@@ -788,8 +788,8 @@ fn weather_drop<W: NativeSecondaryWorld>(
 
 fn acid<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     let residue = if source.scale >= 1.0 && source.age_ticks < 1500 {
@@ -862,8 +862,8 @@ fn acid<W: NativeSecondaryWorld>(
 
 fn comet<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     let brightness = engine.state.rng.draw_scaled_float(0.5, false);

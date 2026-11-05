@@ -12,7 +12,7 @@ use solomon_sim::boneyard::{
 };
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::{NativeSecondaryAbilityId, SecondaryActorRead, SecondaryActorWrite};
+use solomon_sim::secondary::NativeSecondaryAbilityId;
 use solomon_sim::session::{GameSession, GameSessionOptions, GameSessionTickContext};
 
 fn arena_session(north: bool, phase: ArenaPhase, skill: NativeSecondaryAbilityId) -> GameSession {
@@ -150,7 +150,7 @@ fn summoned_golems_resolve_their_body_inside_the_playable_arena() {
                 ),
                 "Golem was placed beyond the active arena: north={north}, phase={phase:?}"
             );
-            let articulation = golem.golem().unwrap();
+            let articulation = golem.golem.as_ref().unwrap();
             for foot in [articulation.left_foot, articulation.right_foot] {
                 assert!(can_place_boneyard_body(
                     foot,
@@ -172,14 +172,14 @@ fn walking_golems_keep_their_body_and_feet_inside_the_active_arena() {
                 Vec2::new(600.0, if north { 400.0 } else { 1375.0 });
             assert!(game.activate_belt_slot("wizard", 0, None).transaction.accepted);
             {
-                let mut actor =
-                    game.secondary.actors.iter_mut().find(|actor| actor.golem().is_some()).unwrap();
+                let actor =
+                    game.secondary.actors.iter_mut().find(|actor| actor.golem.is_some()).unwrap();
                 let origin = Vec2::new(600.0, if north { 405.0 } else { 1370.0 });
                 let rotation = if north { 0.0 } else { std::f64::consts::PI };
                 actor.position = origin;
                 actor.age_ticks = 400;
                 actor.rotation_radians = rotation;
-                let golem = actor.golem_mut().unwrap();
+                let golem = actor.golem.as_mut().unwrap();
                 golem.phase = solomon_sim::secondary::golem::NativeGolemPhase::Active;
                 golem.orbit_heading_radians = Some(rotation);
                 golem.gait_tick = 99;
@@ -198,7 +198,7 @@ fn walking_golems_keep_their_body_and_feet_inside_the_active_arena() {
                 )
                 .advanced
             );
-            let actor = game.secondary.actors.iter().find(|actor| actor.golem().is_some()).unwrap();
+            let actor = game.secondary.actors.iter().find(|actor| actor.golem.is_some()).unwrap();
             assert_eq!(actor.age_ticks, 401);
             let world = game.boneyard.as_ref().unwrap();
             assert!(
@@ -210,7 +210,7 @@ fn walking_golems_keep_their_body_and_feet_inside_the_active_arena() {
                 ),
                 "Golem walked beyond the arena: north={north}, phase={phase:?}"
             );
-            let golem = actor.golem().unwrap();
+            let golem = actor.golem.as_ref().unwrap();
             for foot in
                 [golem.left_foot, golem.right_foot, golem.left_foot_next, golem.right_foot_next]
             {

@@ -299,10 +299,7 @@ fn every_secondary_actor_preserves_native_painter_and_light_disposition() {
         actors.push(actor);
     }
     let mut order = WorldPainterOrder { next_actor_ordinal: 49, next_transient_ordinal: 10 };
-    enroll_native_secondary_painter_owners(
-        actors.iter_mut().map(|actor| actor.view_mut()),
-        &mut order,
-    );
+    enroll_native_secondary_painter_owners(actors.iter_mut(), &mut order);
     for (actor, case) in actors.iter().zip(fixture["painterCases"].as_array().unwrap()) {
         let lane = match native_secondary_painter_manager_lane(actor.kind) {
             WorldManagerLane::Actor => "actor",
@@ -325,10 +322,7 @@ fn every_secondary_actor_preserves_native_painter_and_light_disposition() {
     }
     let snapshot = |order: WorldPainterOrder| json!({"nextRegistrationOrdinal":{"actor":order.next_actor_ordinal,"transient":order.next_transient_ordinal}});
     assert_snapshot(&snapshot(order), &fixture["nextPainterOrder"], "secondary manager order");
-    enroll_native_secondary_painter_owners(
-        actors.iter_mut().map(|actor| actor.view_mut()),
-        &mut order,
-    );
+    enroll_native_secondary_painter_owners(actors.iter_mut(), &mut order);
     assert_snapshot(
         &snapshot(order),
         &fixture["repeatedPainterOrder"],

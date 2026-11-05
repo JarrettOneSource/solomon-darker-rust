@@ -157,26 +157,6 @@ impl<Q: IterQueryData> OrderedEntities<Q> {
         }
     }
 
-    pub fn extract_if<T>(
-        &mut self,
-        mut extract: impl FnMut(EntityRef<'_>) -> bool,
-        mut take: impl FnMut(&mut EntityWorldMut<'_>) -> T,
-    ) -> Vec<T> {
-        let removed: EntityIndexSet =
-            self.order.iter().copied().filter(|entity| extract(self.read(*entity))).collect();
-        self.order.retain(|entity| !removed.contains(entity));
-        removed
-            .into_iter()
-            .map(|entity| {
-                let storage = self.storage.as_mut().expect("live entity has component storage");
-                let mut entity = storage.world.entity_mut(entity);
-                let value = take(&mut entity);
-                entity.despawn();
-                value
-            })
-            .collect()
-    }
-
     pub fn clear(&mut self) {
         if let Some(storage) = &mut self.storage {
             storage.world.clear_entities();

@@ -131,7 +131,11 @@ impl GameSession {
         unstepped_ids: &[u64],
         extensions: Option<&dyn GameSimulationExtensions>,
     ) -> Result<NativeSecondaryTickResult, String> {
-        let unstepped = self.secondary.actors.extract_if(|actor| unstepped_ids.contains(&actor.id));
+        let unstepped: Vec<_> = self
+            .secondary
+            .actors
+            .extract_if(.., |actor| unstepped_ids.contains(&actor.id))
+            .collect();
         let previous_mindstars: std::collections::BTreeSet<_> = self
             .secondary
             .players
@@ -486,7 +490,7 @@ impl GameSession {
                 .actors
                 .iter()
                 .find(|actor| actor.id == knockback.source_actor_id)
-                .map(|actor| &actor.common.owner_id)
+                .map(|actor| &actor.owner_id)
                 .or_else(|| {
                     previous_owners
                         .iter()

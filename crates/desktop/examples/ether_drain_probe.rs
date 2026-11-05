@@ -12,9 +12,7 @@ mod native {
         NativeEtherDrainAnimation as Animation, NativeEtherDrainAtlas as Atlas,
         NativeEtherDrainState,
     };
-    use solomon_sim::secondary::{
-        NativeSecondaryActorKind, NativeSecondaryActorState, SecondaryActorRead,
-    };
+    use solomon_sim::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
     use solomon_web::Camera;
     use solomon_web::enemies::EnemyView;
     use solomon_web::secondary::SecondaryView;
@@ -325,7 +323,7 @@ mod native {
                         result = (|| {
                             view.prepare(
                                 renderer,
-                                std::iter::once(actor.view()),
+                                std::iter::once(&actor),
                                 "boneyard:probe",
                                 Some(42.0),
                                 None,

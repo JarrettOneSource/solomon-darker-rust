@@ -681,7 +681,7 @@ impl BattleViews {
         };
         let displacement = if frame.settings.zoom_effects {
             native_secondary_world_shake(
-                frame.secondary.actors.iter(),
+                &frame.secondary.actors,
                 &world_key,
                 frame.screen_feedback.camera_displacement,
             )

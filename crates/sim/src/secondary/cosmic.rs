@@ -12,12 +12,12 @@ use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::profile::offensive::resolve_native_skill_damage_value;
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
+use crate::secondary::NativeSecondaryActorState;
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     match actor.kind {
@@ -159,8 +159,8 @@ pub(super) fn step<W: NativeSecondaryWorld>(
 
 fn appendage<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     let Some(parent_id) = source.hit_target_ids.first().copied() else {

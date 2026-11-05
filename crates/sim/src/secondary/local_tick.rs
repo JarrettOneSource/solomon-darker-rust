@@ -8,12 +8,12 @@ use super::{
 };
 use crate::Vec2;
 use crate::float::fround;
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
+use crate::secondary::NativeSecondaryActorState;
 
 pub(super) fn step<W: NativeSecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     retain: &mut bool,
 ) {
     match actor.kind {

@@ -5,26 +5,26 @@ use super::types::*;
 use crate::Vec2;
 use crate::float;
 use crate::secondary::NativeSecondaryActorKind as Kind;
-use crate::secondary::SecondaryActorRead;
+use crate::secondary::NativeSecondaryActorState;
 
 const IRON_TINT: u32 = 0x595959;
 const DRAW_SCALE: f64 = 1.111_f32 as f64;
 const HALF_DRAW_SCALE: f64 = 0.5555_f32 as f64;
 
 pub fn native_golem_presentation_plan(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     frame: f64,
 ) -> NativeSecondaryPresentationPlan {
     native_golem_presentation_plan_at_age(actor, actor.age_ticks as f64, frame)
 }
 
 pub(super) fn native_golem_presentation_plan_at_age(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
     frame: f64,
 ) -> NativeSecondaryPresentationPlan {
     assert_eq!(actor.kind, Kind::Golem, "native Golem presentation has authoritative Golem state");
-    let golem = actor.golem().copied().expect("Golem presentation retains its articulation");
+    let golem = actor.golem.expect("Golem presentation retains its articulation");
     let heading =
         actor.rotation_radians * 180.0 / std::f64::consts::PI + golem.action_heading_offset_degrees;
     let facing = native_golem_facing(heading);
@@ -46,7 +46,7 @@ pub(super) fn native_golem_presentation_plan_at_age(
         golem.right_foot.y + golem.right_foot_bob.y - actor.position.y,
     );
     let center = Vec2::new((left.x + right.x) * 0.5, (left.y + right.y) * 0.5);
-    let body = Body { actor: actor.view(), center, heading, elevation };
+    let body = Body { actor, center, heading, elevation };
     let mut records: Vec<(f64, usize, Vec<NativeSecondarySpriteDraw>)> = Vec::new();
     let front = body.part(
         113 + facing,
@@ -176,7 +176,7 @@ pub(super) fn native_golem_presentation_plan_at_age(
 }
 
 struct Body<'a> {
-    actor: crate::secondary::SecondaryActorRef<'a>,
+    actor: &'a crate::secondary::NativeSecondaryActorState,
     center: Vec2,
     heading: f64,
     elevation: f64,
@@ -192,7 +192,7 @@ impl Body<'_> {
         tint: u32,
     ) -> NativeSecondarySpriteDraw {
         let mut draw =
-            NativeSecondarySpriteDraw::new(&self.actor, NativeSecondaryAtlas::Golem, entry);
+            NativeSecondarySpriteDraw::new(self.actor, NativeSecondaryAtlas::Golem, entry);
         draw.offset = golem_point(
             self.center,
             self.heading,
@@ -217,7 +217,7 @@ fn add_record(
 }
 
 fn connector_draws(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     frame: f64,
     left: Vec2,
     right: Vec2,
@@ -225,7 +225,7 @@ fn connector_draws(
     facing: usize,
     tint: u32,
 ) -> Vec<NativeSecondarySpriteDraw> {
-    let golem = actor.golem().copied().unwrap();
+    let golem = actor.golem.unwrap();
     let center = Vec2::new((left.x + right.x) * 0.5, (left.y + right.y) * 0.5);
     let radians = degrees_to_radians(heading);
     let lateral = Vec2::new(-float::cos(radians), -float::sin(radians));
@@ -293,7 +293,7 @@ fn golem_point(center: Vec2, heading: f64, forward: f64, lateral: f64, vertical:
     let y = -float::cos(radians);
     Vec2::new(center.x + x * forward + y * lateral, center.y + y * forward - x * lateral + vertical)
 }
-fn cosmetic(actor: &impl SecondaryActorRead, frame: f64, salt: u64) -> f64 {
+fn cosmetic(actor: &NativeSecondaryActorState, frame: f64, salt: u64) -> f64 {
     hash_unit(actor.id, frame.floor() as u64 * 31 + salt)
 }
 fn green_tint(unit: f64) -> u32 {
@@ -315,13 +315,13 @@ pub enum NativeGolemDeathMember {
 
 #[must_use]
 pub fn native_golem_death_presentation_plan(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
 ) -> NativeSecondaryPresentationPlan {
     native_golem_death_presentation_plan_at_age(actor, actor.age_ticks as f64)
 }
 
 pub(super) fn native_golem_death_presentation_plan_at_age(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
 ) -> NativeSecondaryPresentationPlan {
     death_member_plan(actor, age_ticks, None)
@@ -329,7 +329,7 @@ pub(super) fn native_golem_death_presentation_plan_at_age(
 
 #[must_use]
 pub fn native_golem_death_member_plan(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
     member: NativeGolemDeathMember,
 ) -> NativeSecondaryPresentationPlan {
@@ -337,7 +337,7 @@ pub fn native_golem_death_member_plan(
 }
 
 fn death_member_plan(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
     member: Option<NativeGolemDeathMember>,
 ) -> NativeSecondaryPresentationPlan {
@@ -346,7 +346,7 @@ fn death_member_plan(
         Kind::GolemDeath,
         "Golem death presentation requires retained fragments"
     );
-    let animation = actor.golem_death().expect("Golem death retains mutable fragments");
+    let animation = actor.golem_death.as_ref().expect("Golem death retains mutable fragments");
     let root = match member {
         Some(NativeGolemDeathMember::Fragment(index)) => animation
             .fragments

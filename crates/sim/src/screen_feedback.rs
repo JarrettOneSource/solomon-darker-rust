@@ -85,7 +85,7 @@ pub fn present_native_secondary_screen_overlay(
 
 #[must_use]
 pub fn native_secondary_world_shake(
-    actors: impl IntoIterator<Item = impl crate::secondary::SecondaryActorRead>,
+    actors: &[crate::secondary::NativeSecondaryActorState],
     world_key: &str,
     current: Vec2,
 ) -> Vec2 {

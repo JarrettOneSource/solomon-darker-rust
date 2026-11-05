@@ -2,8 +2,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
-
 use super::golem::{
     NativeGolemIncomingDamage, NativeGolemKernelActor, damage_native_secondary_golem,
 };
@@ -21,8 +19,8 @@ use crate::{NativeRng, Vec2};
 pub struct NativeSecondarySimulationState {
     pub camera_displacements: Vec<NativeSecondaryCameraDisplacement>,
     pub stoneskin_warp: Option<Vec<f64>>,
-    pub actors: super::SecondaryActors,
-    /// Birth commands collected while existing entities advance. They become live
+    pub actors: Vec<super::NativeSecondaryActorState>,
+    /// Birth commands collected while existing actors advance. They become live
     /// together after that phase, so children cannot advance on their birth tick.
     #[cfg_attr(feature = "persistence", serde(skip))]
     pub(super) deferred_births: Option<Vec<NativeSecondaryActorState>>,
@@ -103,7 +101,7 @@ impl NativeSecondarySimulationState {
         Self {
             camera_displacements: Vec::new(),
             stoneskin_warp: None,
-            actors: super::SecondaryActors::default(),
+            actors: Vec::new(),
             deferred_births: None,
             events: Vec::new(),
             firewalker_geometry_sequence: 0,
@@ -356,7 +354,7 @@ impl NativeSecondarySimulationState {
             return;
         }
         let damage = fround(input.damage / 200.0);
-        if let Some(mut existing) = self.actors.iter_mut().find(|actor| {
+        if let Some(existing) = self.actors.iter_mut().find(|actor| {
             actor.kind == NativeSecondaryActorKind::FireBurn
                 && actor.world_key == input.world_key
                 && actor.target_id == Some(input.target.id)
@@ -390,7 +388,7 @@ impl NativeSecondarySimulationState {
     }
 
     pub fn apply_ether_burn(&mut self, input: NativeSecondaryEtherBurnInput) {
-        if let Some(mut existing) = self.actors.iter_mut().find(|actor| {
+        if let Some(existing) = self.actors.iter_mut().find(|actor| {
             actor.kind == NativeSecondaryActorKind::EtherBurn
                 && actor.world_key == input.world_key
                 && actor.target_id == Some(input.target.id)
@@ -595,7 +593,7 @@ impl NativeSecondarySimulationState {
         }) else {
             return missing;
         };
-        let actor = self.actors.get(index).expect("Golem index is live").snapshot();
+        let actor = self.actors[index].clone();
         let Some(golem) = actor.golem else {
             return missing;
         };
@@ -622,8 +620,8 @@ impl NativeSecondarySimulationState {
             return result;
         }
         if let Some(remaining) = received.actor {
-            let mut actor = self.actors.get_mut(index).expect("Golem index is live");
-            *actor.golem_mut().expect("Golem retains its articulation") = remaining.golem;
+            let actor = &mut self.actors[index];
+            actor.golem = Some(remaining.golem);
             actor.quantity = remaining.golem.current_health;
             return result;
         }
@@ -656,7 +654,7 @@ impl NativeSecondarySimulationState {
         }
         death.variant = i32::from(golem.iron);
         self.spawn_actor(death);
-        let death = self.actors.last().expect("Golem death presentation was spawned").snapshot();
+        let death = self.actors.last().expect("Golem death presentation was spawned").clone();
         for cue in [
             NativeSecondaryAudioCue::StoneBreak,
             NativeSecondaryAudioCue::FlameLashStart,

@@ -1,14 +1,14 @@
 //! Shared secondary motion from `native-expanding-wave.ts` and `native-stoneskin.ts`.
 
 use crate::float::{cos, fround, sin};
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
+use crate::secondary::NativeSecondaryActorState;
 use crate::{NativeRng, Vec2};
 
 /// Both Comet debris and Stoneskin chips retain the same ordinary Bouncer fields.
 /// The Source converts its stored radians to degrees for each shared motion step.
 pub(super) fn step_secondary_bouncer(
-    source: &impl SecondaryActorRead,
-    actor: &mut impl SecondaryActorWrite,
+    source: &NativeSecondaryActorState,
+    actor: &mut NativeSecondaryActorState,
     tick: u64,
     rng: &mut NativeRng,
 ) -> bool {

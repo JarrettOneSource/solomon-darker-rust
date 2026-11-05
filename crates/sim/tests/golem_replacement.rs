@@ -13,7 +13,6 @@ use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
 use solomon_sim::secondary::golem::NativeGolemIncomingDamage;
 use solomon_sim::secondary::{
     NativeSecondaryActorKind, NativeSecondarySimulationState, NativeSecondaryTickContext,
-    SecondaryActorRead,
 };
 use solomon_sim::social::{AllyGolemProjection, AllyHudRow, derive_golem_ally_hud_rows};
 use solomon_sim::{HubWizard, Vec2};
@@ -24,7 +23,7 @@ fn health(state: &NativeSecondarySimulationState) -> Vec<(u64, f64, f64)> {
         .iter()
         .filter(|actor| actor.kind == NativeSecondaryActorKind::Golem)
         .map(|actor| {
-            let golem = actor.golem().unwrap();
+            let golem = actor.golem.as_ref().unwrap();
             (actor.id, golem.current_health, golem.maximum_health)
         })
         .collect()
@@ -36,10 +35,10 @@ fn rows(state: &NativeSecondarySimulationState) -> Vec<AllyHudRow> {
         .iter()
         .filter(|actor| actor.kind == NativeSecondaryActorKind::Golem)
         .map(|actor| {
-            let golem = actor.golem().unwrap();
+            let golem = actor.golem.as_ref().unwrap();
             AllyGolemProjection {
                 id: actor.id,
-                world_key: &actor.common.world_key,
+                world_key: &actor.world_key,
                 current_health: golem.current_health,
                 maximum_health: golem.maximum_health,
             }

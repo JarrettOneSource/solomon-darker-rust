@@ -19,7 +19,7 @@ use crate::enemies::presentation::{
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::secondary::NativeSecondaryActorKind as Kind;
-use crate::secondary::SecondaryActorRead;
+use crate::secondary::NativeSecondaryActorState;
 use crate::secondary::ether_drain::{NativeEtherDrainAnimation, NativeEtherDrainAtlas};
 use crate::secondary::leviathan::{
     native_leviathan_appendage_local_root, native_leviathan_appendage_record,
@@ -32,7 +32,7 @@ use crate::{NativeRng, Vec2};
 
 #[must_use]
 pub fn native_secondary_presentation_plan(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     frame: f64,
     point_gain: f64,
 ) -> NativeSecondaryPresentationPlan {
@@ -52,7 +52,7 @@ pub fn native_secondary_presentation_plan(
 /// the ordinary snapshot wrapper uses Source's `actor.enhanced` default.
 #[must_use]
 pub fn native_secondary_presentation_plan_at_age(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
     frame: f64,
     point_gain: f64,
@@ -632,7 +632,7 @@ fn spell_draw(draw: NativeSpellSprite, role: String) -> NativeSecondarySpriteDra
 }
 
 fn dampened_projectile_draws(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let layers = if actor.variant == 3 {
@@ -697,7 +697,7 @@ fn dampened_projectile_draws(
 }
 
 fn magic_trap_draws(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let radians = degrees_to_radians(age_ticks);
@@ -746,7 +746,7 @@ fn magic_trap_draws(
 }
 
 fn acid_rain_plan(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     age_ticks: f64,
 ) -> NativeSecondaryPresentationPlan {
     let scale = fround(actor.scale);
@@ -795,7 +795,7 @@ fn acid_rain_plan(
 }
 
 fn ether_drain_draws(
-    actor: &impl SecondaryActorRead,
+    actor: &NativeSecondaryActorState,
     frame: f64,
 ) -> Vec<NativeSecondarySpriteDraw> {
     let mut draws = Vec::new();
@@ -866,7 +866,7 @@ fn ether_drain_draws(
         pulse.scale_y = pulse.scale_x;
         draws.push(pulse);
     }
-    if let Some(field) = actor.ether_drain() {
+    if let Some(field) = actor.ether_drain.as_ref() {
         // Retail private-manager draw follows the parent pulse. Anim_Sucked
         // 0x00455370 uses field opacity, unit scale and a field-local clip.
         let private = |atlas, entry, role: &str| {

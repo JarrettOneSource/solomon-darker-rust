@@ -33,7 +33,7 @@ impl SessionSecondaryWorld<'_> {
     pub fn collect_teleport_bodies(
         world: Option<&BoneyardWorld>,
         positions: &[Vec2],
-        actors: &crate::secondary::SecondaryActors,
+        actors: &[crate::secondary::NativeSecondaryActorState],
     ) -> Vec<BoneyardNativeTeleportBody> {
         let mut bodies: Vec<_> = positions
             .iter()

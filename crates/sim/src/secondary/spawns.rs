@@ -7,7 +7,7 @@ use super::{NativeSecondaryActorKind as Kind, NativeSecondarySimulationState as 
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
-use crate::secondary::{SecondaryActorRead, SecondaryActorWrite};
+use crate::secondary::NativeSecondaryActorState;
 
 pub(super) enum EtherFadePresentation {
     Muzzle,
@@ -58,7 +58,7 @@ pub(super) fn planewalker_mote(
 
 pub(super) fn ether_fade(
     state: &mut State,
-    parent: &impl SecondaryActorRead,
+    parent: &NativeSecondaryActorState,
     position: Vec2,
     presentation: EtherFadePresentation,
     tick: u64,
@@ -86,7 +86,7 @@ pub(super) fn ether_fade(
 
 pub(super) fn leviathan_mote(
     state: &mut State,
-    parent: &impl SecondaryActorRead,
+    parent: &NativeSecondaryActorState,
     current_scale: f64,
 ) {
     let heading = state.rng.draw_scaled_float(360.0, false);
@@ -185,7 +185,7 @@ pub(super) fn plane_orb_birth(state: &mut State, owner: &str, world_key: &str, o
     }
 }
 
-pub(super) fn plane_orb_mote(state: &mut State, parent: &impl SecondaryActorRead) {
+pub(super) fn plane_orb_mote(state: &mut State, parent: &NativeSecondaryActorState) {
     let heading = state.rng.draw_scaled_float(360.0, false);
     let vertical = state.rng.draw_scaled_float(5.0, false);
     let scale = state.rng.draw_scaled_float(0.5, false);
@@ -214,7 +214,7 @@ pub(super) fn plane_orb_mote(state: &mut State, parent: &impl SecondaryActorRead
     state.spawn_actor(child);
 }
 
-pub(super) fn drain_cloud(state: &mut State, parent: &impl SecondaryActorRead) {
+pub(super) fn drain_cloud(state: &mut State, parent: &NativeSecondaryActorState) {
     let scale = state.rng.draw_scaled_float(1.5, false);
     let rotation = state.rng.draw_scaled_float(360.0, false);
     let alpha = state.rng.draw_scaled_float(0.15_f32 as f64, false);
@@ -250,7 +250,7 @@ pub(super) fn drain_cloud(state: &mut State, parent: &impl SecondaryActorRead) {
     state.spawn_actor(child);
 }
 
-pub(super) fn quake(state: &mut State, parent: &impl SecondaryActorRead, intensity: f64) {
+pub(super) fn quake(state: &mut State, parent: &NativeSecondaryActorState, intensity: f64) {
     let rotation = state.rng.draw_scaled_float(360.0, false);
     let selector = state.rng.draw_integer(4);
     let scale = fround(2.0 + f64::from(selector));
@@ -270,7 +270,7 @@ pub(super) fn quake(state: &mut State, parent: &impl SecondaryActorRead, intensi
     state.spawn_actor(child);
 }
 
-pub(super) fn advance_dust(child: &mut impl SecondaryActorWrite) {
+pub(super) fn advance_dust(child: &mut NativeSecondaryActorState) {
     child.phase = fround(child.phase + 0.5);
     child.alpha =
         fround(float::sin(child.phase * std::f64::consts::PI / 180.0).abs() * child.quantity);
@@ -282,8 +282,8 @@ pub(super) fn advance_dust(child: &mut impl SecondaryActorWrite) {
 
 pub(super) fn dust(
     state: &mut State,
-    parent: &impl SecondaryActorRead,
-    scenery: &impl SecondaryActorRead,
+    parent: &NativeSecondaryActorState,
+    scenery: &NativeSecondaryActorState,
 ) {
     let speed = state.rng.draw_scaled_float(0.25, false);
     let magnitude = state.rng.draw_scaled_float(0.5, false);
@@ -313,7 +313,7 @@ pub(super) fn dust(
     state.spawn_actor(child);
 }
 
-pub(super) fn quake_debris(state: &mut State, parent: &impl SecondaryActorRead) {
+pub(super) fn quake_debris(state: &mut State, parent: &NativeSecondaryActorState) {
     let heading = state.rng.draw_scaled_float(360.0, false);
     let bounce = state.rng.draw_scaled_float(3.0, false);
     state.rng.draw_scaled_float(50.0, false);
