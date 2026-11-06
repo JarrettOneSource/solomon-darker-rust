@@ -128,7 +128,7 @@ fn label(
 #[derive(Clone, Debug)]
 pub(crate) enum EditorFont {
     Browser(FontId),
-    NativeName { origin: Pos2, scale: f32, field: Rect },
+    WizardName { origin: Pos2, scale: f32, field: Rect },
 }
 
 /// The identity of one mounted editor: its widget ID and mount instance.
@@ -190,8 +190,8 @@ impl EditorDescriptor {
         } else {
             match &self.font {
                 EditorFont::Browser(font) => font_run::geometry(font, text, self.font_options)?,
-                EditorFont::NativeName { origin, scale, field } => {
-                    native_name_geometry(text, *origin, *scale, *field)
+                EditorFont::WizardName { origin, scale, field } => {
+                    wizard_name_geometry(text, *origin, *scale, *field)
                 }
             }
         })
@@ -201,7 +201,7 @@ impl EditorDescriptor {
     }
 }
 
-fn native_name_geometry(
+fn wizard_name_geometry(
     text: &str,
     origin: Pos2,
     scale: f32,

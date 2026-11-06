@@ -393,7 +393,7 @@ fn native_text_prefocus_respects_actual_covering_controls_and_modal_admission() 
                 .show(frame.ctx, |ui| {
                     ui.set_min_size(vec2(320.0, 200.0));
                     NativeTextEdit::singleline(&mut text, "prefocus-field", "Name")
-                        .native_name(Pos2::ZERO, 1.0)
+                        .wizard_name_font(Pos2::ZERO, 1.0)
                         .show(frame, ui, Rect::from_min_size(pos2(20.0, 20.0), vec2(200.0, 44.0)));
                     let cover = ui.interact(
                         Rect::from_min_size(pos2(60.0, 20.0), vec2(70.0, 44.0)),
@@ -747,7 +747,7 @@ fn a_new_field_has_committed_geometry_before_an_immediate_click_and_submit() {
                 // Source permits empty drafts; no stock glyph image is needed
                 // for this native focus/dispatch regression.
                 let response = NativeTextEdit::singleline(&mut text, "new-name", "Name")
-                    .native_name(Pos2::ZERO, 1.0)
+                    .wizard_name_font(Pos2::ZERO, 1.0)
                     .margin(Vec2::ZERO)
                     .show(frame, ui, Rect::from_min_size(pos2(20.0, 100.0), vec2(250.0, 45.0)));
                 if response.submitted {
@@ -820,7 +820,7 @@ fn native_editor_enter_is_per_dispatch_and_keeps_the_real_singleline_focus() {
     let mut paint = |frame: &mut UiFrame<'_>| {
         frame.ctx.root_ui(|ui| {
             let response = NativeTextEdit::singleline(&mut text, "native-form", "Query")
-                .native_name(Pos2::ZERO, 1.0)
+                .wizard_name_font(Pos2::ZERO, 1.0)
                 .request_focus(true)
                 .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)));
             submitted.set(response.submitted);
@@ -852,7 +852,7 @@ fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance(
     frame(&ctx, Vec::new(), |frame| {
         frame.ctx.root_ui(|ui| {
             NativeTextEdit::singleline(&mut text, "rename", "Name")
-                .native_name(Pos2::ZERO, 1.0)
+                .wizard_name_font(Pos2::ZERO, 1.0)
                 .request_focus(true)
                 .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)));
             descriptor = frame.editors.borrow().last().cloned();
@@ -865,7 +865,7 @@ fn a_remounted_field_does_not_accept_a_native_receipt_from_its_retired_instance(
     frame_native(&ctx, Vec::new(), &[], &[old_input], None, |frame| {
         frame.ctx.root_ui(|ui| {
             submitted = NativeTextEdit::singleline(&mut text, "rename", "Name")
-                .native_name(Pos2::ZERO, 1.0)
+                .wizard_name_font(Pos2::ZERO, 1.0)
                 .request_focus(true)
                 .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(250.0, 45.0)))
                 .submitted;
@@ -888,7 +888,7 @@ fn controller_confirmation_clicks_a_text_field_and_directions_leave_it_spatially
     let mut paint = |frame: &mut UiFrame<'_>| {
         frame.ctx.root_ui(|ui| {
             let output = NativeTextEdit::singleline(&mut text, "controller-field", "Name")
-                .native_name(Pos2::ZERO, 1.0)
+                .wizard_name_font(Pos2::ZERO, 1.0)
                 .request_focus(focus.get())
                 .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(200.0, 45.0)));
             submitted.set(output.submitted);
@@ -928,7 +928,7 @@ fn native_tab_focus_provenance_distinguishes_actual_field_entry_from_controller_
         let mut paint = |frame: &mut UiFrame<'_>| {
             frame.ctx.root_ui(|ui| {
                 let response = NativeTextEdit::singleline(&mut text, "tab-field", "Name")
-                    .native_name(Pos2::ZERO, 1.0)
+                    .wizard_name_font(Pos2::ZERO, 1.0)
                     .request_focus(focus.get())
                     .show(frame, ui, Rect::from_min_size(pos2(20.0, 30.0), vec2(200.0, 45.0)));
                 if response.has_focus() {
@@ -982,7 +982,7 @@ fn native_editor_honors_readonly_and_async_disabled_admission_without_retiring_i
     let mut paint = |frame: &mut UiFrame<'_>| {
         frame.ctx.root_ui(|ui| {
             NativeTextEdit::singleline(&mut text, "pending-field", "Name")
-                .native_name(Pos2::ZERO, 1.0)
+                .wizard_name_font(Pos2::ZERO, 1.0)
                 .request_focus(true)
                 .readonly(readonly.get())
                 .enabled(enabled.get())

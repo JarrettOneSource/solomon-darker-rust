@@ -247,7 +247,7 @@ pub fn selection(textarea: &HtmlTextAreaElement) -> TextSelection {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::super::{EditorFont, EditorRules, native_name_geometry};
+    use super::super::{EditorFont, EditorRules, wizard_name_geometry};
     use super::*;
     use egui::{Pos2, Rect, Vec2};
 
@@ -269,8 +269,8 @@ pub(crate) mod tests {
             content: field,
             text_origin: Pos2::ZERO,
             scale: 1.0,
-            font: EditorFont::NativeName { origin: Pos2::ZERO, scale: 1.0, field },
-            geometry: native_name_geometry(text, Pos2::ZERO, 1.0, field),
+            font: EditorFont::WizardName { origin: Pos2::ZERO, scale: 1.0, field },
+            geometry: wizard_name_geometry(text, Pos2::ZERO, 1.0, field),
             font_options: super::super::FontRunOptions::default(),
         }
     }

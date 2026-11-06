@@ -471,7 +471,7 @@ impl CreateView {
         );
         let response =
             crate::gpu_ui::NativeTextEdit::singleline(&mut self.name, "create-name", "Wizard name")
-                .native_name(origin, stage.scale)
+                .wizard_name_font(origin, stage.scale)
                 .margin(Vec2::ZERO)
                 .color(widgets::GOLD)
                 .enabled(enabled)
