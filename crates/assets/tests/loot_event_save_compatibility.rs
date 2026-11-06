@@ -1,14 +1,15 @@
-//! Public save compatibility for retained loot events. The supported source
-//! contract uses `type` and the seven IDs in `BoneyardLootSound::as_str`.
+//! Public save compatibility for loot events, sound IDs and numeric Bonus rewards.
 
 use serde_json::{Value, json};
 use solomon_assets::website_save::{self, CreateSaveOptions, SaveIntegrity, SaveMetadata};
+use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::{BoneyardLootEventType, BoneyardLootSound};
+use solomon_sim::loot::{BonusKind, LootDropKind, LootDropSource, LootDropSpec};
 use solomon_sim::modding::LuaObject;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionOptions};
 
-fn document() -> Value {
+fn document(bonus: Option<BonusKind>) -> Value {
     let mut session = GameSession::new(
         "local".into(),
         NewGameSelection {
@@ -20,6 +21,24 @@ fn document() -> Value {
     );
     let loaded = solomon_assets::boneyard::load_boneyard([0; 16]).unwrap();
     session.install_boneyard(loaded.clone()).unwrap();
+    if let Some(bonus) = bonus {
+        let mut spec = LootDropSpec::new(
+            LootDropKind::Bonus,
+            1,
+            Vec2::new(500.0, 600.0),
+            LootDropSource::Enemy,
+        );
+        spec.bonus_kind = Some(bonus);
+        assert_eq!(
+            session.boneyard.as_mut().unwrap().loot.spawn_specs(
+                vec![spec],
+                0,
+                &mut session.painter_order,
+            ),
+            0,
+        );
+    }
+
     let metadata = SaveMetadata {
         integrity: SaveIntegrity::LocalOnly,
         mods: Vec::new(),
@@ -58,7 +77,7 @@ fn supported_loot_event_tags_and_all_sound_ids_restore_and_reexport() {
     ];
     for version in [50, 51] {
         for rust_spelling in [false, true] {
-            let mut document = document();
+            let mut document = document(None);
             document["schemaVersion"] = json!(version);
             let events: Vec<_> = cases
                 .iter()
@@ -115,5 +134,50 @@ fn supported_loot_event_tags_and_all_sound_ids_restore_and_reexport() {
             let roundtrip = website_save::restore(&reencoded).unwrap();
             assert_eq!(roundtrip.session.boneyard.as_ref().unwrap().loot_events, *actual);
         }
+    }
+}
+
+#[test]
+fn source_bonus_ids_and_prior_rust_names_restore_and_export_numeric_rewards() {
+    for version in [50, 51, 52] {
+        for (id, kind, previous) in [
+            (0, BonusKind::SkillChoice, "skill-choice"),
+            (1, BonusKind::SkillRank, "skill-rank"),
+            (2, BonusKind::DamageX4, "damage-x4"),
+        ] {
+            for spelling in [json!(id), json!(format!("{kind:?}")), json!(previous)] {
+                let mut document = document(Some(kind));
+                document["schemaVersion"] = json!(version);
+                document["continuation"]["simulation"]["world"]["loot"]["actors"][0]["bonusKind"] =
+                    spelling;
+                let restored = website_save::restore(&document.to_string()).unwrap();
+                let loot = &restored.session.boneyard.as_ref().unwrap().loot;
+                assert_eq!(loot.actors[0].bonus_kind, Some(kind));
+                let encoded = website_save::create(CreateSaveOptions {
+                    state: &restored.session,
+                    player_id: &restored.player_id,
+                    loaded_boneyard: restored.loaded_boneyard.as_ref(),
+                    metadata: &restored.metadata,
+                    party_rejoin_token: None,
+                })
+                .unwrap();
+                let exported: Value = serde_json::from_str(&encoded).unwrap();
+                assert_eq!(
+                    exported["continuation"]["simulation"]["world"]["loot"]["actors"][0]["bonusKind"],
+                    id,
+                );
+                let roundtrip = website_save::restore(&encoded).unwrap();
+                assert_eq!(roundtrip.session.boneyard.as_ref().unwrap().loot, *loot);
+            }
+        }
+    }
+}
+
+#[test]
+fn unknown_or_fractional_bonus_ids_are_rejected() {
+    for invalid in [json!(-1), json!(3), json!(0.5)] {
+        let mut document = document(Some(BonusKind::SkillRank));
+        document["continuation"]["simulation"]["world"]["loot"]["actors"][0]["bonusKind"] = invalid;
+        assert!(website_save::restore(&document.to_string()).is_err());
     }
 }
