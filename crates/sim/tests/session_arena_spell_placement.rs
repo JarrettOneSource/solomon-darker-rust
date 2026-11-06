@@ -224,3 +224,32 @@ fn walking_golems_keep_their_body_and_feet_inside_the_active_arena() {
         }
     }
 }
+
+#[test]
+fn a_wizard_joining_after_the_arena_locks_enters_inside_it() {
+    use solomon_sim::hub::PLAYER_CHARACTER_RADIUS;
+    for north in [true, false] {
+        for phase in [ArenaPhase::Open, ArenaPhase::Locking, ArenaPhase::Sealed] {
+            let mut game = arena_session(north, phase, SecondaryAbilityId::Teleport);
+            let selection = NewGameSelection {
+                name: "Late".into(),
+                element: WizardElement::Water,
+                discipline: WizardDiscipline::Body,
+            };
+            assert!(game.add_participant("late".into(), selection));
+            let world = game.boneyard.as_ref().unwrap();
+            let spawn = world.loaded.scene.spawn.position;
+            let arena = world.arena_transition.as_ref().unwrap();
+            let position = game.participants["late"].wizard.position;
+            if phase == ArenaPhase::Open {
+                assert_eq!(position, spawn, "before the lock a wizard enters at the spawn point");
+            } else {
+                assert!(
+                    arena.safety_clear(&[(position, PLAYER_CHARACTER_RADIUS)]),
+                    "north={north} {phase:?}: {position:?} is inside the locked arena"
+                );
+                assert_eq!(position.x, spawn.x, "it enters in the spawn point's column");
+            }
+        }
+    }
+}

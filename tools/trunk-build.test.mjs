@@ -122,6 +122,7 @@ test('hosted preparation keeps every reference relative and adds the deployment 
     '--mount', '/game-stg', '--website-mount', '', '--revision', revision],
   {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'}});
   const document = await readFile(join(root, 'index.html'), 'utf8');
+  assert.equal(document.includes('solomon-storage-namespace'), false, 'no namespace unless one is asked for');
   const editor = await readFile(join(root, 'editor-test/index.html'), 'utf8');
   const boot = /<script type="module" src="\.\/(solomon-boot-[a-f0-9]{16}\.mjs)"><\/script>/.exec(document)[1];
   assert.match(document, /<base href="\.\/">/);
@@ -149,4 +150,20 @@ test('hosted preparation keeps every reference relative and adds the deployment 
   assert.equal(await readFile(join(root, 'editor-test-boot.mjs'), 'utf8'),
     await readFile(join(repositoryRoot, 'web/editor-test-boot.mjs'), 'utf8'));
   assert.deepEqual(JSON.parse(await readFile(join(root, 'deployment.json'), 'utf8')), {revision});
+});
+
+test('a storage namespace is written only when given, and must name a path', async context => {
+  const python = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+  const prepare = (root, namespace) => execFileSync(python,
+    [join(repositoryRoot, 'scripts/prepare-hosted-client.py'), root, '--mount', '/game',
+      '--website-mount', '/game', '--storage-namespace', namespace, '--revision', '1'.repeat(40)],
+    {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'}, stdio: 'pipe'});
+  const root = await distribution(context, trunkDocument());
+  prepare(root, '/game-rust');
+  assert.match(await readFile(join(root, 'index.html'), 'utf8'),
+    /name="solomon-storage-namespace" content="\/game-rust"/);
+  for (const invalid of ['', '/', 'game-rust', '/game-rust/']) {
+    const fresh = await distribution(context, trunkDocument());
+    assert.throws(() => prepare(fresh, invalid), undefined, `accepted ${JSON.stringify(invalid)}`);
+  }
 });

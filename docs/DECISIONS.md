@@ -549,6 +549,22 @@ phases and retained multiplayer timing. The original host-control recording stay
 unchanged; its one older disconnect countdown expectation is explicitly superseded
 in the replay by this independently tested policy.
 
+## Where a rejoining wizard enters
+
+A wizard that joins or rejoins a Boneyard enters at the scene's spawn point, which
+lies in the 400-unit entrance strip. Once the arena begins to lock, that strip is
+outside the combat bounds: the camera follows the shrinking bounds, so a late wizard
+showed at the top or bottom edge, partly behind the health bar, outside the fight.
+PixiJS and the Website host behave the same way, and there is no recorded retail
+evidence for where a late joiner should enter.
+
+While the arena is locking or sealed, `BoneyardWorld::spawn_wizard` moves the
+spawn point just inside the combat bounds (`ArenaTransition::entry_inside`), keeping
+its column: the path every wizard walked in on. Before the lock nothing changes.
+The rule lives in the simulation, so standalone, hosted and desktop authorities
+agree. `a_wizard_joining_after_the_arena_locks_enters_inside_it` covers both
+entrance sides and every arena phase.
+
 ## Navigation and painter registration
 
 Pike constraints pass through the active Boneyard's player-placement callback.

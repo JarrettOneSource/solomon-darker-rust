@@ -139,6 +139,14 @@ API, game socket and browser storage (`solomon-website-mount`). A staging artifa
 uses `/game-stg` for both. Serving an artifact at another mount changes only that
 metadata.
 
+The player's own browser data (saves, settings, Hall of Fame, playtime, layout) is
+stored under keys suffixed with the Website mount, so `/game-rust` and `/game-stg`
+keep separate data on one origin. A deployment can pin that scope with a
+`<meta name="solomon-storage-namespace" content="/game-rust">` tag, which
+`prepare-hosted-client.py --storage-namespace` writes. The game then keeps the same
+data when it moves to another path. The sign-in token and Boneyard workshop keys
+stay on the Website mount, because the Website's own pages there share them.
+
 ## Repository layout
 
 | Path | Contents |

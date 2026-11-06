@@ -17,6 +17,8 @@ def main():
     parser.add_argument("dist", type=Path, help="completed Trunk distribution")
     parser.add_argument("--mount", default="/game-stg", help="URL prefix the deployment serves the game at")
     parser.add_argument("--website-mount", help="Website API and account-storage prefix; defaults to the game mount")
+    parser.add_argument("--storage-namespace", help="browser-storage scope for the player's game data; "
+                        "defaults to the Website mount. Keep it when the game moves to another path.")
     parser.add_argument("--revision", required=True, help="full source revision of this build")
     args = parser.parse_args()
     if not re.fullmatch(r"/[a-z0-9/-]+", args.mount) or args.mount.endswith("/"):
@@ -25,6 +27,11 @@ def main():
     if website_mount and (not re.fullmatch(r"/[a-z0-9/-]+", website_mount)
                           or website_mount.endswith("/") or "//" in website_mount):
         parser.error("website-mount must be empty or an absolute URL path without a trailing slash")
+    if args.storage_namespace is not None and (
+            not re.fullmatch(r"/[a-z0-9/-]+", args.storage_namespace)
+            or args.storage_namespace.endswith("/") or "//" in args.storage_namespace):
+        # An empty namespace would share the PixiJS client's unsuffixed storage keys.
+        parser.error("storage-namespace must be an absolute URL path without a trailing slash")
     if not re.fullmatch(r"[0-9a-f]{40}", args.revision):
         parser.error("revision must be a full lowercase source commit")
     index = args.dist / "index.html"
@@ -37,7 +44,10 @@ def main():
     document = document.replace("</head>", (
         f'<meta name="solomon-build-revision" content="{args.revision}">\n'
         f'<meta name="solomon-game-mount" content="{args.mount}">\n'
-        f'<meta name="solomon-website-mount" content="{website_mount}">\n</head>'
+        f'<meta name="solomon-website-mount" content="{website_mount}">\n'
+        + (f'<meta name="solomon-storage-namespace" content="{args.storage_namespace}">\n'
+           if args.storage_namespace is not None else '')
+        + '</head>'
     ))
     index.write_text(document, encoding="utf-8")
     editor_boot = "editor-test-boot.mjs"
