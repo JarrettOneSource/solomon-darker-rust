@@ -24,7 +24,7 @@ impl Game {
             .participant_order
             .iter()
             .map(|id| {
-                let player = &self.session.participants.get(id).expect("participant exists").player;
+                let player = &self.session.participants[id].player;
                 PartyRosterPlayer {
                     connected: host.is_some_and(|host| host.connected_player_ids.contains(id)),
                     current_health: player.combat.current_health,
@@ -62,11 +62,7 @@ impl Game {
         allies.extend(derive_golem_ally_hud_rows(&golems, &world_key));
         let tutorial = self.session.boneyard.as_ref().is_some_and(|world| world.tutorial.is_some());
         let college_admission = self.session.boneyard.is_none()
-            && self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
+            && self.session.participants[&self.local_player_id]
                 .player
                 .economy
                 .college_intro_pending;
@@ -119,7 +115,7 @@ impl Game {
         if !self.has_game || session.boneyard.is_some() {
             return false;
         }
-        let local = &session.participants.get(&self.local_player_id).expect("participant exists");
+        let local = &session.participants[&self.local_player_id];
         if local.wizard.transition.is_some() || local.player.economy.college_intro_pending {
             return false;
         }
@@ -127,7 +123,7 @@ impl Game {
             .participant_order
             .iter()
             .map(|id| {
-                let wizard = &session.participants.get(id).expect("participant exists").wizard;
+                let wizard = &session.participants[id].wizard;
                 HubPlayerSelection {
                     player_id: id,
                     position: wizard.position,

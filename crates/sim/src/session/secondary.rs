@@ -36,11 +36,8 @@ impl GameSession {
             .filter(|(_, player)| player.mindstar)
             .map(|(id, _)| id.clone())
             .collect();
-        let positions: Vec<_> = self
-            .participant_order
-            .iter()
-            .map(|id| self.participants.get(id).expect("participant exists").wizard.position)
-            .collect();
+        let positions: Vec<_> =
+            self.participant_order.iter().map(|id| self.participants[id].wizard.position).collect();
         let key = self.world_key(id).expect("an admitted secondary owner has its actual world");
         let teleport_bodies = SessionSecondaryWorld::collect_teleport_bodies(
             self.boneyard.as_ref(),
@@ -60,7 +57,7 @@ impl GameSession {
             // An immediate belt cast supplies no projectile viewports.
             viewports: Vec::new(),
         };
-        let participant = &self.participants.get(id).expect("participant exists");
+        let participant = &self.participants[id];
         let player = &participant.player;
         let derived = player.derived_stats();
         let mut authority = SecondaryPlayerAuthority::from_snapshot_with_stat_book(
@@ -143,11 +140,8 @@ impl GameSession {
             .filter(|(_, player)| player.mindstar)
             .map(|(id, _)| id.clone())
             .collect();
-        let positions: Vec<_> = self
-            .participant_order
-            .iter()
-            .map(|id| self.participants.get(id).expect("participant exists").wizard.position)
-            .collect();
+        let positions: Vec<_> =
+            self.participant_order.iter().map(|id| self.participants[id].wizard.position).collect();
         let ether_drain = super::ether_drain::SessionEtherDrainSnapshot::capture(self);
         let teleport_bodies = SessionSecondaryWorld::collect_teleport_bodies(
             self.boneyard.as_ref(),
@@ -161,7 +155,7 @@ impl GameSession {
             .collect();
         let mut players = BTreeMap::new();
         for id in &self.participant_order {
-            let participant = &self.participants.get(id).expect("participant exists");
+            let participant = &self.participants[id];
             let player = &participant.player;
             let derived = player.derived_stats();
             let input = inputs[id];
@@ -205,12 +199,7 @@ impl GameSession {
                 .participant_order
                 .iter()
                 .map(|id| BoneyardProjectileViewport {
-                    position: self
-                        .participants
-                        .get(id)
-                        .expect("participant exists")
-                        .wizard
-                        .position,
+                    position: self.participants[id].wizard.position,
                     viewport: inputs[id].viewport,
                     alternate_player: false,
                 })
@@ -545,7 +534,7 @@ pub(super) fn boneyard_player_bodies<'a>(
     order
         .iter()
         .map(|id| {
-            let participant = participants.get(id).expect("participant exists");
+            let participant = &participants[id];
             BoneyardPlayerBody {
                 status: BoneyardPlayerStatus {
                     id: &participant.id,

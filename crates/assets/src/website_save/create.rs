@@ -70,7 +70,7 @@ pub fn create(options: CreateSaveOptions<'_>) -> Result<String, String> {
     }
     let profile = profile(&state, options.player_id, false)?;
     disk_projection(&mut state);
-    let owner = &state.participants.get(options.player_id).expect("participant exists");
+    let owner = &state.participants[options.player_id];
     let world_kind = if state.boneyard.is_some() { "boneyard" } else { "hub" };
     let continuation = json!({
         "loadedBoneyard": loaded,
@@ -150,14 +150,7 @@ fn owner_projection(state: &GameSession, player_id: &str) -> Result<GameSession,
             owner.remove_participant(id);
         }
     }
-    if !owner
-        .participants
-        .get(player_id)
-        .expect("participant exists")
-        .player
-        .economy
-        .inventory_is_valid()
-    {
+    if !owner.participants[player_id].player.economy.inventory_is_valid() {
         return Err("game save owner inventory is invalid".into());
     }
     Ok(owner)
@@ -199,8 +192,8 @@ fn profile(state: &GameSession, player_id: &str, durable: bool) -> Result<Value,
     .ok_or("game save profile owner is absent")?;
     disk_economy(&mut economy);
     Ok(
-        json!({"economy":encode(&economy)?, "hagathaRuntime":encode(&state.participants.get(player_id).expect("participant exists").player.progression.hagatha_runtime)?,
-            "advancedUnlocks":state.participants.get(player_id).expect("participant exists").player.book.advanced_unlocks}),
+        json!({"economy":encode(&economy)?, "hagathaRuntime":encode(&state.participants[player_id].player.progression.hagatha_runtime)?,
+            "advancedUnlocks":state.participants[player_id].player.book.advanced_unlocks}),
     )
 }
 

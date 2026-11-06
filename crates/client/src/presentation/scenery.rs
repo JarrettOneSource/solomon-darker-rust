@@ -73,7 +73,7 @@ fn from_endpoint(endpoint: &TimedSession) -> TreeActorPoses {
         session.boneyard.as_ref().expect("retained Boneyard endpoint"),
         session.participant_order.iter().map(|id| TreePlayerPose {
             id: id.clone(),
-            position: session.participants.get(id).expect("participant exists").wizard.position,
+            position: session.participants[id].wizard.position,
         }),
         endpoint.enemies.as_ref(),
     )

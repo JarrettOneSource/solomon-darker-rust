@@ -384,7 +384,7 @@ fn restore_legacy_death_weapons(session: &mut GameSession, tick: u64) {
             PlayerDeathWeaponTrigger, legacy_player_death_weapon_motion,
         };
         for id in &session.participant_order {
-            let participant = &session.participants.get(id).expect("participant exists");
+            let participant = &session.participants[id];
             let combat = &participant.player.combat;
             let Some(registration) = participant.lighting.death_weapon_painter_registration else {
                 continue;

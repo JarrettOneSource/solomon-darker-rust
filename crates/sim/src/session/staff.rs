@@ -256,7 +256,7 @@ impl GameSession {
         output: &mut StaffTickResult,
     ) {
         let owner = &action.common().owner_id;
-        let participant = &self.participants.get(owner).expect("participant exists");
+        let participant = &self.participants[owner];
         let element = participant.player.selection.element;
         let derived = participant.player.derived_stats();
         let total = player_staff_damage(
@@ -357,13 +357,7 @@ impl GameSession {
             for target in selected {
                 let amount = damage
                     * hagatha_boss_damage_factor(
-                        &self
-                            .participants
-                            .get(owner)
-                            .expect("participant exists")
-                            .player
-                            .economy
-                            .owned_perk_selectors,
+                        &self.participants[owner].player.economy.owned_perk_selectors,
                         u32::from(target.type_id),
                     );
                 let result = self.damage_enemy(EnemyDamageRequest {

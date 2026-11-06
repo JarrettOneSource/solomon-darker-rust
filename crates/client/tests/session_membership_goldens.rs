@@ -36,7 +36,7 @@ fn snapshot(session: &GameSession) -> Value {
         session
             .participant_order
             .iter()
-            .map(|id| session.participants.get(id).expect("participant exists").entity_id)
+            .map(|id| session.participants[id].entity_id)
             .collect::<Vec<_>>()
     );
     value["nextEntityId"] = serde_json::json!(session.next_entity_id);

@@ -65,14 +65,7 @@ impl ModPlayerControl {
         if self.run_id.is_some() {
             for id in &game.participant_order {
                 if inputs.contains_key(id)
-                    && game
-                        .participants
-                        .get(id)
-                        .expect("participant exists")
-                        .player
-                        .combat
-                        .life_state
-                        == PlayerLifeState::Alive
+                    && game.participants[id].player.combat.life_state == PlayerLifeState::Alive
                 {
                     players.push(id.clone());
                 }

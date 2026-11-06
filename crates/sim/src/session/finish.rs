@@ -104,8 +104,7 @@ impl GameSession {
                     }
                 }
                 super::player_combat::PlayerPoisonResponse::Flash { response } => {
-                    let position =
-                        self.participants.get(id).expect("participant exists").wizard.position;
+                    let position = self.participants[id].wizard.position;
                     let world_key = self.world_key(id).unwrap();
                     let targets: Vec<_> = self.boneyard.as_ref().map_or_else(Vec::new, |world| {
                         boneyard_secondary_targets(

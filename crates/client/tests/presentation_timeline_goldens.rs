@@ -176,8 +176,7 @@ fn client_clock_and_player_poses_follow_receipt_time_without_extrapolating() {
                     .participant_order
                     .iter()
                     .map(|id| {
-                        let participant =
-                            &frame.session.participants.get(id).expect("participant exists");
+                        let participant = &frame.session.participants[id];
                         let wizard = &participant.wizard;
                         (
                             id.clone(),
@@ -272,8 +271,7 @@ fn college_prediction_stops_after_one_snapshot_interval() {
             [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 200.0].into_iter().enumerate()
         {
             let frame = timeline.sample(milliseconds, "local", input, false).unwrap().unwrap();
-            let wizard =
-                &frame.session.participants.get("local").expect("participant exists").wizard;
+            let wizard = &frame.session.participants["local"].wizard;
             let actual = (
                 wizard.position.x,
                 wizard.position.y,
