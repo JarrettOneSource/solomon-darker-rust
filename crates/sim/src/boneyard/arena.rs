@@ -95,6 +95,19 @@ impl ArenaTransition {
         }
     }
 
+    /// Where a body of `radius` enters once the arena has begun to lock: the spawn
+    /// point moved just inside the combat bounds. The spawn point lies in the entrance
+    /// strip, which the locked arena excludes, and its column is the path every wizard
+    /// walked in on.
+    #[must_use]
+    pub fn entry_inside(&self, spawn: Vec2, radius: f64) -> Vec2 {
+        let bounds = self.combat_bounds;
+        let clamp = |value: f64, start: f64, extent: f64| {
+            fround(value.clamp(start + radius, start + extent - radius))
+        };
+        Vec2::new(clamp(spawn.x, bounds.x, bounds.width), clamp(spawn.y, bounds.y, bounds.height))
+    }
+
     #[must_use]
     pub fn active_bounds(&self) -> BoneyardBounds {
         if self.phase == ArenaPhase::Open { self.full_bounds } else { self.combat_bounds }
