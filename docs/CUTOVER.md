@@ -113,7 +113,7 @@ These must be finished before Rust moves to `/game`.
 | --- | --- | --- | --- |
 | 1 | PixiJS critical-fix-only policy | Done | Recorded above and in the device wiki for future campaigns. |
 | 2 | Cutover checklist (what "passes QC" means) | Not started | See [Cutover checklist](#cutover-checklist). Needs owner review before use. |
-| 3 | Rebuild boneyard art without PixiJS | Not started | `web/assets/stock/boneyard/images` holds 4,886 PNGs (424 MB) baked by the Website's PixiJS painter through `tools/export-boneyard-art.mjs`. Nobody can regenerate them once PixiJS retires. Draw boneyards with the Rust renderer from source sprites, or compile them with a Rust tool. Also cuts most of the ~600 MB release download. |
+| 3 | Boneyard art without PixiJS | Done | The Rust client draws every Boneyard itself: it loads `catalog.json`, the retail ground, road, river, rise and fence-grate textures, and the DeadHawg glyphs, which are crops of the retail atlas. The 4,886 PNGs (424 MB) and 13 manifests that `tools/export-boneyard-art.mjs` baked through the Website's painter were never read, and still showed the editor's placement shadows. They and the tool are removed; a build without them passes the Boneyard, Tutorial and Hub journeys and requests nothing from the removed paths. The shape tables in `catalog.json` still come from `tools/export-boneyard-catalog.mjs` (item 10). |
 | 4 | Move PixiJS players' saves | Not started | Cloud saves use the shared save document that `solomon-assets::website_save` reads; test real production documents. Browser-local PixiJS saves need a one-time import. |
 | 5 | Browser storage keys independent of the URL | Not started | `WebsiteMount::storage_key` (`crates/client/src/hosted.rs`) appends the Website mount to every key. The Website's `/game-rust` remount sets that mount, so Rust's guest saves live in `solomon-dark-game-saves:/game-rust` while PixiJS owns the unsuffixed names. Moving Rust to `/game` as built today would orphan its data and read PixiJS's. Have the deployment supply a storage namespace separate from the URL path (staging at `/game-stg` keeps its own), and copy the suffixed keys once at the swap. Coordinate with the Website's guest-save migration and item 8. |
 | 6 | Mount-independent build | Not started | The hosted build is made for `/game` and the Website's `build-parallel-apps.mjs` rewrites it for `/game-rust`. Relative asset URLs remove the rewrite. |
@@ -129,7 +129,7 @@ These must be finished before Rust moves to `/game`.
 
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
-| 10 | Tools that need a Website checkout | Not started | `tools/website-oracle`, `tools/export-boneyard-art.mjs`, `tools/export-boneyard-catalog.mjs`, `tools/browser-smoke`, `scripts/record-website-goldens.sh`, `scripts/sync-native-ui-fonts.py`, `scripts/sync-player-portrait-assets.py`, `scripts/sync-stock-assets.sh`. Keep what they produced as tracked source; remove or replace the tools. |
+| 10 | Tools that need a Website checkout | Not started | `tools/website-oracle`, `tools/export-boneyard-catalog.mjs`, `tools/browser-smoke`, `scripts/record-website-goldens.sh`, `scripts/sync-native-ui-fonts.py`, `scripts/sync-player-portrait-assets.py`, `scripts/sync-stock-assets.sh`. Keep what they produced as tracked source; remove or replace the tools. |
 | 11 | Neutral names for frozen fixtures | Won't do | The `website` fixture directories and `website_goldens` tests are named for where the recordings came from. [Reference data](REFERENCE-DATA.md#recording-provenance) keeps those names so the evidence stays attributable, and already treats them as frozen regression data rather than a target. |
 | 12 | PixiJS behavior quirks | Not started | Match retail: PixiJS word wrap (`ui/sack_name.rs`), blend modes (`graphics`), overlay order (`painter/overlays.rs`), and the UTF-16 length check in `menu/create_name.rs`. Each needs retail evidence. |
 | 13 | Comments that cite TypeScript | Done | Comments state what the code does and why, citing the original game where a rule needs a source, and public types say what they represent in the game. `scripts/check-port-references.py`, part of the gate, rejects comments in `crates/` that name `.ts` or `.tsx` files, PixiJS or TypeScript. The Website itself is still a live service, so comments about its API, accounts, cloud saves and editor stay. |
@@ -162,7 +162,7 @@ These must be finished before Rust moves to `/game`.
 | --- | --- | --- | --- |
 | 25 | Mod CLI in Rust | Not started | `tools/sdmod/cli.mjs` is about 730 lines of Node wrapping the `solomon-sdmod` binary. Make the binary the command-line tool. |
 | 26 | `cargo xtask` | Not started | Replace the Python and shell packaging and verification scripts so contributors need only Rust and Trunk. Node stays for Playwright browser tests. |
-| 27 | Repository size | Not started | The Git pack is about 614 MiB, mostly PNG. Stop committing generated art once item 3 lands. Rewriting history is a separate owner decision. |
+| 27 | Repository size | Not started | The Git pack is about 614 MiB, mostly PNG; the Boneyard art removed in item 3 accounts for about 424 MB of it. Removing files from main does not shrink history; rewriting it is a separate owner decision. |
 | 28 | Local spell journey | Not started | No repository journey casts primary spells locally: `electric-burn.cjs` and the other combat journeys need the hosted staging fixtures. Against the native host, `solomon-entrance.cjs` walks a wizard into Solomon, which starts combat, so a local journey can cast every school. Weld builds need a supported local grant, because Create does not offer them and the developer Console runs only on hosted servers. |
 
 ## Cutover checklist
@@ -187,4 +187,4 @@ Draft. Rust moves to `/game` only when all of these hold:
 - Entity storage cost: [Performance](PERFORMANCE.md#entity-storage).
 - Numeric contract and why the math is custom: [Decisions](DECISIONS.md#numeric-contract).
 - Fixture provenance: [Reference data](REFERENCE-DATA.md).
-- Release download (about 600 MB) by type: PNG 490 MB, WAV 64 MB, MP3 29 MB.
+- Client assets (about 182 MB) by type: PNG 64 MB, WAV 61 MB, MP3 28 MB. Before item 3 they were about 603 MB, with PNG 490 MB.
