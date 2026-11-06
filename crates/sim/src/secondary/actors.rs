@@ -325,7 +325,7 @@ pub struct SecondaryTarget {
     pub family: String,
     pub id: usize,
     pub light_registration: PainterRegistration,
-    pub native_flags: Option<u32>,
+    pub actor_flags: Option<u32>,
     pub registration_order: Option<usize>,
     pub position: Vec2,
     pub radius: f64,

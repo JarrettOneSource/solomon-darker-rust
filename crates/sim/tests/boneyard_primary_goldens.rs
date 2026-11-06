@@ -380,7 +380,7 @@ fn boneyard_primary_phases_use_live_equipment_stats_mana_and_enemy_ownership() {
                             target.family,
                             target.id,
                             registration(target.light_registration),
-                            target.native_flags,
+                            target.actor_flags,
                             point(target.position),
                             target.radius,
                             target.scale,

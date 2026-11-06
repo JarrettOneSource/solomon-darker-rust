@@ -251,7 +251,7 @@ pub(super) fn step<W: SecondaryWorld>(
                     }
                     hit.push(target.id as u64);
                     let owner = &engine.context.players[&actor.owner_id];
-                    let patch = if target.native_flags.unwrap_or(0) & 0x40 != 0 {
+                    let patch = if target.actor_flags.unwrap_or(0) & 0x40 != 0 {
                         Patch {
                             cold_slow_factor: Some(owner.cold_slow_factor),
                             cold_slow_material: Some(true),

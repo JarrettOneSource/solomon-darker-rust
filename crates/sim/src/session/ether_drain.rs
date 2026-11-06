@@ -30,7 +30,7 @@ impl SessionEtherDrainSnapshot {
             targets.push(EtherDrainTarget {
                 activation_delay_ticks: 0,
                 force_factor: ether_drain_enemy_force_factor(&target.family),
-                native_flags: target.native_flags.unwrap_or(2),
+                actor_flags: target.actor_flags.unwrap_or(2),
                 position: target.position,
                 reference: EtherDrainTargetRef::Enemy {
                     id: target.id as u64,
@@ -43,7 +43,7 @@ impl SessionEtherDrainSnapshot {
                 targets.push(EtherDrainTarget {
                     activation_delay_ticks: 0,
                     force_factor: 1.0,
-                    native_flags: 2,
+                    actor_flags: 2,
                     position: maggot.position,
                     reference: EtherDrainTargetRef::Enemy {
                         id: maggot.id as u64,
@@ -62,7 +62,7 @@ impl SessionEtherDrainSnapshot {
             targets.push(EtherDrainTarget {
                 activation_delay_ticks: 0,
                 force_factor: 1.0,
-                native_flags: 0x801,
+                actor_flags: 0x801,
                 position: participant.wizard.position,
                 reference: EtherDrainTargetRef::Player { id: id.clone() },
             });
@@ -74,7 +74,7 @@ impl SessionEtherDrainSnapshot {
             targets.push(EtherDrainTarget {
                 activation_delay_ticks: actor.activation_delay_ticks,
                 force_factor: 1.0,
-                native_flags: 0x400,
+                actor_flags: 0x400,
                 position: actor.position,
                 reference: EtherDrainTargetRef::Loot {
                     id: actor.id as u64,
@@ -87,7 +87,7 @@ impl SessionEtherDrainSnapshot {
                 targets.push(EtherDrainTarget {
                     activation_delay_ticks: 0,
                     force_factor: 0.25,
-                    native_flags: 0x800,
+                    actor_flags: 0x800,
                     position: actor.position,
                     reference: EtherDrainTargetRef::Golem { id: actor.id },
                 });

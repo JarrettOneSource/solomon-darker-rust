@@ -57,7 +57,7 @@ impl<W: SecondaryWorld> StepEngine<'_, '_, '_, W> {
             by_id.insert(id.clone(), target);
             query_targets.push(PrimarySpellTarget {
                 active: true,
-                actor_flags: target.native_flags.unwrap_or(2),
+                actor_flags: target.actor_flags.unwrap_or(2),
                 attachment: target.position,
                 body_radius: target.radius,
                 cell_binding_order: order,

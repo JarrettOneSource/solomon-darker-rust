@@ -19,7 +19,8 @@ const PRESSURE_DISTANCE_SQUARED: f64 = 262_144.0;
 pub struct EtherDrainTarget {
     pub activation_delay_ticks: i64,
     pub force_factor: f64,
-    pub native_flags: u32,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_flags"))]
+    pub actor_flags: u32,
     pub position: Vec2,
     #[cfg_attr(feature = "persistence", serde(rename = "ref"))]
     pub reference: EtherDrainTargetRef,
@@ -155,7 +156,7 @@ pub fn refresh_ether_drain_targets(
         state.queried.clear();
         for target in targets {
             if !matches!(target.reference, EtherDrainTargetRef::Loot { .. })
-                && target.native_flags & 0xc02 != 0
+                && target.actor_flags & 0xc02 != 0
                 && inside_broad_ellipse(center, target.position, 0.8_f32 as f64)
             {
                 state.queried.push(target.reference.clone());
@@ -206,7 +207,7 @@ pub fn ether_drain_contact(
     if squared > PRESSURE_DISTANCE_SQUARED {
         return None;
     }
-    let loose = target.native_flags & 0x400 != 0;
+    let loose = target.actor_flags & 0x400 != 0;
     if loose && target.activation_delay_ticks > 0 {
         return None;
     }
@@ -227,7 +228,7 @@ pub fn ether_drain_contact(
     if squared < 100.0 {
         amount = fround(amount * 2.0);
     }
-    if target.native_flags & 1 != 0 {
+    if target.actor_flags & 1 != 0 {
         amount = fround(amount * 2.0);
     }
     Some(EtherDrainContact {

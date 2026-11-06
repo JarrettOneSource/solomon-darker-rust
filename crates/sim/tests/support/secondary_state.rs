@@ -380,7 +380,7 @@ pub fn target(value: &Value) -> SecondaryTarget {
         family: value["family"].as_str().unwrap().to_owned(),
         id: value["id"].as_u64().unwrap() as usize,
         light_registration: registration(&value["lightRegistration"]),
-        native_flags: value["nativeFlags"].as_u64().map(|flags| flags as u32),
+        actor_flags: value["nativeFlags"].as_u64().map(|flags| flags as u32),
         registration_order: value["registrationOrder"].as_u64().map(|order| order as usize),
         position: point(&value["position"]),
         radius: value["radius"].as_f64().unwrap(),
