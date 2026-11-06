@@ -20,7 +20,9 @@ use crate::heading::heading_degrees_from_vector;
 use crate::hub::HubWizard;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::profile::WizardElement;
-use crate::profile::primary::{EarthPrimarySkillProfile, PrimarySkillProfile};
+use crate::profile::primary::{
+    EarthPrimarySkillProfile, PrimarySkillProfile, WaterPrimarySkillProfile,
+};
 use crate::profile::weld::WeldCastKind;
 use crate::{Rng, Vec2};
 
@@ -171,6 +173,93 @@ impl ManaDebit {
         self.remaining -= cost;
         self.spent += cost;
         true
+    }
+}
+
+/// One player's primary cast this tick, read before the cast state changes: the caster's
+/// limits and world view, the element and payload kind, the per-emission mana cost, the
+/// button edges and acceptance, the aim, and the cast state the tick started from.
+struct PrimaryCastTick<'a> {
+    authority: PrimarySpellCastAuthority<'a>,
+    context: &'a PrimarySpellWorldContext<'a>,
+    previous: PlayerPrimaryCastState,
+    element: WizardElement,
+    one_shot: bool,
+    mana_cost: f64,
+    raw_held: bool,
+    released: bool,
+    accepted: bool,
+    aim: Vec2,
+    selected_primary_age: Option<u64>,
+}
+
+impl<'a> PrimaryCastTick<'a> {
+    fn new(
+        wizard: &HubWizard,
+        authority: PrimarySpellCastAuthority<'a>,
+        input: PrimarySpellInput,
+        context: &'a PrimarySpellWorldContext<'a>,
+    ) -> Self {
+        let element = match authority.primary_skill {
+            PrimarySkillProfile::Air(_) => WizardElement::Air,
+            PrimarySkillProfile::Earth(_) => WizardElement::Earth,
+            PrimarySkillProfile::Ether(_) => WizardElement::Ether,
+            PrimarySkillProfile::Fire(_) => WizardElement::Fire,
+            PrimarySkillProfile::Water(_) => WizardElement::Water,
+            // Native welded casts use the Fire action clock and weapon emitter.
+            PrimarySkillProfile::Weld(_) => WizardElement::Fire,
+        };
+        let previous = wizard.primary_cast.clone();
+        let one_shot = match authority.primary_skill {
+            PrimarySkillProfile::Weld(profile) => profile.cast_kind == WeldCastKind::OneShot,
+            _ => matches!(element, WizardElement::Ether | WizardElement::Fire),
+        };
+        // Steam 0x00542D20 multiplies its per-tick debit by the class cast rate.
+        let steam_cast_factor = match authority.primary_skill {
+            PrimarySkillProfile::Weld(profile) if profile.build_id == 1005 => {
+                authority.cast_progress_factor
+            }
+            _ => 1.0,
+        };
+        let mana_cost = authority.primary_skill.common().mana_cost
+            / if one_shot { 1.0 } else { 100.0 }
+            * steam_cast_factor;
+        let raw_held = input.primary && input.aim.is_some();
+        let pressed = raw_held && !previous.held;
+        let released = !raw_held && previous.held;
+        let action_available = previous.action_tick.is_none()
+            || previous.hand_cast.as_ref().is_some_and(|hand| hand.done())
+            || (one_shot
+                && previous.hand_cast.is_none()
+                && !previous.channel_active
+                && previous
+                    .action_tick
+                    .is_some_and(|tick| tick > primary_cast_completion_progress(element)));
+        let accepted = raw_held
+            && action_available
+            && (pressed || (one_shot && previous.cast_sequence > 0))
+            && authority.eligible;
+        let aim = if raw_held {
+            primary_spell_aim_direction(wizard.position, input.aim.unwrap(), context.view_scale)
+        } else {
+            previous.aim_direction
+        };
+        let selected_primary_age = (previous.selected_primary_id
+            == Some(authority.primary_skill.common().skill_id))
+        .then_some(previous.selected_primary_age_ticks);
+        Self {
+            authority,
+            context,
+            previous,
+            element,
+            one_shot,
+            mana_cost,
+            raw_held,
+            released,
+            accepted,
+            aim,
+            selected_primary_age,
+        }
     }
 }
 
@@ -337,282 +426,28 @@ impl SpellState {
         rng: &mut Rng,
         order: &mut WorldPainterOrder,
     ) -> PrimarySpellTickResult {
-        let element = match authority.primary_skill {
-            PrimarySkillProfile::Air(_) => WizardElement::Air,
-            PrimarySkillProfile::Earth(_) => WizardElement::Earth,
-            PrimarySkillProfile::Ether(_) => WizardElement::Ether,
-            PrimarySkillProfile::Fire(_) => WizardElement::Fire,
-            PrimarySkillProfile::Water(_) => WizardElement::Water,
-            // Native welded casts use the Fire action clock and weapon emitter.
-            PrimarySkillProfile::Weld(_) => WizardElement::Fire,
-        };
+        let cast = PrimaryCastTick::new(wizard, authority, input, context);
         let mut result = PrimarySpellTickResult::default();
-        let previous = wizard.primary_cast.clone();
-        let one_shot = match authority.primary_skill {
-            PrimarySkillProfile::Weld(profile) => profile.cast_kind == WeldCastKind::OneShot,
-            _ => matches!(element, WizardElement::Ether | WizardElement::Fire),
-        };
-        // Steam 0x00542D20 multiplies its per-tick debit by the class cast rate.
-        let steam_cast_factor = match authority.primary_skill {
-            PrimarySkillProfile::Weld(profile) if profile.build_id == 1005 => {
-                authority.cast_progress_factor
-            }
-            _ => 1.0,
-        };
-        let mana_cost = authority.primary_skill.common().mana_cost
-            / if one_shot { 1.0 } else { 100.0 }
-            * steam_cast_factor;
         let mut mana = ManaDebit { remaining: authority.available_mana, ..ManaDebit::default() };
-        let raw_held = input.primary && input.aim.is_some();
-        let pressed = raw_held && !previous.held;
-        let released = !raw_held && previous.held;
-        let action_available = previous.action_tick.is_none()
-            || previous.hand_cast.as_ref().is_some_and(|hand| hand.done())
-            || (one_shot
-                && previous.hand_cast.is_none()
-                && !previous.channel_active
-                && previous
-                    .action_tick
-                    .is_some_and(|tick| tick > primary_cast_completion_progress(element)));
-        let accepted = raw_held
-            && action_available
-            && (pressed || (one_shot && previous.cast_sequence > 0))
-            && authority.eligible;
-        let aim = if raw_held {
-            primary_spell_aim_direction(wizard.position, input.aim.unwrap(), context.view_scale)
-        } else {
-            previous.aim_direction
-        };
-        wizard.primary_cast.advance(
-            raw_held,
-            accepted,
-            element,
-            authority.cast_progress_factor,
-            authority.action_time_factor,
-        );
-        if authority.weapon_kind.is_none() && previous.channel_active {
-            // HandConstant writes K2 on its first update even at zero time.
-            wizard.primary_cast.action_tick = Some(1.0);
-        }
-        if !one_shot {
-            wizard.primary_cast.one_shot_attack_pose_held = false;
-        }
-        let selected_primary_age = (previous.selected_primary_id
-            == Some(authority.primary_skill.common().skill_id))
-        .then_some(previous.selected_primary_age_ticks);
-        wizard.primary_cast.selected_primary_age_ticks =
-            selected_primary_age.map_or(0, |age| age + 1);
-        wizard.primary_cast.selected_primary_id = Some(authority.primary_skill.common().skill_id);
-        wizard.primary_cast.weapon_pulse =
-            fround(previous.weapon_pulse * PLAYER_WEAPON_PULSE_DECAY);
-        if wizard.primary_cast.owns_facing() {
-            wizard.set_facing(heading_degrees_from_vector(aim.x, aim.y));
-        }
-        wizard.primary_cast.aim_direction = aim;
+        advance_cast_state(wizard, &cast);
 
         if !authority.eligible {
-            if element == WizardElement::Earth {
-                self.projectiles.retain(|spell| {
-                    !(matches!(spell, PrimarySpellProjectile::Earth(_))
-                        && spell.common().owner_id == context.owner_id
-                        && spell.common().phase == PrimarySpellProjectilePhase::Held)
-                });
-            }
-            if previous.channel_active {
-                self.transients.retain(|effect| {
-                    !matches!(effect,
-                    PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor))
-                    if actor.common().owner.owner_id==context.owner_id)
-                });
-            }
-            wizard.primary_cast.action_tick = None;
-            wizard.primary_cast.hand_cast = None;
-            wizard.primary_cast.channel_active = false;
-            wizard.primary_cast.one_shot_attack_pose_held = false;
-            wizard.primary_cast.underpowered = false;
-            finish_ether_blast_tick(wizard, authority, mana.remaining, mana_cost);
+            self.cancel_ineligible_cast(wizard, &cast);
+            finish_ether_blast_tick(wizard, authority, mana.remaining, cast.mana_cost);
             return result;
         }
 
         let mut earth_accepted_underpowered = false;
-        if accepted {
-            if one_shot && authority.weapon_kind.is_none() {
-                wizard.primary_cast.hand_cast = Some(super::hand_cast::HandCast1::new(
-                    super::hand_cast::hand_cast1_rate(
-                        authority.primary_skill,
-                        authority.hand_cast_factor,
-                    ),
-                    previous.hand_cast.as_ref().map_or(0, |hand| hand.pose()),
-                    rng,
-                ));
-            }
-            wizard.primary_cast.last_weld_playback_rate = None;
-            wizard.primary_cast.last_weld_sound_variant = None;
-            match authority.primary_skill {
-                PrimarySkillProfile::Air(_) | PrimarySkillProfile::Water(_) => {
-                    wizard.primary_cast.channel_active = true
-                }
-                PrimarySkillProfile::Earth(profile) => {
-                    earth_accepted_underpowered = mana.debit(mana_cost);
-                    let surged = profile.rock_surge_chance > 0.0
-                        && f64::from(rng.draw_integer(10_000)) < profile.rock_surge_chance * 100.0
-                        && mana.spend_exact(profile.rock_surge_mana_cost);
-                    wizard.primary_cast.action_tick =
-                        if surged { None } else { wizard.primary_cast.action_tick };
-                    wizard.primary_cast.channel_active = !surged;
-                    if surged {
-                        wizard.primary_cast.emission_sequence += 1;
-                    }
-                    self.create_earth_boulder(
-                        wizard,
-                        profile,
-                        authority.weapon_kind,
-                        context,
-                        surged,
-                        order,
-                    );
-                }
-                PrimarySkillProfile::Ether(_) | PrimarySkillProfile::Fire(_) => {}
-                PrimarySkillProfile::Weld(profile) => {
-                    if profile.cast_kind != WeldCastKind::OneShot {
-                        wizard.primary_cast.channel_active = true;
-                    }
-                }
-            }
-            if !one_shot {
-                wizard.primary_cast.weapon_pulse = 0.25;
-            }
+        if cast.accepted {
+            earth_accepted_underpowered = self.accept_cast(wizard, &cast, &mut mana, rng, order);
         }
 
-        let emission_progress = primary_cast_emission_progress(element);
-        let crossed_marker = wizard.primary_cast.hand_cast.as_ref().map_or_else(
-            || {
-                wizard.primary_cast.action_tick.is_some_and(|tick| tick >= emission_progress)
-                    && previous.action_tick.unwrap_or(-1.0) < emission_progress
-            },
-            |hand| {
-                previous.hand_cast.as_ref().is_some_and(|previous| {
-                    forward_action_marker_crossed(previous.progress(), hand.progress(), 1.0)
-                })
-            },
-        );
-        if one_shot && crossed_marker {
-            if element == WizardElement::Ether && authority.primary_skill.common().skill_id == 8 {
-                let charges = ether_blast_release_charges(wizard.primary_cast.ether_blast_charge);
-                wizard.primary_cast.ether_blast_charge = 0.0;
-                if charges > 0 {
-                    let presentation_rng = rng.clone();
-                    let _particles = create_ether_blast_particle_program(rng);
-                    let mut common =
-                        transient_base(self.next_id, context.owner_id, context.world_key, None);
-                    common.painter_registrations =
-                        order.register_many(WorldManagerLane::Transient, 108);
-                    self.transients.push(PrimarySpellTransient::EtherBlast(
-                        PrimarySpellEtherBlast {
-                            common,
-                            birth_tick: context.tick,
-                            charges,
-                            origin: ether_blast_pulse_origin(wizard.position, aim),
-                            presentation_rng,
-                        },
-                    ));
-                    self.next_id += 1;
-                }
-            }
-            let underpowered = mana.debit(mana_cost);
-            let births = create_one_shot_projectiles(
-                OneShotBirth {
-                    first_id: self.next_id,
-                    owner_id: context.owner_id,
-                    wizard,
-                    weapon: authority.weapon_kind,
-                    profile: authority.primary_skill,
-                    world_key: context.world_key,
-                    targets: context.targets,
-                    underpowered,
-                },
-                rng,
-                order,
-            );
-            self.next_id += births.len() as u64;
-            let weld_audio = births.first().and_then(|projectile| {
-                if let PrimarySpellProjectile::Weld(spell) = projectile {
-                    Some((spell.cast_playback_rate, spell.cast_sound_variant))
-                } else {
-                    None
-                }
-            });
-            for born in births {
-                let birth_mask = primary_birth_terrain_exclusion_mask(&born);
-                let flight_mask = primary_flight_terrain_exclusion_mask(
-                    PrimarySpellTraversalActor::Projectile(&born),
-                );
-                let common = born.common();
-                let lookahead = Vec2::new(
-                    common.position.x + common.velocity.x * 5.0,
-                    common.position.y + common.velocity.y * 5.0,
-                );
-                let initial_clear = matches!(&born, PrimarySpellProjectile::Weld(spell) if spell.build_id==1009)
-                    || (context.can_traverse)(
-                        PrimarySpellTraversalActor::Projectile(&born),
-                        wizard.position,
-                        common.position,
-                        0.0,
-                        birth_mask,
-                    );
-                let clear = initial_clear
-                    && (context.can_traverse)(
-                        PrimarySpellTraversalActor::Projectile(&born),
-                        common.position,
-                        lookahead,
-                        0.0,
-                        flight_mask,
-                    );
-                if clear {
-                    let mut spell = born;
-                    self.advance_projectile_with_presentation(
-                        &mut spell,
-                        context.targets,
-                        context.tick,
-                        rng,
-                    );
-                    if matches!(&spell, PrimarySpellProjectile::Fire(_))
-                        || matches!(&spell, PrimarySpellProjectile::Weld(weld) if weld.build_id==1000)
-                    {
-                        self.transients.push(PrimarySpellTransient::FireParticle(
-                            create_fire_particle(
-                                self.next_id,
-                                spell.common(),
-                                order,
-                                context.enhanced_effects,
-                            ),
-                        ));
-                        self.next_id += 1;
-                    }
-                    self.projectiles.push(spell);
-                } else {
-                    self.projectile_terrain_impact(
-                        &born,
-                        context.tick,
-                        context.enhanced_effects,
-                        rng,
-                        order,
-                        &mut result,
-                    );
-                }
-            }
-            wizard.primary_cast.emission_sequence += 1;
-            wizard.primary_cast.last_weld_playback_rate = weld_audio.map(|audio| audio.0);
-            wizard.primary_cast.last_weld_sound_variant = weld_audio.and_then(|audio| audio.1);
-            if underpowered {
-                wizard.primary_cast.fizzle_sequence += 1;
-            }
-            wizard.primary_cast.one_shot_attack_pose_held = true;
-            wizard.primary_cast.underpowered = underpowered;
-            wizard.primary_cast.weapon_pulse = 0.15_f32 as f64;
+        let crossed_marker = emission_marker_crossed(wizard, &cast);
+        if cast.one_shot && crossed_marker {
+            self.emit_one_shot(wizard, &cast, &mut mana, rng, order, &mut result);
         }
 
-        let earth_release_eligible = element == WizardElement::Earth
+        let earth_release_eligible = cast.element == WizardElement::Earth
             && self.projectiles.iter().any(|spell| {
                 matches!(spell, PrimarySpellProjectile::Earth(_))
                     && spell.common().owner_id == context.owner_id
@@ -620,233 +455,524 @@ impl SpellState {
                     && spell.common().charge >= 0.3_f32 as f64
             });
         if wizard.primary_cast.channel_active {
+            // Each channel tick debits its per-tick cost before emitting.
             match authority.primary_skill {
-                PrimarySkillProfile::Weld(_) if raw_held => {
-                    let underpowered = mana.debit(mana_cost);
+                PrimarySkillProfile::Weld(_) if cast.raw_held => {
+                    let underpowered = mana.debit(cast.mana_cost);
                     self.step_weld_cast(
                         wizard,
                         authority,
                         underpowered,
-                        selected_primary_age,
+                        cast.selected_primary_age,
                         context,
                         rng,
                         order,
                         &mut result,
                     );
                 }
-                PrimarySkillProfile::Air(_) if raw_held => {
-                    let underpowered = mana.debit(mana_cost);
-                    let origin = emitter(wizard, element, authority.weapon_kind);
-                    let (endpoint, midpoint, target_id) =
-                        air_geometry(wizard, origin, aim, context);
-                    result.channel_emissions.push(channel_emission(
-                        self.next_id,
-                        authority.primary_skill,
-                        origin,
-                        Some(endpoint),
-                        wizard.position,
-                        aim,
-                        underpowered,
-                        mana_cost,
-                        context,
-                    ));
-                    let mut common =
-                        transient_base(self.next_id, context.owner_id, context.world_key, None);
-                    common.painter_registrations = order.register_many(WorldManagerLane::Actor, 3);
-                    common.light_registration = Some(order.register(WorldManagerLane::Transient));
-                    self.transients.push(PrimarySpellTransient::Air(PrimarySpellAirTransient {
-                        common,
-                        chained: false,
-                        enhanced_effects: context.enhanced_effects,
-                        birth_tick: context.tick,
-                        direction: aim,
-                        endpoint,
-                        hurricane_charge: 0.0,
-                        midpoint,
-                        origin,
-                        target_id: target_id.clone(),
-                        underpowered,
-                        variant: (self.next_id % 4) as u32,
-                    }));
-                    wizard.primary_cast.target_id = target_id;
-                    wizard.primary_cast.underpowered = underpowered;
-                    self.next_id += 1;
+                PrimarySkillProfile::Air(_) if cast.raw_held => {
+                    let underpowered = mana.debit(cast.mana_cost);
+                    self.channel_air(wizard, &cast, underpowered, order, &mut result);
                 }
-                PrimarySkillProfile::Water(profile) if raw_held => {
-                    let underpowered = mana.debit(mana_cost);
-                    let origin = emitter(wizard, element, authority.weapon_kind);
-                    result.channel_emissions.push(channel_emission(
-                        self.next_id,
-                        authority.primary_skill,
-                        origin,
-                        None,
-                        wizard.position,
-                        aim,
-                        underpowered,
-                        mana_cost,
-                        context,
-                    ));
-                    let widen = if underpowered { 0.0 } else { profile.widen_half_degrees };
-                    let count = if underpowered {
-                        1
-                    } else {
-                        water_frost_jet_particle_count(widen, context.enhanced_effects)
-                    };
-                    let speed = water_frost_jet_speed(widen);
-                    for variant in 0..count {
-                        let id = self.next_id + u64::from(variant);
-                        let born = water_frost_jet_emission(WaterFrostJetEmissionInput {
-                            emitter: origin,
-                            base_direction: aim,
-                            tick: context.tick,
-                            ordinal: variant,
-                            id,
-                            particle_count: count,
-                            speed,
-                            widen_half_degrees: widen,
-                        });
-                        let obstruction = water_frost_jet_obstruction(
-                            born,
-                            wizard.position,
-                            id,
-                            &|start, end| {
-                                (context.obstruction)(
-                                    start,
-                                    end,
-                                    None,
-                                    PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
-                                )
-                            },
-                            underpowered,
-                        );
-                        let mut common =
-                            transient_base(id, context.owner_id, context.world_key, None);
-                        common.age_ticks = 1;
-                        common.painter_registrations =
-                            order.register_many(WorldManagerLane::Transient, 1);
-                        self.transients.push(PrimarySpellTransient::Water(
-                            PrimarySpellWaterTransient {
-                                common,
-                                direction: born.direction,
-                                obstruction_distance: obstruction.map(|hit| hit.distance),
-                                obstruction_point: obstruction.map(|hit| hit.point),
-                                origin: born.origin,
-                                speed: born.speed,
-                                underpowered,
-                                variant,
-                            },
-                        ));
-                    }
-                    self.next_id += u64::from(count);
-                    wizard.primary_cast.underpowered = underpowered;
+                PrimarySkillProfile::Water(profile) if cast.raw_held => {
+                    let underpowered = mana.debit(cast.mana_cost);
+                    self.channel_water(wizard, &cast, profile, underpowered, order, &mut result);
                 }
                 PrimarySkillProfile::Earth(profile) => {
-                    let underpowered =
-                        if accepted { earth_accepted_underpowered } else { mana.debit(mana_cost) };
-                    let origin = emitter(wizard, element, authority.weapon_kind);
-                    for projectile in self.projectiles.iter_mut() {
-                        let PrimarySpellProjectile::Earth(spell) = projectile else {
-                            continue;
-                        };
-                        if spell.common.owner_id != context.owner_id
-                            || spell.common.phase != PrimarySpellProjectilePhase::Held
-                        {
-                            continue;
-                        }
-                        let previous_charge = spell.common.charge;
-                        let release_threshold = 0.3_f32 as f64;
-                        let charge = if accepted
-                            || (!raw_held && previous_charge >= release_threshold)
-                            || (underpowered && previous_charge > release_threshold)
-                        {
-                            previous_charge
-                        } else {
-                            advance_earth_boulder_charge(
-                                previous_charge,
-                                profile.growth_factor,
-                                spell.maximum_charge,
-                                1.0,
-                            )
-                        };
-                        if (30.0 * previous_charge).floor() != (30.0 * charge).floor() {
-                            spell.assembly_charge = charge;
-                        }
-                        if underpowered && previous_charge < 1.0 {
-                            spell.common.damage = fround(spell.common.damage * 0.5);
-                            spell.remaining_damage = fround(spell.remaining_damage * 0.5);
-                        }
-                        spell.common.charge = charge;
-                        spell.common.direction = aim;
-                        if raw_held || previous_charge < release_threshold {
-                            spell.orientation =
-                                earth_boulder_held_orientation_step(spell.orientation, aim);
-                        }
-                        spell.common.position = Vec2::new(origin.x, origin.y + 15.0);
-                        spell.shell_charge = spell.assembly_charge;
-                        spell.common.world_key = context.world_key.into();
-                    }
-                    if underpowered && context.tick.is_multiple_of(50) {
-                        wizard.primary_cast.fizzle_sequence += 1;
-                    }
-                    wizard.primary_cast.underpowered = underpowered;
-                    let held_boulder = self.projectiles.iter().find_map(|projectile| {
-                        if let PrimarySpellProjectile::Earth(spell) = projectile
-                            && spell.common.owner_id == context.owner_id
-                            && spell.common.phase == PrimarySpellProjectilePhase::Held
-                        {
-                            Some(spell)
-                        } else {
-                            None
-                        }
-                    });
-                    if let Some(boulder) = held_boulder
-                        && (raw_held || !earth_release_eligible)
-                        && boulder.common.charge < boulder.maximum_charge
-                        && earth_called_rock_emits(boulder, context.tick)
-                    {
-                        self.transients.push(PrimarySpellTransient::EarthCalledRock(
-                            create_earth_called_rock(
-                                self.next_id,
-                                boulder,
-                                order.register(WorldManagerLane::Actor),
-                            ),
-                        ));
-                        self.next_id += 1;
-                    }
+                    let underpowered = if cast.accepted {
+                        earth_accepted_underpowered
+                    } else {
+                        mana.debit(cast.mana_cost)
+                    };
+                    self.channel_earth(
+                        wizard,
+                        &cast,
+                        profile,
+                        underpowered,
+                        earth_release_eligible,
+                        order,
+                    );
                 }
                 _ => {}
             }
         }
+
         let end_channel = wizard.primary_cast.channel_active
-            && if element == WizardElement::Earth {
-                !raw_held && earth_release_eligible
+            && if cast.element == WizardElement::Earth {
+                !cast.raw_held && earth_release_eligible
             } else {
-                released
+                cast.released
             };
         if end_channel {
-            if element == WizardElement::Earth {
-                self.release_earth_boulders(aim, context, rng, order, &mut result);
-                wizard.primary_cast.emission_sequence += 1;
-            }
-            wizard.primary_cast.action_tick = None;
-            wizard.primary_cast.hand_cast = None;
-            wizard.primary_cast.channel_active = false;
-            wizard.primary_cast.target_id = None;
-            wizard.primary_cast.underpowered = false;
-            if matches!(authority.primary_skill, PrimarySkillProfile::Weld(_)) {
-                self.release_owned_weld_persistent_actors(
-                    context.owner_id,
-                    context.tick,
-                    rng,
-                    order,
-                    context.targets,
-                );
-            }
+            self.end_channel(wizard, &cast, rng, order, &mut result);
         }
-        finish_ether_blast_tick(wizard, authority, mana.remaining, mana_cost);
+        finish_ether_blast_tick(wizard, authority, mana.remaining, cast.mana_cost);
         result.mana_spent = mana.spent;
         result.mana_underflow = mana.underflow;
         result
+    }
+
+    /// An ineligible caster's cast stops: held Earth boulders and a channelled Weld's
+    /// persistent actors are removed, and the cast state resets.
+    fn cancel_ineligible_cast(&mut self, wizard: &mut HubWizard, cast: &PrimaryCastTick<'_>) {
+        if cast.element == WizardElement::Earth {
+            self.projectiles.retain(|spell| {
+                !(matches!(spell, PrimarySpellProjectile::Earth(_))
+                    && spell.common().owner_id == cast.context.owner_id
+                    && spell.common().phase == PrimarySpellProjectilePhase::Held)
+            });
+        }
+        if cast.previous.channel_active {
+            self.transients.retain(|effect| {
+                !matches!(effect,
+                PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor))
+                if actor.common().owner.owner_id==cast.context.owner_id)
+            });
+        }
+        wizard.primary_cast.action_tick = None;
+        wizard.primary_cast.hand_cast = None;
+        wizard.primary_cast.channel_active = false;
+        wizard.primary_cast.one_shot_attack_pose_held = false;
+        wizard.primary_cast.underpowered = false;
+    }
+
+    /// Starts an accepted cast: a hand action for an unarmed one-shot, the channel for a
+    /// continuous cast, and Earth's boulder, which pays the first debit and may surge.
+    /// Returns whether that Earth debit left the cast underpowered.
+    fn accept_cast(
+        &mut self,
+        wizard: &mut HubWizard,
+        cast: &PrimaryCastTick<'_>,
+        mana: &mut ManaDebit,
+        rng: &mut Rng,
+        order: &mut WorldPainterOrder,
+    ) -> bool {
+        let mut earth_accepted_underpowered = false;
+        if cast.one_shot && cast.authority.weapon_kind.is_none() {
+            wizard.primary_cast.hand_cast = Some(super::hand_cast::HandCast1::new(
+                super::hand_cast::hand_cast1_rate(
+                    cast.authority.primary_skill,
+                    cast.authority.hand_cast_factor,
+                ),
+                cast.previous.hand_cast.as_ref().map_or(0, |hand| hand.pose()),
+                rng,
+            ));
+        }
+        wizard.primary_cast.last_weld_playback_rate = None;
+        wizard.primary_cast.last_weld_sound_variant = None;
+        match cast.authority.primary_skill {
+            PrimarySkillProfile::Air(_) | PrimarySkillProfile::Water(_) => {
+                wizard.primary_cast.channel_active = true
+            }
+            PrimarySkillProfile::Earth(profile) => {
+                earth_accepted_underpowered = mana.debit(cast.mana_cost);
+                let surged = profile.rock_surge_chance > 0.0
+                    && f64::from(rng.draw_integer(10_000)) < profile.rock_surge_chance * 100.0
+                    && mana.spend_exact(profile.rock_surge_mana_cost);
+                wizard.primary_cast.action_tick =
+                    if surged { None } else { wizard.primary_cast.action_tick };
+                wizard.primary_cast.channel_active = !surged;
+                if surged {
+                    wizard.primary_cast.emission_sequence += 1;
+                }
+                self.create_earth_boulder(
+                    wizard,
+                    profile,
+                    cast.authority.weapon_kind,
+                    cast.context,
+                    surged,
+                    order,
+                );
+            }
+            PrimarySkillProfile::Ether(_) | PrimarySkillProfile::Fire(_) => {}
+            PrimarySkillProfile::Weld(profile) => {
+                if profile.cast_kind != WeldCastKind::OneShot {
+                    wizard.primary_cast.channel_active = true;
+                }
+            }
+        }
+        if !cast.one_shot {
+            wizard.primary_cast.weapon_pulse = 0.25;
+        }
+        earth_accepted_underpowered
+    }
+
+    /// A one-shot cast releases at its emission marker: Ether Blast's stored charges, then
+    /// the projectiles, each launched or detonated against terrain at birth.
+    fn emit_one_shot(
+        &mut self,
+        wizard: &mut HubWizard,
+        cast: &PrimaryCastTick<'_>,
+        mana: &mut ManaDebit,
+        rng: &mut Rng,
+        order: &mut WorldPainterOrder,
+        result: &mut PrimarySpellTickResult,
+    ) {
+        if cast.element == WizardElement::Ether
+            && cast.authority.primary_skill.common().skill_id == 8
+        {
+            self.release_ether_blast(wizard, cast, rng, order);
+        }
+        let underpowered = mana.debit(cast.mana_cost);
+        let births = create_one_shot_projectiles(
+            OneShotBirth {
+                first_id: self.next_id,
+                owner_id: cast.context.owner_id,
+                wizard,
+                weapon: cast.authority.weapon_kind,
+                profile: cast.authority.primary_skill,
+                world_key: cast.context.world_key,
+                targets: cast.context.targets,
+                underpowered,
+            },
+            rng,
+            order,
+        );
+        self.next_id += births.len() as u64;
+        let weld_audio = births.first().and_then(|projectile| {
+            if let PrimarySpellProjectile::Weld(spell) = projectile {
+                Some((spell.cast_playback_rate, spell.cast_sound_variant))
+            } else {
+                None
+            }
+        });
+        for born in births {
+            self.launch_one_shot(born, wizard, cast.context, rng, order, result);
+        }
+        wizard.primary_cast.emission_sequence += 1;
+        wizard.primary_cast.last_weld_playback_rate = weld_audio.map(|audio| audio.0);
+        wizard.primary_cast.last_weld_sound_variant = weld_audio.and_then(|audio| audio.1);
+        if underpowered {
+            wizard.primary_cast.fizzle_sequence += 1;
+        }
+        wizard.primary_cast.one_shot_attack_pose_held = true;
+        wizard.primary_cast.underpowered = underpowered;
+        wizard.primary_cast.weapon_pulse = 0.15_f32 as f64;
+    }
+
+    /// Ether Blast releases its stored charges as one pulse.
+    fn release_ether_blast(
+        &mut self,
+        wizard: &mut HubWizard,
+        cast: &PrimaryCastTick<'_>,
+        rng: &mut Rng,
+        order: &mut WorldPainterOrder,
+    ) {
+        let charges = ether_blast_release_charges(wizard.primary_cast.ether_blast_charge);
+        wizard.primary_cast.ether_blast_charge = 0.0;
+        if charges > 0 {
+            let presentation_rng = rng.clone();
+            let _particles = create_ether_blast_particle_program(rng);
+            let mut common =
+                transient_base(self.next_id, cast.context.owner_id, cast.context.world_key, None);
+            common.painter_registrations = order.register_many(WorldManagerLane::Transient, 108);
+            self.transients.push(PrimarySpellTransient::EtherBlast(PrimarySpellEtherBlast {
+                common,
+                birth_tick: cast.context.tick,
+                charges,
+                origin: ether_blast_pulse_origin(wizard.position, cast.aim),
+                presentation_rng,
+            }));
+            self.next_id += 1;
+        }
+    }
+
+    /// Launches a newborn projectile, or resolves its terrain impact at once when terrain
+    /// blocks its birth or its first flight.
+    fn launch_one_shot(
+        &mut self,
+        born: PrimarySpellProjectile,
+        wizard: &HubWizard,
+        context: &PrimarySpellWorldContext<'_>,
+        rng: &mut Rng,
+        order: &mut WorldPainterOrder,
+        result: &mut PrimarySpellTickResult,
+    ) {
+        let birth_mask = primary_birth_terrain_exclusion_mask(&born);
+        let flight_mask =
+            primary_flight_terrain_exclusion_mask(PrimarySpellTraversalActor::Projectile(&born));
+        let common = born.common();
+        let lookahead = Vec2::new(
+            common.position.x + common.velocity.x * 5.0,
+            common.position.y + common.velocity.y * 5.0,
+        );
+        let initial_clear = matches!(&born, PrimarySpellProjectile::Weld(spell) if spell.build_id==1009)
+            || (context.can_traverse)(
+                PrimarySpellTraversalActor::Projectile(&born),
+                wizard.position,
+                common.position,
+                0.0,
+                birth_mask,
+            );
+        let clear = initial_clear
+            && (context.can_traverse)(
+                PrimarySpellTraversalActor::Projectile(&born),
+                common.position,
+                lookahead,
+                0.0,
+                flight_mask,
+            );
+        if clear {
+            let mut spell = born;
+            self.advance_projectile_with_presentation(
+                &mut spell,
+                context.targets,
+                context.tick,
+                rng,
+            );
+            if matches!(&spell, PrimarySpellProjectile::Fire(_))
+                || matches!(&spell, PrimarySpellProjectile::Weld(weld) if weld.build_id==1000)
+            {
+                self.transients.push(PrimarySpellTransient::FireParticle(create_fire_particle(
+                    self.next_id,
+                    spell.common(),
+                    order,
+                    context.enhanced_effects,
+                )));
+                self.next_id += 1;
+            }
+            self.projectiles.push(spell);
+        } else {
+            self.projectile_terrain_impact(
+                &born,
+                context.tick,
+                context.enhanced_effects,
+                rng,
+                order,
+                result,
+            );
+        }
+    }
+
+    /// One tick of an Air channel: the bolt's contact emission and its drawn transient.
+    fn channel_air(
+        &mut self,
+        wizard: &mut HubWizard,
+        cast: &PrimaryCastTick<'_>,
+        underpowered: bool,
+        order: &mut WorldPainterOrder,
+        result: &mut PrimarySpellTickResult,
+    ) {
+        let origin = emitter(wizard, cast.element, cast.authority.weapon_kind);
+        let (endpoint, midpoint, target_id) = air_geometry(wizard, origin, cast.aim, cast.context);
+        result.channel_emissions.push(channel_emission(
+            self.next_id,
+            cast.authority.primary_skill,
+            origin,
+            Some(endpoint),
+            wizard.position,
+            cast.aim,
+            underpowered,
+            cast.mana_cost,
+            cast.context,
+        ));
+        let mut common =
+            transient_base(self.next_id, cast.context.owner_id, cast.context.world_key, None);
+        common.painter_registrations = order.register_many(WorldManagerLane::Actor, 3);
+        common.light_registration = Some(order.register(WorldManagerLane::Transient));
+        self.transients.push(PrimarySpellTransient::Air(PrimarySpellAirTransient {
+            common,
+            chained: false,
+            enhanced_effects: cast.context.enhanced_effects,
+            birth_tick: cast.context.tick,
+            direction: cast.aim,
+            endpoint,
+            hurricane_charge: 0.0,
+            midpoint,
+            origin,
+            target_id: target_id.clone(),
+            underpowered,
+            variant: (self.next_id % 4) as u32,
+        }));
+        wizard.primary_cast.target_id = target_id;
+        wizard.primary_cast.underpowered = underpowered;
+        self.next_id += 1;
+    }
+
+    /// One tick of a Water channel: the jet's contact emission and its frost particles,
+    /// each clipped where terrain obstructs it.
+    fn channel_water(
+        &mut self,
+        wizard: &mut HubWizard,
+        cast: &PrimaryCastTick<'_>,
+        profile: &WaterPrimarySkillProfile,
+        underpowered: bool,
+        order: &mut WorldPainterOrder,
+        result: &mut PrimarySpellTickResult,
+    ) {
+        let origin = emitter(wizard, cast.element, cast.authority.weapon_kind);
+        result.channel_emissions.push(channel_emission(
+            self.next_id,
+            cast.authority.primary_skill,
+            origin,
+            None,
+            wizard.position,
+            cast.aim,
+            underpowered,
+            cast.mana_cost,
+            cast.context,
+        ));
+        let widen = if underpowered { 0.0 } else { profile.widen_half_degrees };
+        let count = if underpowered {
+            1
+        } else {
+            water_frost_jet_particle_count(widen, cast.context.enhanced_effects)
+        };
+        let speed = water_frost_jet_speed(widen);
+        for variant in 0..count {
+            let id = self.next_id + u64::from(variant);
+            let born = water_frost_jet_emission(WaterFrostJetEmissionInput {
+                emitter: origin,
+                base_direction: cast.aim,
+                tick: cast.context.tick,
+                ordinal: variant,
+                id,
+                particle_count: count,
+                speed,
+                widen_half_degrees: widen,
+            });
+            let obstruction = water_frost_jet_obstruction(
+                born,
+                wizard.position,
+                id,
+                &|start, end| {
+                    (cast.context.obstruction)(
+                        start,
+                        end,
+                        None,
+                        PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
+                    )
+                },
+                underpowered,
+            );
+            let mut common =
+                transient_base(id, cast.context.owner_id, cast.context.world_key, None);
+            common.age_ticks = 1;
+            common.painter_registrations = order.register_many(WorldManagerLane::Transient, 1);
+            self.transients.push(PrimarySpellTransient::Water(PrimarySpellWaterTransient {
+                common,
+                direction: born.direction,
+                obstruction_distance: obstruction.map(|hit| hit.distance),
+                obstruction_point: obstruction.map(|hit| hit.point),
+                origin: born.origin,
+                speed: born.speed,
+                underpowered,
+                variant,
+            }));
+        }
+        self.next_id += u64::from(count);
+        wizard.primary_cast.underpowered = underpowered;
+    }
+
+    /// One tick of an Earth channel: each held boulder charges, follows the emitter and
+    /// turns toward the aim, and a still-growing boulder calls rocks to itself.
+    fn channel_earth(
+        &mut self,
+        wizard: &mut HubWizard,
+        cast: &PrimaryCastTick<'_>,
+        profile: &EarthPrimarySkillProfile,
+        underpowered: bool,
+        earth_release_eligible: bool,
+        order: &mut WorldPainterOrder,
+    ) {
+        let origin = emitter(wizard, cast.element, cast.authority.weapon_kind);
+        for projectile in self.projectiles.iter_mut() {
+            let PrimarySpellProjectile::Earth(spell) = projectile else {
+                continue;
+            };
+            if spell.common.owner_id != cast.context.owner_id
+                || spell.common.phase != PrimarySpellProjectilePhase::Held
+            {
+                continue;
+            }
+            let previous_charge = spell.common.charge;
+            let release_threshold = 0.3_f32 as f64;
+            let charge = if cast.accepted
+                || (!cast.raw_held && previous_charge >= release_threshold)
+                || (underpowered && previous_charge > release_threshold)
+            {
+                previous_charge
+            } else {
+                advance_earth_boulder_charge(
+                    previous_charge,
+                    profile.growth_factor,
+                    spell.maximum_charge,
+                    1.0,
+                )
+            };
+            if (30.0 * previous_charge).floor() != (30.0 * charge).floor() {
+                spell.assembly_charge = charge;
+            }
+            if underpowered && previous_charge < 1.0 {
+                spell.common.damage = fround(spell.common.damage * 0.5);
+                spell.remaining_damage = fround(spell.remaining_damage * 0.5);
+            }
+            spell.common.charge = charge;
+            spell.common.direction = cast.aim;
+            if cast.raw_held || previous_charge < release_threshold {
+                spell.orientation =
+                    earth_boulder_held_orientation_step(spell.orientation, cast.aim);
+            }
+            spell.common.position = Vec2::new(origin.x, origin.y + 15.0);
+            spell.shell_charge = spell.assembly_charge;
+            spell.common.world_key = cast.context.world_key.into();
+        }
+        if underpowered && cast.context.tick.is_multiple_of(50) {
+            wizard.primary_cast.fizzle_sequence += 1;
+        }
+        wizard.primary_cast.underpowered = underpowered;
+        let held_boulder = self.projectiles.iter().find_map(|projectile| {
+            if let PrimarySpellProjectile::Earth(spell) = projectile
+                && spell.common.owner_id == cast.context.owner_id
+                && spell.common.phase == PrimarySpellProjectilePhase::Held
+            {
+                Some(spell)
+            } else {
+                None
+            }
+        });
+        if let Some(boulder) = held_boulder
+            && (cast.raw_held || !earth_release_eligible)
+            && boulder.common.charge < boulder.maximum_charge
+            && earth_called_rock_emits(boulder, cast.context.tick)
+        {
+            self.transients.push(PrimarySpellTransient::EarthCalledRock(create_earth_called_rock(
+                self.next_id,
+                boulder,
+                order.register(WorldManagerLane::Actor),
+            )));
+            self.next_id += 1;
+        }
+    }
+
+    /// Ends the channel: Earth releases its held boulders, and a Weld releases its
+    /// persistent actors.
+    fn end_channel(
+        &mut self,
+        wizard: &mut HubWizard,
+        cast: &PrimaryCastTick<'_>,
+        rng: &mut Rng,
+        order: &mut WorldPainterOrder,
+        result: &mut PrimarySpellTickResult,
+    ) {
+        if cast.element == WizardElement::Earth {
+            self.release_earth_boulders(cast.aim, cast.context, rng, order, result);
+            wizard.primary_cast.emission_sequence += 1;
+        }
+        wizard.primary_cast.action_tick = None;
+        wizard.primary_cast.hand_cast = None;
+        wizard.primary_cast.channel_active = false;
+        wizard.primary_cast.target_id = None;
+        wizard.primary_cast.underpowered = false;
+        if matches!(cast.authority.primary_skill, PrimarySkillProfile::Weld(_)) {
+            self.release_owned_weld_persistent_actors(
+                cast.context.owner_id,
+                cast.context.tick,
+                rng,
+                order,
+                cast.context.targets,
+            );
+        }
     }
 
     fn create_earth_boulder(
@@ -1161,6 +1287,51 @@ impl SpellState {
             advance_earth_called_rock(rock, parent)
         });
     }
+}
+
+/// Advances the wizard's cast action, pose and weapon pulse from this tick's input, and
+/// turns the wizard toward the aim while the cast owns facing.
+fn advance_cast_state(wizard: &mut HubWizard, cast: &PrimaryCastTick<'_>) {
+    wizard.primary_cast.advance(
+        cast.raw_held,
+        cast.accepted,
+        cast.element,
+        cast.authority.cast_progress_factor,
+        cast.authority.action_time_factor,
+    );
+    if cast.authority.weapon_kind.is_none() && cast.previous.channel_active {
+        // HandConstant writes K2 on its first update even at zero time.
+        wizard.primary_cast.action_tick = Some(1.0);
+    }
+    if !cast.one_shot {
+        wizard.primary_cast.one_shot_attack_pose_held = false;
+    }
+    wizard.primary_cast.selected_primary_age_ticks =
+        cast.selected_primary_age.map_or(0, |age| age + 1);
+    wizard.primary_cast.selected_primary_id = Some(cast.authority.primary_skill.common().skill_id);
+    wizard.primary_cast.weapon_pulse =
+        fround(cast.previous.weapon_pulse * PLAYER_WEAPON_PULSE_DECAY);
+    if wizard.primary_cast.owns_facing() {
+        wizard.set_facing(heading_degrees_from_vector(cast.aim.x, cast.aim.y));
+    }
+    wizard.primary_cast.aim_direction = cast.aim;
+}
+
+/// Whether the cast action crossed its emission marker this tick: a hand cast's own
+/// marker, otherwise the element's emission progress.
+fn emission_marker_crossed(wizard: &HubWizard, cast: &PrimaryCastTick<'_>) -> bool {
+    let emission_progress = primary_cast_emission_progress(cast.element);
+    wizard.primary_cast.hand_cast.as_ref().map_or_else(
+        || {
+            wizard.primary_cast.action_tick.is_some_and(|tick| tick >= emission_progress)
+                && cast.previous.action_tick.unwrap_or(-1.0) < emission_progress
+        },
+        |hand| {
+            cast.previous.hand_cast.as_ref().is_some_and(|previous| {
+                forward_action_marker_crossed(previous.progress(), hand.progress(), 1.0)
+            })
+        },
+    )
 }
 
 fn finish_ether_blast_tick(
