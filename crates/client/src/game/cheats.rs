@@ -23,8 +23,9 @@ impl Game {
                 .player
                 .economy
                 .college_intro_pending;
-        let interrupted =
-            self.world_loading || self.skill_selection_active() || self.social.input_active();
+        let interrupted = self.world_load.is_loading()
+            || self.skill_selection_active()
+            || self.social.input_active();
         let retain_open = active
             && !admission_hidden
             && !interrupted

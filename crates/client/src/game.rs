@@ -19,10 +19,12 @@ mod social;
 mod spectator;
 pub(crate) mod tasks;
 mod ui_layers;
+mod world_load;
 use local_save::LocalSave;
 pub use local_save::PendingSave;
 use native::{CommandFeedback, NativeGame};
 use solomon_protocol::{ClientMessage, GameCommand};
+use world_load::WorldLoad;
 
 use crate::battle::{BattleFrame, BattlePlayer, BattleScene, BattleViews};
 use crate::college_intro::CollegeIntroOverlay;
@@ -185,9 +187,7 @@ pub struct Game {
     input_belt_press_count: u64,
     accumulator: f64,
     last_time: Option<f64>,
-    pending_world: Option<LoadedBoneyard>,
-    world_loading: bool,
-    world_generation: u64,
+    world_load: WorldLoad,
     local_save: LocalSave,
     #[cfg(target_arch = "wasm32")]
     save_listeners: Vec<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>,
@@ -362,9 +362,7 @@ impl Game {
                 hud_state: HudState::new_game(),
                 accumulator: 0.0,
                 last_time: None,
-                pending_world: None,
-                world_loading: false,
-                world_generation: 0,
+                world_load: WorldLoad::default(),
                 local_save: LocalSave::default(),
                 #[cfg(target_arch = "wasm32")]
                 save_listeners: Vec::new(),
@@ -478,7 +476,7 @@ impl Game {
                 },
                 navigation,
             });
-            self.world_loading = false;
+            self.world_load.finish();
             self.apply_native_frame(frame, Some(loaded))?;
             // An observer loads the world without claiming
             // participant readiness or changing that participant's pause barrier.
@@ -493,7 +491,7 @@ impl Game {
             scene: BattleScene { scenery, lights, weather, compact_masks, compact_frame_count: 0 },
             navigation,
         });
-        self.world_loading = false;
+        self.world_load.finish();
         self.accumulator = 0.0;
         self.menu.hide()?;
         self.request_save();
@@ -502,15 +500,15 @@ impl Game {
     }
 
     pub fn take_world_load(&mut self) -> Option<(u64, LoadedBoneyard)> {
-        self.pending_world.take().map(|world| (self.world_generation, world))
+        self.world_load.take_queued()
     }
 
     pub fn world_load_current(&self, generation: u64) -> bool {
-        self.world_generation == generation
+        self.world_load.is_current(generation)
     }
 
     pub fn world_load_failed(&mut self, error: &str) {
-        self.world_loading = false;
+        self.world_load.finish();
         self.match_loading = None;
         set_status(error);
     }
@@ -830,7 +828,7 @@ impl Game {
             || self.menu.is_blocking()
             || self.panels.is_open()
             || self.skill_selection_active()
-            || self.world_loading
+            || self.world_load.is_loading()
             || self.match_loading.is_some()
             || !self.has_game;
         for slot in self.input.take_belt_unassignments() {
@@ -877,7 +875,7 @@ impl Game {
                 quickbar: input.quickbar,
                 viewport: self.scene_view().1.logical_size,
             },
-            self.native_gameplay_held() || self.world_loading || !self.has_game,
+            self.native_gameplay_held() || self.world_load.is_loading() || !self.has_game,
         )?;
         self.update_spectator_camera(self.input.take_spectator_camera_advances());
         self.input_aim = self.project_input_aim(input.aim);
@@ -1063,9 +1061,7 @@ impl Game {
                 self.reset_world_views()?;
                 self.has_game = true;
                 self.session.arm_college_intro(&self.local_player_id);
-                self.world_generation += 1;
-                self.pending_world = None;
-                self.world_loading = false;
+                self.world_load.cancel();
                 self.accumulator = 0.0;
                 if self.local_save.has_store() {
                     set_status("");
@@ -1161,7 +1157,7 @@ impl Game {
         // Gameplay pause applies only in a Boneyard. In the Hub, panels seal the local
         // input, while the College's students, NPCs and onboarding keep ticking.
         !self.has_game
-            || self.world_loading
+            || self.world_load.is_loading()
             || self.menu.covers_world()
             || self.skill_selection_active()
             || (self.session.boneyard.is_some()
@@ -1192,7 +1188,7 @@ impl Game {
             && !self.social.input_active()
             && !self.menu.is_blocking()
             && !self.menu.settings_open()
-            && !self.world_loading
+            && !self.world_load.is_loading()
             && self.match_loading.is_none()
             && !self.skill_selection_active()
             && self.session.level_up_barrier.is_none()
@@ -1274,7 +1270,7 @@ impl Game {
         if self.native.is_some() {
             return self.native_start_run(tutorial);
         }
-        if self.world_loading {
+        if self.world_load.is_loading() {
             return Ok(());
         }
         let mut seed = [0; 16];
@@ -1284,9 +1280,7 @@ impl Game {
         } else {
             solomon_assets::boneyard::load_boneyard(seed)
         }?;
-        self.world_generation += 1;
-        self.pending_world = Some(loaded);
-        self.world_loading = true;
+        self.world_load.start(loaded);
         self.begin_match_loading(MatchLoadingFlow::Boneyard, MatchLoadingStage::MaterializingWorld);
         set_status("Loading Boneyard…");
         Ok(())
@@ -1321,7 +1315,7 @@ impl Game {
     fn update_match_loading(&mut self, now: f64) -> Result<(), String> {
         if let Some(loading) = &mut self.match_loading {
             let admitted = self.has_game && self.native.as_ref().is_none_or(NativeGame::is_playing);
-            let prepared = !self.world_loading
+            let prepared = !self.world_load.is_loading()
                 && !self.menu.is_create_pending()
                 && self
                     .hosted
@@ -1376,7 +1370,7 @@ impl Game {
 
     fn observe_skill_book_feedback(&mut self, now: f64) -> Result<(), String> {
         if !self.has_game
-            || self.world_loading
+            || self.world_load.is_loading()
             || self.is_hosted_observer()
             || matches!(self.session.run.phase, GameRunPhase::Loadout | GameRunPhase::GameOver)
         {
@@ -2080,7 +2074,7 @@ impl Game {
             || self.menu.is_blocking()
             || self.skill_selection_active()
             || self.native_gameplay_held()
-            || self.world_loading
+            || self.world_load.is_loading()
             || self.session.participants[&self.local_player_id].wizard.transition.is_some()
         {
             return Ok(());

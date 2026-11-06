@@ -87,7 +87,7 @@ impl Game {
                     && !tutorial,
                 chat_enabled: self.session.run.phase != GameRunPhase::GameOver
                     && !self.cheats.is_open(),
-                input_suspended: self.world_loading
+                input_suspended: self.world_load.is_loading()
                     || self.cheats.is_open()
                     || self.menu.settings_open()
                     || host.is_some_and(|host| host.resume_grace.is_some()),
