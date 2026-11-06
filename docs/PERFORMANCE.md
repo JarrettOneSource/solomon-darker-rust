@@ -178,7 +178,60 @@ The reproducible drivers, raw samples and checkpoints are retained in
 `~/codex-runs/solomon-standalone-cutover-20261104/bench/` for November:
 `session-bench.rs`, `session-benchmark.py` and the per-run results.
 
+## Faculty death sprites
+
+The enemy sprite presenter computes its deterministic sine/cosine pair once per
+sprite, then reuses it for the four corners. Previously it evaluated eight sine
+and eight cosine calls per sprite. The recorded math deliberately uses fused
+operations; WebAssembly implements those through software arithmetic. An exact
+executable symbol map attributes 2.60 seconds of a 5.21-second baseline profile
+to that arithmetic, called mainly by the repeated sprite rotation work.
+
+Measurements on November 6, 2026 compare this change with `4f447266` on M2,
+Chrome 156.0.8078.80 and ANGLE/Metal at 1600×900, device scale 1. The retained
+Report 37 save is already after Aliss and Sirmin died. A task-only replay applies
+one accepted lethal hit to the surviving Lucritius at saved tick 1,086,824,
+preserving other state, then encodes the native checkpoint for ordinary browser
+Continue. Its shared Faculty death reaches 8,524 effects. No population, lifetime,
+health, loot, quality or random-stream rule changes.
+
+Three fresh-browser pairs alternate baseline/candidate, candidate/baseline and
+baseline/candidate. The table gives medians of the initial five-second active
+window after ordinary Continue, excluding the initial part of the death
+transition. CPU profiles and screenshots are excluded from these timing windows.
+
+| Measure | Previous | Current |
+| --- | ---: | ---: |
+| Frames per second | 52.8 | 60.0 |
+| Frame callback mean, ms | 15.89 | 7.64 |
+| Frame callback p95, ms | 26.20 | 10.20 |
+| Frame interval p95, ms | 33.30 | 17.20 |
+
+A second control applies the hit after 100 original-state ticks, reaching 8,250
+effects. Its first window changes from 53.4 to 60.0 FPS, with interval p95
+33.3→17.3 ms; both versions reach 60 FPS in the following five seconds. Native
+replays keep tick p95 below 0.5 ms and retire the Faculty and its effects through
+the unchanged simulation. All paired browser runs remain alive, save normally
+and close without browser/request errors or warnings. Composed candidate images
+were reviewed separately. Background OS/user services remained running.
+
+These local static-client controls establish the reproduced shared-death
+slowdown and the measured improvement. They do not replay Aliss's unavailable
+exact lethal frame, compare centered/offscreen cameras, measure hosted transport
+or resolve the unspecified October 31 occurrence. The original input remains in
+the Report 37 archive; concise source and measurement receipts live in
+`~/solomon-darker-bug-reports/_source/`.
+
 ## Implementation constraints
+
+Enemy sprite corners share one rotation. The registered-atlas presenter uses the
+simulation's deterministic `float::sin` and `float::cos`; each call is pure, so
+the same sine/cosine pair can serve all four corners without changing their
+floating-point operation order. This applies to every sprite in the six enemy
+atlas banks, including death smoke, ordinary actors, Maggots and projectiles.
+Stretching resolves its rotation first; signed/zero scales and root transforms
+keep their existing rules. Meshes, gradients, webs and authored underlays have
+their own geometry and do not use this sprite transform.
 
 Immutable scene, collision, skill, and unchanged scenery-target data share storage.
 Display projection borrows endpoint lists and updates the selected private copy.
