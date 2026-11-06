@@ -261,9 +261,19 @@ impl BoneyardWorld {
         }
     }
 
+    /// A wizard entering this Boneyard: at the scene's spawn point, or just inside the
+    /// arena once it has begun to lock, so a wizard who rejoins mid-fight is not left in
+    /// the excluded entrance strip at the edge of the screen.
     #[must_use]
     pub fn spawn_wizard(&self) -> HubWizard {
-        let mut wizard = HubWizard::at(self.loaded.scene.spawn.position);
+        let spawn = self.loaded.scene.spawn.position;
+        let position = match &self.arena_transition {
+            Some(arena) if arena.phase != ArenaPhase::Open => {
+                arena.entry_inside(spawn, PLAYER_CHARACTER_RADIUS)
+            }
+            _ => spawn,
+        };
+        let mut wizard = HubWizard::at(position);
         wizard.set_facing(self.loaded.scene.spawn.facing_degrees);
         wizard
     }
