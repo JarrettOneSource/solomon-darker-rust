@@ -37,8 +37,10 @@ pub struct SilkCreation {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemySilkActor {
-    pub native_registration_order: usize,
-    pub native_cell_binding_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_registration_order"))]
+    pub registration_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_cell_binding_order"))]
+    pub cell_binding_order: usize,
     pub id: usize,
     pub owner_actor_id: usize,
     pub spawn_tick: u64,

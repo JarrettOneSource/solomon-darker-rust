@@ -112,8 +112,8 @@ pub fn step_spider(
                 owner_actor_id: actor.id,
                 spawn_tick: context.tick,
                 state: silk.state,
-                native_registration_order: world.next_registration_order,
-                native_cell_binding_order: world.next_cell_binding_order,
+                registration_order: world.next_registration_order,
+                cell_binding_order: world.next_cell_binding_order,
                 painter_registration,
             });
             world.next_registration_order += 1;
@@ -344,7 +344,7 @@ impl EnemyWorld {
                 }
             }
             if !hit {
-                let mut binding = actor.native_cell_binding_order;
+                let mut binding = actor.cell_binding_order;
                 if primary_cell_coordinate(previous.x) != primary_cell_coordinate(state.position.x)
                     || primary_cell_coordinate(previous.y)
                         != primary_cell_coordinate(state.position.y)
@@ -352,7 +352,7 @@ impl EnemyWorld {
                     binding = self.next_cell_binding_order;
                     self.next_cell_binding_order += 1;
                 }
-                actor.native_cell_binding_order = binding;
+                actor.cell_binding_order = binding;
             }
             !hit
         });

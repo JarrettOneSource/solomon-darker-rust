@@ -165,11 +165,11 @@ impl EnemyWorld {
                         format!("projectile:{}", state.id),
                         state.position,
                         0x100,
-                        state.native_registration_order,
+                        state.registration_order,
                         None,
                         PrimarySpellQueryLane::Grid,
                     );
-                    target.target.cell_binding_order = state.native_cell_binding_order;
+                    target.target.cell_binding_order = state.cell_binding_order;
                     targets.push(target);
                 }
                 _ => {}
@@ -180,11 +180,11 @@ impl EnemyWorld {
                 format!("silk:{}", silk.id),
                 silk.state.position,
                 0x1000,
-                silk.native_registration_order,
+                silk.registration_order,
                 None,
                 PrimarySpellQueryLane::Grid,
             );
-            target.target.cell_binding_order = silk.native_cell_binding_order;
+            target.target.cell_binding_order = silk.cell_binding_order;
             targets.push(target);
         }
         for spell in self.boss_spells.iter() {

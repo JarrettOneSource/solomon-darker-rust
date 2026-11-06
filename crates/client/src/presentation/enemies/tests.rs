@@ -122,8 +122,8 @@ fn projectile(value: &Value) -> EnemyProjectile {
             _ => panic!("unknown source projectile"),
         }
         .type_id(),
-        native_cell_binding_order: 0,
-        native_registration_order: 0,
+        cell_binding_order: 0,
+        registration_order: 0,
         owner_actor_id: 1,
         painter_registration: registration(id(value)),
         payload: EnemyProjectilePayload::Normal,
@@ -271,8 +271,8 @@ fn world(value: &Value) -> EnemyWorld {
         state.drift = sample_json::point(&value["drift"]);
         state.ended = value["ended"].as_bool().unwrap();
         world.silks.push(EnemySilkActor {
-            native_registration_order: 0,
-            native_cell_binding_order: 0,
+            registration_order: 0,
+            cell_binding_order: 0,
             id: id(source),
             owner_actor_id: 1,
             spawn_tick: 0,

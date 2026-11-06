@@ -270,8 +270,8 @@ impl EnemyWorld {
                 next_movement_tick: context.tick + 2,
                 next_target_refresh_tick: context.tick
                     + enemy_target_refresh_ticks(intent.pathfinding_mode),
-                native_cell_binding_order: self.next_cell_binding_order,
-                native_registration_order: self.next_registration_order,
+                cell_binding_order: self.next_cell_binding_order,
+                registration_order: self.next_registration_order,
                 path,
                 position,
                 reward_granted: false,

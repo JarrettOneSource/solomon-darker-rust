@@ -182,7 +182,7 @@ impl EnemyWorld {
                 actor_flags: 0x80,
                 attachment: Vec2::ZERO,
                 body_radius: state.contact_radius,
-                cell_binding_order: state.native_cell_binding_order,
+                cell_binding_order: state.cell_binding_order,
                 heading_degrees: None,
                 grid_position: None,
                 id: format!("projectile:{}", state.id),
@@ -200,7 +200,7 @@ impl EnemyWorld {
                 actor_flags: 0x1000,
                 attachment: Vec2::ZERO,
                 body_radius: 15.0,
-                cell_binding_order: silk.native_cell_binding_order,
+                cell_binding_order: silk.cell_binding_order,
                 heading_degrees: None,
                 grid_position: None,
                 id: format!("silk:{}", silk.id),
@@ -209,7 +209,7 @@ impl EnemyWorld {
                 pending_remove: false,
                 position: silk.state.position,
                 query_lane: PrimarySpellQueryLane::Grid,
-                registration_order: silk.native_registration_order,
+                registration_order: silk.registration_order,
             });
         }
         targets
@@ -226,7 +226,7 @@ impl EnemyWorld {
                 actor_flags: boneyard_enemy_actor_flags(actor),
                 attachment: Vec2::ZERO,
                 body_radius: boneyard_enemy_collision_radius(actor),
-                cell_binding_order: actor.native_cell_binding_order,
+                cell_binding_order: actor.cell_binding_order,
                 heading_degrees: Some(actor.heading_deg),
                 grid_position: None,
                 id: format!("enemy:{}", actor.id),
@@ -235,7 +235,7 @@ impl EnemyWorld {
                 pending_remove: false,
                 position: actor.position,
                 query_lane: PrimarySpellQueryLane::Grid,
-                registration_order: actor.native_registration_order,
+                registration_order: actor.registration_order,
             });
         }
         for maggot in self.maggots.iter() {
@@ -244,7 +244,7 @@ impl EnemyWorld {
                 actor_flags: 0x2,
                 attachment: Vec2::ZERO,
                 body_radius: maggot.collision_radius,
-                cell_binding_order: maggot.native_cell_binding_order,
+                cell_binding_order: maggot.cell_binding_order,
                 heading_degrees: Some(maggot.heading_deg),
                 grid_position: None,
                 id: format!("enemy:{}", maggot.id),
@@ -253,7 +253,7 @@ impl EnemyWorld {
                 pending_remove: false,
                 position: maggot.position,
                 query_lane: PrimarySpellQueryLane::Grid,
-                registration_order: maggot.native_registration_order,
+                registration_order: maggot.registration_order,
             });
         }
         targets
@@ -271,7 +271,7 @@ impl EnemyWorld {
                 return false;
             }
             if primary_cell_changed(actor.position, position) {
-                actor.native_cell_binding_order = self.next_cell_binding_order;
+                actor.cell_binding_order = self.next_cell_binding_order;
                 self.next_cell_binding_order += 1;
             }
             actor.position = position;
@@ -284,7 +284,7 @@ impl EnemyWorld {
             return false;
         }
         if primary_cell_changed(maggot.position, position) {
-            maggot.native_cell_binding_order = self.next_cell_binding_order;
+            maggot.cell_binding_order = self.next_cell_binding_order;
             self.next_cell_binding_order += 1;
         }
         maggot.position = position;

@@ -79,8 +79,10 @@ pub struct EnemyProjectileState {
     pub minimum_speed: f64,
     #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
     pub type_id: u16,
-    pub native_cell_binding_order: usize,
-    pub native_registration_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_cell_binding_order"))]
+    pub cell_binding_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_registration_order"))]
+    pub registration_order: usize,
     pub owner_actor_id: usize,
     pub painter_registration: EnemyPainterRegistration,
     pub payload: EnemyProjectilePayload,

@@ -619,8 +619,10 @@ pub struct EnemyActor {
     pub loot_seed: u32,
     pub next_movement_tick: u64,
     pub next_target_refresh_tick: u64,
-    pub native_cell_binding_order: usize,
-    pub native_registration_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_cell_binding_order"))]
+    pub cell_binding_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_registration_order"))]
+    pub registration_order: usize,
     pub path: EnemyPathState,
     pub position: Vec2,
     pub reward_granted: bool,
@@ -1463,8 +1465,10 @@ pub struct EnemyMaggotActor {
     pub next_attack_tick: u64,
     pub next_movement_tick: u64,
     pub next_target_refresh_tick: u64,
-    pub native_cell_binding_order: usize,
-    pub native_registration_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_cell_binding_order"))]
+    pub cell_binding_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_registration_order"))]
+    pub registration_order: usize,
     pub owner_coffin_actor_id: usize,
     pub path: EnemyPathState,
     pub poison_damage: f64,
