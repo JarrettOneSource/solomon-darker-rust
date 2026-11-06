@@ -2003,7 +2003,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                     arena_scalars: EnemyArenaScalars::default(),
                     dialogue_busy: false,
                     roll_loot_seed: None,
-                    native_visibility: None,
+                    enemy_visibility: None,
                     projected_point_visible: None,
                     view_bounds: None,
                     puppet_targets: &[],
@@ -2169,7 +2169,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                 } else {
                     None
                 },
-                native_visibility: Some(&visible),
+                enemy_visibility: Some(&visible),
                 projected_point_visible: Some(&projected),
                 view_bounds: (case["token"] == "DIREFACULTY" || case["token"] == "DEMONSKULL")
                     .then_some(BoneyardBounds::new(0.0, 0.0, 1000.0, 1000.0)),

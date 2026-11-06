@@ -195,7 +195,7 @@ pub fn step_heartmonger(
         panic!("Heartmonger config required");
     };
     let visibility =
-        context.native_visibility.map_or_else(Default::default, |query| query(actor.position));
+        context.enemy_visibility.map_or_else(Default::default, |query| query(actor.position));
     let mut targets = Vec::new();
     for target in context.players {
         if target_eligible(target) {
@@ -316,7 +316,7 @@ pub fn step_heartmonger(
     }
     for crow in &mut brain.crows {
         crow.light_intensity = crow.position.map_or(0.0, |position| {
-            context.native_visibility.map_or(1.0, |query| query(position).intensity)
+            context.enemy_visibility.map_or(1.0, |query| query(position).intensity)
         });
     }
     actor.body_pose = brain.torso_phase.trunc();
@@ -390,7 +390,7 @@ impl EnemyWorld {
                 let flight = &mut source.flight;
                 let position = flight.position.expect("a surviving detached crow has a root");
                 flight.light_intensity =
-                    context.native_visibility.map_or(1.0, |query| query(position).intensity);
+                    context.enemy_visibility.map_or(1.0, |query| query(position).intensity);
             }
             step.retained
         });

@@ -289,7 +289,7 @@ impl BoneyardWorld {
                 },
                 bodies,
             );
-            let native_visibility = |position| geometry.native_visibility(position);
+            let enemy_visibility = |position| geometry.enemy_visibility(position);
             let projected_point_visible = |position| geometry.projected_point_visible(position);
             let light_at = |position| world_light.scalar_at(position);
             let mut external = context.external_spawn_intents;
@@ -331,7 +331,7 @@ impl BoneyardWorld {
                     arena_scalars: EnemyArenaScalars::default(),
                     dialogue_busy,
                     roll_loot_seed: Some(&mut roll_loot_seed),
-                    native_visibility: Some(&native_visibility),
+                    enemy_visibility: Some(&enemy_visibility),
                     projected_point_visible: Some(&projected_point_visible),
                     view_bounds: geometry.view_bounds(),
                     puppet_targets: &puppet_targets,

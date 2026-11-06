@@ -150,7 +150,7 @@ fn current_wraith_world_motion_and_shared_random_streams_match_the_source() {
                     arena_scalars: EnemyArenaScalars::default(),
                     dialogue_busy: false,
                     roll_loot_seed: None,
-                    native_visibility: Some(&visible),
+                    enemy_visibility: Some(&visible),
                     projected_point_visible: None,
                     view_bounds: None,
                     puppet_targets: &[],

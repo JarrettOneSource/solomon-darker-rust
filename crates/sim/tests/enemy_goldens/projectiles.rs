@@ -335,7 +335,7 @@ fn projectile_world_queries_contacts_hazards_and_retirement_match_the_website() 
                     arena_scalars: EnemyArenaScalars::default(),
                     dialogue_busy: false,
                     roll_loot_seed: None,
-                    native_visibility: None,
+                    enemy_visibility: None,
                     projected_point_visible: None,
                     view_bounds: None,
                     puppet_targets: &[],
