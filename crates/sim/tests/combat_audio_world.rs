@@ -151,7 +151,7 @@ fn ambient_world(value: &Value) -> EnemyWorld {
                         position: point(&input["position"]),
                         damage: 0.0,
                         burn_damage: 0.0,
-                        native_type: FirePatchType::Fire,
+                        patch_type: FirePatchType::Fire,
                         atlas_phase_step: None,
                         life: None,
                         draw_alpha: None,

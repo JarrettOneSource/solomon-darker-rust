@@ -55,7 +55,7 @@ fn spell(value: &Value) -> BossSpell {
                     fade_alpha: None,
                     id: 1,
                     life: None,
-                    native_type: FirePatchType::Fire,
+                    patch_type: FirePatchType::Fire,
                     owner_id: "boss".into(),
                     painter_registration: None,
                     position: Vec2::ZERO,

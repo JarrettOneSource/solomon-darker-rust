@@ -143,7 +143,7 @@ pub struct CreateFirePatchOptions {
     pub fade_alpha: Option<f64>,
     pub id: u64,
     pub life: Option<f64>,
-    pub native_type: FirePatchType,
+    pub patch_type: FirePatchType,
     pub owner_id: String,
     pub painter_registration: Option<PainterRegistration>,
     pub position: Vec2,
@@ -189,7 +189,7 @@ pub fn create_fire_patch(
     assert!(options.id > 0, "Fire patch id must be positive");
     let life = options.life.unwrap_or(2.0);
     let scale = options.scale.unwrap_or(1.0);
-    let moving = options.native_type == FirePatchType::Moving;
+    let moving = options.patch_type == FirePatchType::Moving;
     let draw_alpha = options.draw_alpha.unwrap_or(if moving { 4.0 } else { 1.0 });
     let atlas_phase_step =
         options.atlas_phase_step.unwrap_or(if moving { 0.12_f32 as f64 } else { 0.25_f32 as f64 });
@@ -217,7 +217,7 @@ pub fn create_fire_patch(
         draw_alpha,
         fade_alpha: fround(options.fade_alpha.unwrap_or(0.0)),
         life: fround(life),
-        native_type: options.native_type,
+        patch_type: options.patch_type,
         position: float32_vector(options.position),
         horizontal_sign,
         scale: fround(scale),

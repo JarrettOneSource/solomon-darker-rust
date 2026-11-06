@@ -574,7 +574,7 @@ pub fn spawn_green_fire(
             fade_alpha: None,
             id: owner.id as u64,
             life: Some(life),
-            native_type: FirePatchType::Fire,
+            patch_type: FirePatchType::Fire,
             owner_id: format!("enemy:{owner_actor_id}"),
             painter_registration: Some(owner.painter_registration),
             position,
