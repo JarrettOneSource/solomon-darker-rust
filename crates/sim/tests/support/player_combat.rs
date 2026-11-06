@@ -207,7 +207,7 @@ pub fn player_snapshot(player: &PlayerState) -> Value {
             "boast": {
                 "failed": economy.npc.boast.failed,
                 "failureSequence": economy.npc.boast.failure_sequence,
-                "selected": economy.npc.boast.selected_native(),
+                "selected": economy.npc.boast.selected_stock(),
                 "succeeded": economy.npc.boast.succeeded,
             },
             "items": items,

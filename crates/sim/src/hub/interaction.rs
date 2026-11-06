@@ -646,8 +646,8 @@ fn pick<T: Copy>(values: &[T], random_index: i64) -> T {
 
 impl BoastState {
     #[must_use]
-    pub fn selected_native(&self) -> Option<u32> {
-        self.selected.as_ref()?.native_id()
+    pub fn selected_stock(&self) -> Option<u32> {
+        self.selected.as_ref()?.stock_id()
     }
 
     pub fn select(&mut self, selection: crate::economy::BoastSelection) {
@@ -738,7 +738,7 @@ fn native_boast_rules(state: &BoastState) -> Option<BoastRules<'static>> {
 pub fn boast_rules_for_selection(
     selection: &crate::economy::BoastSelection,
 ) -> Option<BoastRules<'static>> {
-    let id = selection.native_id()?;
+    let id = selection.stock_id()?;
     let definition = BOASTS.get(id as usize)?;
     Some(BoastRules {
         failure_producers: definition.failure_producer.as_slice(),

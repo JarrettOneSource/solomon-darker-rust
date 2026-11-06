@@ -215,7 +215,7 @@ fn college_dialogue_geometry_markers_and_every_stock_selector_replay_the_website
         use solomon_sim::economy::HubInventoryAction;
         let action = match hub_npc_selector_action(selector, id) {
             HubInventoryAction::SelectBoast { boast_id } => {
-                json!({"type":"select-boast","boastId":boast_id.native_id().unwrap()})
+                json!({"type":"select-boast","boastId":boast_id.stock_id().unwrap()})
             }
             HubInventoryAction::ReadLibrarianBook { book_id } => {
                 json!({"type":"read-librarian-book","bookId":book_id})

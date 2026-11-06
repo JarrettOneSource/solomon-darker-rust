@@ -195,7 +195,7 @@ impl GameSimulationExtensions for PreparedModRuntime {
     }
 
     fn resolve_boast(&self, selection: &BoastSelection) -> Option<BoastRules<'_>> {
-        if matches!(selection, BoastSelection::Native(_)) {
+        if matches!(selection, BoastSelection::Stock(_)) {
             return None;
         }
         self.content.boast_rules(selection)

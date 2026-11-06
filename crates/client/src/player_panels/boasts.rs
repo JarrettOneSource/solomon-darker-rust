@@ -45,7 +45,7 @@ fn boast_progress<'a>(
     mods: Option<&'a ModContentProjection>,
 ) -> Option<BoastProgress<'a>> {
     let (name, statement) = match state.selected.as_ref()? {
-        BoastSelection::Native(id) => {
+        BoastSelection::Stock(id) => {
             let boast = BOASTS.iter().find(|boast| boast.id == *id)?;
             (boast.label, boast.statement)
         }

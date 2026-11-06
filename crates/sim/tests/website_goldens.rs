@@ -484,7 +484,7 @@ fn hub_regions_doorways_and_scripted_walks_replay_the_website_kernels() {
     let regions: Vec<HubRegion> = goldens.regions.iter().map(|record| region(&record.id)).collect();
     assert_eq!(regions, HubRegion::ALL, "region order");
     for (record, region) in goldens.regions.iter().zip(regions.iter().copied()) {
-        assert_eq!(region.native_id(), record.native_id, "{} native id", record.id);
+        assert_eq!(region.index(), record.native_id, "{} native id", record.id);
         assert_eq!(region.size(), vec2(record.size), "{} size", record.id);
         assert_eq!(hub_incoming_fade_rate(region), record.incoming_fade_rate, "{} fade", record.id);
         if region == HubRegion::Courtyard {
@@ -1011,7 +1011,7 @@ fn private_rooms_collision_presentation_and_doorway_lifecycles_match_the_website
                 wizard.gait_degrees,
                 wizard.walk_cycle_primary,
                 f64::from(rng),
-                f64::from(wizard.region.native_id()),
+                f64::from(wizard.region.index()),
                 phase,
                 alpha,
                 speed,
@@ -1672,7 +1672,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             "firstMixedSelectors":state.first_mixed_selectors,"hagathaBundleSelectors":state.hagatha_bundle_selectors,
             "nextItemId":state.next_item_id,"nextOfferId":state.next_offer_id,
             "npc":{"boast":{"failed":state.npc.boast.failed,"failureSequence":state.npc.boast.failure_sequence,
-                "selected":state.npc.boast.selected_native(),"succeeded":state.npc.boast.succeeded},
+                "selected":state.npc.boast.selected_stock(),"succeeded":state.npc.boast.succeeded},
                 "helpFlags":state.npc.help_flags,"librarianLaceRead":state.npc.librarian_lace_read},
             "ownedPerkSelectors":state.owned_perk_selectors,"revision":state.revision,
             "rng":{"indexA":state.rng.index_a,"indexB":state.rng.index_b,"words":&state.rng.words[..]},

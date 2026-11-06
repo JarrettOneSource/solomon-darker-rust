@@ -110,7 +110,7 @@ pub fn hub_boast_instruction<'a>(
     mods: Option<&'a ModContentProjection>,
 ) -> Option<&'a str> {
     match selection? {
-        BoastSelection::Native(_) => Some(BOAST_INSTRUCTION),
+        BoastSelection::Stock(_) => Some(BOAST_INSTRUCTION),
         BoastSelection::Mod(selection) => Some(&mods?.boast(selection)?.instruction),
     }
 }
@@ -124,7 +124,7 @@ pub fn hub_boast_failure_text(
         return None;
     }
     let label = match state.selected.as_ref()? {
-        BoastSelection::Native(id) => BOASTS.iter().find(|boast| boast.id == *id)?.label,
+        BoastSelection::Stock(id) => BOASTS.iter().find(|boast| boast.id == *id)?.label,
         BoastSelection::Mod(selection) => &mods?.boast(selection)?.name,
     };
     if label.is_empty() {

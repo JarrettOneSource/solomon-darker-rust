@@ -393,7 +393,7 @@ impl Game {
             wizard.gait_degrees,
             wizard.walk_cycle_primary,
             self.session.ticks as f64,
-            f64::from(wizard.region.native_id()),
+            f64::from(wizard.region.index()),
             wizard.transition.map_or(-1.0, |transition| match transition.phase {
                 solomon_sim::hub::regions::HubTransitionPhase::CollegeIntro => 0.0,
                 solomon_sim::hub::regions::HubTransitionPhase::CollegeLoadout => 1.0,

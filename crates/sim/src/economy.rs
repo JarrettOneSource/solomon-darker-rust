@@ -353,15 +353,15 @@ impl HubEquipmentState {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(untagged))]
 pub enum BoastSelection {
-    Native(u32),
+    Stock(u32),
     Mod(ModBoastSelection),
 }
 
 impl BoastSelection {
     #[must_use]
-    pub const fn native_id(&self) -> Option<u32> {
+    pub const fn stock_id(&self) -> Option<u32> {
         match self {
-            Self::Native(id) => Some(*id),
+            Self::Stock(id) => Some(*id),
             Self::Mod(_) => None,
         }
     }
@@ -369,7 +369,7 @@ impl BoastSelection {
 
 impl From<u32> for BoastSelection {
     fn from(value: u32) -> Self {
-        Self::Native(value)
+        Self::Stock(value)
     }
 }
 

@@ -30,7 +30,7 @@ impl HubRegion {
 
     /// The stock region index.
     #[must_use]
-    pub const fn native_id(self) -> u8 {
+    pub const fn index(self) -> u8 {
         self as u8
     }
 
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn regions_keep_the_stock_index_order_and_round_trip_their_ids() {
         for (index, region) in HubRegion::ALL.into_iter().enumerate() {
-            assert_eq!(usize::from(region.native_id()), index);
+            assert_eq!(usize::from(region.index()), index);
             assert_eq!(HubRegion::from_id(region.id()), Some(region));
         }
         assert_eq!(HubRegion::from_id("boneyard"), None);

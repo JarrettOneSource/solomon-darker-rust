@@ -495,7 +495,7 @@ impl PreparedModContentCatalog {
         selection: &crate::economy::BoastSelection,
     ) -> Option<crate::hub::interaction::BoastRules<'_>> {
         match selection {
-            crate::economy::BoastSelection::Native(_) => {
+            crate::economy::BoastSelection::Stock(_) => {
                 crate::hub::interaction::boast_rules_for_selection(selection)
             }
             crate::economy::BoastSelection::Mod(selection) => {
