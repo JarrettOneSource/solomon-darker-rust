@@ -27,3 +27,7 @@ flate2 = "1.1"
 [[bin]]
 name = "solomon-darker"
 path = "src/main.rs"
+
+[[bin]]
+name = "solomon-save-check"
+path = "src/bin/solomon-save-check/main.rs"

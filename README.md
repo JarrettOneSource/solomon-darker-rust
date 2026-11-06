@@ -124,11 +124,45 @@ python3 scripts/package-hosted-game.py --output artifacts/hosted-game \
 ```
 
 The directory and its `.tar.gz` include the host, client, editor entry, save-tools
-module, and a manifest of file hashes.
+module, the [cloud save checker](#checking-stored-cloud-saves), and a manifest of file
+hashes.
 
 The consumer verifies complete payload membership and hashes before installation.
 Mounts are build inputs: rebuilding with `/game-stg` for both prefixes creates a
 staging artifact. `--profile debug` selects an unoptimized development build.
+
+### Checking stored cloud saves
+
+`solomon-save-check` measures how many of the Website's stored cloud saves the Rust game
+loads. For each save it parses the document, restores it as the host admits Continue
+(a profile-only save is hydrated into a New Game wizard), loads a restored Boneyard's
+navigation, writes the document as the host's next checkpoint would, and loads that
+rewrite again. `solomon-save-rows.py`, a standard-library Python 3 script, opens the
+Website's SQLite database read-only and streams each `WebGameSaves` row's slot, revision
+and document, without user IDs. From an unpacked hosted archive:
+
+```sh
+python3 bin/solomon-save-rows.py /path/to/sdr.db | bin/solomon-save-check --assets client > summary.json
+```
+
+From source, build the checker with `cargo build -p solomon-launcher --bin solomon-save-check`,
+then use `python3 scripts/solomon-save-rows.py` and `--assets web`. `--assets` names the
+client directory the host serves, which holds `assets/navigation`.
+
+The summary counts rows by slot (0 is PixiJS, 1 is Rust), schema version and outcome:
+`ok`, `parseError`, `restoreError`, `roundTripError`, `oversize` or `panic`. It lists
+each distinct error with the slot, revision and SHA-256 of its rows;
+`solomon-save-rows.py DATABASE --find-sha256 HASH` finds such a row again. The checker
+exits 0 whenever it has read all of its input.
+
+The summary contains no document text. Messages that can repeat a document's keys,
+values or names are redacted (the list is in
+`crates/launcher/src/bin/solomon-save-check/redact.rs`), numbers become `#`, and a
+message that still contains a name, identity or long string from its document is
+withheld. Session policies are not applied: each save loads as the first wizard of a
+private College whose mods match the save, so no mod packages are needed. The exporter
+keeps one read transaction open while it streams, so give it a copy of a live database,
+such as one made with `sqlite3 sdr.db ".backup copy.db"`.
 
 ## Repository layout
 

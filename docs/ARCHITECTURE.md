@@ -269,7 +269,9 @@ and coalesce later revisions, preserving the revision needed by a waiting receip
 Native server files use `assets::save_document` schema 2; schema 1 is rejected.
 Browser/desktop player documents use the separate schema 52 codec with its supported
 migrations. [Save conversion decisions](DECISIONS.md#save-conversion) explain the
-retail container and portable-archive boundary.
+retail container and portable-archive boundary. The hosted artifact also carries
+`solomon-save-check`, which runs stored cloud documents through the host's load path
+and checkpoint writer and reports the outcomes without document text.
 
 Static asset transfer workers retain connection leases and check shutdown between
 nonblocking writes. Slow readers cannot occupy the request-framing pool.

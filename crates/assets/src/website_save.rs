@@ -15,8 +15,9 @@ pub use profile::{RestoredGameProfile, hydrate_profile, restore_profile};
 pub use restore::{RestoredGameSave, restore};
 
 pub use contract::{
-    MAX_SAVE_BYTES, NativeSaveFile, NativeSaveSource, ParsedContinuation, ParsedSaveDocument,
-    SCHEMA_VERSION, SaveIntegrity, SaveMetadata, SaveSummary, SaveWorldKind, parse,
+    MAX_SAFE_INTEGER, MAX_SAVE_BYTES, NativeSaveFile, NativeSaveSource, ParsedContinuation,
+    ParsedSaveDocument, SCHEMA_VERSION, SaveIntegrity, SaveMetadata, SaveSummary, SaveWorldKind,
+    parse,
 };
 
 #[cfg(test)]

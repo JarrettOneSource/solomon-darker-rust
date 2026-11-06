@@ -67,7 +67,10 @@ def main():
                 if line.startswith('host: '))
     native_target = args.target or host
     target = Path(os.environ.get('CARGO_TARGET_DIR', ROOT / 'target')).resolve()
-    executable = 'solomon-darker.exe' if 'windows' in native_target else 'solomon-darker'
+    suffix = '.exe' if 'windows' in native_target else ''
+    executable = 'solomon-darker' + suffix
+    # The cloud save checker and its database exporter run beside the host on the server.
+    save_check = 'solomon-save-check' + suffix
     release = ['--release'] if args.profile == 'release' else []
     native_flags = ['--target', args.target] if args.target else []
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -77,8 +80,11 @@ def main():
         client = package / 'client'
         native = package / 'bin' / executable
         native.parent.mkdir(parents=True)
-        run(['cargo', 'build', '-p', 'solomon-launcher', '--bin', 'solomon-darker', *release, *native_flags])
+        run(['cargo', 'build', '-p', 'solomon-launcher', '--bin', 'solomon-darker',
+             '--bin', 'solomon-save-check', *release, *native_flags])
         built_native = target / args.target if args.target else target
+        shutil.copy2(built_native / args.profile / save_check, native.parent / save_check)
+        shutil.copy2(ROOT / 'scripts/solomon-save-rows.py', native.parent / 'solomon-save-rows.py')
         shutil.copy2(built_native / args.profile / executable, native)
         run(['trunk', 'build', '--config', 'web/Trunk.toml', *release,
              '--public-url', args.mount + '/', '--dist', str(client)])
