@@ -39,7 +39,8 @@ async function resume(page) {
     await page.goto(url); await loaded(page);
     await startNewGame(page,{name:'Felix'});
     await ui.click(page,(await ui.byLabel(page,'Fomentius',{prefix:'hud:',role:'button'})).id);
-    const potion=await ui.byLabel(page,'Buy Health Potion for 150 gold',{prefix:'panel:',role:'button'});
+    // Fomentius stocks two to four separate Health Potions; buy the first.
+    const potion=await ui.byLabel(page,'Buy Health Potion for 150 gold',{prefix:'panel:shop:',role:'button',first:true});
     await ui.click(page,potion.id);await ui.click(page,potion.id);
     await ui.byLabel(page,'Health Potion, quantity 2',{prefix:'panel:item:',role:'button'});
     await saved(page,record=>localParticipant(record).player.economy.gold===350);

@@ -40,14 +40,16 @@ async function noWidget(page, id, options) {
   return waitForUi(page, ui => !findWidget(ui, id), `GPU widget ${id} to close`, options);
 }
 
-async function byLabel(page, label, {role, prefix = '', timeout} = {}) {
+// `first` is for rows that are truly interchangeable, such as a shop stocking several
+// identical potions; it returns the first one drawn instead of requiring a unique label.
+async function byLabel(page, label, {role, prefix = '', timeout, first = false} = {}) {
   const matches = snapshot => snapshot.widgets.filter(widget => widget.id.startsWith(prefix)
     && (!role || widget.role === role)
     && (typeof label === 'string' ? widget.label === label : label.test(widget.label)));
   const snapshot = await waitForUi(page, snapshot => matches(snapshot).length > 0,
     `GPU label ${label}`, {timeout});
   const found = matches(snapshot);
-  assert.equal(found.length, 1, `GPU label is unambiguous within ${prefix}: ${label}`);
+  if (!first) assert.equal(found.length, 1, `GPU label is unambiguous within ${prefix}: ${label}`);
   return found[0];
 }
 
