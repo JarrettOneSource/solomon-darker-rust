@@ -2,7 +2,7 @@
 // Windows process-exit ordering for controller services held in thread locals.
 #[cfg(target_os = "windows")]
 fn main() {
-    use solomon_web::platform::{ClientTasks, gamepads};
+    use solomon_client::platform::{ClientTasks, gamepads};
 
     for _ in 0..2 {
         let client = ClientTasks::install();

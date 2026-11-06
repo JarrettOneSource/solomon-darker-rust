@@ -45,7 +45,7 @@ fn main() -> Result<(), String> {
                     pixels
                 };
                 let cases = futures_lite::future::block_on(
-                    solomon_web::wizard::material_probe::run(&mut renderer, &mut read_pixels),
+                    solomon_client::wizard::material_probe::run(&mut renderer, &mut read_pixels),
                 )?;
                 std::fs::create_dir_all(&self.output).map_err(|error| error.to_string())?;
                 let mut receipts = Vec::new();

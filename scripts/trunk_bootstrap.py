@@ -10,8 +10,8 @@ BOOT_SCRIPT = re.compile(r'<script type="module" src="([^"]*solomon-boot-[0-9a-f
 RESOURCE_NAMES = {
     "loaderModule": r"solomon-loader-[0-9a-f]+\.js",
     "loaderWasm": r"solomon-loader-[0-9a-f]+_bg\.wasm",
-    "mainModule": r"solomon-web-[0-9a-f]+\.js",
-    "mainWasm": r"solomon-web-[0-9a-f]+_bg\.wasm",
+    "mainModule": r"solomon-client-[0-9a-f]+\.js",
+    "mainWasm": r"solomon-client-[0-9a-f]+_bg\.wasm",
 }
 
 
@@ -38,7 +38,7 @@ def render_bootstrap(resources: dict[str, str]) -> str:
 def hash_worker_outputs(dist: Path) -> None:
     """Trunk workers keep their bindgen names; give our external entries content hashes."""
     outputs = []
-    for name in ("solomon-loader", "solomon-web"):
+    for name in ("solomon-loader", "solomon-client"):
         module = dist / f"{name}.js"
         wasm = dist / f"{name}_bg.wasm"
         if not module.exists() and not wasm.exists():

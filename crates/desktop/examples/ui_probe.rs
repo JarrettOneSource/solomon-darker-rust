@@ -7,12 +7,12 @@ fn main() {}
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), String> {
     use glow::HasContext;
-    use solomon_desktop::window::NativeWindow;
-    use solomon_graphics::Renderer;
-    use solomon_web::gpu_ui::{
+    use solomon_client::gpu_ui::{
         FontRunOptions, GpuUi, NativeFontStroke, NativeTextEdit, font_run_with_options,
     };
-    use solomon_web::platform::{ClientTasks, Surface};
+    use solomon_client::platform::{ClientTasks, Surface};
+    use solomon_desktop::window::NativeWindow;
+    use solomon_graphics::Renderer;
     use std::cell::RefCell;
     use std::path::PathBuf;
     use std::rc::Rc;
@@ -25,16 +25,16 @@ fn main() -> Result<(), String> {
 
     struct Operations {
         surface: Surface,
-        picker: solomon_web::platform::files::FilePicker,
-        fullscreen: solomon_web::fullscreen::FullscreenControl,
+        picker: solomon_client::platform::files::FilePicker,
+        fullscreen: solomon_client::fullscreen::FullscreenControl,
         events: Rc<RefCell<Vec<serde_json::Value>>>,
     }
     impl Operations {
         fn new(surface: Surface) -> Result<Self, String> {
-            let mut fullscreen = solomon_web::fullscreen::FullscreenControl::attach(&surface)?;
-            fullscreen.update(solomon_web::fullscreen::FullscreenPlacement::Title)?;
+            let mut fullscreen = solomon_client::fullscreen::FullscreenControl::attach(&surface)?;
+            fullscreen.update(solomon_client::fullscreen::FullscreenPlacement::Title)?;
             Ok(Self {
-                picker: solomon_web::platform::files::FilePicker::new(
+                picker: solomon_client::platform::files::FilePicker::new(
                     &surface,
                     &["json", "txt"],
                     true,
@@ -47,7 +47,7 @@ fn main() -> Result<(), String> {
         fn poll(&mut self) {
             for files in self.picker.take() {
                 let events = self.events.clone();
-                solomon_web::platform::spawn_local(async move {
+                solomon_client::platform::spawn_local(async move {
                     for file in files {
                         let result = file.read(1024 * 1024).await;
                         events.borrow_mut().push(match result {
@@ -60,7 +60,7 @@ fn main() -> Result<(), String> {
         }
         fn paint(
             &mut self,
-            frame: &solomon_web::gpu_ui::UiFrame<'_>,
+            frame: &solomon_client::gpu_ui::UiFrame<'_>,
             ui: &mut egui::Ui,
             origin: egui::Pos2,
         ) -> Result<(), String> {
@@ -83,8 +83,8 @@ fn main() -> Result<(), String> {
                         "save" => {
                             let surface = self.surface.clone();
                             let events = self.events.clone();
-                            solomon_web::platform::spawn_local(async move {
-                                let result = solomon_web::platform::files::save_file(
+                            solomon_client::platform::spawn_local(async move {
+                                let result = solomon_client::platform::files::save_file(
                                     &surface,
                                     "native-platform-check.json",
                                     br#"{"native":true,"save":"complete"}"#.to_vec(),
@@ -95,9 +95,9 @@ fn main() -> Result<(), String> {
                             });
                         }
                         "copy" => {
-                            let request = solomon_web::platform::copy_text("Native clipboard ✓");
+                            let request = solomon_client::platform::copy_text("Native clipboard ✓");
                             let events = self.events.clone();
-                            solomon_web::platform::spawn_local(async move {
+                            solomon_client::platform::spawn_local(async move {
                                 let result = match request {
                                     Ok(request) => request.await,
                                     Err(error) => Err(error),
@@ -123,7 +123,7 @@ fn main() -> Result<(), String> {
     }
     struct Probe {
         operations: Option<Operations>,
-        audio: Option<solomon_web::audio::GameAudio>,
+        audio: Option<solomon_client::audio::GameAudio>,
         check_audio: bool,
         audio_trace: Vec<serde_json::Value>,
         ui: Option<GpuUi>,
@@ -188,22 +188,27 @@ fn main() -> Result<(), String> {
             renderer.begin_frame(size.width as i32, size.height as i32, viewport);
             renderer.draw_solid([0.0, 0.0, viewport[0], viewport[1]], [0.06, 0.04, 0.08, 1.0]);
             renderer.end_frame();
-            ui.run(renderer, viewport, solomon_web::platform::monotonic_ms() / 1000.0, |frame| {
-                Self::paint(
-                    frame,
-                    viewport,
-                    &mut self.text,
-                    &mut self.clicks,
-                    self.frames == 0,
-                    self.operations.as_mut().ok_or("Native operations absent")?,
-                )
-            })?;
+            ui.run(
+                renderer,
+                viewport,
+                solomon_client::platform::monotonic_ms() / 1000.0,
+                |frame| {
+                    Self::paint(
+                        frame,
+                        viewport,
+                        &mut self.text,
+                        &mut self.clicks,
+                        self.frames == 0,
+                        self.operations.as_mut().ok_or("Native operations absent")?,
+                    )
+                },
+            )?;
             self.frames += 1;
             window.present()?;
             Ok(())
         }
         fn paint(
-            frame: &mut solomon_web::gpu_ui::UiFrame<'_>,
+            frame: &mut solomon_client::gpu_ui::UiFrame<'_>,
             viewport: [f32; 2],
             text: &mut String,
             clicks: &mut u32,
@@ -283,13 +288,13 @@ fn main() -> Result<(), String> {
         fn dispatch(&mut self) -> Result<(), String> {
             let Some(ui) = self.ui.as_mut() else { return Ok(()) };
             let Some(mut run) =
-                ui.begin_native_dispatch(solomon_web::platform::monotonic_ms() / 1000.0)?
+                ui.begin_native_dispatch(solomon_client::platform::monotonic_ms() / 1000.0)?
             else {
                 return Ok(());
             };
             let window = self.window.as_ref().ok_or("Native UI window absent")?;
             let size = window.window.inner_size().to_logical::<f32>(window.window.scale_factor());
-            let mut paint = |frame: &mut solomon_web::gpu_ui::UiFrame<'_>| {
+            let mut paint = |frame: &mut solomon_client::gpu_ui::UiFrame<'_>| {
                 Self::paint(
                     frame,
                     [size.width, size.height],
@@ -370,7 +375,7 @@ fn main() -> Result<(), String> {
                 ui.context().enable_accesskit();
                 if self.check_audio {
                     let audio =
-                        futures_lite::future::block_on(solomon_web::audio::GameAudio::load(
+                        futures_lite::future::block_on(solomon_client::audio::GameAudio::load(
                             &Surface::from_window(window.window.clone()),
                         ))?;
                     audio.set_volumes(20, 15);

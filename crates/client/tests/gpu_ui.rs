@@ -1,8 +1,8 @@
-use solomon_web::gpu_ui::{canvas_point, clip_scissor, key_from_browser};
+use solomon_client::gpu_ui::{canvas_point, clip_scissor, key_from_browser};
 
 #[test]
 fn circular_and_rotated_native_controls_do_not_capture_their_empty_box_corners() {
-    use solomon_web::gpu_ui::{HitRegion, HitShape};
+    use solomon_client::gpu_ui::{HitRegion, HitShape};
     let bounds = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(100.0, 100.0));
     let circle =
         HitRegion { bounds: bounds.into(), paint_bounds: bounds.into(), shape: HitShape::Ellipse };
@@ -22,7 +22,7 @@ fn circular_and_rotated_native_controls_do_not_capture_their_empty_box_corners()
 
 #[test]
 fn quickbar_cooldown_uses_the_stock_square_perimeter_and_svg_formatter() {
-    let points = solomon_web::gpu_ui::cooldown_sector_points(1.0, 4.0);
+    let points = solomon_client::gpu_ui::cooldown_sector_points(1.0, 4.0);
     assert_eq!(
         points,
         vec![
@@ -36,9 +36,9 @@ fn quickbar_cooldown_uses_the_stock_square_perimeter_and_svg_formatter() {
         solomon_sim::hud::quickbar::cooldown_sector_path(1.0, 4.0),
         "M 26.5 26.5 L 26.5 53 L 53 53 L 53 26.5 Z"
     );
-    assert!(solomon_web::gpu_ui::cooldown_sector_points(0.0, 4.0).is_empty());
-    assert!(solomon_web::gpu_ui::cooldown_sector_points(1.0, 0.0).is_empty());
-    assert_eq!(solomon_web::gpu_ui::cooldown_sector_points(4.0, 4.0).len(), 10);
+    assert!(solomon_client::gpu_ui::cooldown_sector_points(0.0, 4.0).is_empty());
+    assert!(solomon_client::gpu_ui::cooldown_sector_points(1.0, 0.0).is_empty());
+    assert_eq!(solomon_client::gpu_ui::cooldown_sector_points(4.0, 4.0).len(), 10);
 }
 
 #[test]

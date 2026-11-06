@@ -103,7 +103,7 @@ impl Peer {
 impl Drop for Peer {
     fn drop(&mut self) {
         if let Err(error) = self.close() {
-            solomon_web::platform::error(&error);
+            solomon_client::platform::error(&error);
         }
     }
 }

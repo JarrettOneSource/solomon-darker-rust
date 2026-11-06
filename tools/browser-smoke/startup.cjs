@@ -15,9 +15,9 @@ assert.ok(selectedCases.length>0&&selectedCases.every(value=>allCases.includes(v
 const selected=name=>selectedCases.includes(name);
 const source = path.resolve(__dirname, '../../web/assets/stock/loader-logo.png');
 const fontCount=[...fs.readFileSync(path.resolve(__dirname,
-  '../../crates/web/src/gpu_ui/fonts.rs'),'utf8').matchAll(/"[^"]+\.woff2"/g)].length;
+  '../../crates/client/src/gpu_ui/fonts.rs'),'utf8').matchAll(/"[^"]+\.woff2"/g)].length;
 const interfaceImageCount=fs.readFileSync(path.resolve(__dirname,
-  '../../crates/web/src/gpu_ui/stock-images.txt'),'utf8').split(/\r?\n/).filter(Boolean).length;
+  '../../crates/client/src/gpu_ui/stock-images.txt'),'utf8').split(/\r?\n/).filter(Boolean).length;
 const audioCount=new Set([...fs.readFileSync(path.resolve(__dirname,
   '../../crates/sim/src/audio/catalog.rs'),'utf8').matchAll(/path: "([^"]+)"/g)]
   .map(match=>match[1])).size;

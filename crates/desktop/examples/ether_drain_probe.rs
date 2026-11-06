@@ -4,6 +4,10 @@
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use glow::HasContext;
+    use solomon_client::Camera;
+    use solomon_client::enemies::EnemyView;
+    use solomon_client::secondary::SecondaryView;
+    use solomon_client::spells::{SpellView, StockAtlas};
     use solomon_desktop::window::NativeWindow;
     use solomon_graphics::{BlendMode, Renderer, Vertex};
     use solomon_sim::Vec2;
@@ -12,10 +16,6 @@ mod native {
         EtherDrainAnimation as Animation, EtherDrainAtlas as Atlas, EtherDrainState,
     };
     use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState};
-    use solomon_web::Camera;
-    use solomon_web::enemies::EnemyView;
-    use solomon_web::secondary::SecondaryView;
-    use solomon_web::spells::{SpellView, StockAtlas};
     use std::path::{Path, PathBuf};
     use winit::application::ApplicationHandler;
     use winit::event::WindowEvent;

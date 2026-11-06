@@ -12,6 +12,7 @@ struct RenderRow {
     spells: Vec<Vec<f64>>,
 }
 use solomon_assets::boneyard::BoneyardCatalog;
+use solomon_client::presentation::PresentationTimeline;
 use solomon_sim::Vec2;
 use solomon_sim::float::fround;
 use solomon_sim::game_run::GameRunPhase;
@@ -23,7 +24,6 @@ use solomon_sim::spells::model::{
     PrimarySpellFireEmber, PrimarySpellFireParticle, PrimarySpellTransient,
     PrimarySpellTransientBase, PrimarySpellWaterHail,
 };
-use solomon_web::presentation::PresentationTimeline;
 
 fn primary_endpoint(session: &mut GameSession, tick: u64) {
     let registration =

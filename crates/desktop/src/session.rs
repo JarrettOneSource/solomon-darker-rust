@@ -1,6 +1,6 @@
 //! One native desktop session owns its authority and optional encrypted peer service.
 
-use solomon_web::desktop::{DesktopEndpoint, launcher::SessionOptions};
+use solomon_client::desktop::{DesktopEndpoint, launcher::SessionOptions};
 use std::path::PathBuf;
 
 use crate::{
@@ -78,7 +78,7 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         if let Err(error) = self.close() {
-            solomon_web::platform::error(&error);
+            solomon_client::platform::error(&error);
         }
     }
 }

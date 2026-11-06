@@ -1,6 +1,7 @@
 //! Fixed-body contacts through the public display timeline and authoritative Hub epoch.
 //! Geometry and the retained bench route come from Website parity ledger 013 (Report 57).
 
+use solomon_client::presentation::PresentationTimeline;
 use solomon_sim::Vec2;
 use solomon_sim::hub::npc::{HUB_SKORCHA_PLACEMENTS, HubSkorcha, HubStudentPopulation};
 use solomon_sim::hub::regions::{HubRegion, HubTransition, HubTransitionPhase};
@@ -9,7 +10,6 @@ use solomon_sim::hub::{PLAYER_CHARACTER_RADIUS, is_traversable_against_segments}
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::rng::Rng;
 use solomon_sim::session::{GameSession, GameSessionInput, GameSessionOptions};
-use solomon_web::presentation::PresentationTimeline;
 
 #[derive(Clone, Copy)]
 struct FixedActor {

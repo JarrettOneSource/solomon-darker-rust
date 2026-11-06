@@ -4099,6 +4099,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "solomon-client"
+version = "0.1.0"
+dependencies = [
+ "accesskit_consumer",
+ "arboard",
+ "async-executor",
+ "blocking",
+ "console_error_panic_hook",
+ "egui",
+ "egui-winit",
+ "fastrand",
+ "futures-lite",
+ "futures-util",
+ "getrandom 0.4.3",
+ "gilrs",
+ "icu_calendar",
+ "icu_casemap",
+ "icu_collator",
+ "icu_datetime",
+ "icu_decimal 2.3.0",
+ "icu_locale",
+ "js-sys",
+ "objc2-app-kit 0.3.2",
+ "ogg",
+ "opus-codec",
+ "percent-encoding",
+ "rfd",
+ "rodio",
+ "ryu-js",
+ "serde",
+ "serde_json",
+ "sha2",
+ "solomon-assets",
+ "solomon-graphics",
+ "solomon-protocol",
+ "solomon-sim",
+ "solomon-storage",
+ "sys-locale",
+ "time",
+ "tokio",
+ "tokio-tungstenite",
+ "unicode-linebreak",
+ "unicode-segmentation",
+ "ureq",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "windows-sys 0.61.2",
+ "winit",
+ "writeable 0.6.4",
+]
+
+[[package]]
 name = "solomon-desktop"
 version = "0.1.0"
 dependencies = [
@@ -4120,11 +4174,11 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "solomon-client",
  "solomon-graphics",
  "solomon-launcher",
  "solomon-sim",
  "solomon-storage",
- "solomon-web",
  "tokio",
  "tokio-openssl",
  "ureq",
@@ -4246,60 +4300,6 @@ dependencies = [
 [[package]]
 name = "solomon-storage"
 version = "0.1.0"
-
-[[package]]
-name = "solomon-web"
-version = "0.1.0"
-dependencies = [
- "accesskit_consumer",
- "arboard",
- "async-executor",
- "blocking",
- "console_error_panic_hook",
- "egui",
- "egui-winit",
- "fastrand",
- "futures-lite",
- "futures-util",
- "getrandom 0.4.3",
- "gilrs",
- "icu_calendar",
- "icu_casemap",
- "icu_collator",
- "icu_datetime",
- "icu_decimal 2.3.0",
- "icu_locale",
- "js-sys",
- "objc2-app-kit 0.3.2",
- "ogg",
- "opus-codec",
- "percent-encoding",
- "rfd",
- "rodio",
- "ryu-js",
- "serde",
- "serde_json",
- "sha2",
- "solomon-assets",
- "solomon-graphics",
- "solomon-protocol",
- "solomon-sim",
- "solomon-storage",
- "sys-locale",
- "time",
- "tokio",
- "tokio-tungstenite",
- "unicode-linebreak",
- "unicode-segmentation",
- "ureq",
- "url",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "windows-sys 0.61.2",
- "winit",
- "writeable 0.6.4",
-]
 
 [[package]]
 name = "stable_deref_trait"

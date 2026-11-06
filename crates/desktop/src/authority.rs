@@ -12,11 +12,11 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use base64::Engine;
+use solomon_client::desktop::DesktopEndpoint;
 use solomon_launcher::{
     host::supervisor::{HostedSupervisor, HostedSupervisorConfig},
     transport::{NativeServer, TransportConfig},
 };
-use solomon_web::desktop::DesktopEndpoint;
 
 pub struct LocalAuthority {
     endpoint: DesktopEndpoint,
@@ -37,7 +37,7 @@ impl LocalAuthority {
         let server = NativeServer::start_hosted(
             listener,
             TransportConfig {
-                allowed_origins: vec![solomon_web::platform::NATIVE_ORIGIN.into()],
+                allowed_origins: vec![solomon_client::platform::NATIVE_ORIGIN.into()],
                 max_peers: 32,
                 ..TransportConfig::default()
             },
@@ -91,7 +91,7 @@ impl LocalAuthority {
 impl Drop for LocalAuthority {
     fn drop(&mut self) {
         if let Err(error) = self.close() {
-            solomon_web::platform::error(&error);
+            solomon_client::platform::error(&error);
         }
     }
 }

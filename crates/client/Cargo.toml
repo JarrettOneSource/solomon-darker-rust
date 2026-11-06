@@ -1,5 +1,5 @@
 [package]
-name = "solomon-web"
+name = "solomon-client"
 description = "Shared Rust game client and GPU UI for native desktop and browser WASM"
 version.workspace = true
 edition.workspace = true
