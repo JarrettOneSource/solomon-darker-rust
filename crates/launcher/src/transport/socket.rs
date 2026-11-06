@@ -334,159 +334,226 @@ struct SocketClose {
     queued: bool,
 }
 
+/// An established peer's WebSocket and the state its poll loop carries between iterations:
+/// the snapshot encoder, the heartbeat, the close in progress, and whether a started frame
+/// still has bytes to write.
+struct PeerConnection<'a> {
+    socket: WebSocket<PrefixedStream>,
+    server: &'a ServerState,
+    peer: &'a PeerSender,
+    snapshots: solomon_protocol::snapshot::SnapshotWriter,
+    last_ping: Instant,
+    missed_pongs: usize,
+    closing: Option<SocketClose>,
+    write_pending: bool,
+}
+
 fn drive_peer(
-    mut socket: WebSocket<PrefixedStream>,
+    socket: WebSocket<PrefixedStream>,
     server: &ServerState,
     peer: &PeerSender,
 ) -> TransportClose {
-    enum Publication {
-        Reliable(Arc<str>),
-        Snapshot(Arc<solomon_protocol::snapshot::PreparedSnapshot>),
-    }
-
-    let mut snapshots = solomon_protocol::snapshot::SnapshotWriter::default();
-    let mut last_ping = Instant::now();
-    let mut missed_pongs = 0;
-    let mut closing: Option<SocketClose> = None;
-    let mut write_pending = false;
+    let mut connection = PeerConnection {
+        socket,
+        server,
+        peer,
+        snapshots: solomon_protocol::snapshot::SnapshotWriter::default(),
+        last_ping: Instant::now(),
+        missed_pongs: 0,
+        closing: None,
+        write_pending: false,
+    };
     loop {
         if server.stopping.load(Ordering::Acquire) {
             return TransportClose { code: None, reason: "native transport stopped".to_owned() };
         }
-        if closing.is_none() {
-            if peer.expire_welcome(Instant::now()) {
-                let _ = peer.close(4000, "game welcome transfer timed out");
-            }
-            let requested = peer
-                .0
-                .outbox
-                .lock()
-                .expect("the peer outbox does not panic while locked")
-                .close
-                .take();
-            if let Some(detail) = requested {
-                closing = Some(SocketClose { started: Instant::now(), detail, queued: false });
-            } else if last_ping.elapsed() >= server.config.heartbeat_interval
-                && missed_pongs >= server.config.missed_pong_limit
-            {
-                peer.0.closed.store(true, Ordering::Release);
-                closing = Some(SocketClose {
-                    started: Instant::now(),
-                    detail: TransportClose {
-                        code: Some(4000),
-                        reason: "connection timed out".to_owned(),
-                    },
-                    queued: false,
-                });
-            }
+        if connection.closing.is_none() {
+            connection.start_requested_close();
         }
-        if let Some(close) = &closing
+        if let Some(close) = &connection.closing
             && close.started.elapsed() >= server.config.close_timeout
         {
             return close.detail.clone();
         }
-        if closing.as_ref().is_none_or(|close| !close.queued) {
-            for _ in 0..=server.config.reliable_message_capacity {
-                if write_pending {
-                    break;
-                }
-                let payload = {
-                    let mut outbox =
-                        peer.0.outbox.lock().expect("the peer outbox does not panic while locked");
-                    if let Some(payload) = outbox.reliable.pop_front() {
-                        outbox.reliable_bytes -= payload.len();
-                        Some(Publication::Reliable(payload))
-                    } else {
-                        outbox.snapshot.take().map(Publication::Snapshot)
-                    }
-                };
-                let Some(payload) = payload else { break };
-                let payload = match payload {
-                    Publication::Reliable(payload) => payload,
-                    Publication::Snapshot(document) => match snapshots.encode(document) {
-                        Ok(payload) => payload,
-                        Err(reason) => return TransportClose { code: Some(1011), reason },
-                    },
-                };
-                match socket.send(shared_text(payload)) {
-                    Ok(()) => {}
-                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {
-                        // The complete frame, including its remaining byte offset, now
-                        // belongs to Tungstenite. Flush it before accepting another.
-                        write_pending = true;
-                    }
-                    Err(error) => return failed_connection(error, closing),
-                }
+        if connection.closing.as_ref().is_none_or(|close| !close.queued) {
+            if let Some(close) = connection.send_outbox() {
+                return close;
             }
-            if let Some(close) = &mut closing {
-                let reliable_empty = peer
-                    .0
-                    .outbox
-                    .lock()
-                    .expect("the peer outbox does not panic while locked")
-                    .reliable
-                    .is_empty();
-                if !write_pending && reliable_empty {
-                    match socket.close(Some(close_frame(&close.detail))) {
-                        Ok(()) => {}
-                        Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                        Err(error) => return failed_connection(error, closing),
-                    }
-                    close.queued = true;
-                }
-            } else if last_ping.elapsed() >= server.config.heartbeat_interval {
-                match socket.send(Message::Ping(Bytes::new())) {
-                    Ok(()) => {}
-                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(error) => return failed_connection(error, closing),
-                }
-                missed_pongs += 1;
-                last_ping = Instant::now();
+            if let Some(close) = connection.send_close_or_ping() {
+                return close;
             }
         }
         // After receiving Close, only flush the started frame and queued reply.
         // A further read may report ConnectionClosed while that flush still has
         // WouldBlock bytes; it cannot establish that the output drained.
-        let received = socket.can_read().then(|| socket.read());
+        let received = connection.socket.can_read().then(|| connection.socket.read());
         let idle = received.as_ref().is_none_or(|result| {
             matches!(result, Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock)
         });
-        match received {
-            Some(Ok(Message::Text(payload))) if closing.is_none() => {
-                if server
+        let ended = match received {
+            None => None,
+            Some(Ok(message)) => connection.receive_message(message),
+            Some(Err(error)) => connection.receive_error(error),
+        };
+        if let Some(close) = ended {
+            return close;
+        }
+        if let Some(close) = connection.flush_frames() {
+            return close;
+        }
+        if idle {
+            thread::sleep(server.config.io_poll_interval);
+        }
+    }
+}
+
+/// Each step returns `Some` with the connection's final close when the connection ends there.
+impl PeerConnection<'_> {
+    /// Starts the close the authority requested, or a heartbeat timeout after too many missed
+    /// Pongs. An expired welcome transfer first requests its own close.
+    fn start_requested_close(&mut self) {
+        if self.peer.expire_welcome(Instant::now()) {
+            let _ = self.peer.close(4000, "game welcome transfer timed out");
+        }
+        let requested = self
+            .peer
+            .0
+            .outbox
+            .lock()
+            .expect("the peer outbox does not panic while locked")
+            .close
+            .take();
+        if let Some(detail) = requested {
+            self.closing = Some(SocketClose { started: Instant::now(), detail, queued: false });
+        } else if self.last_ping.elapsed() >= self.server.config.heartbeat_interval
+            && self.missed_pongs >= self.server.config.missed_pong_limit
+        {
+            self.peer.0.closed.store(true, Ordering::Release);
+            self.closing = Some(SocketClose {
+                started: Instant::now(),
+                detail: TransportClose {
+                    code: Some(4000),
+                    reason: "connection timed out".to_owned(),
+                },
+                queued: false,
+            });
+        }
+    }
+
+    /// Sends queued reliable messages, then the latest snapshot, until a frame would block.
+    fn send_outbox(&mut self) -> Option<TransportClose> {
+        enum Publication {
+            Reliable(Arc<str>),
+            Snapshot(Arc<solomon_protocol::snapshot::PreparedSnapshot>),
+        }
+
+        for _ in 0..=self.server.config.reliable_message_capacity {
+            if self.write_pending {
+                break;
+            }
+            let payload = {
+                let mut outbox =
+                    self.peer.0.outbox.lock().expect("the peer outbox does not panic while locked");
+                if let Some(payload) = outbox.reliable.pop_front() {
+                    outbox.reliable_bytes -= payload.len();
+                    Some(Publication::Reliable(payload))
+                } else {
+                    outbox.snapshot.take().map(Publication::Snapshot)
+                }
+            };
+            let Some(payload) = payload else { break };
+            let payload = match payload {
+                Publication::Reliable(payload) => payload,
+                Publication::Snapshot(document) => match self.snapshots.encode(document) {
+                    Ok(payload) => payload,
+                    Err(reason) => return Some(TransportClose { code: Some(1011), reason }),
+                },
+            };
+            match self.socket.send(shared_text(payload)) {
+                Ok(()) => {}
+                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {
+                    // The complete frame, including its remaining byte offset, now
+                    // belongs to Tungstenite. Flush it before accepting another.
+                    self.write_pending = true;
+                }
+                Err(error) => return Some(failed_connection(error, self.closing.take())),
+            }
+        }
+        None
+    }
+
+    /// While closing, queues the close frame once every reliable message is written;
+    /// otherwise sends a heartbeat Ping when one is due.
+    fn send_close_or_ping(&mut self) -> Option<TransportClose> {
+        if let Some(close) = &mut self.closing {
+            let reliable_empty = self
+                .peer
+                .0
+                .outbox
+                .lock()
+                .expect("the peer outbox does not panic while locked")
+                .reliable
+                .is_empty();
+            if !self.write_pending && reliable_empty {
+                match self.socket.close(Some(close_frame(&close.detail))) {
+                    Ok(()) => {}
+                    Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                    Err(error) => return Some(failed_connection(error, self.closing.take())),
+                }
+                close.queued = true;
+            }
+        } else if self.last_ping.elapsed() >= self.server.config.heartbeat_interval {
+            match self.socket.send(Message::Ping(Bytes::new())) {
+                Ok(()) => {}
+                Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
+                Err(error) => return Some(failed_connection(error, self.closing.take())),
+            }
+            self.missed_pongs += 1;
+            self.last_ping = Instant::now();
+        }
+        None
+    }
+
+    /// Text goes to the authority and binary data starts a 1003 close. A Pong answers the
+    /// heartbeat, and a Close starts or confirms the close.
+    fn receive_message(&mut self, message: Message) -> Option<TransportClose> {
+        match message {
+            Message::Text(payload) if self.closing.is_none() => {
+                if self
+                    .server
                     .events
                     .send(TransportEvent::Message {
-                        peer_id: peer.id(),
+                        peer_id: self.peer.id(),
                         payload: payload.to_string(),
                     })
                     .is_err()
                 {
-                    return TransportClose {
+                    return Some(TransportClose {
                         code: None,
                         reason: "the authority stopped receiving transport events".to_owned(),
-                    };
+                    });
                 }
             }
-            Some(Ok(Message::Binary(_))) if closing.is_none() => {
-                peer.0.closed.store(true, Ordering::Release);
+            Message::Binary(_) if self.closing.is_none() => {
+                self.peer.0.closed.store(true, Ordering::Release);
                 let close = TransportClose {
                     code: Some(1003),
                     reason: "game transport accepts text messages only".to_owned(),
                 };
                 let frame = close_frame(&close);
-                closing =
+                self.closing =
                     Some(SocketClose { started: Instant::now(), detail: close, queued: true });
-                match socket.close(Some(frame)) {
+                match self.socket.close(Some(frame)) {
                     Ok(()) => {}
                     Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => {}
-                    Err(error) => return failed_connection(error, closing),
+                    Err(error) => return Some(failed_connection(error, self.closing.take())),
                 }
             }
-            Some(Ok(Message::Pong(_))) => missed_pongs = 0,
-            Some(Ok(Message::Close(frame))) => {
+            Message::Pong(_) => self.missed_pongs = 0,
+            Message::Close(frame) => {
                 // Keep the queued reply through WouldBlock until it drains or the
                 // existing close deadline expires, preserving the accepted identity.
-                if let Some(close) = &mut closing {
+                if let Some(close) = &mut self.closing {
                     close.queued = true;
                 } else {
                     let detail = TransportClose {
@@ -495,47 +562,57 @@ fn drive_peer(
                         code: Some(frame.as_ref().map_or(1005, |frame| frame.code.into())),
                         reason: frame.map_or_else(String::new, |frame| frame.reason.to_string()),
                     };
-                    closing = Some(SocketClose { started: Instant::now(), detail, queued: true });
+                    self.closing =
+                        Some(SocketClose { started: Instant::now(), detail, queued: true });
                 }
             }
-            None | Some(Ok(_)) => {}
-            Some(Err(Error::Io(error))) if error.kind() == io::ErrorKind::WouldBlock => {}
-            Some(Err(Error::ConnectionClosed)) => {
-                return closing.map_or_else(
-                    || TransportClose { code: None, reason: "connection closed".to_owned() },
-                    |close| close.detail,
-                );
-            }
-            Some(Err(Error::Capacity(_))) => {
-                return reject_frame(&mut socket, 1009, "game message exceeds the payload bound");
-            }
-            Some(Err(Error::Utf8(_))) => {
-                return reject_frame(&mut socket, 1007, "game text must be valid UTF-8");
-            }
-            Some(Err(error @ Error::Protocol(ProtocolError::ResetWithoutClosingHandshake))) => {
-                // Tungstenite's EOF variant carries no malformed WebSocket frame.
-                return failed_connection(error, closing);
-            }
-            Some(Err(Error::Protocol(_))) => {
-                return reject_frame(&mut socket, 1002, "invalid WebSocket frame");
-            }
-            Some(Err(error)) => return failed_connection(error, closing),
+            _ => {}
         }
+        None
+    }
+
+    /// A blocked read waits for the next poll. A finished close handshake or lost connection
+    /// ends the connection; malformed input first sends its WebSocket close status.
+    fn receive_error(&mut self, error: Error) -> Option<TransportClose> {
+        match error {
+            Error::Io(error) if error.kind() == io::ErrorKind::WouldBlock => None,
+            Error::ConnectionClosed => Some(self.handle_connection_closed()),
+            Error::Capacity(_) => {
+                Some(reject_frame(&mut self.socket, 1009, "game message exceeds the payload bound"))
+            }
+            Error::Utf8(_) => {
+                Some(reject_frame(&mut self.socket, 1007, "game text must be valid UTF-8"))
+            }
+            error @ Error::Protocol(ProtocolError::ResetWithoutClosingHandshake) => {
+                // Tungstenite's EOF variant carries no malformed WebSocket frame.
+                Some(failed_connection(error, self.closing.take()))
+            }
+            Error::Protocol(_) => {
+                Some(reject_frame(&mut self.socket, 1002, "invalid WebSocket frame"))
+            }
+            error => Some(failed_connection(error, self.closing.take())),
+        }
+    }
+
+    /// Flushes started frames. A frame that would block stays pending for the next poll.
+    fn flush_frames(&mut self) -> Option<TransportClose> {
         // read queues automatic pong and close replies; do not replace them manually.
-        write_pending = match socket.flush() {
+        self.write_pending = match self.socket.flush() {
             Ok(()) => false,
             Err(Error::Io(error)) if error.kind() == io::ErrorKind::WouldBlock => true,
-            Err(Error::ConnectionClosed) => {
-                return closing.map_or_else(
-                    || TransportClose { code: None, reason: "connection closed".to_owned() },
-                    |close| close.detail,
-                );
-            }
-            Err(error) => return failed_connection(error, closing),
+            Err(Error::ConnectionClosed) => return Some(self.handle_connection_closed()),
+            Err(error) => return Some(failed_connection(error, self.closing.take())),
         };
-        if idle {
-            thread::sleep(server.config.io_poll_interval);
-        }
+        None
+    }
+
+    /// Tungstenite finished the close handshake: the connection ends with the close in
+    /// progress, if any.
+    fn handle_connection_closed(&mut self) -> TransportClose {
+        self.closing.take().map_or_else(
+            || TransportClose { code: None, reason: "connection closed".to_owned() },
+            |close| close.detail,
+        )
     }
 }
 

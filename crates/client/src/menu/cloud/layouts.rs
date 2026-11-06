@@ -19,6 +19,24 @@ struct CopyCompletion {
     generation: u64,
     result: Result<(), String>,
 }
+/// The Layouts tab's breakpoint, content column and input state for one frame.
+#[derive(Clone, Copy)]
+struct LayoutsPage {
+    phone: bool,
+    enabled: bool,
+    /// A load or publish request is pending.
+    busy: bool,
+    top: egui::Pos2,
+    content_width: f32,
+}
+/// One section's panel and the share-code row measurements that size it.
+#[derive(Clone, Copy)]
+struct LayoutSection {
+    panel: Rect,
+    label_size: Vec2,
+    field_row_height: f32,
+    action_width: f32,
+}
 /// The Layouts tab's state: the typed code, the pending load or publish request, its
 /// shared result and the copy-to-clipboard status.
 pub(super) struct LayoutsView {
@@ -217,6 +235,7 @@ impl LayoutsView {
         let origin =
             top + Vec2::new((content_width - sections_width) / 2.0, heading_size.y + header_gap);
         let busy = self.pending.is_some();
+        let page = LayoutsPage { phone, enabled, busy, top, content_width };
         let mut bottom = origin.y;
         for (index, title) in ["LOAD A LAYOUT", "SUBMIT YOUR LAYOUT"].into_iter().enumerate() {
             let min = if phone {
@@ -238,85 +257,11 @@ impl LayoutsView {
             let panel = Rect::from_min_size(panel_top, Vec2::new(section_width, panel_height));
             widgets::control_panel(frame, ui, &art.controls, panel, false)?;
             let action_width = section_width - 6.0;
+            let section = LayoutSection { panel, label_size, field_row_height, action_width };
             if index == 0 {
-                let label_rect = Rect::from_min_size(
-                    panel.min
-                        + Vec2::new(10.0, if phone { 10.0 } else { (44.0 - label_size.y) / 2.0 }),
-                    label_size,
-                );
-                ink(frame, ui, "SHARE CODE", UiFontName::Medium, 1.0, 0xd9ba70, label_rect, false)?;
-                let field = if phone {
-                    Rect::from_min_size(
-                        panel.min + Vec2::new(10.0, 10.0 + label_size.y + 7.0),
-                        Vec2::new(action_width - 20.0, 30.0),
-                    )
-                } else {
-                    Rect::from_min_size(
-                        panel.min + Vec2::new(20.0 + label_size.x, 7.0),
-                        Vec2::new(action_width - 30.0 - label_size.x, 30.0),
-                    )
-                };
-                widgets::control_panel(frame, ui, &art.controls, field, true)?;
-                let input_rect = field.expand2(Vec2::new(0.0, 7.0));
-                let response = crate::gpu_ui::NativeTextEdit::singleline(
-                    &mut self.input,
-                    "dark-cloud-layout-code",
-                    "Share code",
-                )
-                .font(egui::FontId::new(16.0, egui::FontFamily::Name("JetBrains Mono".into())))
-                .color(widgets::GOLD)
-                .line_height(21.6)
-                .letter_spacing(1.28)
-                .horizontal_align(egui::Align::Center)
-                .margin(Vec2::new(10.0, 7.0))
-                .hint_text("ABCD-EFGH")
-                .enabled(enabled)
-                .rules(crate::gpu_ui::EditorRules {
-                    normalize: Some(normalize_layout_code),
-                    ..Default::default()
-                })
-                .show(frame, ui, input_rect);
-                if response.has_focus() {
-                    ui.painter().rect_stroke(
-                        input_rect.shrink(7.0),
-                        0.0,
-                        egui::Stroke::new(1.0, widgets::GOLD),
-                        egui::StrokeKind::Inside,
-                    );
-                }
-                let admitted = enabled && !busy && self.input.len() == 9;
-                if admitted && widgets::submitted_on_enter(&response) {
-                    actions.push("cloud-layout-load".to_owned());
-                }
-                let button = Rect::from_min_size(
-                    panel.min + Vec2::new(0.0, field_row_height),
-                    Vec2::new(action_width, 44.0),
-                );
-                let label = if matches!(self.pending, Some((_, LayoutAction::Load))) {
-                    "LOADING..."
-                } else {
-                    "LOAD LAYOUT"
-                };
-                if control_action(frame, ui, "cloud-layout-load", label, button, admitted)?
-                    .clicked()
-                    && admitted
-                {
-                    actions.push("cloud-layout-load".to_owned());
-                }
+                self.paint_load_form(frame, ui, art, page, section, actions)?;
             } else {
-                let admitted = enabled && !busy && self.account.is_some() && self.customized;
-                let button = Rect::from_min_size(panel.min, Vec2::new(action_width, 44.0));
-                let label = if matches!(self.pending, Some((_, LayoutAction::Publish))) {
-                    "SUBMITTING..."
-                } else {
-                    "SUBMIT CURRENT LAYOUT"
-                };
-                if control_action(frame, ui, "cloud-layout-publish", label, button, admitted)?
-                    .clicked()
-                    && admitted
-                {
-                    actions.push("cloud-layout-publish".to_owned());
-                }
+                self.paint_publish_button(frame, ui, page, section, actions)?;
             }
             let note = if index == 0 {
                 "Replaces the layout saved on this device."
@@ -337,6 +282,129 @@ impl LayoutsView {
                 bottom += gap;
             }
         }
+        self.paint_receipt(frame, ui, page, &mut bottom, actions)?;
+        if let Some(error) = &self.error {
+            let run = narrative(ui, error, content_width, 16.0, widgets::ERROR)?;
+            let rect = Rect::from_min_size(egui::pos2(top.x, bottom + 24.0), run.size());
+            run.paint(frame, ui.painter(), rect.min, 1.0)?;
+            frame.record_rect("cloud-layout-error", error, "alert", rect, false);
+            frame.announce("cloud-layout-error", error);
+            bottom = rect.bottom() + 24.0;
+        }
+        ui.allocate_space(Vec2::new(width, bottom - ui.cursor().min.y + padding.y));
+        Ok(())
+    }
+    /// The share-code field and Load Layout button; Enter in a complete code also loads.
+    fn paint_load_form(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
+        art: &CloudArt,
+        page: LayoutsPage,
+        section: LayoutSection,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let LayoutsPage { phone, enabled, busy, .. } = page;
+        let LayoutSection { panel, label_size, field_row_height, action_width } = section;
+        let label_rect = Rect::from_min_size(
+            panel.min + Vec2::new(10.0, if phone { 10.0 } else { (44.0 - label_size.y) / 2.0 }),
+            label_size,
+        );
+        ink(frame, ui, "SHARE CODE", UiFontName::Medium, 1.0, 0xd9ba70, label_rect, false)?;
+        let field = if phone {
+            Rect::from_min_size(
+                panel.min + Vec2::new(10.0, 10.0 + label_size.y + 7.0),
+                Vec2::new(action_width - 20.0, 30.0),
+            )
+        } else {
+            Rect::from_min_size(
+                panel.min + Vec2::new(20.0 + label_size.x, 7.0),
+                Vec2::new(action_width - 30.0 - label_size.x, 30.0),
+            )
+        };
+        widgets::control_panel(frame, ui, &art.controls, field, true)?;
+        let input_rect = field.expand2(Vec2::new(0.0, 7.0));
+        let response = crate::gpu_ui::NativeTextEdit::singleline(
+            &mut self.input,
+            "dark-cloud-layout-code",
+            "Share code",
+        )
+        .font(egui::FontId::new(16.0, egui::FontFamily::Name("JetBrains Mono".into())))
+        .color(widgets::GOLD)
+        .line_height(21.6)
+        .letter_spacing(1.28)
+        .horizontal_align(egui::Align::Center)
+        .margin(Vec2::new(10.0, 7.0))
+        .hint_text("ABCD-EFGH")
+        .enabled(enabled)
+        .rules(crate::gpu_ui::EditorRules {
+            normalize: Some(normalize_layout_code),
+            ..Default::default()
+        })
+        .show(frame, ui, input_rect);
+        if response.has_focus() {
+            ui.painter().rect_stroke(
+                input_rect.shrink(7.0),
+                0.0,
+                egui::Stroke::new(1.0, widgets::GOLD),
+                egui::StrokeKind::Inside,
+            );
+        }
+        let admitted = enabled && !busy && self.input.len() == 9;
+        if admitted && widgets::submitted_on_enter(&response) {
+            actions.push("cloud-layout-load".to_owned());
+        }
+        let button = Rect::from_min_size(
+            panel.min + Vec2::new(0.0, field_row_height),
+            Vec2::new(action_width, 44.0),
+        );
+        let label = if matches!(self.pending, Some((_, LayoutAction::Load))) {
+            "LOADING..."
+        } else {
+            "LOAD LAYOUT"
+        };
+        if control_action(frame, ui, "cloud-layout-load", label, button, admitted)?.clicked()
+            && admitted
+        {
+            actions.push("cloud-layout-load".to_owned());
+        }
+        Ok(())
+    }
+    /// The Submit Current Layout button, enabled for a signed-in player with a saved layout.
+    fn paint_publish_button(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        page: LayoutsPage,
+        section: LayoutSection,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let LayoutsPage { enabled, busy, .. } = page;
+        let LayoutSection { panel, action_width, .. } = section;
+        let admitted = enabled && !busy && self.account.is_some() && self.customized;
+        let button = Rect::from_min_size(panel.min, Vec2::new(action_width, 44.0));
+        let label = if matches!(self.pending, Some((_, LayoutAction::Publish))) {
+            "SUBMITTING..."
+        } else {
+            "SUBMIT CURRENT LAYOUT"
+        };
+        if control_action(frame, ui, "cloud-layout-publish", label, button, admitted)?.clicked()
+            && admitted
+        {
+            actions.push("cloud-layout-publish".to_owned());
+        }
+        Ok(())
+    }
+    /// The shared layout's receipt and Copy Code button, placed below `bottom`.
+    fn paint_receipt(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        page: LayoutsPage,
+        bottom: &mut f32,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let LayoutsPage { phone, enabled, top, content_width, .. } = page;
         if let Some((action, layout)) = &self.shared {
             let status = if matches!(action, LayoutAction::Load) {
                 "LAYOUT LOADED"
@@ -355,7 +423,7 @@ impl LayoutsView {
                 .collect::<Result<Vec<_>, _>>()?;
             let receipt_width = content_width.min(800.0);
             let receipt_top =
-                egui::pos2(top.x + (content_width - receipt_width) / 2.0, bottom + 30.0);
+                egui::pos2(top.x + (content_width - receipt_width) / 2.0, *bottom + 30.0);
             let row_height = sizes.iter().fold(44.0_f32, |height, size| height.max(size.y));
             let first_width = (receipt_width - sizes[1].x - sizes[2].x - 130.0 - 54.0).max(0.0);
             let mut cursor = receipt_top;
@@ -402,17 +470,8 @@ impl LayoutsView {
                 actions.push("cloud-copy-layout".to_owned());
             }
             frame.announce("cloud-layout-receipt", &format!("{status}: {}. {author}", layout.code));
-            bottom = button.bottom();
+            *bottom = button.bottom();
         }
-        if let Some(error) = &self.error {
-            let run = narrative(ui, error, content_width, 16.0, widgets::ERROR)?;
-            let rect = Rect::from_min_size(egui::pos2(top.x, bottom + 24.0), run.size());
-            run.paint(frame, ui.painter(), rect.min, 1.0)?;
-            frame.record_rect("cloud-layout-error", error, "alert", rect, false);
-            frame.announce("cloud-layout-error", error);
-            bottom = rect.bottom() + 24.0;
-        }
-        ui.allocate_space(Vec2::new(width, bottom - ui.cursor().min.y + padding.y));
         Ok(())
     }
 }

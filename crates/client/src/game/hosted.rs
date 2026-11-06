@@ -109,6 +109,34 @@ impl HostedGame {
         self.enable_cheats_after_leave = false;
         self.generation += 1;
     }
+
+    /// Show each content download's progress on its menu request, or on the status line
+    /// while the game connects or loads content.
+    fn show_download_progress(&self, menu: &mut MenuUi) -> Result<(), String> {
+        for progress in std::mem::take(&mut *self.progress.borrow_mut()) {
+            if progress.generation != self.generation && !progress.cloud {
+                continue;
+            }
+            if let Some(request_id) = progress.request_id {
+                let projection = Some(crate::menu::RoutingDownloadProgress {
+                    completed_bytes: progress.completed_bytes,
+                    total_bytes: progress.total_bytes,
+                    active_mod_id: progress.active_mod_id.as_deref(),
+                });
+                if progress.cloud {
+                    menu.set_dark_cloud_progress(request_id, projection)?;
+                } else {
+                    menu.set_routing_progress(request_id, projection)?;
+                }
+            } else if self.connecting || self.content_pending {
+                set_status(&format!(
+                    "Loading content… {} / {} bytes",
+                    progress.completed_bytes, progress.total_bytes
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 enum Admission {
@@ -799,28 +827,7 @@ impl Game {
         #[cfg(target_arch = "wasm32")]
         self.update_boneyard_library()?;
         let Some(hosted) = &mut self.hosted else { return Ok(()) };
-        for progress in std::mem::take(&mut *hosted.progress.borrow_mut()) {
-            if progress.generation != hosted.generation && !progress.cloud {
-                continue;
-            }
-            if let Some(request_id) = progress.request_id {
-                let projection = Some(crate::menu::RoutingDownloadProgress {
-                    completed_bytes: progress.completed_bytes,
-                    total_bytes: progress.total_bytes,
-                    active_mod_id: progress.active_mod_id.as_deref(),
-                });
-                if progress.cloud {
-                    self.menu.set_dark_cloud_progress(request_id, projection)?;
-                } else {
-                    self.menu.set_routing_progress(request_id, projection)?;
-                }
-            } else if hosted.connecting || hosted.content_pending {
-                set_status(&format!(
-                    "Loading content… {} / {} bytes",
-                    progress.completed_bytes, progress.total_bytes
-                ));
-            }
-        }
+        hosted.show_download_progress(&mut self.menu)?;
         let native = self.native.as_mut().unwrap();
         if let Some(welcome) = native.hosted_welcome.take() {
             hosted.pending.push(HostedRequest::Presentation(welcome.mod_assets.clone()));
@@ -837,168 +844,160 @@ impl Game {
             if self.cheats.receive_hosted_message(&message)? {
                 continue;
             }
-            let runtime_updated = matches!(message, HostedServerMessage::ModRuntime { .. });
-            let mut presentation_updated = runtime_updated;
-            let hosted = self.hosted.as_mut().unwrap();
-            match message {
-                HostedServerMessage::SaveCheckpoint { save, sequence, .. } => {
-                    hosted.saves.accept(hosted.generation, sequence, save)?;
-                }
-                HostedServerMessage::SaveCheckpointChunk { .. } => {
-                    return Err("The game received an unassembled save checkpoint".into());
-                }
-                HostedServerMessage::SaveBeforeLeave { checkpoint_sequence, request_id } => {
-                    if !self.native.as_ref().unwrap().expects_leave_receipt(request_id) {
-                        continue;
-                    }
-                    if checkpoint_sequence == 0 {
-                        self.fail_hosted_leave(
-                            "The game server could not create a final save.".into(),
-                        )?;
-                        continue;
-                    }
-                    let Some(receipt) = hosted.saves.receipt(checkpoint_sequence) else {
-                        self.native_disconnected(
-                            "The leave response did not include its final save checkpoint.",
-                        )?;
-                        continue;
-                    };
-                    hosted.leave_checkpoint = Some(receipt);
-                    if hosted.pending_transfer.is_some() {
-                        hosted.transfer_save_document = Some(
-                            hosted
-                                .saves
-                                .document(checkpoint_sequence)
-                                .expect("the accepted checkpoint owns its document")
-                                .to_owned(),
-                        );
-                    }
-                }
-                HostedServerMessage::DeploymentRestart {
-                    checkpoint_sequence,
-                    target_revision,
-                    deployment_id,
-                    deployment_sequence,
-                } => {
-                    if hosted.deployment_update.restarting() {
-                        continue;
-                    }
-                    let receipt = if checkpoint_sequence == 0 {
-                        hosted.saves.idle()
-                    } else if let Some(receipt) = hosted.saves.receipt(checkpoint_sequence) {
-                        receipt
-                    } else {
-                        self.native_disconnected(
-                            "The deployment restart did not include its final save checkpoint.",
-                        )?;
-                        continue;
-                    };
-                    hosted.deployment_update.begin(
-                        &target_revision,
-                        &deployment_id,
-                        deployment_sequence,
-                    )?;
-                    if let Some(mut episode) = hosted.reconnect.take() {
-                        episode.cancel();
-                        set_status("");
-                    }
-                    hosted.leave_checkpoint = None;
-                    hosted.pending_transfer = None;
-                    hosted.transfer_save_document = None;
-                    hosted.enable_cheats_after_leave = false;
-                    self.native.as_mut().unwrap().begin_deployment();
-                    hosted.deployment = Some((checkpoint_sequence, target_revision, receipt));
-                }
-                HostedServerMessage::LeaderboardReceipt { receipt } => {
-                    hosted.pending.push(HostedRequest::Leaderboard(receipt));
-                }
-                HostedServerMessage::ModRuntime { projection, .. } => {
-                    hosted.runtime = Some(projection);
-                }
-                HostedServerMessage::ModContent { projection } => {
-                    match self.mod_content.receive(&projection) {
-                        Ok(changed) => presentation_updated = changed,
-                        Err(error) => self.native_disconnected(&error)?,
-                    }
-                }
-                HostedServerMessage::ModCatalog { items } => {
-                    if let Some(welcome) = &mut hosted.welcome {
-                        welcome.mod_catalog = items;
-                    }
-                }
-                HostedServerMessage::CheatMode { enabled } => {
-                    if let Some(welcome) = &mut hosted.welcome {
-                        welcome.cheats_enabled = enabled;
-                    }
-                }
-                // Social and cheat surfaces consume their own matching responses
-                // above. An unmounted surface ignores a late reply.
-                HostedServerMessage::PlayerCard { .. }
-                | HostedServerMessage::CollegeInvitations { .. }
-                | HostedServerMessage::PartyAction { .. }
-                | HostedServerMessage::LuaResult { .. } => {}
-            }
-            if presentation_updated {
-                self.update_hosted_presentation(runtime_updated)?;
-            }
+            self.apply_hosted_message(message)?;
         }
         self.poll_hosted_social()?;
-        let mut actions = self.mod_overlays.scene.take_actions();
-        actions.extend(self.mod_minimap.take_actions().into_iter().map(|action| {
-            let center: LuaObject = [
-                ("x".into(), LuaValue::Number(action.center.x)),
-                ("y".into(), LuaValue::Number(action.center.y)),
-            ]
-            .into_iter()
-            .collect();
-            crate::mod_world_overlays::ModViewAction {
-                action: solomon_protocol::hosted::ModAction::UiAction,
-                target: action.content_id,
-                arguments: [
-                    ("action".into(), LuaValue::String(action.action)),
-                    ("arguments".into(), LuaValue::Object(center)),
-                ]
-                .into_iter()
-                .collect(),
+        self.send_mod_view_actions()?;
+        self.send_mod_panel_actions()?;
+        self.send_mod_quickbar_actions()?;
+        self.queue_hosted_menu_actions()?;
+        let hosted = self.hosted.as_mut().unwrap();
+        if hosted.join_request.as_ref().is_some_and(|(_, _, due)| now >= *due) {
+            let (request_id, token, _) = hosted.join_request.take().unwrap();
+            hosted.pending.push(HostedRequest::PollJoin { request_id, token });
+        }
+        self.finish_hosted_persistence()
+    }
+
+    fn apply_hosted_message(&mut self, message: HostedServerMessage) -> Result<(), String> {
+        let runtime_updated = matches!(message, HostedServerMessage::ModRuntime { .. });
+        let mut presentation_updated = runtime_updated;
+        let hosted = self.hosted.as_mut().unwrap();
+        match message {
+            HostedServerMessage::SaveCheckpoint { save, sequence, .. } => {
+                hosted.saves.accept(hosted.generation, sequence, save)?;
             }
-        }));
-        actions.extend(self.mod_skills.take_actions().into_iter().map(|action| {
-            use crate::mod_skills::ModSkillAction;
-            let (action, target, arguments) = match action {
-                ModSkillAction::QuickbarBind { content_id, slot, clear } => {
-                    let mut arguments: LuaObject =
-                        [("slot".into(), LuaValue::Number(slot))].into_iter().collect();
-                    if clear {
-                        arguments.insert("clear".into(), LuaValue::Boolean(true));
-                    }
-                    (ModAction::QuickbarBind, content_id, arguments)
+            HostedServerMessage::SaveCheckpointChunk { .. } => {
+                return Err("The game received an unassembled save checkpoint".into());
+            }
+            HostedServerMessage::SaveBeforeLeave { checkpoint_sequence, request_id } => {
+                self.accept_save_before_leave(checkpoint_sequence, request_id)?
+            }
+            HostedServerMessage::DeploymentRestart {
+                checkpoint_sequence,
+                target_revision,
+                deployment_id,
+                deployment_sequence,
+            } => self.begin_deployment_restart(
+                checkpoint_sequence,
+                target_revision,
+                deployment_id,
+                deployment_sequence,
+            )?,
+            HostedServerMessage::LeaderboardReceipt { receipt } => {
+                hosted.pending.push(HostedRequest::Leaderboard(receipt));
+            }
+            HostedServerMessage::ModRuntime { projection, .. } => {
+                hosted.runtime = Some(projection);
+            }
+            HostedServerMessage::ModContent { projection } => {
+                match self.mod_content.receive(&projection) {
+                    Ok(changed) => presentation_updated = changed,
+                    Err(error) => self.native_disconnected(&error)?,
                 }
-                ModSkillAction::SkillChoose {
-                    content_id,
-                    mod_offer_sequence,
-                    native_offer_sequence,
-                } => {
-                    let arguments = [
-                        ("mod_offer_sequence".into(), LuaValue::Number(mod_offer_sequence)),
-                        (
-                            "native_offer_sequence".into(),
-                            LuaValue::Number(native_offer_sequence as f64),
-                        ),
-                    ]
-                    .into_iter()
-                    .collect();
-                    (ModAction::SkillChoose, content_id, arguments)
+            }
+            HostedServerMessage::ModCatalog { items } => {
+                if let Some(welcome) = &mut hosted.welcome {
+                    welcome.mod_catalog = items;
                 }
-            };
-            crate::mod_world_overlays::ModViewAction { action, target, arguments }
-        }));
+            }
+            HostedServerMessage::CheatMode { enabled } => {
+                if let Some(welcome) = &mut hosted.welcome {
+                    welcome.cheats_enabled = enabled;
+                }
+            }
+            // Social and cheat surfaces consume their own matching responses
+            // above. An unmounted surface ignores a late reply.
+            HostedServerMessage::PlayerCard { .. }
+            | HostedServerMessage::CollegeInvitations { .. }
+            | HostedServerMessage::PartyAction { .. }
+            | HostedServerMessage::LuaResult { .. } => {}
+        }
+        if presentation_updated {
+            self.update_hosted_presentation(runtime_updated)?;
+        }
+        Ok(())
+    }
+
+    /// The final save checkpoint of a leave this client requested.
+    fn accept_save_before_leave(
+        &mut self,
+        checkpoint_sequence: u64,
+        request_id: u64,
+    ) -> Result<(), String> {
+        if !self.native.as_ref().unwrap().expects_leave_receipt(request_id) {
+            return Ok(());
+        }
+        if checkpoint_sequence == 0 {
+            self.fail_hosted_leave("The game server could not create a final save.".into())?;
+            return Ok(());
+        }
+        let hosted = self.hosted.as_mut().unwrap();
+        let Some(receipt) = hosted.saves.receipt(checkpoint_sequence) else {
+            self.native_disconnected(
+                "The leave response did not include its final save checkpoint.",
+            )?;
+            return Ok(());
+        };
+        hosted.leave_checkpoint = Some(receipt);
+        if hosted.pending_transfer.is_some() {
+            hosted.transfer_save_document = Some(
+                hosted
+                    .saves
+                    .document(checkpoint_sequence)
+                    .expect("the accepted checkpoint owns its document")
+                    .to_owned(),
+            );
+        }
+        Ok(())
+    }
+
+    /// The host's announcement that a deployment restarts the game after a final save.
+    fn begin_deployment_restart(
+        &mut self,
+        checkpoint_sequence: u64,
+        target_revision: String,
+        deployment_id: String,
+        deployment_sequence: u64,
+    ) -> Result<(), String> {
+        let hosted = self.hosted.as_mut().unwrap();
+        if hosted.deployment_update.restarting() {
+            return Ok(());
+        }
+        let receipt = if checkpoint_sequence == 0 {
+            hosted.saves.idle()
+        } else if let Some(receipt) = hosted.saves.receipt(checkpoint_sequence) {
+            receipt
+        } else {
+            self.native_disconnected(
+                "The deployment restart did not include its final save checkpoint.",
+            )?;
+            return Ok(());
+        };
+        hosted.deployment_update.begin(&target_revision, &deployment_id, deployment_sequence)?;
+        if let Some(mut episode) = hosted.reconnect.take() {
+            episode.cancel();
+            set_status("");
+        }
+        hosted.leave_checkpoint = None;
+        hosted.pending_transfer = None;
+        hosted.transfer_save_document = None;
+        hosted.enable_cheats_after_leave = false;
+        self.native.as_mut().unwrap().begin_deployment();
+        hosted.deployment = Some((checkpoint_sequence, target_revision, receipt));
+        Ok(())
+    }
+
+    /// Send the mod scene, minimap and skill views' UI actions as numbered mod requests.
+    fn send_mod_view_actions(&mut self) -> Result<(), String> {
+        let mut actions = self.mod_overlays.scene.take_actions();
+        actions.extend(self.mod_minimap.take_actions().into_iter().map(minimap_view_action));
+        actions.extend(self.mod_skills.take_actions().into_iter().map(skill_view_action));
         for action in actions {
             if self.is_hosted_observer() {
                 continue;
             }
-            let hosted = self.hosted.as_mut().unwrap();
-            hosted.mod_request_sequence += 1;
-            let request_id = hosted.mod_request_sequence;
+            let request_id = self.next_mod_request_id();
             self.send_native_message(&ClientMessage::Hosted {
                 command: HostedCommand::ModAction {
                     action: action.action,
@@ -1008,13 +1007,15 @@ impl Game {
                 },
             })?;
         }
+        Ok(())
+    }
+
+    fn send_mod_panel_actions(&mut self) -> Result<(), String> {
         for action in self.mod_panels.take_actions() {
             if self.is_hosted_observer() {
                 continue;
             }
-            let hosted = self.hosted.as_mut().unwrap();
-            hosted.mod_request_sequence += 1;
-            let request_id = hosted.mod_request_sequence;
+            let request_id = self.next_mod_request_id();
             use crate::mod_panels::ModPanelAction;
             let command = match action {
                 ModPanelAction::Cast { content_id, position } => HostedCommand::ModCast {
@@ -1051,13 +1052,15 @@ impl Game {
             };
             self.send_native_message(&ClientMessage::Hosted { command })?;
         }
+        Ok(())
+    }
+
+    fn send_mod_quickbar_actions(&mut self) -> Result<(), String> {
         for action in self.mod_skill_quickbar.take_actions() {
             if self.is_hosted_observer() {
                 continue;
             }
-            let hosted = self.hosted.as_mut().unwrap();
-            hosted.mod_request_sequence += 1;
-            let request_id = hosted.mod_request_sequence;
+            let request_id = self.next_mod_request_id();
             self.send_native_message(&ClientMessage::Hosted {
                 command: HostedCommand::ModCast {
                     content_id: action.content_id,
@@ -1067,6 +1070,18 @@ impl Game {
                 },
             })?;
         }
+        Ok(())
+    }
+
+    /// Number the next mod request this client sends.
+    fn next_mod_request_id(&mut self) -> u64 {
+        let hosted = self.hosted.as_mut().unwrap();
+        hosted.mod_request_sequence += 1;
+        hosted.mod_request_sequence
+    }
+
+    /// Route the menu's hosted actions to their owners, or queue them as Website requests.
+    fn queue_hosted_menu_actions(&mut self) -> Result<(), String> {
         for action in self.menu.take_hosted_actions() {
             if matches!(action, HostedMenuAction::ContinueCheatsInPrivateCollege) {
                 self.apply_menu_action(MenuAction::Leave)?;
@@ -1091,12 +1106,7 @@ impl Game {
                 hosted.pending.push(HostedRequest::Menu { action, requester });
             }
         }
-        let hosted = self.hosted.as_mut().unwrap();
-        if hosted.join_request.as_ref().is_some_and(|(_, _, due)| now >= *due) {
-            let (request_id, token, _) = hosted.join_request.take().unwrap();
-            hosted.pending.push(HostedRequest::PollJoin { request_id, token });
-        }
-        self.finish_hosted_persistence()
+        Ok(())
     }
 
     fn finish_hosted_persistence(&mut self) -> Result<(), String> {
@@ -1416,4 +1426,53 @@ impl Game {
     ) -> Result<(), String> {
         self.present_party_resolution(request_id, resolution)
     }
+}
+
+/// The mod request for a minimap UI action: its action name and the map center.
+fn minimap_view_action(
+    action: crate::mod_minimap::ModMinimapAction,
+) -> crate::mod_world_overlays::ModViewAction {
+    let center: LuaObject = [
+        ("x".into(), LuaValue::Number(action.center.x)),
+        ("y".into(), LuaValue::Number(action.center.y)),
+    ]
+    .into_iter()
+    .collect();
+    crate::mod_world_overlays::ModViewAction {
+        action: solomon_protocol::hosted::ModAction::UiAction,
+        target: action.content_id,
+        arguments: [
+            ("action".into(), LuaValue::String(action.action)),
+            ("arguments".into(), LuaValue::Object(center)),
+        ]
+        .into_iter()
+        .collect(),
+    }
+}
+
+/// The mod request for a skill quickbar binding or a mod skill choice.
+fn skill_view_action(
+    action: crate::mod_skills::ModSkillAction,
+) -> crate::mod_world_overlays::ModViewAction {
+    use crate::mod_skills::ModSkillAction;
+    let (action, target, arguments) = match action {
+        ModSkillAction::QuickbarBind { content_id, slot, clear } => {
+            let mut arguments: LuaObject =
+                [("slot".into(), LuaValue::Number(slot))].into_iter().collect();
+            if clear {
+                arguments.insert("clear".into(), LuaValue::Boolean(true));
+            }
+            (ModAction::QuickbarBind, content_id, arguments)
+        }
+        ModSkillAction::SkillChoose { content_id, mod_offer_sequence, native_offer_sequence } => {
+            let arguments = [
+                ("mod_offer_sequence".into(), LuaValue::Number(mod_offer_sequence)),
+                ("native_offer_sequence".into(), LuaValue::Number(native_offer_sequence as f64)),
+            ]
+            .into_iter()
+            .collect();
+            (ModAction::SkillChoose, content_id, arguments)
+        }
+    };
+    crate::mod_world_overlays::ModViewAction { action, target, arguments }
 }

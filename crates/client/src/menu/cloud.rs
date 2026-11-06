@@ -850,95 +850,10 @@ impl CloudView {
         } else {
             (128.0, 69.0, 100.0)
         };
-        let heading_width = 760.0_f32.min(view.width() - 32.0);
-        let title_scale = 1.0_f32.min(heading_width / 560.0).min(
-            if short {
-                40.6
-            } else if phone {
-                38.0
-            } else {
-                58.0
-            } / 58.0,
-        );
-        widgets::native(
-            frame,
-            ui,
-            "THE DARK CLOUD",
-            UiFontName::Heading,
-            egui::pos2(view.center().x, view.top() + 50.0 * title_scale),
-            title_scale,
-            0xd9ba70,
-            UiTextAlign::Center,
-        );
-        if !phone {
-            widgets::native(
-                frame,
-                ui,
-                "beta",
-                UiFontName::Menu,
-                egui::pos2(view.center().x + 235.0 * title_scale, view.top() + 50.0 * title_scale),
-                title_scale,
-                0xd9ba70,
-                UiTextAlign::Center,
-            );
-        }
+        paint_cloud_title(frame, ui, view, short, phone);
         let admitted = enabled && !self.modal_open();
         if !short {
-            let label = self.account.as_ref().map_or_else(
-                || "You are signed in as a GUEST.".to_owned(),
-                |a| format!("You are signed in as {}.", a.username),
-            );
-            let rect = Rect::from_min_size(
-                egui::pos2(
-                    view.center().x - 280.0_f32.min((view.width() - 24.0) / 2.0),
-                    view.top() + if phone { 38.0 } else { 58.0 },
-                ),
-                Vec2::new(560.0_f32.min(view.width() - 24.0), 50.0),
-            );
-            let id = if self.account.is_some() { "cloud-account-menu" } else { "cloud-sign-in" };
-            if widgets::interact(frame, ui, id, &label, "button", rect, admitted).clicked()
-                && admitted
-            {
-                actions.push(
-                    if self.account.is_some() { "cloud-menu" } else { "cloud-sign-in" }.to_owned(),
-                );
-            }
-            let scale = 1.0_f32.min(rect.width() / 560.0);
-            widgets::native(
-                frame,
-                ui,
-                &label,
-                UiFontName::Menu,
-                egui::pos2(rect.center().x, rect.top() + 25.0),
-                scale,
-                0xd9ba70,
-                UiTextAlign::Center,
-            );
-            if self.account.is_none() {
-                widgets::native(
-                    frame,
-                    ui,
-                    "To change this, click here.",
-                    UiFontName::Menu,
-                    egui::pos2(rect.center().x, rect.top() + 25.0 + 18.0 * scale),
-                    scale,
-                    0xd9ba70,
-                    UiTextAlign::Center,
-                );
-                ui.painter().line_segment(
-                    [
-                        egui::pos2(
-                            rect.center().x + 34.0 * scale,
-                            rect.top() + 25.0 + 20.0 * scale,
-                        ),
-                        egui::pos2(
-                            rect.center().x + 179.0 * scale,
-                            rect.top() + 25.0 + 20.0 * scale,
-                        ),
-                    ],
-                    egui::Stroke::new(2.0, widgets::GOLD),
-                );
-            }
+            self.paint_account_line(frame, ui, view, phone, admitted, actions);
         }
         let frame_rect = if !compact && !short {
             Rect::from_min_max(view.min + Vec2::new(55.0, 173.0), view.max - Vec2::new(55.0, 100.0))
@@ -955,6 +870,109 @@ impl CloudView {
             egui::pos2(view.center().x - tabs_width / 2.0, view.top() + heading_height),
             Vec2::new(tabs_width, tab_height),
         );
+        self.paint_tab_strip(frame, ui, tabs, admitted, actions)?;
+        let pad = if phone {
+            14.0
+        } else if compact || short {
+            24.0
+        } else {
+            50.0
+        };
+        let content = frame_rect.shrink2(Vec2::new(pad, if phone { 14.0 } else { 24.0 }));
+        if self.tab == Tab::Layouts {
+            self.layouts.paint(frame, ui, &self.art, content, admitted, actions)?;
+        } else if self.tab == Tab::Boneyards {
+            frame.record_rect(
+                "cloud-boneyards-content",
+                "Boneyard library",
+                "surface",
+                content,
+                admitted,
+            );
+        } else {
+            self.paint_rows(frame, ui, content, view, admitted, actions)?;
+            self.paint_footer(frame, ui, view, footer_height, admitted, actions)?;
+        }
+        self.paint_menu_skull(frame, ui, view, admitted, actions)?;
+        if let Some(error) = &self.action_error {
+            let r = Rect::from_min_size(view.max - Vec2::new(530.0, 158.0), Vec2::new(500.0, 48.0));
+            ui.painter().rect_filled(r, 0.0, widgets::color(0x160504));
+            widgets::paragraph(ui, error, r.shrink(8.0), "IM FELL English", 16.0, widgets::ERROR);
+        }
+        if self.modal_open() {
+            self.paint_modal(frame, view, enabled, actions)?;
+        }
+        self.images.finish_paint(frame);
+        Ok(())
+    }
+    /// The signed-in account line; it opens the account menu, or sign-in for a guest.
+    fn paint_account_line(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        view: Rect,
+        phone: bool,
+        admitted: bool,
+        actions: &mut Vec<String>,
+    ) {
+        let label = self.account.as_ref().map_or_else(
+            || "You are signed in as a GUEST.".to_owned(),
+            |a| format!("You are signed in as {}.", a.username),
+        );
+        let rect = Rect::from_min_size(
+            egui::pos2(
+                view.center().x - 280.0_f32.min((view.width() - 24.0) / 2.0),
+                view.top() + if phone { 38.0 } else { 58.0 },
+            ),
+            Vec2::new(560.0_f32.min(view.width() - 24.0), 50.0),
+        );
+        let id = if self.account.is_some() { "cloud-account-menu" } else { "cloud-sign-in" };
+        if widgets::interact(frame, ui, id, &label, "button", rect, admitted).clicked() && admitted
+        {
+            actions.push(
+                if self.account.is_some() { "cloud-menu" } else { "cloud-sign-in" }.to_owned(),
+            );
+        }
+        let scale = 1.0_f32.min(rect.width() / 560.0);
+        widgets::native(
+            frame,
+            ui,
+            &label,
+            UiFontName::Menu,
+            egui::pos2(rect.center().x, rect.top() + 25.0),
+            scale,
+            0xd9ba70,
+            UiTextAlign::Center,
+        );
+        if self.account.is_none() {
+            widgets::native(
+                frame,
+                ui,
+                "To change this, click here.",
+                UiFontName::Menu,
+                egui::pos2(rect.center().x, rect.top() + 25.0 + 18.0 * scale),
+                scale,
+                0xd9ba70,
+                UiTextAlign::Center,
+            );
+            ui.painter().line_segment(
+                [
+                    egui::pos2(rect.center().x + 34.0 * scale, rect.top() + 25.0 + 20.0 * scale),
+                    egui::pos2(rect.center().x + 179.0 * scale, rect.top() + 25.0 + 20.0 * scale),
+                ],
+                egui::Stroke::new(2.0, widgets::GOLD),
+            );
+        }
+    }
+    /// The horizontally scrolling section tabs; the selected tab scrolls into view once.
+    fn paint_tab_strip(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
+        tabs: Rect,
+        admitted: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
         let strip = dark_cloud_tab_strip(f64::from(tabs.width()), f64::from(tabs.height()));
         frame.record_rect("cloud-tabs", "Dark Cloud sections", "region", tabs, admitted);
         let mut child = ui.new_child(egui::UiBuilder::new().id_salt("cloud-tabs").max_rect(tabs));
@@ -997,29 +1015,17 @@ impl CloudView {
                 }
             }
         });
-        std::mem::replace(&mut result, Ok(()))?;
-        let pad = if phone {
-            14.0
-        } else if compact || short {
-            24.0
-        } else {
-            50.0
-        };
-        let content = frame_rect.shrink2(Vec2::new(pad, if phone { 14.0 } else { 24.0 }));
-        if self.tab == Tab::Layouts {
-            self.layouts.paint(frame, ui, &self.art, content, admitted, actions)?;
-        } else if self.tab == Tab::Boneyards {
-            frame.record_rect(
-                "cloud-boneyards-content",
-                "Boneyard library",
-                "surface",
-                content,
-                admitted,
-            );
-        } else {
-            self.paint_rows(frame, ui, content, view, admitted, actions)?;
-            self.paint_footer(frame, ui, view, footer_height, admitted, actions)?;
-        }
+        result
+    }
+    /// The skull button in the top-left corner that opens the menu.
+    fn paint_menu_skull(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        view: Rect,
+        admitted: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
         let coarse = crate::platform::coarse_pointer();
         let skull = if coarse {
             Rect::from_min_size(view.min + Vec2::splat(4.0), Vec2::splat(44.0))
@@ -1048,80 +1054,74 @@ impl CloudView {
         if response.clicked() && admitted {
             actions.push("cloud-menu".to_owned());
         }
-        if let Some(error) = &self.action_error {
-            let r = Rect::from_min_size(view.max - Vec2::new(530.0, 158.0), Vec2::new(500.0, 48.0));
-            ui.painter().rect_filled(r, 0.0, widgets::color(0x160504));
-            widgets::paragraph(ui, error, r.shrink(8.0), "IM FELL English", 16.0, widgets::ERROR);
-        }
-        if self.modal_open() {
-            let ctx = frame.ctx.clone();
-            let dialog_rect = if self.detail.is_some() {
-                Rect::from_center_size(
-                    view.center(),
-                    Vec2::new(
-                        1100.0_f32.min(view.width() - 48.0),
-                        820.0_f32.min(view.height() - 48.0),
-                    ),
-                )
-            } else if matches!(self.sheet, Some(Sheet::Search { .. })) {
-                Rect::from_center_size(
-                    view.center(),
-                    Vec2::new(
-                        520.0_f32.min(view.width() - 48.0),
-                        if view.width() < 700.0 { 240.0 } else { 205.0 },
-                    ),
-                )
-            } else {
-                Rect::from_center_size(
-                    view.center(),
-                    Vec2::new(
-                        320.0_f32.min(view.width() - 48.0),
-                        255.0_f32.min(view.height() - 48.0),
-                    ),
-                )
-            };
-            let modal = egui::Modal::new(super::cloud_dialog_layer().id)
-                .area(
-                    egui::Area::new(super::cloud_dialog_layer().id)
-                        .fade_in(false)
-                        .fixed_pos(dialog_rect.min)
-                        .order(egui::Order::Foreground),
-                )
-                .frame(egui::Frame::NONE)
-                .backdrop_color(Color32::from_black_alpha(191))
-                .show(&ctx, |ui| {
-                    ui.set_min_size(dialog_rect.size());
-                    ui.set_clip_rect(view);
-                    if !enabled {
-                        ui.disable();
-                    }
-                    if let Some(detail) = &mut self.detail {
-                        let subscription = self
-                            .subscriptions
-                            .iter()
-                            .find(|s| s.content.slug == detail.summary.slug);
-                        result = detail.paint(
-                            frame,
-                            ui,
-                            &self.art,
-                            &mut self.images,
-                            view,
-                            subscription,
-                            self.subscription_request.is_some(),
-                            self.subscription_error.as_deref(),
-                            actions,
-                        );
-                    } else {
-                        result = self.paint_sheet(frame, ui, view, actions);
-                    }
-                });
-            if modal.should_close() && enabled {
-                actions.push("cloud-dialog-close".to_owned());
-            }
-            std::mem::replace(&mut result, Ok(()))?;
-        }
-        self.images.finish_paint(frame);
         Ok(())
+    }
+    /// The mod detail view, or the search or sort sheet, in a modal over the scene.
+    fn paint_modal(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        view: Rect,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let ctx = frame.ctx.clone();
+        let dialog_rect = if self.detail.is_some() {
+            Rect::from_center_size(
+                view.center(),
+                Vec2::new(1100.0_f32.min(view.width() - 48.0), 820.0_f32.min(view.height() - 48.0)),
+            )
+        } else if matches!(self.sheet, Some(Sheet::Search { .. })) {
+            Rect::from_center_size(
+                view.center(),
+                Vec2::new(
+                    520.0_f32.min(view.width() - 48.0),
+                    if view.width() < 700.0 { 240.0 } else { 205.0 },
+                ),
+            )
+        } else {
+            Rect::from_center_size(
+                view.center(),
+                Vec2::new(320.0_f32.min(view.width() - 48.0), 255.0_f32.min(view.height() - 48.0)),
+            )
+        };
+        let mut result = Ok(());
+        let modal = egui::Modal::new(super::cloud_dialog_layer().id)
+            .area(
+                egui::Area::new(super::cloud_dialog_layer().id)
+                    .fade_in(false)
+                    .fixed_pos(dialog_rect.min)
+                    .order(egui::Order::Foreground),
+            )
+            .frame(egui::Frame::NONE)
+            .backdrop_color(Color32::from_black_alpha(191))
+            .show(&ctx, |ui| {
+                ui.set_min_size(dialog_rect.size());
+                ui.set_clip_rect(view);
+                if !enabled {
+                    ui.disable();
+                }
+                if let Some(detail) = &mut self.detail {
+                    let subscription =
+                        self.subscriptions.iter().find(|s| s.content.slug == detail.summary.slug);
+                    result = detail.paint(
+                        frame,
+                        ui,
+                        &self.art,
+                        &mut self.images,
+                        view,
+                        subscription,
+                        self.subscription_request.is_some(),
+                        self.subscription_error.as_deref(),
+                        actions,
+                    );
+                } else {
+                    result = self.paint_sheet(frame, ui, view, actions);
+                }
+            });
+        if modal.should_close() && enabled {
+            actions.push("cloud-dialog-close".to_owned());
+        }
+        result
     }
     fn status_label(&self, count: usize) -> String {
         if self.loading() && count == 0 {
@@ -1170,135 +1170,9 @@ impl CloudView {
         let status = Rect::from_min_size(content.min, Vec2::new(content.width(), status_height));
         let label = self.status_label(rows.len());
         if view.width() <= 700.0 {
-            let tools = if self.tab == Tab::Parties { 128.0 } else { 0.0 }
-                + if !self.query.is_empty() { 128.0 } else { 0.0 };
-            let label_rect = Rect::from_min_size(
-                status.min,
-                Vec2::new((status.width() - tools).max(10.0), status.height()),
-            );
-            frame.record_rect("cloud-list-status", &label, "status", label_rect, false);
-            frame.record_value("cloud-list-status", &label, None);
-            rows::ink(frame, ui, &label, UiFontName::Medium, 0.85, 0xd9ba70, label_rect, false)?;
-            let mut right = status.right();
-            if self.tab == Tab::Parties {
-                let r = Rect::from_min_size(
-                    egui::pos2(right - 120.0, status.top()),
-                    Vec2::new(120.0, 44.0),
-                );
-                if widgets::cloud_button(frame, ui, "cloud-refresh", "REFRESH", r, 0.55, enabled)
-                    .clicked()
-                    && enabled
-                {
-                    actions.push("cloud-refresh".to_owned());
-                }
-                right -= 128.0;
-            }
-            if !self.query.is_empty() {
-                let r = Rect::from_min_size(
-                    egui::pos2(right - 120.0, status.top()),
-                    Vec2::new(120.0, 44.0),
-                );
-                if widgets::cloud_button(
-                    frame,
-                    ui,
-                    "cloud-clear-query",
-                    "CLEAR SEARCH",
-                    r,
-                    0.55,
-                    enabled,
-                )
-                .clicked()
-                    && enabled
-                {
-                    actions.push("cloud-clear-query".to_owned());
-                }
-            }
+            self.paint_phone_status(frame, ui, status, &label, enabled, actions)?;
         } else {
-            let party = self.tab == Tab::Parties;
-            let gap = if view.width() <= 1300.0 { 8.0 } else { 12.0 };
-            let action_width = if party {
-                160.0
-            } else if view.width() <= 880.0 {
-                200.0
-            } else if view.width() <= 1300.0 {
-                270.0
-            } else {
-                300.0
-            };
-            let author_width = if party && view.width() <= 1050.0 {
-                75.0
-            } else if view.width() <= 880.0 {
-                80.0
-            } else if view.width() <= 1300.0 {
-                95.0
-            } else {
-                120.0
-            };
-            let version_width = if !party && view.width() <= 1050.0 {
-                0.0
-            } else if party && view.width() <= 1050.0 {
-                85.0
-            } else if view.width() <= 1300.0 {
-                75.0
-            } else {
-                90.0
-            };
-            let state_width = if party && view.width() <= 1050.0 {
-                125.0
-            } else if view.width() <= 1300.0 {
-                135.0
-            } else {
-                165.0
-            };
-            let count = if version_width > 0.0 { 5.0 } else { 4.0 };
-            let first = status.width()
-                - action_width
-                - author_width
-                - version_width
-                - state_width
-                - gap * (count - 1.0);
-            let mut x = status.left();
-            let captions = if party {
-                ["party", "wizards", "status", "location", "action"]
-            } else if self.tab == Tab::Subscribed {
-                ["subscribed mod", "author", "version", "status", "manage"]
-            } else {
-                ["mod", "author", "version", "status", "action"]
-            };
-            for (index, (caption, width)) in captions
-                .into_iter()
-                .zip([first, author_width, version_width, state_width, action_width])
-                .enumerate()
-            {
-                if width <= 0.0 {
-                    continue;
-                }
-                let r = Rect::from_min_size(
-                    egui::pos2(x, status.top()),
-                    Vec2::new(width, status.height()),
-                );
-                if party && index == 4 {
-                    let button = Rect::from_center_size(r.center(), Vec2::new(100.0, 44.0));
-                    if widgets::cloud_button(
-                        frame,
-                        ui,
-                        "cloud-refresh",
-                        "REFRESH",
-                        button,
-                        0.55,
-                        enabled,
-                    )
-                    .clicked()
-                        && enabled
-                    {
-                        actions.push("cloud-refresh".to_owned());
-                    }
-                } else {
-                    rows::ink(frame, ui, caption, UiFontName::Menu, 1.0, 0xd9ba70, r, index > 0)?;
-                }
-                x += width + gap;
-            }
-            frame.record_rect("cloud-columns", &captions.join(" · "), "heading", status, false);
+            self.paint_column_headings(frame, ui, status, view, enabled, actions)?;
         }
         let list = Rect::from_min_max(content.min + Vec2::new(0.0, status_height), content.max);
         frame.record_rect("cloud-list", "Dark Cloud entries", "region", list, enabled);
@@ -1312,48 +1186,7 @@ impl CloudView {
             .auto_shrink([false, false])
             .show(&mut child, |ui| {
                 if rows.is_empty() {
-                    let text = if self.loading() {
-                        "CONSULTING THE DARK CLOUD..."
-                    } else if let Some(error) = self.active_error() {
-                        error
-                    } else if !self.query.is_empty() {
-                        "NOTHING MATCHES YOUR SEARCH."
-                    } else {
-                        match self.tab {
-                            Tab::Parties => "NO PUBLIC PARTIES.",
-                            Tab::Subscribed if self.account.is_none() => {
-                                "SIGN IN TO SEE YOUR MODS."
-                            }
-                            Tab::Subscribed => "NO SUBSCRIBED MODS.",
-                            _ => "NO MODS HAVE REACHED THE DARK CLOUD.",
-                        }
-                    };
-                    let (_, r) = ui.allocate_space(Vec2::new(list.width(), 100.0));
-                    widgets::paragraph(
-                        ui,
-                        text,
-                        r.shrink(12.0),
-                        "IM FELL English",
-                        16.0,
-                        widgets::GOLD,
-                    );
-                    if self.active_error().is_some() {
-                        let (_, r) = ui.allocate_space(Vec2::new(list.width(), 50.0));
-                        if widgets::cloud_button(
-                            frame,
-                            ui,
-                            "cloud-refresh",
-                            "RETRY",
-                            Rect::from_min_size(r.min, Vec2::new(170.0, 44.0)),
-                            0.55,
-                            enabled,
-                        )
-                        .clicked()
-                            && enabled
-                        {
-                            actions.push("cloud-refresh".to_owned());
-                        }
-                    }
+                    self.paint_empty_list(frame, ui, list, enabled, actions);
                 }
                 for row in rows {
                     let selected = Some(row.key()) == self.selected;
@@ -1409,6 +1242,199 @@ impl CloudView {
                 }
             });
         result
+    }
+    /// The phone layout's status line with its Refresh and Clear Search buttons.
+    fn paint_phone_status(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        status: Rect,
+        label: &str,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let tools = if self.tab == Tab::Parties { 128.0 } else { 0.0 }
+            + if !self.query.is_empty() { 128.0 } else { 0.0 };
+        let label_rect = Rect::from_min_size(
+            status.min,
+            Vec2::new((status.width() - tools).max(10.0), status.height()),
+        );
+        frame.record_rect("cloud-list-status", label, "status", label_rect, false);
+        frame.record_value("cloud-list-status", label, None);
+        rows::ink(frame, ui, label, UiFontName::Medium, 0.85, 0xd9ba70, label_rect, false)?;
+        let mut right = status.right();
+        if self.tab == Tab::Parties {
+            let r = Rect::from_min_size(
+                egui::pos2(right - 120.0, status.top()),
+                Vec2::new(120.0, 44.0),
+            );
+            if widgets::cloud_button(frame, ui, "cloud-refresh", "REFRESH", r, 0.55, enabled)
+                .clicked()
+                && enabled
+            {
+                actions.push("cloud-refresh".to_owned());
+            }
+            right -= 128.0;
+        }
+        if !self.query.is_empty() {
+            let r = Rect::from_min_size(
+                egui::pos2(right - 120.0, status.top()),
+                Vec2::new(120.0, 44.0),
+            );
+            if widgets::cloud_button(
+                frame,
+                ui,
+                "cloud-clear-query",
+                "CLEAR SEARCH",
+                r,
+                0.55,
+                enabled,
+            )
+            .clicked()
+                && enabled
+            {
+                actions.push("cloud-clear-query".to_owned());
+            }
+        }
+        Ok(())
+    }
+    /// The wide layout's column captions; the Parties tab puts Refresh in the action column.
+    fn paint_column_headings(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        status: Rect,
+        view: Rect,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let party = self.tab == Tab::Parties;
+        let gap = if view.width() <= 1300.0 { 8.0 } else { 12.0 };
+        let action_width = if party {
+            160.0
+        } else if view.width() <= 880.0 {
+            200.0
+        } else if view.width() <= 1300.0 {
+            270.0
+        } else {
+            300.0
+        };
+        let author_width = if party && view.width() <= 1050.0 {
+            75.0
+        } else if view.width() <= 880.0 {
+            80.0
+        } else if view.width() <= 1300.0 {
+            95.0
+        } else {
+            120.0
+        };
+        let version_width = if !party && view.width() <= 1050.0 {
+            0.0
+        } else if party && view.width() <= 1050.0 {
+            85.0
+        } else if view.width() <= 1300.0 {
+            75.0
+        } else {
+            90.0
+        };
+        let state_width = if party && view.width() <= 1050.0 {
+            125.0
+        } else if view.width() <= 1300.0 {
+            135.0
+        } else {
+            165.0
+        };
+        let count = if version_width > 0.0 { 5.0 } else { 4.0 };
+        let first = status.width()
+            - action_width
+            - author_width
+            - version_width
+            - state_width
+            - gap * (count - 1.0);
+        let mut x = status.left();
+        let captions = if party {
+            ["party", "wizards", "status", "location", "action"]
+        } else if self.tab == Tab::Subscribed {
+            ["subscribed mod", "author", "version", "status", "manage"]
+        } else {
+            ["mod", "author", "version", "status", "action"]
+        };
+        for (index, (caption, width)) in captions
+            .into_iter()
+            .zip([first, author_width, version_width, state_width, action_width])
+            .enumerate()
+        {
+            if width <= 0.0 {
+                continue;
+            }
+            let r =
+                Rect::from_min_size(egui::pos2(x, status.top()), Vec2::new(width, status.height()));
+            if party && index == 4 {
+                let button = Rect::from_center_size(r.center(), Vec2::new(100.0, 44.0));
+                if widgets::cloud_button(
+                    frame,
+                    ui,
+                    "cloud-refresh",
+                    "REFRESH",
+                    button,
+                    0.55,
+                    enabled,
+                )
+                .clicked()
+                    && enabled
+                {
+                    actions.push("cloud-refresh".to_owned());
+                }
+            } else {
+                rows::ink(frame, ui, caption, UiFontName::Menu, 1.0, 0xd9ba70, r, index > 0)?;
+            }
+            x += width + gap;
+        }
+        frame.record_rect("cloud-columns", &captions.join(" · "), "heading", status, false);
+        Ok(())
+    }
+    /// Why the list is empty: loading, an error with Retry, no matches, or no entries.
+    fn paint_empty_list(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &mut Ui,
+        list: Rect,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) {
+        let text = if self.loading() {
+            "CONSULTING THE DARK CLOUD..."
+        } else if let Some(error) = self.active_error() {
+            error
+        } else if !self.query.is_empty() {
+            "NOTHING MATCHES YOUR SEARCH."
+        } else {
+            match self.tab {
+                Tab::Parties => "NO PUBLIC PARTIES.",
+                Tab::Subscribed if self.account.is_none() => "SIGN IN TO SEE YOUR MODS.",
+                Tab::Subscribed => "NO SUBSCRIBED MODS.",
+                _ => "NO MODS HAVE REACHED THE DARK CLOUD.",
+            }
+        };
+        let (_, r) = ui.allocate_space(Vec2::new(list.width(), 100.0));
+        widgets::paragraph(ui, text, r.shrink(12.0), "IM FELL English", 16.0, widgets::GOLD);
+        if self.active_error().is_some() {
+            let (_, r) = ui.allocate_space(Vec2::new(list.width(), 50.0));
+            if widgets::cloud_button(
+                frame,
+                ui,
+                "cloud-refresh",
+                "RETRY",
+                Rect::from_min_size(r.min, Vec2::new(170.0, 44.0)),
+                0.55,
+                enabled,
+            )
+            .clicked()
+                && enabled
+            {
+                actions.push("cloud-refresh".to_owned());
+            }
+        }
     }
     fn paint_footer(
         &self,
@@ -1798,5 +1824,41 @@ impl CloudView {
             widgets::GOLD,
         );
         Ok(())
+    }
+}
+
+/// The "THE DARK CLOUD" heading and, except on phones, its "beta" mark.
+fn paint_cloud_title(frame: &UiFrame<'_>, ui: &Ui, view: Rect, short: bool, phone: bool) {
+    let heading_width = 760.0_f32.min(view.width() - 32.0);
+    let title_scale = 1.0_f32.min(heading_width / 560.0).min(
+        if short {
+            40.6
+        } else if phone {
+            38.0
+        } else {
+            58.0
+        } / 58.0,
+    );
+    widgets::native(
+        frame,
+        ui,
+        "THE DARK CLOUD",
+        UiFontName::Heading,
+        egui::pos2(view.center().x, view.top() + 50.0 * title_scale),
+        title_scale,
+        0xd9ba70,
+        UiTextAlign::Center,
+    );
+    if !phone {
+        widgets::native(
+            frame,
+            ui,
+            "beta",
+            UiFontName::Menu,
+            egui::pos2(view.center().x + 235.0 * title_scale, view.top() + 50.0 * title_scale),
+            title_scale,
+            0xd9ba70,
+            UiTextAlign::Center,
+        );
     }
 }

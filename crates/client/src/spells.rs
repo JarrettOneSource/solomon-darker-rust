@@ -89,6 +89,23 @@ struct SpellRoot {
     draws: Vec<SpellDraw>,
 }
 
+/// The frame facts that `SpellView::prepare` shares with every spell's plan.
+struct SpellFrame<'a> {
+    presentation_frame: u64,
+    point_gain: &'a dyn Fn(Vec2) -> f64,
+    puppet_hits: &'a [EnemyPuppetHit],
+    enhanced_effects: bool,
+    region_view: Option<FlameLashBounds>,
+}
+
+impl SpellFrame<'_> {
+    /// Whether an enemy puppet hit lands on this Weld view this frame.
+    fn puppet_hit(&self, id: u64) -> bool {
+        let target_id = format!("primary:{id}");
+        self.puppet_hits.iter().any(|hit| hit.target_id == target_id)
+    }
+}
+
 /// GPU state for drawing primary spells: shared stock atlases, the frame's painter roots
 /// and pre/post-world draws, and each retained view's creation order.
 pub struct SpellView {
@@ -174,6 +191,13 @@ impl SpellView {
             }
         }
         self.view_creation_orders.retain(|id, _| live_view_ids.contains(id));
+        let frame = SpellFrame {
+            presentation_frame,
+            point_gain,
+            puppet_hits,
+            enhanced_effects,
+            region_view,
+        };
         for spell in spells.projectiles.iter() {
             let common = spell.common();
             if common.world_key != world_key {
@@ -185,56 +209,7 @@ impl SpellView {
                 .unwrap_or(common.age_ticks as f64);
             let first_root = self.roots.len();
             self.admit_view(common.id);
-            let plan = match spell {
-                PrimarySpellProjectile::Earth(spell) => {
-                    // The Earth Boulder's cosmetic program also runs on actor age.
-                    earth_boulder_sprite_plan_at_age(spell, age, age)
-                }
-                PrimarySpellProjectile::Ether(spell) => {
-                    let mut plan = ether_primary_flight_plan(
-                        common.id,
-                        age,
-                        spell.speed,
-                        spell.visual_scale,
-                        spell.underpowered,
-                    );
-                    plan.position.x += common.position.x;
-                    plan.position.y += common.position.y;
-                    plan.world_y = common.position.y;
-                    plan
-                }
-                PrimarySpellProjectile::Fire(spell) => fireball_plan(
-                    FireballPresentationState {
-                        age_ticks: age,
-                        ..FireballPresentationState::from(spell)
-                    },
-                    presentation_frame,
-                ),
-                PrimarySpellProjectile::Weld(spell) => {
-                    let target_id = format!("primary:{}", common.id);
-                    let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
-                    self.append_weld(
-                        WeldPresentationState::Projectile(spell),
-                        presentation_frame,
-                        age,
-                        common.registration,
-                        false,
-                        puppet_hit,
-                        enhanced_effects,
-                        region_view,
-                    );
-                    self.identify_roots(first_root, common.id);
-                    continue;
-                }
-            };
-            self.append_plan(plan, common.registration);
-            if matches!(spell, PrimarySpellProjectile::Earth(_)) {
-                self.roots
-                    .last_mut()
-                    .expect("Earth Boulder owns a world root")
-                    .painter
-                    .overlay_owner_id = Some(common.owner_id.clone());
-            }
+            self.append_projectile(spell, age, &frame);
             self.identify_roots(first_root, common.id);
         }
         for effect in spells.transients.iter() {
@@ -248,242 +223,362 @@ impl SpellView {
                 .unwrap_or(common.age_ticks as f64);
             let first_root = self.roots.len();
             self.admit_view(common.id);
-            match effect {
-                // Staff views share SecondaryView's stock atlas.
-                PrimarySpellTransient::Staff(_) => {}
-                PrimarySpellTransient::AirHurricane(spell) => {
-                    let mut plan = plan_at(spell.position);
-                    for draw in hurricane_visual_plan(spell) {
-                        let core = draw.role == HurricaneSpriteRole::Core;
-                        plan.draws.push(SpellSprite {
-                            alpha: draw.alpha,
-                            atlas: if core { SpellAtlas::DeadHawg } else { SpellAtlas::BadGuys },
-                            blend: if draw.additive { SpellBlend::Add } else { SpellBlend::Normal },
-                            offset: draw.position,
-                            rotation: draw.rotation_radians,
-                            scale: draw.scale,
-                            tint: draw.tint,
-                            ..SpellSprite::new(if core { 15 } else { 84 }, 1.0)
-                        });
-                    }
-                    self.append_plan(plan, common.painter_registrations[0]);
-                    self.roots
-                        .last_mut()
-                        .expect("Hurricane owns a world root")
-                        .painter
-                        .overlay_owner_id = Some(common.owner_id.clone());
-                }
-                PrimarySpellTransient::WaterAura(spell) => {
-                    let draw = water_aura_visual_plan(spell);
-                    let mut plan = plan_at(spell.origin);
-                    plan.draws.push(SpellSprite {
-                        alpha: draw.alpha,
-                        blend: SpellBlend::Add,
-                        rotation: draw.rotation_radians,
-                        tint: draw.tint,
-                        ..SpellSprite::new(14, draw.scale)
-                    });
-                    self.append_plan(plan, common.painter_registrations[0]);
-                }
-                PrimarySpellTransient::WaterHail(spell) => {
-                    let draw = hail_visual_plan(spell);
-                    let mut plan = plan_at(spell.position);
-                    plan.draws.push(SpellSprite {
-                        alpha: draw.alpha,
-                        offset: Vec2::new(0.0, draw.offset_y),
-                        rotation: draw.rotation_radians,
-                        ..SpellSprite::new(32, draw.scale)
-                    });
-                    self.append_plan(plan, common.painter_registrations[0]);
-                }
-                PrimarySpellTransient::Weld(spell) => {
-                    let target_id = format!("primary:{}", common.id);
-                    let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
-                    // Copying the parent's painter list onto every Boulder piece would
-                    // be rejected by the strict planner; each piece already has its own
-                    // Actor registration.
-                    let registration = match spell {
-                        WeldWorldActor::Persistent(WeldPersistentActorState::EtherealBoulder(
-                            _,
-                        )) => {
-                            common.light_registration.expect("Boulder owns an Actor registration")
-                        }
-                        _ => common.painter_registrations[0],
-                    };
-                    self.append_weld(
-                        WeldPresentationState::World(spell),
-                        presentation_frame,
-                        age,
-                        registration,
-                        matches!(spell, WeldWorldActor::Channel(_)),
-                        puppet_hit,
-                        enhanced_effects,
-                        region_view,
-                    );
-                }
-                PrimarySpellTransient::Harden(effect) => {
-                    self.append_plan(harden_effect_plan(effect), common.painter_registrations[0])
-                }
-                PrimarySpellTransient::EarthBoulderBit(spell) => {
-                    let debris = &spell.debris.common;
-                    let position = Vec2::new(
-                        spell.position.x + debris.position.x,
-                        spell.position.y + debris.position.y,
-                    );
-                    let mut plan = plan_at(position);
-                    plan.sort_bias = -15.0;
-                    plan.region_light_point = Some(position);
-                    if spell.debris.enhanced_shadow && debris.height != 0.0 {
-                        plan.draws.push(SpellSprite {
-                            alpha: debris.alpha.min(1.0),
-                            offset: Vec2::new(0.0, 2.0),
-                            rotation: debris.rotation_degrees * std::f64::consts::PI / 180.0,
-                            scale: Vec2::new(debris.scale, debris.scale * 0.75),
-                            tint: 0,
-                            ..SpellSprite::new(debris.record, 1.0)
-                        });
-                    }
-                    plan.draws.push(SpellSprite {
-                        alpha: debris.alpha.min(1.0),
-                        offset: Vec2::new(0.0, debris.height),
-                        rotation: debris.rotation_degrees * std::f64::consts::PI / 180.0,
-                        tint: 0xff0000 | ((debris.color_green * 255.0).trunc() as u32) << 8,
-                        ..SpellSprite::new(debris.record, debris.scale)
-                    });
-                    self.append_plan(plan, common.painter_registrations[0]);
-                }
-                PrimarySpellTransient::Air(spell) => self.append_air(spell, enhanced_effects),
-                PrimarySpellTransient::Water(spell) => self.append_water(spell),
-                PrimarySpellTransient::EarthImpact(spell) => {
-                    let seed = EarthImpactSeed {
-                        birth_tick: spell.birth_tick,
-                        charge: spell.charge,
-                        enhanced_effects: spell.enhanced_effects,
-                        id: common.id,
-                    };
-                    for fragment in earth_impact_fragments_at_age(seed, age) {
-                        let position = Vec2::new(
-                            spell.origin.x + fragment.position.x,
-                            spell.origin.y + fragment.position.y,
-                        );
-                        let mut plan = SpellSpritePlan {
-                            position,
-                            world_y: position.y,
-                            sort_bias: -15.0,
-                            region_light_point: Some(position),
-                            draws: Vec::new(),
-                        };
-                        plan.draws.push(SpellSprite {
-                            alpha: fragment.alpha.clamp(0.0, 1.0),
-                            offset: Vec2::new(0.0, fragment.height),
-                            rotation: fragment.rotation * std::f64::consts::PI / 180.0,
-                            ..SpellSprite::new(fragment.record, fragment.scale)
-                        });
-                        self.append_plan(plan, common.painter_registrations[fragment.index]);
-                    }
-                }
-                PrimarySpellTransient::EarthCalledRock(spell) => {
-                    let mut plan = plan_at(spell.position);
-                    if spell.height < 0.0 {
-                        plan.draws.push(SpellSprite::new(
-                            2008 + spell.variant as usize,
-                            spell.scale * 0.75,
-                        ));
-                    }
-                    plan.draws.push(SpellSprite {
-                        offset: Vec2::new(0.0, spell.height),
-                        rotation: spell.rotation * std::f64::consts::PI / 180.0,
-                        ..SpellSprite::new(2008 + spell.variant as usize, spell.scale)
-                    });
-                    self.append_plan(plan, common.painter_registrations[0]);
-                }
-                PrimarySpellTransient::EtherImpact(spell) => self
-                    .append_plan(ether_primary_impact_plan(spell), common.painter_registrations[0]),
-                PrimarySpellTransient::EtherPierceStreak(spell) => self.append_plan(
-                    ether_primary_pierce_streak_plan(spell),
-                    common.painter_registrations[0],
-                ),
-                PrimarySpellTransient::EtherBlast(spell) => {
-                    let particles =
-                        create_ether_blast_particle_program(&mut spell.presentation_rng.clone());
-                    for (index, particle) in particles.into_iter().enumerate() {
-                        let frame = ether_blast_particle_frame(particle, age);
-                        let position = Vec2::new(
-                            fround(spell.origin.x + frame.position.x),
-                            fround(spell.origin.y + frame.position.y),
-                        );
-                        let mut plan = plan_at(position);
-                        plan.draws.push(SpellSprite {
-                            alpha: frame.alpha,
-                            blend: SpellBlend::Add,
-                            rotation: particle.rotation_degrees * std::f64::consts::PI / 180.0,
-                            scale: Vec2::new(
-                                particle.scale,
-                                fround(particle.scale * 0.8_f32 as f64),
-                            ),
-                            tint: pack_spell_rgb(particle.red, particle.green, particle.blue),
-                            ..SpellSprite::new(particle.sprite_record, 1.0)
-                        });
-                        self.append_plan(plan, common.painter_registrations[index]);
-                    }
-                }
-                PrimarySpellTransient::FireParticle(spell) => self.append_plan(
-                    fire_particle_plan_at_age(spell, age),
-                    common.painter_registrations[0],
-                ),
-                PrimarySpellTransient::FireImpact(spell) => self.append_plan(
-                    fire_impact_plan_at_age(spell, age),
-                    common.painter_registrations[0],
-                ),
-                PrimarySpellTransient::FireExplosion(spell) => {
-                    let gain = *self
-                        .fire_explosion_point_gains
-                        .entry(common.id)
-                        .or_insert_with(|| point_gain(spell.origin));
-                    self.append_plan(
-                        fire_explosion_plan(
-                            age,
-                            spell.origin,
-                            spell.presentation,
-                            spell.visual_scale,
-                            gain,
-                        ),
-                        common.painter_registrations[0],
-                    );
-                }
-                PrimarySpellTransient::FireEmber(spell) => {
-                    let root_index = self.roots.len();
-                    self.append_plan(
-                        fire_ember_plan(
-                            common.id,
-                            spell.height,
-                            spell.life,
-                            spell.phase,
-                            spell.position,
-                            presentation_frame,
-                            enhanced_effects,
-                        ),
-                        common.painter_registrations[0],
-                    );
-                    if enhanced_effects && spell.height < 0.0 {
-                        self.roots[root_index].draws.insert(
-                            0,
-                            SpellDraw::GroundGlow {
-                                position: spell.position,
-                                alpha: fround((1.0 - spell.height / -50.0 * 0.5) * 0.25),
-                            },
-                        );
-                    }
-                }
-                PrimarySpellTransient::FireGoodImp(spell) => {
-                    self.append_plan(fire_good_imp_plan(spell), common.painter_registrations[0])
-                }
-                PrimarySpellTransient::FirePatch(spell) => self.append_plan(
-                    fire_patch_plan(spell, presentation_frame),
-                    common.painter_registrations[0],
-                ),
-            }
+            self.append_transient(effect, age, &frame);
             self.identify_roots(first_root, common.id);
+        }
+    }
+
+    /// A projectile's plan: the Earth Boulder, Ether bolt, Fireball or Weld projectile.
+    fn append_projectile(
+        &mut self,
+        spell: &PrimarySpellProjectile,
+        age: f64,
+        frame: &SpellFrame<'_>,
+    ) {
+        let common = spell.common();
+        let plan = match spell {
+            PrimarySpellProjectile::Earth(spell) => {
+                // The Earth Boulder's cosmetic program also runs on actor age.
+                earth_boulder_sprite_plan_at_age(spell, age, age)
+            }
+            PrimarySpellProjectile::Ether(spell) => {
+                let mut plan = ether_primary_flight_plan(
+                    common.id,
+                    age,
+                    spell.speed,
+                    spell.visual_scale,
+                    spell.underpowered,
+                );
+                plan.position.x += common.position.x;
+                plan.position.y += common.position.y;
+                plan.world_y = common.position.y;
+                plan
+            }
+            PrimarySpellProjectile::Fire(spell) => fireball_plan(
+                FireballPresentationState {
+                    age_ticks: age,
+                    ..FireballPresentationState::from(spell)
+                },
+                frame.presentation_frame,
+            ),
+            PrimarySpellProjectile::Weld(spell) => {
+                let puppet_hit = frame.puppet_hit(common.id);
+                self.append_weld(
+                    WeldPresentationState::Projectile(spell),
+                    frame.presentation_frame,
+                    age,
+                    common.registration,
+                    false,
+                    puppet_hit,
+                    frame.enhanced_effects,
+                    frame.region_view,
+                );
+                return;
+            }
+        };
+        self.append_plan(plan, common.registration);
+        if matches!(spell, PrimarySpellProjectile::Earth(_)) {
+            self.roots
+                .last_mut()
+                .expect("Earth Boulder owns a world root")
+                .painter
+                .overlay_owner_id = Some(common.owner_id.clone());
+        }
+    }
+
+    /// A transient effect's plan, by spell.
+    fn append_transient(
+        &mut self,
+        effect: &PrimarySpellTransient,
+        age: f64,
+        frame: &SpellFrame<'_>,
+    ) {
+        let common = effect.common();
+        match effect {
+            // Staff views share SecondaryView's stock atlas.
+            PrimarySpellTransient::Staff(_) => {}
+            PrimarySpellTransient::AirHurricane(spell) => self.append_hurricane(spell, common),
+            PrimarySpellTransient::WaterAura(spell) => {
+                let draw = water_aura_visual_plan(spell);
+                let mut plan = plan_at(spell.origin);
+                plan.draws.push(SpellSprite {
+                    alpha: draw.alpha,
+                    blend: SpellBlend::Add,
+                    rotation: draw.rotation_radians,
+                    tint: draw.tint,
+                    ..SpellSprite::new(14, draw.scale)
+                });
+                self.append_plan(plan, common.painter_registrations[0]);
+            }
+            PrimarySpellTransient::WaterHail(spell) => {
+                let draw = hail_visual_plan(spell);
+                let mut plan = plan_at(spell.position);
+                plan.draws.push(SpellSprite {
+                    alpha: draw.alpha,
+                    offset: Vec2::new(0.0, draw.offset_y),
+                    rotation: draw.rotation_radians,
+                    ..SpellSprite::new(32, draw.scale)
+                });
+                self.append_plan(plan, common.painter_registrations[0]);
+            }
+            PrimarySpellTransient::Weld(spell) => self.append_weld_actor(spell, common, age, frame),
+            PrimarySpellTransient::Harden(effect) => {
+                self.append_plan(harden_effect_plan(effect), common.painter_registrations[0])
+            }
+            PrimarySpellTransient::EarthBoulderBit(spell) => self.append_boulder_bit(spell, common),
+            PrimarySpellTransient::Air(spell) => self.append_air(spell, frame.enhanced_effects),
+            PrimarySpellTransient::Water(spell) => self.append_water(spell),
+            PrimarySpellTransient::EarthImpact(spell) => {
+                self.append_earth_impact(spell, common, age)
+            }
+            PrimarySpellTransient::EarthCalledRock(spell) => self.append_called_rock(spell, common),
+            PrimarySpellTransient::EtherImpact(spell) => {
+                self.append_plan(ether_primary_impact_plan(spell), common.painter_registrations[0])
+            }
+            PrimarySpellTransient::EtherPierceStreak(spell) => self.append_plan(
+                ether_primary_pierce_streak_plan(spell),
+                common.painter_registrations[0],
+            ),
+            PrimarySpellTransient::EtherBlast(spell) => self.append_ether_blast(spell, common, age),
+            PrimarySpellTransient::FireParticle(spell) => self.append_plan(
+                fire_particle_plan_at_age(spell, age),
+                common.painter_registrations[0],
+            ),
+            PrimarySpellTransient::FireImpact(spell) => self
+                .append_plan(fire_impact_plan_at_age(spell, age), common.painter_registrations[0]),
+            PrimarySpellTransient::FireExplosion(spell) => {
+                self.append_fire_explosion(spell, common, age, frame.point_gain)
+            }
+            PrimarySpellTransient::FireEmber(spell) => self.append_fire_ember(
+                spell,
+                common,
+                frame.presentation_frame,
+                frame.enhanced_effects,
+            ),
+            PrimarySpellTransient::FireGoodImp(spell) => {
+                self.append_plan(fire_good_imp_plan(spell), common.painter_registrations[0])
+            }
+            PrimarySpellTransient::FirePatch(spell) => self.append_plan(
+                fire_patch_plan(spell, frame.presentation_frame),
+                common.painter_registrations[0],
+            ),
+        }
+    }
+
+    /// The Hurricane's sprites, promoted above its owner.
+    fn append_hurricane(
+        &mut self,
+        spell: &PrimarySpellAirHurricane,
+        common: &PrimarySpellTransientBase,
+    ) {
+        let mut plan = plan_at(spell.position);
+        for draw in hurricane_visual_plan(spell) {
+            let core = draw.role == HurricaneSpriteRole::Core;
+            plan.draws.push(SpellSprite {
+                alpha: draw.alpha,
+                atlas: if core { SpellAtlas::DeadHawg } else { SpellAtlas::BadGuys },
+                blend: if draw.additive { SpellBlend::Add } else { SpellBlend::Normal },
+                offset: draw.position,
+                rotation: draw.rotation_radians,
+                scale: draw.scale,
+                tint: draw.tint,
+                ..SpellSprite::new(if core { 15 } else { 84 }, 1.0)
+            });
+        }
+        self.append_plan(plan, common.painter_registrations[0]);
+        self.roots.last_mut().expect("Hurricane owns a world root").painter.overlay_owner_id =
+            Some(common.owner_id.clone());
+    }
+
+    /// A Weld actor in the world; an Ethereal Boulder piece uses its own Actor registration.
+    fn append_weld_actor(
+        &mut self,
+        spell: &WeldWorldActor,
+        common: &PrimarySpellTransientBase,
+        age: f64,
+        frame: &SpellFrame<'_>,
+    ) {
+        let puppet_hit = frame.puppet_hit(common.id);
+        // Copying the parent's painter list onto every Boulder piece would
+        // be rejected by the strict planner; each piece already has its own
+        // Actor registration.
+        let registration = match spell {
+            WeldWorldActor::Persistent(WeldPersistentActorState::EtherealBoulder(_)) => {
+                common.light_registration.expect("Boulder owns an Actor registration")
+            }
+            _ => common.painter_registrations[0],
+        };
+        self.append_weld(
+            WeldPresentationState::World(spell),
+            frame.presentation_frame,
+            age,
+            registration,
+            matches!(spell, WeldWorldActor::Channel(_)),
+            puppet_hit,
+            frame.enhanced_effects,
+            frame.region_view,
+        );
+    }
+
+    /// A Boulder fragment with its optional enhanced shadow.
+    fn append_boulder_bit(
+        &mut self,
+        spell: &PrimarySpellEarthBoulderBit,
+        common: &PrimarySpellTransientBase,
+    ) {
+        let debris = &spell.debris.common;
+        let position =
+            Vec2::new(spell.position.x + debris.position.x, spell.position.y + debris.position.y);
+        let mut plan = plan_at(position);
+        plan.sort_bias = -15.0;
+        plan.region_light_point = Some(position);
+        if spell.debris.enhanced_shadow && debris.height != 0.0 {
+            plan.draws.push(SpellSprite {
+                alpha: debris.alpha.min(1.0),
+                offset: Vec2::new(0.0, 2.0),
+                rotation: debris.rotation_degrees * std::f64::consts::PI / 180.0,
+                scale: Vec2::new(debris.scale, debris.scale * 0.75),
+                tint: 0,
+                ..SpellSprite::new(debris.record, 1.0)
+            });
+        }
+        plan.draws.push(SpellSprite {
+            alpha: debris.alpha.min(1.0),
+            offset: Vec2::new(0.0, debris.height),
+            rotation: debris.rotation_degrees * std::f64::consts::PI / 180.0,
+            tint: 0xff0000 | ((debris.color_green * 255.0).trunc() as u32) << 8,
+            ..SpellSprite::new(debris.record, debris.scale)
+        });
+        self.append_plan(plan, common.painter_registrations[0]);
+    }
+
+    /// Each fragment of an Earth impact at this age, on its own registration.
+    fn append_earth_impact(
+        &mut self,
+        spell: &PrimarySpellEarthImpact,
+        common: &PrimarySpellTransientBase,
+        age: f64,
+    ) {
+        let seed = EarthImpactSeed {
+            birth_tick: spell.birth_tick,
+            charge: spell.charge,
+            enhanced_effects: spell.enhanced_effects,
+            id: common.id,
+        };
+        for fragment in earth_impact_fragments_at_age(seed, age) {
+            let position = Vec2::new(
+                spell.origin.x + fragment.position.x,
+                spell.origin.y + fragment.position.y,
+            );
+            let mut plan = SpellSpritePlan {
+                position,
+                world_y: position.y,
+                sort_bias: -15.0,
+                region_light_point: Some(position),
+                draws: Vec::new(),
+            };
+            plan.draws.push(SpellSprite {
+                alpha: fragment.alpha.clamp(0.0, 1.0),
+                offset: Vec2::new(0.0, fragment.height),
+                rotation: fragment.rotation * std::f64::consts::PI / 180.0,
+                ..SpellSprite::new(fragment.record, fragment.scale)
+            });
+            self.append_plan(plan, common.painter_registrations[fragment.index]);
+        }
+    }
+
+    /// A called rock and, while it is in the air, its shadow.
+    fn append_called_rock(
+        &mut self,
+        spell: &PrimarySpellEarthCalledRock,
+        common: &PrimarySpellTransientBase,
+    ) {
+        let mut plan = plan_at(spell.position);
+        if spell.height < 0.0 {
+            plan.draws.push(SpellSprite::new(2008 + spell.variant as usize, spell.scale * 0.75));
+        }
+        plan.draws.push(SpellSprite {
+            offset: Vec2::new(0.0, spell.height),
+            rotation: spell.rotation * std::f64::consts::PI / 180.0,
+            ..SpellSprite::new(2008 + spell.variant as usize, spell.scale)
+        });
+        self.append_plan(plan, common.painter_registrations[0]);
+    }
+
+    /// The Ether blast's particles at this age, each on its own registration.
+    fn append_ether_blast(
+        &mut self,
+        spell: &PrimarySpellEtherBlast,
+        common: &PrimarySpellTransientBase,
+        age: f64,
+    ) {
+        let particles = create_ether_blast_particle_program(&mut spell.presentation_rng.clone());
+        for (index, particle) in particles.into_iter().enumerate() {
+            let frame = ether_blast_particle_frame(particle, age);
+            let position = Vec2::new(
+                fround(spell.origin.x + frame.position.x),
+                fround(spell.origin.y + frame.position.y),
+            );
+            let mut plan = plan_at(position);
+            plan.draws.push(SpellSprite {
+                alpha: frame.alpha,
+                blend: SpellBlend::Add,
+                rotation: particle.rotation_degrees * std::f64::consts::PI / 180.0,
+                scale: Vec2::new(particle.scale, fround(particle.scale * 0.8_f32 as f64)),
+                tint: pack_spell_rgb(particle.red, particle.green, particle.blue),
+                ..SpellSprite::new(particle.sprite_record, 1.0)
+            });
+            self.append_plan(plan, common.painter_registrations[index]);
+        }
+    }
+
+    /// A Fire explosion, lit with the gain captured when it first appeared.
+    fn append_fire_explosion(
+        &mut self,
+        spell: &PrimarySpellFireExplosion,
+        common: &PrimarySpellTransientBase,
+        age: f64,
+        point_gain: &dyn Fn(Vec2) -> f64,
+    ) {
+        let gain = *self
+            .fire_explosion_point_gains
+            .entry(common.id)
+            .or_insert_with(|| point_gain(spell.origin));
+        self.append_plan(
+            fire_explosion_plan(age, spell.origin, spell.presentation, spell.visual_scale, gain),
+            common.painter_registrations[0],
+        );
+    }
+
+    /// A Fire ember and, with enhanced effects, the glow beneath it while airborne.
+    fn append_fire_ember(
+        &mut self,
+        spell: &PrimarySpellFireEmber,
+        common: &PrimarySpellTransientBase,
+        presentation_frame: u64,
+        enhanced_effects: bool,
+    ) {
+        let root_index = self.roots.len();
+        self.append_plan(
+            fire_ember_plan(
+                common.id,
+                spell.height,
+                spell.life,
+                spell.phase,
+                spell.position,
+                presentation_frame,
+                enhanced_effects,
+            ),
+            common.painter_registrations[0],
+        );
+        if enhanced_effects && spell.height < 0.0 {
+            self.roots[root_index].draws.insert(
+                0,
+                SpellDraw::GroundGlow {
+                    position: spell.position,
+                    alpha: fround((1.0 - spell.height / -50.0 * 0.5) * 0.25),
+                },
+            );
         }
     }
 

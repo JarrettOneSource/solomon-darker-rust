@@ -9,8 +9,8 @@ use solomon_sim::player_panels::skill_hover::{skill_hover_box_layout, skill_pick
 use solomon_sim::player_panels::skill_text::{skill_page_text_height, skill_page_wrapped_lines};
 use solomon_sim::profile::{PlayerSkillChoice, PlayerSkillOffer};
 use solomon_sim::skill_picker::{
-    SkillPickerReveal, skill_picker_card, skill_picker_centers, skill_picker_close,
-    skill_picker_panel, skill_picker_reveal,
+    SkillPickerCard, SkillPickerReveal, skill_picker_card, skill_picker_centers,
+    skill_picker_close, skill_picker_panel, skill_picker_reveal,
 };
 use solomon_sim::ui_text::{UiFontName as Font, UiTextSpec as TextSpec};
 /// A choice made in the level-up skill picker: take a skill, reroll the offer, or save
@@ -34,6 +34,26 @@ enum PickerEvent {
     Hover(Option<usize>),
     Select(usize),
     Key(String),
+}
+
+/// The displayed offer and what its parts paint with this frame: whether it accepts
+/// input, the reveal's panel alpha and white tint, and the panel bounds.
+struct OfferView<'a> {
+    offer: &'a PlayerSkillOffer,
+    interactive: bool,
+    panel_alpha: f32,
+    white: egui::Color32,
+    panel: HudRect,
+}
+
+/// One choice's card slot: its option index, whether it is an Insight, and where it sits.
+#[derive(Clone, Copy)]
+struct CardSlot {
+    index: usize,
+    insight: bool,
+    x: f64,
+    top: f64,
+    bounds: egui::Rect,
 }
 
 /// The level-up skill picker: the displayed offer, selection and detail state, opening
@@ -353,9 +373,45 @@ impl SkillPicker {
         let ambient_alpha = reveal.ambient_alpha as f32;
         let white = egui::Color32::WHITE.gamma_multiply(panel_alpha);
         let ambient = frame.with_blend(solomon_graphics::BlendMode::Add);
+        self.paint_ambient_glow(&ambient, p, ambient_alpha)?;
+        let panel = if self.compact {
+            HudRect::new(580.0, 125.0, 440.0, offer.options.len().div_ceil(2) as f64 * 315.0 + 30.0)
+        } else {
+            skill_picker_panel(offer.options.len())
+        };
+        self.paint_offer_panel(frame, p, panel, white)?;
+        let level = if self.compact {
+            format!("YOU ARE NOW LEVEL {}", offer.level)
+        } else {
+            format!("Y O U   A R E   N O W   L E V E L   {}", offer.level)
+        };
+        self.paint_level_title(frame, p, &level, panel_alpha);
+        let view = OfferView { offer, interactive, panel_alpha, white, panel };
+        for index in 0..offer.options.len() {
+            self.paint_choice_card(frame, &ambient, ui, &view, index, events)?;
+        }
+        if self.special_available {
+            self.paint_special_actions(frame, ui, &view, events)?;
+        }
+        frame.record_rect(
+            "picker:offer",
+            &level,
+            "dialog",
+            frame.ctx.layer_transform_to_global(ui.layer_id()).unwrap_or_default() * rect(panel),
+            false,
+        );
+        Ok(())
+    }
+    /// The additive rays and glows behind the panel.
+    fn paint_ambient_glow(
+        &self,
+        ambient: &UiFrame<'_>,
+        p: &egui::Painter,
+        ambient_alpha: f32,
+    ) -> Result<(), String> {
         for index in 0..8 {
             self.ui.paint_centered(
-                &ambient,
+                ambient,
                 p,
                 3,
                 egui::pos2(800.0, 450.0),
@@ -367,7 +423,7 @@ impl SkillPicker {
         }
         for y in [350.0, 550.0] {
             self.ui.paint_centered(
-                &ambient,
+                ambient,
                 p,
                 62,
                 egui::pos2(800.0, y),
@@ -376,11 +432,16 @@ impl SkillPicker {
                 egui::Color32::WHITE.gamma_multiply(ambient_alpha),
             )?;
         }
-        let panel = if self.compact {
-            HudRect::new(580.0, 125.0, 440.0, offer.options.len().div_ceil(2) as f64 * 315.0 + 30.0)
-        } else {
-            skill_picker_panel(offer.options.len())
-        };
+        Ok(())
+    }
+    /// The header and footer art, the tiled panel and its borders, and the corner pieces.
+    fn paint_offer_panel(
+        &self,
+        frame: &UiFrame<'_>,
+        p: &egui::Painter,
+        panel: HudRect,
+        white: egui::Color32,
+    ) -> Result<(), String> {
         self.ui.paint_centered(
             frame,
             p,
@@ -439,11 +500,16 @@ impl SkillPicker {
                 white,
             )?;
         }
-        let level = if self.compact {
-            format!("YOU ARE NOW LEVEL {}", offer.level)
-        } else {
-            format!("Y O U   A R E   N O W   L E V E L   {}", offer.level)
-        };
+        Ok(())
+    }
+    /// The level title over its eight offset dark copies.
+    fn paint_level_title(
+        &self,
+        frame: &UiFrame<'_>,
+        p: &egui::Painter,
+        level: &str,
+        panel_alpha: f32,
+    ) {
         let level_y = if self.compact { 112.0 } else { 262.5 };
         for degrees in (0..360).step_by(45) {
             let angle = degrees as f64 * std::f64::consts::PI / 180.0;
@@ -455,7 +521,7 @@ impl SkillPicker {
                     alpha: panel_alpha as f64,
                     ..TextSpec::new(
                         Font::Menu,
-                        &level,
+                        level,
                         800.0 + angle.cos() * 5.0,
                         level_y + angle.sin() * 5.0,
                     )
@@ -468,262 +534,231 @@ impl SkillPicker {
             &TextSpec {
                 tint: 0xe0bd58,
                 alpha: panel_alpha as f64,
-                ..TextSpec::new(Font::Menu, &level, 800.0, level_y)
+                ..TextSpec::new(Font::Menu, level, 800.0, level_y)
             },
         );
-        for (index, option) in offer.options.iter().enumerate() {
-            let card = skill_picker_card(option);
-            let x = if self.compact {
-                if index + 1 == offer.options.len() && index % 2 == 0 {
-                    800.0
-                } else if index % 2 == 0 {
-                    690.0
-                } else {
-                    910.0
-                }
+    }
+    /// One choice's card: its choice target, art, text and detail button.
+    fn paint_choice_card(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ambient: &UiFrame<'_>,
+        ui: &egui::Ui,
+        view: &OfferView<'_>,
+        index: usize,
+        events: &mut Vec<PickerEvent>,
+    ) -> Result<(), String> {
+        let OfferView { offer, interactive, panel_alpha, .. } = *view;
+        let p = ui.painter();
+        let option = &offer.options[index];
+        let card = skill_picker_card(option);
+        let x = if self.compact {
+            if index + 1 == offer.options.len() && index.is_multiple_of(2) {
+                800.0
+            } else if index.is_multiple_of(2) {
+                690.0
             } else {
-                skill_picker_centers(offer.options.len())[index]
+                910.0
+            }
+        } else {
+            skill_picker_centers(offer.options.len())[index]
+        };
+        let top = if self.compact { 145.0 + (index / 2) as f64 * 315.0 } else { 302.5 };
+        let r = rect(HudRect::new(x - 100.0, top, 200.0, 295.0));
+        let mut child = crate::player_panels::chrome::child_ui(ui, "hud-admission", ui.max_rect());
+        if !(interactive) {
+            child.disable();
+        }
+        let response = child.interact(
+            r,
+            egui::Id::unique(("picker-choice", offer.sequence, index)),
+            egui::Sense::click(),
+        );
+        frame.record(
+            &format!("picker:choice:{index}"),
+            &format!(
+                "{}{}, {}. {}",
+                if option.insight { "Insight. " } else { "" },
+                card.name,
+                card.family_label.trim(),
+                card.quick_description
+            ),
+            "button",
+            &response,
+        );
+        frame.record_value(
+            &format!("picker:choice:{index}"),
+            &option.skill_id.to_string(),
+            Some(self.selected == index),
+        );
+        if self.focus_index == Some(index) {
+            response.request_focus();
+            self.focus_index = None;
+        }
+        if response.clicked() {
+            events.push(PickerEvent::Activate(
+                PickerTarget::Choice(index),
+                self.touch,
+                offer.sequence,
+            ));
+        }
+        if response.hovered() || response.has_focus() {
+            events.push(PickerEvent::Select(index));
+        }
+        let slot = CardSlot { index, insight: option.insight, x, top, bounds: r };
+        self.paint_card_art(frame, ambient, p, &card, slot, panel_alpha)?;
+        paint_card_text(frame, p, &card, slot, panel_alpha);
+        let info = child.interact(
+            rect(HudRect::new(x - 43.5, top + 36.0, 87.0, 88.0)),
+            egui::Id::unique(("picker-detail", offer.sequence, index)),
+            egui::Sense::click(),
+        );
+        frame.record(
+            &format!("picker:detail:{index}"),
+            &format!("Show details for {}", card.name),
+            "button",
+            &info,
+        );
+        if info.clicked() {
+            events.push(PickerEvent::Activate(
+                PickerTarget::Detail(index),
+                self.touch,
+                offer.sequence,
+            ));
+        }
+        if info.hovered() || info.has_focus() {
+            events.push(PickerEvent::Hover(Some(index)));
+        } else if self.detail_index == Some(index) && !self.touch && !self.compact_detail {
+            events.push(PickerEvent::Hover(None));
+        }
+        Ok(())
+    }
+    /// The card's frame, selection outline, glow, icon frame and icon; Insight pulses.
+    fn paint_card_art(
+        &self,
+        frame: &UiFrame<'_>,
+        ambient: &UiFrame<'_>,
+        p: &egui::Painter,
+        card: &SkillPickerCard,
+        slot: CardSlot,
+        panel_alpha: f32,
+    ) -> Result<(), String> {
+        let CardSlot { index, insight, x, top, bounds } = slot;
+        let pulse = if insight {
+            0.85 + 0.3
+                * float::sin(
+                    (self.now - self.started_at) / 10.0 * 2.0 * std::f64::consts::PI / 180.0,
+                )
+                .max(0.0)
+        } else {
+            1.0
+        };
+        let tint = egui::Color32::WHITE.gamma_multiply(panel_alpha * pulse.min(1.0) as f32);
+        self.skills.paint_frame(frame, p, 0, bounds, 30.0, tint)?;
+        if self.selected == index {
+            p.rect_stroke(
+                bounds,
+                2.0,
+                egui::Stroke::new(2.0, color(0xd9ba70).gamma_multiply(panel_alpha)),
+                egui::StrokeKind::Inside,
+            );
+        }
+        let center = egui::pos2(x as f32, (top + 80.0) as f32);
+        self.skills.paint_centered(frame, p, 13, center, 1.15, 0.0, tint)?;
+        if card.glow_tints.len() == 2 {
+            crate::player_panels::chrome::paint_split_art(
+                frame,
+                p,
+                &self.skills,
+                164,
+                center,
+                1.15,
+                [card.glow_tints[0], card.glow_tints[1]]
+                    .map(|tint| color(tint).gamma_multiply(panel_alpha)),
+            )?;
+        } else {
+            self.skills.paint_centered(
+                frame,
+                p,
+                164,
+                center,
+                1.15,
+                0.0,
+                color(card.glow_tints[0]).gamma_multiply(panel_alpha),
+            )?;
+        }
+        self.skills.paint_centered(frame, p, card.frame_record, center, 1.0, 0.0, tint)?;
+        self.skills.paint_centered(
+            frame,
+            p,
+            card.icon_record,
+            center + egui::vec2(4.0, 4.0),
+            1.0,
+            0.0,
+            egui::Color32::BLACK.gamma_multiply(panel_alpha),
+        )?;
+        self.skills.paint_centered(frame, p, card.icon_record, center, 1.0, 0.0, tint)?;
+        if pulse > 1.0 {
+            self.skills.paint_centered(
+                ambient,
+                p,
+                card.icon_record,
+                center,
+                1.0,
+                0.0,
+                egui::Color32::WHITE.gamma_multiply(panel_alpha * (pulse - 1.0) as f32),
+            )?;
+        }
+        Ok(())
+    }
+    /// The Save Skill and Roll Again buttons beside the panel.
+    fn paint_special_actions(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &egui::Ui,
+        view: &OfferView<'_>,
+        events: &mut Vec<PickerEvent>,
+    ) -> Result<(), String> {
+        let OfferView { offer, interactive, white, panel, .. } = *view;
+        let p = ui.painter();
+        for (record, target, action, x) in [
+            (57, PickerTarget::Save, "save", 800.0 - panel.width / 2.0 - 140.0),
+            (56, PickerTarget::Reroll, "reroll", 800.0 + panel.width / 2.0 + 40.0),
+        ] {
+            let (left, top, width, art_scale) = if self.compact {
+                (if action == "save" { 590.0 } else { 810.0 }, 835.0, 200.0, 0.75)
+            } else {
+                (x, 322.5, 255.0, 1.0)
             };
-            let top = if self.compact { 145.0 + (index / 2) as f64 * 315.0 } else { 302.5 };
-            let r = rect(HudRect::new(x - 100.0, top, 200.0, 295.0));
+            self.ui.paint_centered(
+                frame,
+                p,
+                record,
+                egui::pos2((left + width / 2.0) as f32, (top + 50.0) as f32),
+                art_scale,
+                0.0,
+                white,
+            )?;
             let mut child =
                 crate::player_panels::chrome::child_ui(ui, "hud-admission", ui.max_rect());
             if !(interactive) {
                 child.disable();
             }
             let response = child.interact(
-                r,
-                egui::Id::unique(("picker-choice", offer.sequence, index)),
+                rect(HudRect::new(left, top, width, 100.0)),
+                egui::Id::unique(("picker-special", offer.sequence, action)),
                 egui::Sense::click(),
             );
             frame.record(
-                &format!("picker:choice:{index}"),
-                &format!(
-                    "{}{}, {}. {}",
-                    if option.insight { "Insight. " } else { "" },
-                    card.name,
-                    card.family_label.trim(),
-                    card.quick_description
-                ),
+                &format!("picker:{action}"),
+                if action == "save" { "Save Skill" } else { "Roll Again" },
                 "button",
                 &response,
             );
-            frame.record_value(
-                &format!("picker:choice:{index}"),
-                &option.skill_id.to_string(),
-                Some(self.selected == index),
-            );
-            if self.focus_index == Some(index) {
-                response.request_focus();
-                self.focus_index = None;
-            }
             if response.clicked() {
-                events.push(PickerEvent::Activate(
-                    PickerTarget::Choice(index),
-                    self.touch,
-                    offer.sequence,
-                ));
-            }
-            if response.hovered() || response.has_focus() {
-                events.push(PickerEvent::Select(index));
-            }
-            let pulse = if option.insight {
-                0.85 + 0.3
-                    * float::sin(
-                        (self.now - self.started_at) / 10.0 * 2.0 * std::f64::consts::PI / 180.0,
-                    )
-                    .max(0.0)
-            } else {
-                1.0
-            };
-            let tint = egui::Color32::WHITE.gamma_multiply(panel_alpha * pulse.min(1.0) as f32);
-            self.skills.paint_frame(frame, p, 0, r, 30.0, tint)?;
-            if self.selected == index {
-                p.rect_stroke(
-                    r,
-                    2.0,
-                    egui::Stroke::new(2.0, color(0xd9ba70).gamma_multiply(panel_alpha)),
-                    egui::StrokeKind::Inside,
-                );
-            }
-            let center = egui::pos2(x as f32, (top + 80.0) as f32);
-            self.skills.paint_centered(frame, p, 13, center, 1.15, 0.0, tint)?;
-            if card.glow_tints.len() == 2 {
-                crate::player_panels::chrome::paint_split_art(
-                    frame,
-                    p,
-                    &self.skills,
-                    164,
-                    center,
-                    1.15,
-                    [card.glow_tints[0], card.glow_tints[1]]
-                        .map(|tint| color(tint).gamma_multiply(panel_alpha)),
-                )?;
-            } else {
-                self.skills.paint_centered(
-                    frame,
-                    p,
-                    164,
-                    center,
-                    1.15,
-                    0.0,
-                    color(card.glow_tints[0]).gamma_multiply(panel_alpha),
-                )?;
-            }
-            self.skills.paint_centered(frame, p, card.frame_record, center, 1.0, 0.0, tint)?;
-            self.skills.paint_centered(
-                frame,
-                p,
-                card.icon_record,
-                center + egui::vec2(4.0, 4.0),
-                1.0,
-                0.0,
-                egui::Color32::BLACK.gamma_multiply(panel_alpha),
-            )?;
-            self.skills.paint_centered(frame, p, card.icon_record, center, 1.0, 0.0, tint)?;
-            if pulse > 1.0 {
-                self.skills.paint_centered(
-                    &ambient,
-                    p,
-                    card.icon_record,
-                    center,
-                    1.0,
-                    0.0,
-                    egui::Color32::WHITE.gamma_multiply(panel_alpha * (pulse - 1.0) as f32),
-                )?;
-            }
-            let names = skill_page_wrapped_lines(&card.name);
-            let descriptions = skill_page_wrapped_lines(card.quick_description);
-            let text_tint = if option.insight { 0xd9ba70 } else { card.root_tint };
-            for (font, source, baseline) in [
-                (Font::Medium, names.join("\n"), top + 150.0),
-                (
-                    Font::SkillUppercase,
-                    card.family_label.to_owned(),
-                    top + 150.0 + skill_page_text_height(&names),
-                ),
-            ] {
-                let line_height = (font == Font::Medium).then_some(17.0);
-                if !option.insight {
-                    native_text(
-                        frame,
-                        p,
-                        &TextSpec {
-                            tint: 0,
-                            alpha: panel_alpha as f64,
-                            line_height,
-                            ..TextSpec::new(font, &source, x + 1.0, baseline + 1.0)
-                        },
-                    );
-                }
-                native_text(
-                    frame,
-                    p,
-                    &TextSpec {
-                        tint: text_tint,
-                        alpha: panel_alpha as f64,
-                        line_height,
-                        ..TextSpec::new(font, &source, x, baseline)
-                    },
-                );
-            }
-            native_text(
-                frame,
-                p,
-                &TextSpec {
-                    tint: if option.insight { 0xd9ba70 } else { 0xffffff },
-                    alpha: panel_alpha as f64,
-                    line_height: Some(17.0),
-                    ..TextSpec::new(
-                        Font::Medium,
-                        &descriptions.join("\n"),
-                        x,
-                        top + 230.0 - skill_page_text_height(&descriptions) / 2.0,
-                    )
-                },
-            );
-            if option.insight {
-                native_text(
-                    frame,
-                    p,
-                    &TextSpec {
-                        tint: 0xd9ba70,
-                        alpha: panel_alpha as f64,
-                        ..TextSpec::new(Font::Body, "Insight", x, top + 3.0)
-                    },
-                );
-            }
-            let info = child.interact(
-                rect(HudRect::new(x - 43.5, top + 36.0, 87.0, 88.0)),
-                egui::Id::unique(("picker-detail", offer.sequence, index)),
-                egui::Sense::click(),
-            );
-            frame.record(
-                &format!("picker:detail:{index}"),
-                &format!("Show details for {}", card.name),
-                "button",
-                &info,
-            );
-            if info.clicked() {
-                events.push(PickerEvent::Activate(
-                    PickerTarget::Detail(index),
-                    self.touch,
-                    offer.sequence,
-                ));
-            }
-            if info.hovered() || info.has_focus() {
-                events.push(PickerEvent::Hover(Some(index)));
-            } else if self.detail_index == Some(index) && !self.touch && !self.compact_detail {
-                events.push(PickerEvent::Hover(None));
+                events.push(PickerEvent::Activate(target, self.touch, offer.sequence));
             }
         }
-        if self.special_available {
-            for (record, target, action, x) in [
-                (57, PickerTarget::Save, "save", 800.0 - panel.width / 2.0 - 140.0),
-                (56, PickerTarget::Reroll, "reroll", 800.0 + panel.width / 2.0 + 40.0),
-            ] {
-                let (left, top, width, art_scale) = if self.compact {
-                    (if action == "save" { 590.0 } else { 810.0 }, 835.0, 200.0, 0.75)
-                } else {
-                    (x, 322.5, 255.0, 1.0)
-                };
-                self.ui.paint_centered(
-                    frame,
-                    p,
-                    record,
-                    egui::pos2((left + width / 2.0) as f32, (top + 50.0) as f32),
-                    art_scale,
-                    0.0,
-                    white,
-                )?;
-                let mut child =
-                    crate::player_panels::chrome::child_ui(ui, "hud-admission", ui.max_rect());
-                if !(interactive) {
-                    child.disable();
-                }
-                let response = child.interact(
-                    rect(HudRect::new(left, top, width, 100.0)),
-                    egui::Id::unique(("picker-special", offer.sequence, action)),
-                    egui::Sense::click(),
-                );
-                frame.record(
-                    &format!("picker:{action}"),
-                    if action == "save" { "Save Skill" } else { "Roll Again" },
-                    "button",
-                    &response,
-                );
-                if response.clicked() {
-                    events.push(PickerEvent::Activate(target, self.touch, offer.sequence));
-                }
-            }
-        }
-        frame.record_rect(
-            "picker:offer",
-            &level,
-            "dialog",
-            frame.ctx.layer_transform_to_global(ui.layer_id()).unwrap_or_default() * rect(panel),
-            false,
-        );
         Ok(())
     }
     fn paint_detail(
@@ -792,5 +827,77 @@ impl SkillPicker {
             self.detail_index = None;
         }
         Ok(())
+    }
+}
+
+/// The card's name, family, description and Insight label.
+fn paint_card_text(
+    frame: &UiFrame<'_>,
+    p: &egui::Painter,
+    card: &SkillPickerCard,
+    slot: CardSlot,
+    panel_alpha: f32,
+) {
+    let CardSlot { insight, x, top, .. } = slot;
+    let names = skill_page_wrapped_lines(&card.name);
+    let descriptions = skill_page_wrapped_lines(card.quick_description);
+    let text_tint = if insight { 0xd9ba70 } else { card.root_tint };
+    for (font, source, baseline) in [
+        (Font::Medium, names.join("\n"), top + 150.0),
+        (
+            Font::SkillUppercase,
+            card.family_label.to_owned(),
+            top + 150.0 + skill_page_text_height(&names),
+        ),
+    ] {
+        let line_height = (font == Font::Medium).then_some(17.0);
+        if !insight {
+            native_text(
+                frame,
+                p,
+                &TextSpec {
+                    tint: 0,
+                    alpha: panel_alpha as f64,
+                    line_height,
+                    ..TextSpec::new(font, &source, x + 1.0, baseline + 1.0)
+                },
+            );
+        }
+        native_text(
+            frame,
+            p,
+            &TextSpec {
+                tint: text_tint,
+                alpha: panel_alpha as f64,
+                line_height,
+                ..TextSpec::new(font, &source, x, baseline)
+            },
+        );
+    }
+    native_text(
+        frame,
+        p,
+        &TextSpec {
+            tint: if insight { 0xd9ba70 } else { 0xffffff },
+            alpha: panel_alpha as f64,
+            line_height: Some(17.0),
+            ..TextSpec::new(
+                Font::Medium,
+                &descriptions.join("\n"),
+                x,
+                top + 230.0 - skill_page_text_height(&descriptions) / 2.0,
+            )
+        },
+    );
+    if insight {
+        native_text(
+            frame,
+            p,
+            &TextSpec {
+                tint: 0xd9ba70,
+                alpha: panel_alpha as f64,
+                ..TextSpec::new(Font::Body, "Insight", x, top + 3.0)
+            },
+        );
     }
 }

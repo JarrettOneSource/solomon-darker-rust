@@ -707,78 +707,7 @@ impl PlayerPanels {
             return Ok(());
         }
         if let PanelEvent::Key(key) = event {
-            if key.repeat {
-                return Ok(());
-            }
-            if self.closing_at.is_some() {
-                return Ok(());
-            }
-            let code = key.code;
-            if (self.notice.is_some() || self.dye.is_some())
-                && (code == "Escape"
-                    || code == self.controls.open_menu
-                    || code == self.controls.open_inventory
-                    || code == self.controls.open_skills)
-            {
-                self.back(now)?;
-                return Ok(());
-            }
-            if self.panel.is_none() {
-                if code == self.controls.open_inventory {
-                    self.actions.push(PlayerPanelAction::OpenInventory);
-                }
-                if code == self.controls.open_skills {
-                    self.actions.push(PlayerPanelAction::OpenSkills);
-                }
-            } else if code == "Escape" || code == self.controls.open_menu {
-                if matches!(
-                    self.panel,
-                    Some(PlayerPanel::Inventory | PlayerPanel::Skills | PlayerPanel::Service(_))
-                ) {
-                    // Menu closes the whole optional book; the Inventory binding and
-                    // footer retain one-Sack Back ("Optional Inventory and Skills
-                    // navigation" in docs/DECISIONS.md).
-                    self.close(now, None);
-                } else {
-                    self.back(now)?;
-                }
-            } else if code == self.controls.open_inventory {
-                if self.inventory_owner_active() {
-                    self.back(now)?;
-                } else {
-                    self.close(
-                        now,
-                        (self.panel != Some(PlayerPanel::Inventory))
-                            .then_some(PlayerPanel::Inventory),
-                    );
-                }
-            } else if code == self.controls.open_skills {
-                self.close(
-                    now,
-                    (self.panel != Some(PlayerPanel::Skills)).then_some(PlayerPanel::Skills),
-                );
-            } else if self.notice.is_none()
-                && self.dye.is_none()
-                && self.panel == Some(PlayerPanel::Skills)
-                && key.key.len() == 1
-                && let Ok(slot) = key.key.parse::<usize>()
-                && (1..8).contains(&slot)
-            {
-                self.target_belt = Some(self.hotbar.slot(slot));
-            } else if self.notice.is_none()
-                && self.dye.is_none()
-                && !self.inventory_transition_locked()
-                && !key.modified
-                && matches!(self.panel, Some(PlayerPanel::Inventory | PlayerPanel::Service(_)))
-                && let Some(visible_slot) =
-                    self.controls.belt.iter().position(|binding| binding == &code)
-            {
-                let slot = self.hotbar.slot(visible_slot);
-                if snapshot.belt.entries[slot].is_some() {
-                    self.actions.push(PlayerPanelAction::ActivateBeltSlot { slot, pointer: None });
-                }
-            }
-            return Ok(());
+            return self.handle_key(key, snapshot, now);
         }
         if self.panel.is_none() || self.closing_at.is_some() {
             return Ok(());
@@ -793,123 +722,13 @@ impl PlayerPanels {
             PanelEvent::Activate(target) => self.activate(target, snapshot, now, None)?,
             PanelEvent::SelectNpc(id) => self.select_npc(id, snapshot, now)?,
             PanelEvent::PointerDown(target, point, npc_id) => {
-                if self.inventory_transition_locked() && inventory_drop::locks_target(target) {
-                    return Ok(());
-                }
-                if self.notice.is_some()
-                    && !matches!(
-                        target,
-                        Target::NoticeOkay | Target::UnforgeConfirm | Target::UnforgeCancel
-                    )
-                {
-                    return Ok(());
-                }
-                self.pointer = point;
-                if target == Target::Back && self.selected_backpack_item_id(snapshot).is_none() {
-                    // Retail kind-7 holder activates on the first press. Do not
-                    // retain a release that could pop the next settled page.
-                    self.press = None;
-                    self.pressed_npc_selector = None;
-                    self.back(now)?;
-                    return Ok(());
-                }
-                let inventory_item_id = match target {
-                    Target::Item(id) => Some(id),
-                    Target::Equipment(slot) => {
-                        snapshot.economy.equipment.at(slot).as_ref().map(|item| item.id)
-                    }
-                    _ => None,
-                };
-                self.press =
-                    Some(Press { target, inventory_item_id, origin: point, dragging: false });
-                self.pressed_npc_selector = npc_id;
-                if matches!(target, Target::Item(_)) {
-                    self.selected = Some(target);
-                    self.selected_at = now;
-                }
+                self.handle_pointer_down(target, point, npc_id, snapshot, now)?;
             }
             PanelEvent::PointerMove(point, target, npc_id) => {
-                let previous_point = self.pointer;
-                self.pointer = point;
-                let scrolling = self.press.is_some_and(|press| {
-                    matches!(press.target, Target::DialogueSelector(_) | Target::SelectorScroll)
-                        && ((point.x - press.origin.x).hypot(point.y - press.origin.y) > 10.0
-                            || press.dragging)
-                });
-                if scrolling {
-                    self.press.as_mut().expect("captured selector pointer").dragging = true;
-                    self.scroll_selector_pixels(previous_point.y - point.y);
-                    return Ok(());
-                }
-                if let Some(press) = self.press
-                    && let Target::Belt(slot) = press.target
-                    && snapshot.belt.entries[slot].is_some()
-                    && self.dye.is_none()
-                    && belt_pull_off_started(press.origin, point)
-                {
-                    self.press = None;
-                    self.target_belt = None;
-                    self.actions.push(PlayerPanelAction::Belt(BeltCommand::BindSkill {
-                        skill_id: None,
-                        slot,
-                    }));
-                    self.sound(AudioCue::Poof);
-                    self.show_modal_belt_pull_off(slot)?;
-
-                    return Ok(());
-                }
-                if let Some(press) = &mut self.press {
-                    let distance = (point.x - press.origin.x).hypot(point.y - press.origin.y);
-                    let threshold = if matches!(press.target, Target::Belt(_)) {
-                        50.0
-                    } else if matches!(press.target, Target::Skill(_)) {
-                        3.0
-                    } else {
-                        10.0
-                    };
-                    if distance > threshold
-                        && self.dye.is_none()
-                        && !matches!(press.target, Target::Belt(_))
-                        && !press.dragging
-                    {
-                        press.dragging = true;
-                    }
-                } else {
-                    if self.hovered_npc_selector != npc_id {
-                        self.hovered_npc_selector = npc_id;
-                    }
-                    self.hovered_service = target.filter(|target| {
-                        matches!(
-                            target,
-                            Target::Shop(_)
-                                | Target::Hagatha(_)
-                                | Target::Storage(_)
-                                | Target::OwnedPerk(_)
-                        )
-                    });
-                    let skill = match target {
-                        Some(Target::Skill(id)) => Some(id),
-                        _ => None,
-                    };
-                    self.hovered_skill = skill;
-                }
+                self.handle_pointer_move(point, target, npc_id, snapshot)?;
             }
             PanelEvent::PointerUp(point, target) => {
-                self.pointer = point;
-                let npc_id = self.pressed_npc_selector.take();
-                if let Some(press) = self.press.take() {
-                    if press.dragging {
-                        self.drop(press, target, snapshot, now)?;
-                    } else if let Some(id) = npc_id {
-                        self.select_npc(id, snapshot, now)?;
-                    } else {
-                        let pointer = Vec2::new(
-                            self.stage_origin.x + point.x * self.view_scale,
-                            self.stage_origin.y + point.y * self.view_scale,
-                        );
-                        self.activate(press.target, snapshot, now, Some(pointer))?;
-                    }
-                }
+                self.handle_pointer_up(point, target, snapshot, now)?;
             }
             PanelEvent::Cancel => {
                 self.press = None;
@@ -934,6 +753,234 @@ impl PlayerPanels {
                 self.hovered_npc_selector = Some(id);
             }
             PanelEvent::Key(_) => unreachable!(),
+        }
+        Ok(())
+    }
+
+    /// A key press: Back and Menu, the Inventory and Skills bindings, and the number and
+    /// belt keys that target or activate a belt slot.
+    fn handle_key(
+        &mut self,
+        key: PanelKey,
+        snapshot: &PlayerPanelSnapshot<'_>,
+        now: f64,
+    ) -> Result<(), String> {
+        if key.repeat {
+            return Ok(());
+        }
+        if self.closing_at.is_some() {
+            return Ok(());
+        }
+        let code = key.code;
+        if (self.notice.is_some() || self.dye.is_some())
+            && (code == "Escape"
+                || code == self.controls.open_menu
+                || code == self.controls.open_inventory
+                || code == self.controls.open_skills)
+        {
+            self.back(now)?;
+            return Ok(());
+        }
+        if self.panel.is_none() {
+            if code == self.controls.open_inventory {
+                self.actions.push(PlayerPanelAction::OpenInventory);
+            }
+            if code == self.controls.open_skills {
+                self.actions.push(PlayerPanelAction::OpenSkills);
+            }
+        } else if code == "Escape" || code == self.controls.open_menu {
+            if matches!(
+                self.panel,
+                Some(PlayerPanel::Inventory | PlayerPanel::Skills | PlayerPanel::Service(_))
+            ) {
+                // Menu closes the whole optional book; the Inventory binding and
+                // footer retain one-Sack Back ("Optional Inventory and Skills
+                // navigation" in docs/DECISIONS.md).
+                self.close(now, None);
+            } else {
+                self.back(now)?;
+            }
+        } else if code == self.controls.open_inventory {
+            if self.inventory_owner_active() {
+                self.back(now)?;
+            } else {
+                self.close(
+                    now,
+                    (self.panel != Some(PlayerPanel::Inventory)).then_some(PlayerPanel::Inventory),
+                );
+            }
+        } else if code == self.controls.open_skills {
+            self.close(
+                now,
+                (self.panel != Some(PlayerPanel::Skills)).then_some(PlayerPanel::Skills),
+            );
+        } else if self.notice.is_none()
+            && self.dye.is_none()
+            && self.panel == Some(PlayerPanel::Skills)
+            && key.key.len() == 1
+            && let Ok(slot) = key.key.parse::<usize>()
+            && (1..8).contains(&slot)
+        {
+            self.target_belt = Some(self.hotbar.slot(slot));
+        } else if self.notice.is_none()
+            && self.dye.is_none()
+            && !self.inventory_transition_locked()
+            && !key.modified
+            && matches!(self.panel, Some(PlayerPanel::Inventory | PlayerPanel::Service(_)))
+            && let Some(visible_slot) =
+                self.controls.belt.iter().position(|binding| binding == &code)
+        {
+            let slot = self.hotbar.slot(visible_slot);
+            if snapshot.belt.entries[slot].is_some() {
+                self.actions.push(PlayerPanelAction::ActivateBeltSlot { slot, pointer: None });
+            }
+        }
+        Ok(())
+    }
+
+    /// A press on a target: Back acts at once; any other target starts a press that the
+    /// release activates or a drag drops.
+    fn handle_pointer_down(
+        &mut self,
+        target: Target,
+        point: Vec2,
+        npc_id: Option<HubNpcSelectorId>,
+        snapshot: &PlayerPanelSnapshot<'_>,
+        now: f64,
+    ) -> Result<(), String> {
+        if self.inventory_transition_locked() && inventory_drop::locks_target(target) {
+            return Ok(());
+        }
+        if self.notice.is_some()
+            && !matches!(
+                target,
+                Target::NoticeOkay | Target::UnforgeConfirm | Target::UnforgeCancel
+            )
+        {
+            return Ok(());
+        }
+        self.pointer = point;
+        if target == Target::Back && self.selected_backpack_item_id(snapshot).is_none() {
+            // Retail kind-7 holder activates on the first press. Do not
+            // retain a release that could pop the next settled page.
+            self.press = None;
+            self.pressed_npc_selector = None;
+            self.back(now)?;
+            return Ok(());
+        }
+        let inventory_item_id = match target {
+            Target::Item(id) => Some(id),
+            Target::Equipment(slot) => {
+                snapshot.economy.equipment.at(slot).as_ref().map(|item| item.id)
+            }
+            _ => None,
+        };
+        self.press = Some(Press { target, inventory_item_id, origin: point, dragging: false });
+        self.pressed_npc_selector = npc_id;
+        if matches!(target, Target::Item(_)) {
+            self.selected = Some(target);
+            self.selected_at = now;
+        }
+        Ok(())
+    }
+
+    /// Pointer movement: scrolls a captured selector, pulls a skill off the belt, starts a
+    /// drag past its threshold, or updates hover when nothing is pressed.
+    fn handle_pointer_move(
+        &mut self,
+        point: Vec2,
+        target: Option<Target>,
+        npc_id: Option<HubNpcSelectorId>,
+        snapshot: &PlayerPanelSnapshot<'_>,
+    ) -> Result<(), String> {
+        let previous_point = self.pointer;
+        self.pointer = point;
+        let scrolling = self.press.is_some_and(|press| {
+            matches!(press.target, Target::DialogueSelector(_) | Target::SelectorScroll)
+                && ((point.x - press.origin.x).hypot(point.y - press.origin.y) > 10.0
+                    || press.dragging)
+        });
+        if scrolling {
+            self.press.as_mut().expect("captured selector pointer").dragging = true;
+            self.scroll_selector_pixels(previous_point.y - point.y);
+            return Ok(());
+        }
+        if let Some(press) = self.press
+            && let Target::Belt(slot) = press.target
+            && snapshot.belt.entries[slot].is_some()
+            && self.dye.is_none()
+            && belt_pull_off_started(press.origin, point)
+        {
+            self.press = None;
+            self.target_belt = None;
+            self.actions
+                .push(PlayerPanelAction::Belt(BeltCommand::BindSkill { skill_id: None, slot }));
+            self.sound(AudioCue::Poof);
+            self.show_modal_belt_pull_off(slot)?;
+
+            return Ok(());
+        }
+        if let Some(press) = &mut self.press {
+            let distance = (point.x - press.origin.x).hypot(point.y - press.origin.y);
+            let threshold = if matches!(press.target, Target::Belt(_)) {
+                50.0
+            } else if matches!(press.target, Target::Skill(_)) {
+                3.0
+            } else {
+                10.0
+            };
+            if distance > threshold
+                && self.dye.is_none()
+                && !matches!(press.target, Target::Belt(_))
+                && !press.dragging
+            {
+                press.dragging = true;
+            }
+        } else {
+            if self.hovered_npc_selector != npc_id {
+                self.hovered_npc_selector = npc_id;
+            }
+            self.hovered_service = target.filter(|target| {
+                matches!(
+                    target,
+                    Target::Shop(_)
+                        | Target::Hagatha(_)
+                        | Target::Storage(_)
+                        | Target::OwnedPerk(_)
+                )
+            });
+            let skill = match target {
+                Some(Target::Skill(id)) => Some(id),
+                _ => None,
+            };
+            self.hovered_skill = skill;
+        }
+        Ok(())
+    }
+
+    /// A release: drops a dragged press, selects a pressed NPC selector, or activates the
+    /// pressed target.
+    fn handle_pointer_up(
+        &mut self,
+        point: Vec2,
+        target: Option<Target>,
+        snapshot: &PlayerPanelSnapshot<'_>,
+        now: f64,
+    ) -> Result<(), String> {
+        self.pointer = point;
+        let npc_id = self.pressed_npc_selector.take();
+        if let Some(press) = self.press.take() {
+            if press.dragging {
+                self.drop(press, target, snapshot, now)?;
+            } else if let Some(id) = npc_id {
+                self.select_npc(id, snapshot, now)?;
+            } else {
+                let pointer = Vec2::new(
+                    self.stage_origin.x + point.x * self.view_scale,
+                    self.stage_origin.y + point.y * self.view_scale,
+                );
+                self.activate(press.target, snapshot, now, Some(pointer))?;
+            }
         }
         Ok(())
     }
