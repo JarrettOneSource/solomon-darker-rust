@@ -1,9 +1,10 @@
 //! World-light collection: light providers in manager registration order, and the logical
 //! light query that enemy spawning and visibility read.
 //!
-//! Providers keep their native manager registrations. Each participant contributes a stock
-//! view, including participants who are not currently alive; logical spawn queries use the
-//! maximum of those exact manager fields, rather than a renderer's visibility selection.
+//! Providers keep their world-manager registrations. Each participant contributes a view
+//! sized by its own viewport (1600 by 900 when the client has not reported one), including
+//! participants who are not currently alive; logical spawn queries use the maximum of those
+//! exact manager fields, rather than a renderer's visibility selection.
 
 mod entities;
 
