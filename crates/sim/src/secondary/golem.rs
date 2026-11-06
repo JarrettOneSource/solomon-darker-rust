@@ -70,9 +70,10 @@ pub struct GolemBirthStats {
     pub pose_variant: u32,
 }
 
-/// The world a Golem walks in. Foot targets use an optional resolver whose default returns
-/// the requested position, so unobstructed worlds need only supply root movement.
-pub trait NativeGolemWorld {
+/// The terrain a Golem walks on: where its root and feet may go. Foot targets use an optional
+/// resolver whose default returns the requested position, so unobstructed terrain needs only
+/// supply root movement.
+pub trait GolemTerrain {
     fn resolve_movement(&mut self, requested_position: Vec2) -> Vec2;
     fn resolve_foot_target(&mut self, _current_position: Vec2, requested_position: Vec2) -> Vec2 {
         requested_position
@@ -85,7 +86,7 @@ impl SecondaryGolemState {
         position: Vec2,
         rotation_radians: f64,
         stats: GolemBirthStats,
-        world: &mut impl NativeGolemWorld,
+        world: &mut impl GolemTerrain,
     ) -> Self {
         let left =
             world.resolve_foot_target(position, foot_target(position, rotation_radians, 0, -19.0));
@@ -175,7 +176,7 @@ pub fn step_secondary_golem(
     actor: &mut GolemKernelActor,
     owner_position: Option<Vec2>,
     targets: &[GolemKernelTarget],
-    world: &mut impl NativeGolemWorld,
+    world: &mut impl GolemTerrain,
     rng: &mut Rng,
 ) -> GolemKernelStepResult {
     let assembling = actor.age_ticks < 201;
@@ -448,7 +449,7 @@ fn advance_foot(
     actor: &mut GolemKernelActor,
     side: u64,
     mut foot: FootMotion,
-    world: &mut impl NativeGolemWorld,
+    world: &mut impl GolemTerrain,
     rng: &mut Rng,
     footstep: &mut bool,
 ) -> FootMotion {
@@ -480,7 +481,7 @@ fn advance_foot(
 
 fn advance_articulation(
     actor: &mut GolemKernelActor,
-    world: &mut impl NativeGolemWorld,
+    world: &mut impl GolemTerrain,
     rng: &mut Rng,
 ) -> bool {
     actor.golem.gait_tick += 1;
@@ -588,7 +589,7 @@ fn active_result(
     actor: &mut GolemKernelActor,
     contact: Option<GolemContact>,
     provoke_started: bool,
-    world: &mut impl NativeGolemWorld,
+    world: &mut impl GolemTerrain,
     rng: &mut Rng,
 ) -> GolemKernelStepResult {
     let footstep = advance_articulation(actor, world, rng);

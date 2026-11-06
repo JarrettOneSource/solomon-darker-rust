@@ -146,7 +146,7 @@ struct World {
     wall: bool,
     origin: Vec2,
 }
-impl NativeGolemWorld for World {
+impl GolemTerrain for World {
     fn resolve_movement(&mut self, requested: Vec2) -> Vec2 {
         if self.wall && requested.x > 120.0 { self.origin } else { requested }
     }

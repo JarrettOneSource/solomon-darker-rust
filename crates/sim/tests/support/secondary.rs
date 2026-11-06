@@ -264,7 +264,7 @@ pub fn state_snapshot(state: &SecondarySimulationState) -> Value {
  "nextActorId":state.next_actor_id,"nextEventId":state.next_event_id,"players":players,"rng":rng_snapshot(&state.rng),"targetEffects":effects})
 }
 struct OpenWorld;
-impl NativeGolemWorld for OpenWorld {
+impl GolemTerrain for OpenWorld {
     fn resolve_movement(&mut self, requested: Vec2) -> Vec2 {
         requested
     }
