@@ -153,6 +153,7 @@ staging artifact. `--profile debug` selects an unoptimized development build.
 Run from the repository root:
 
 ```sh
+python3 scripts/check-port-references.py
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo clippy -p solomon-client --target wasm32-unknown-unknown -- -D warnings
