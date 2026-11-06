@@ -15,6 +15,7 @@ its native application and browser WASM embedding. The website supplies accounts
 | `solomon-protocol` | Versioned messages, snapshots, commands, and acknowledgements |
 | `solomon-launcher` | Native authority, HTTP/WebSocket transport, persistence, and service integration |
 | `solomon-modding` | Definition compiler, native Lua execution, and authoring CLI |
+| `solomon-content-sweep` | Runs published Website mods and Boneyards through hosted admission and play |
 | `solomon-save-tools` | Independent WebAssembly entry for Account save import/export |
 | `solomon-desktop` | OS window, native session lifetime, encrypted peers, single-instance focus and updates |
 | `solomon-storage` | Locked atomic native documents for client saves/preferences and authority checkpoints |
