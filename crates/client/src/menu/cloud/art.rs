@@ -343,7 +343,7 @@ impl CloudArt {
                 widgets::alpha(0xffffff, alpha),
             )?;
         } else {
-            crate::gpu_ui::native_text(
+            crate::gpu_ui::paint_stock_text(
                 frame,
                 ui.painter(),
                 &solomon_sim::ui_text::UiTextSpec {

@@ -1,7 +1,7 @@
 //! GPU stock widgets shared by the menu screens: the 1600 × 900 stage, stock buttons,
 //! control panels, labels, text fields and gradients.
 
-use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
+use crate::gpu_ui::{StockAtlas, UiFrame, paint_stock_text};
 use egui::{
     Align2, Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2,
 };
@@ -166,7 +166,7 @@ pub(super) fn native(
     tint: u32,
     align: UiTextAlign,
 ) {
-    native_text(
+    paint_stock_text(
         frame,
         ui.painter(),
         &UiTextSpec {
@@ -240,7 +240,7 @@ pub(crate) fn paint_stock_button_label(
     enabled: bool,
 ) {
     if !text.is_empty() {
-        crate::gpu_ui::native_text(
+        crate::gpu_ui::paint_stock_text(
             frame,
             ui.painter(),
             &stock_button_label_spec(
@@ -531,7 +531,7 @@ pub(crate) fn cloud_button_with_label(
     let opacity = if enabled { 1.0 } else { 0.5 };
     let pressed = enabled && stock_button_pressed(ui, &response);
     paint_stock_button_tinted(frame, ui, rect, scale, enabled, pressed, alpha(0xffffff, opacity));
-    crate::gpu_ui::native_text(
+    crate::gpu_ui::paint_stock_text(
         frame,
         ui.painter(),
         &stock_button_label_spec(label, rect, scale, f64::from(scale), pressed, opacity),

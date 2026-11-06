@@ -196,7 +196,7 @@ impl SocialUi {
                 if selected { 235.0 } else { 243.0 },
             );
             spec.tint = if selected { 0xffffff } else { 0xaaa2a6 };
-            gpu::native_text(frame, ui.painter(), &spec, origin, scale);
+            gpu::paint_stock_text(frame, ui.painter(), &spec, origin, scale);
             gpu::focus_outline(frame, ui, &response, scale);
             if response.clicked() {
                 *activated = Some(format!("party-{}", candidate.id()));
@@ -314,7 +314,7 @@ impl SocialUi {
                 if let Some(label) =
                     plan.texts.iter().find(|text| text.label == format!("{}:label", action.id))
                 {
-                    gpu::native_text(
+                    gpu::paint_stock_text(
                         frame,
                         ui.painter(),
                         &UiTextSpec {
@@ -398,7 +398,7 @@ impl SocialUi {
         let viewport = gpu::rect(PARTY_MENU_VIEWPORT, origin, scale);
         let painter = ui.painter().with_clip_rect(viewport);
         if self.party_mods.is_empty() {
-            gpu::native_text(
+            gpu::paint_stock_text(
                 frame,
                 &painter,
                 &UiTextSpec {
@@ -459,7 +459,7 @@ impl SocialUi {
                 (628.0 - version_width - 20.0).max(1.0),
                 0.85,
             );
-            gpu::native_text(
+            gpu::paint_stock_text(
                 frame,
                 &painter,
                 &UiTextSpec {
@@ -470,7 +470,7 @@ impl SocialUi {
                 origin,
                 scale,
             );
-            gpu::native_text(
+            gpu::paint_stock_text(
                 frame,
                 &painter,
                 &UiTextSpec {
@@ -508,7 +508,7 @@ fn paint_party_texts(frame: &mut UiFrame<'_>, ui: &Ui, menu: &PartyMenu) {
         }
         let painter =
             if text.clipped { ui.painter().with_clip_rect(viewport) } else { ui.painter().clone() };
-        gpu::native_text(
+        gpu::paint_stock_text(
             frame,
             &painter,
             &UiTextSpec {

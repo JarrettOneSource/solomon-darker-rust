@@ -133,7 +133,7 @@ impl SpectatorStatusView {
                 Color32::WHITE,
             )?;
         }
-        gpu_ui::native_text(
+        gpu_ui::paint_stock_text(
             frame,
             painter,
             &UiTextSpec {

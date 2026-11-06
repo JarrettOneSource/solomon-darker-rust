@@ -1,7 +1,7 @@
 //! Stock Tutorial presentation. The accepted session supplies text and clocks;
 //! every control anchor comes from the actual GPU widget registry.
 mod callouts;
-use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
+use crate::gpu_ui::{StockAtlas, UiFrame, paint_stock_text};
 use callouts::{TutorialTargets, modal_plans};
 use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 use solomon_sim::{Vec2, hud::HudRect};
@@ -336,7 +336,7 @@ impl TutorialUi {
                         plan.center.y + offset,
                     )
                 };
-                let layout = native_text(frame, &painter, &spec);
+                let layout = paint_stock_text(frame, &painter, &spec);
                 if offset == 0.0 {
                     frame.record_rect(
                         &format!("tutorial:text:{}", plan.id),
@@ -374,7 +374,7 @@ impl TutorialUi {
             );
             self.atlas.paint_stock_frame(frame, &painter, 4, r, true, egui::Color32::WHITE)?;
             for line in &geometry.lines {
-                native_text(
+                paint_stock_text(
                     frame,
                     &painter,
                     &UiTextSpec {

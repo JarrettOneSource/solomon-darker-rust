@@ -1,7 +1,7 @@
 //! The stock Game Over overlay shown when a run ends, with Solomon's riff.
 //! The session owns every clock and admission check; this view only emits Continue.
 
-use crate::gpu_ui::{UiFrame, native_text};
+use crate::gpu_ui::{UiFrame, paint_stock_text};
 use solomon_sim::Vec2;
 use solomon_sim::game_run::presentation::{
     GameOverPresentation, SolomonRiffPresentation, game_over_presentation,
@@ -156,7 +156,7 @@ impl GameOverOverlay {
                         egui::Color32::WHITE.gamma_multiply(view.title_alpha as f32),
                     );
                 }
-                native_text(
+                paint_stock_text(
                     frame,
                     painter,
                     &UiTextSpec {

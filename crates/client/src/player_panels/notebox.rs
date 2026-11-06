@@ -1,6 +1,6 @@
 //! Non-modal stock NPC instruction/failure. Its presentation clock never changes
 //! the accepted session; clicking the visible box starts the native dismissal fade.
-use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
+use crate::gpu_ui::{StockAtlas, UiFrame, paint_stock_text};
 use solomon_sim::ui_notebox::{NoteboxKind, notebox_duration_ms, notebox_layout, notebox_opacity};
 use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 struct Notice {
@@ -101,7 +101,7 @@ impl NpcNotebox {
                         error = Some(message);
                     }
                 }
-                native_text(
+                paint_stock_text(
                     frame,
                     ui.painter(),
                     &UiTextSpec {

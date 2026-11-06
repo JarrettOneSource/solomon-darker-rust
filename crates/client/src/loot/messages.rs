@@ -17,7 +17,7 @@ use solomon_sim::secondary::SecondaryEventKind;
 use solomon_sim::session::GameSession;
 use solomon_sim::ui_text::{UiFontName, UiTextSpec, ui_glyph_ink_bounds};
 
-use crate::gpu_ui::{UiFrame, native_text};
+use crate::gpu_ui::{UiFrame, paint_stock_text};
 
 /// The local player's floating world notifications and the event cursors that feed them.
 #[derive(Default)]
@@ -198,12 +198,12 @@ impl WorldNotifications {
                     baseline,
                 )
             };
-            native_text(
+            paint_stock_text(
                 frame,
                 &painter,
                 &UiTextSpec { y: baseline + 2.0 * scale, tint: 0, ..spec },
             );
-            let layout = native_text(frame, &painter, &spec);
+            let layout = paint_stock_text(frame, &painter, &spec);
             let ink = layout
                 .glyphs
                 .iter()

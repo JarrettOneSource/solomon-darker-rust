@@ -53,7 +53,7 @@ impl SocialUi {
             (PARTY_INVITATION_TITLE, UiFontName::Menu, 95.0, None),
             (body.as_str(), UiFontName::Medium, 130.5, Some(17.0)),
         ] {
-            super::super::gpu::native_text(
+            super::super::gpu::paint_stock_text(
                 frame,
                 ui.painter(),
                 &UiTextSpec {

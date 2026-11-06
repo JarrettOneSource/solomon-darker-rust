@@ -156,7 +156,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         );
     }
     pub fn text(&self, spec: &UiTextSpec<'_>) {
-        crate::gpu_ui::native_text(
+        crate::gpu_ui::paint_stock_text(
             self.frame,
             &self.painter,
             &UiTextSpec {
@@ -168,7 +168,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         );
     }
     pub fn labeled_text(&self, id: &str, spec: &UiTextSpec<'_>) {
-        let layout = crate::gpu_ui::native_text(
+        let layout = crate::gpu_ui::paint_stock_text(
             self.frame,
             &self.painter,
             &UiTextSpec {

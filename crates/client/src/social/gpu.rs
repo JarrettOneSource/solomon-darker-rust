@@ -36,7 +36,7 @@ pub(super) fn rect(bounds: HudRect, origin: Pos2, scale: f32) -> Rect {
     )
 }
 
-pub(super) fn native_text(
+pub(super) fn paint_stock_text(
     frame: &mut UiFrame<'_>,
     painter: &Painter,
     spec: &UiTextSpec<'_>,
@@ -48,7 +48,7 @@ pub(super) fn native_text(
     spec.y = f64::from(origin.y) + spec.y * f64::from(scale);
     spec.scale *= f64::from(scale);
     spec.max_width = spec.max_width.map(|w| w * f64::from(scale));
-    gpu_ui::native_text(frame, painter, &spec);
+    gpu_ui::paint_stock_text(frame, painter, &spec);
 }
 
 pub(super) fn stock_button(
@@ -77,7 +77,7 @@ pub(super) fn stock_button(
         held,
         if enabled { 1.0 } else { 0.4 },
     );
-    gpu_ui::native_text(frame, painter, &spec);
+    gpu_ui::paint_stock_text(frame, painter, &spec);
     frame.record(&format!("social/{id}"), label, "button", &response);
     Ok(response)
 }
