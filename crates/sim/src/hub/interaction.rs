@@ -17,7 +17,7 @@ pub use catalog::{
     HUB_INTERRUPTED_EULOGIES, HUB_MARKER_ACTORS, LIBRARIAN_BOOKS, TEACHER_SPELLS,
 };
 
-use crate::economy::{BoastState, HubTraderId, NativeHubNpcState};
+use crate::economy::{BoastState, HubNpcProgress, HubTraderId};
 use crate::float;
 use crate::float::{atan2, fround};
 use crate::hub::regions::HubRegion;
@@ -417,7 +417,7 @@ pub fn hub_dialogue_record(key: &str) -> Option<&'static HubDialogueRecord> {
 #[must_use]
 pub fn create_hub_npc_chat_content(
     id: HubInteractionId,
-    npc: &NativeHubNpcState,
+    npc: &HubNpcProgress,
     random_index: i64,
     eulogy_index_override: Option<u32>,
     story_office: bool,
@@ -539,7 +539,7 @@ pub fn hub_npc_dismissal(
 #[must_use]
 pub fn hub_npc_selector_rows(
     selector: HubNpcListSelector,
-    npc: &NativeHubNpcState,
+    npc: &HubNpcProgress,
     advanced_unlocks: &[bool; 8],
 ) -> Vec<HubNpcSelectorRow> {
     match selector {
@@ -876,7 +876,7 @@ pub fn hub_npc_marker_frame(
     }
 }
 
-impl NativeHubNpcState {
+impl HubNpcProgress {
     pub fn acknowledge_hint(&mut self, id: HubInteractionId) -> bool {
         let index = HUB_MARKER_ACTORS
             .iter()

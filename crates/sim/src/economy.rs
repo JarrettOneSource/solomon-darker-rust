@@ -382,17 +382,17 @@ pub struct BoastState {
     pub succeeded: bool,
 }
 
-/// A wizard's College NPC state: the Boast, which onboarding hints are still pending, and
-/// whether the Librarian's one-time book has been read.
+/// A wizard's progress with the College NPCs: the Boast, which onboarding hints are still
+/// pending, and whether the Librarian's one-time book has been read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHubNpcState {
+pub struct HubNpcProgress {
     pub boast: BoastState,
     pub help_flags: [bool; 10],
     pub librarian_lace_read: bool,
 }
 
-impl Default for NativeHubNpcState {
+impl Default for HubNpcProgress {
     fn default() -> Self {
         Self { boast: BoastState::default(), help_flags: [true; 10], librarian_lace_read: false }
     }
@@ -475,7 +475,7 @@ pub struct HubEconomyState {
     pub hagatha_bundle_selectors: Vec<u32>,
     pub next_item_id: u64,
     pub next_offer_id: u64,
-    pub npc: NativeHubNpcState,
+    pub npc: HubNpcProgress,
     pub owned_perk_selectors: Vec<u32>,
     pub revision: u64,
     pub rng: Rng,
@@ -761,7 +761,7 @@ impl HubEconomyState {
             hagatha_bundle_selectors: Vec::new(),
             next_item_id,
             next_offer_id: 1,
-            npc: NativeHubNpcState::default(),
+            npc: HubNpcProgress::default(),
             owned_perk_selectors: Vec::new(),
             revision: 0,
             rng: Rng::new(seed),

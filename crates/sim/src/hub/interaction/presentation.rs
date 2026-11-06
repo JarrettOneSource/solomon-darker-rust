@@ -5,7 +5,7 @@ use super::{
     BOAST_INSTRUCTION, BOASTS, HubNpcChatContent, HubNpcChatNext, HubNpcListSelector,
     hub_npc_selector_action, hub_npc_selector_response, hub_npc_selector_rows,
 };
-use crate::economy::{BoastSelection, BoastState, HubInventoryAction, NativeHubNpcState};
+use crate::economy::{BoastSelection, BoastState, HubInventoryAction, HubNpcProgress};
 use crate::modding::content::{ModBoastSelection, PreparedModBoastIcon};
 use crate::modding::projection::ModContentProjection;
 
@@ -33,7 +33,7 @@ pub struct HubNpcSelectorPresentation {
 #[must_use]
 pub fn hub_npc_selector_rows_with_mods(
     selector: HubNpcListSelector,
-    npc: &NativeHubNpcState,
+    npc: &HubNpcProgress,
     advanced_unlocks: &[bool; 8],
     mods: Option<&ModContentProjection>,
 ) -> Vec<HubNpcSelectorPresentation> {

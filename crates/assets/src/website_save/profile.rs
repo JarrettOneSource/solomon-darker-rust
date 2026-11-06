@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{
-    CompletedRunEconomyArchive, HubEconomyState, NativeHubNpcState, UnforgeBonuses,
+    CompletedRunEconomyArchive, HubEconomyState, HubNpcProgress, UnforgeBonuses,
     hagatha_bundle_state_is_valid, hagatha_outcome_state_is_valid,
 };
 use solomon_sim::profile::{HagathaRuntimeState, WizardElement};
@@ -249,10 +249,7 @@ fn normalize_npc(value: Option<&Value>, required: bool) -> Result<Value, String>
         if required {
             return Err("game save Hub NPC state is missing".into());
         }
-        return encode(&NativeHubNpcState {
-            help_flags: [false; 10],
-            ..NativeHubNpcState::default()
-        });
+        return encode(&HubNpcProgress { help_flags: [false; 10], ..HubNpcProgress::default() });
     };
     let mut source = record(value, "game save Hub NPC state")?.clone();
     if required && !source.contains_key("helpFlags") {
