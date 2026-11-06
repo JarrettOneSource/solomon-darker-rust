@@ -47,6 +47,57 @@ The reproducible driver and exact build identities are retained in
 source patch, `comparison-suite.json` and `comparison-review.json`. Native and
 browser composition probes cover projection, blend, crop and program restoration.
 
+## Boulder collision exclusions
+
+The original Report 81 schema51 save contains 309 gravestones. Earth and
+Ethereal Boulder ignore those scenery owners during their sampled body-path
+queries. The old collision loop searched the full ignored-owner list for every
+shape at every sample, including distant shapes. A separate 15.368-second
+browser CPU profile attributes 9.732 seconds of self time to `first_contact`
+through primary casting's path query, plus 0.437 seconds in its `memcmp` child.
+The function names come from a symbol map whose non-custom WASM sections match
+the measured baseline artifact byte for byte.
+
+`first_contact` now checks geometry before searching the ignored-owner list.
+Its geometry functions are pure. Polygon, static/dynamic segment and circle
+order, contact normals, tangency tests, sweep samples and numeric expressions
+are unchanged. A public collision contract compares placement, first blocked
+progress and resolved movement with a world from which only the ignored shapes
+were removed, including overlapping shapes, unowned barriers, and duplicate or
+unknown exclusions. A 1,500-tick original-save charge/release control produces
+byte-identical baseline/candidate final checkpoints, including seven releases.
+Native timing from that state-equality run overlaps builds and is not qualified.
+
+The browser comparison uses Rust `4f447266`, Apple M2/ANGLE Metal, Chrome
+156.0.8078.80, 1600×900, DPR1 and current default visuals. Each fresh browser
+restores the same unmodified original through the public Rust save codec, then
+uses ordinary Play → Continue. The 15-second sample follows Continue, with
+2-second pointer holds and 0.2-second releases at the disclosed fixed screen
+point (1120,360). Three pairs use baseline/candidate, candidate/baseline and
+baseline/candidate order. Each arm accepts seven casts (194→201), remains alive,
+saves through ordinary Leave and exits Chrome gracefully. No compiler, test
+suite or profiler runs during these samples.
+
+Medians across the three runs of each variant:
+
+| Metric | Baseline | Deferred exclusion lookup |
+| --- | ---: | ---: |
+| Drawn-frame rate | 37.70 FPS | 60.00 FPS |
+| Callback mean | 21.86 ms | 4.09 ms |
+| Callback p95 | 70.50 ms | 6.20 ms |
+| Frame-interval p95 | 66.70 ms | 18.20 ms |
+| Maximum frame interval | 332.70 ms | 18.70 ms |
+| Long Tasks per window | 34 | 0 |
+
+Every candidate's maximum interval is at most 18.7 ms. Page, console, warning,
+HTTP and request-failure arrays are empty in all six paired receipts. Composed
+world images are reviewed without a pixel-equivalence claim. The separate
+profile is excluded from timing comparisons. These local static-client controls
+identify the current exclusion-lookup cost; they do not replay hosted transport,
+two-player stalls, the original saved bearing, reporter hardware or the
+unspecified October31 recurrence. The historical duplicate split-painter repair,
+More Missiles count and Smart Missiles guidance remain separate contracts.
+
 ## Broader measured scope
 
 Release `92e3fe4c` sustains approximately 60 FPS in the measured Apple M2 workloads.

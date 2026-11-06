@@ -523,32 +523,27 @@ fn first_contact(
     let ignored = |source_id: &Option<String>| {
         source_id.as_ref().is_some_and(|id| ignored_source_ids.contains(&id.as_str()))
     };
+    // Boulder can ignore every grave. Search that list only for real contacts.
     for polygon in world.polygons() {
-        if ignored(&polygon.source_id) {
-            continue;
-        }
-        if let Some(normal) = polygon_contact(center, radius, &polygon.points, previous) {
+        if let Some(normal) = polygon_contact(center, radius, &polygon.points, previous)
+            && !ignored(&polygon.source_id)
+        {
             return Some(normal);
         }
     }
     for segment in world.segments() {
-        if ignored(&segment.source_id) {
-            continue;
-        }
         if let Some(normal) =
             segment_contact(center, radius + segment.radius, segment.start, segment.end, previous)
+            && !ignored(&segment.source_id)
         {
             return Some(normal);
         }
     }
     for circle in world.circles() {
-        if ignored(&circle.source_id) {
-            continue;
-        }
         let dx = center.x - circle.center.x;
         let dy = center.y - circle.center.y;
         let required = radius + circle.radius;
-        if dx * dx + dy * dy < required * required {
+        if dx * dx + dy * dy < required * required && !ignored(&circle.source_id) {
             return Some(normalized(dx, dy, previous.x - center.x, previous.y - center.y));
         }
     }
