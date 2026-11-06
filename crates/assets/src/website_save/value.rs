@@ -108,9 +108,7 @@ impl<'de> de::Deserializer<'de> for SourceValue {
             raw = serde_json::json!({"kind":"arrow", "state":raw, "velocity":raw["velocity"]});
         }
         let (tag, payload) = match raw {
-            Value::Number(number)
-                if matches!(name, "NativeTutorialStage" | "BoneyardGoodiePhase") =>
-            {
+            Value::Number(number) if matches!(name, "TutorialStage" | "BoneyardGoodiePhase") => {
                 let index = number
                     .as_u64()
                     .and_then(|index| usize::try_from(index).ok())
@@ -253,7 +251,7 @@ fn source_field(name: &str, field: &str) -> String {
         ("NewGameSelection", "name") => return "displayName".into(),
         ("SolomonEncounter", "heading_degrees") => return "headingDeg".into(),
         ("SolomonEncounter", "rng") => return "rngState".into(),
-        ("NativeTutorialState", "rng") => return "rngState".into(),
+        ("TutorialState", "rng") => return "rngState".into(),
         ("EnemyWorld", "head_facing_rng") => return "headFacingRngState".into(),
         ("EnemyWorld", "locomotion_rng") => return "locomotionRngState".into(),
         ("EnemyWorld", "steering_rng") => return "steeringRngState".into(),
@@ -290,7 +288,7 @@ fn source_variant(name: &str, variant: &str) -> String {
     if let Some(kind) = spells::kind(name, variant) {
         return kind;
     }
-    if matches!(name, "EnemyEffectAtlas" | "NativeEtherDrainAtlas" | "ItemRarity") {
+    if matches!(name, "EnemyEffectAtlas" | "EtherDrainAtlas" | "ItemRarity") {
         return variant.into();
     }
     if name == "EnemySound" {
@@ -317,7 +315,7 @@ fn source_variant(name: &str, variant: &str) -> String {
                 .expect("Serde supplies a declared enemy flag");
         return flag.id().into();
     }
-    if name == "NativeTutorialCue" {
+    if name == "TutorialCue" {
         let cue: solomon_sim::boneyard::tutorial::TutorialCue =
             serde_json::from_value(Value::String(variant.into()))
                 .expect("Serde supplies a declared Tutorial cue variant");
@@ -370,7 +368,7 @@ fn adapt_struct(name: &str, mut value: Value) -> Result<Value, serde_json::Error
                 }
             }
         }
-        "NativeSecondaryCastAction" => {
+        "SecondaryCastAction" => {
             if let Some(pose) = value.get("handPose").cloned() {
                 let done = value.get("handDone").cloned().unwrap_or(Value::Bool(false));
                 value["hand"] = serde_json::json!({"pose":pose,"done":done});
@@ -390,7 +388,7 @@ fn adapt_struct(name: &str, mut value: Value) -> Result<Value, serde_json::Error
                 ));
             }
         }
-        "NativeRng" | "NativeRngDocument" => {
+        "Rng" | "RngDocument" => {
             value
                 .as_object_mut()
                 .ok_or_else(|| de::Error::custom("RNG requires an object"))?

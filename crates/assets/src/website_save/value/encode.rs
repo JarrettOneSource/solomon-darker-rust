@@ -69,7 +69,7 @@ impl ser::Serializer for SourceSerializer {
         index: u32,
         variant: &'static str,
     ) -> Result<Value, Self::Error> {
-        if matches!(name, "NativeTutorialStage" | "BoneyardGoodiePhase") {
+        if matches!(name, "TutorialStage" | "BoneyardGoodiePhase") {
             return Ok(Value::from(index));
         }
         let tag = source_variant(name, variant);
@@ -83,7 +83,7 @@ impl ser::Serializer for SourceSerializer {
         Ok(
             if matches!(
                 name,
-                "NativeBeltEntry" | "NativeSpentEmber" | "SpiderCommand" | "NativeSkillBookOutcome"
+                "NativeBeltEntry" | "SpentEmber" | "SpiderCommand" | "SkillBookOutcome"
             ) {
                 serde_json::json!({"kind": tag})
             } else {
@@ -251,7 +251,7 @@ impl SerializeStruct for SourceStruct {
             self.values.extend(fields);
         }
         match self.name {
-            "NativeSecondaryCastAction" => {
+            "SecondaryCastAction" => {
                 if let Some(hand) = self.values.remove("hand") {
                     self.values.insert("handPose".into(), hand["pose"].clone());
                     self.values.insert("handDone".into(), hand["done"].clone());
@@ -305,7 +305,7 @@ impl SerializeStruct for SourceStruct {
                     self.values.remove(field);
                 }
             }
-            "NativeRng" => {
+            "Rng" => {
                 self.values.remove("divisor");
             }
             "HubActionFeedback" => {

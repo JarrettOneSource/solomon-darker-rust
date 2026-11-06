@@ -105,7 +105,7 @@ mod saved_cast {
     use super::{HandCast2, PlayerWeaponKind, SecondaryCastAction};
 
     #[derive(serde::Deserialize)]
-    #[serde(rename = "NativeSecondaryCastAction")]
+    #[serde(rename = "SecondaryCastAction")]
     pub(super) struct Document {
         weapon_kind: Option<PlayerWeaponKind>,
         progress: f64,

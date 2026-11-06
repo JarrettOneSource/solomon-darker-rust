@@ -17,7 +17,7 @@ pub(super) fn route(name: &str, value: &Value) -> Option<&'static str> {
                 None
             }
         }
-        "NativeWeldWorldActor" => match kind {
+        "WeldWorldActor" => match kind {
             "weld-blizzard-chain-frost" => Some("BlizzardChainFrost"),
             "weld-blizzard-glow" => Some("BlizzardGlow"),
             "weld-boulder-debris" => Some("BoulderDebris"),
@@ -35,13 +35,13 @@ pub(super) fn route(name: &str, value: &Value) -> Option<&'static str> {
             kind if kind.starts_with("weld-hail-") => Some("HailChild"),
             _ => None,
         },
-        "NativeWeldPersistentActorState" => match value["buildId"].as_u64() {
+        "WeldPersistentActorState" => match value["buildId"].as_u64() {
             Some(1006) => Some("EtherealBoulder"),
             Some(1007) => Some("MeteorField"),
             Some(1008) => Some("Hailstones"),
             _ => None,
         },
-        "NativeWeldHailChildActorState" => match kind {
+        "WeldHailChildActorState" => match kind {
             "weld-hail-flash" => Some("Flash"),
             "weld-hail-knockback" => Some("Knockback"),
             "weld-hail-line" => Some("Line"),
@@ -49,7 +49,7 @@ pub(super) fn route(name: &str, value: &Value) -> Option<&'static str> {
             "weld-hail-terrain-particle" => Some("TerrainParticle"),
             _ => None,
         },
-        "NativePlayerStaffTransient" => match kind {
+        "PlayerStaffTransient" => match kind {
             "player-staff-melee" | "player-staff-spin" => Some("Action"),
             "player-staff-contact" => Some("Contact"),
             "player-staff-contact-knockback" => Some("ContactKnockback"),
@@ -60,18 +60,18 @@ pub(super) fn route(name: &str, value: &Value) -> Option<&'static str> {
             }
             _ => None,
         },
-        "NativePlayerStaffAction" => match kind {
+        "PlayerStaffAction" => match kind {
             "player-staff-melee" => Some("Melee"),
             "player-staff-spin" => Some("Spin"),
             _ => None,
         },
-        "NativePlayerStaffVfx" => match kind {
+        "PlayerStaffVfx" => match kind {
             "player-staff-smoke" => Some("Smoke"),
             "player-staff-move-fade" => Some("MoveFade"),
             "player-staff-perspective-fade" => Some("PerspectiveFade"),
             _ => None,
         },
-        "NativeHardenEffect" => match kind {
+        "HardenEffect" => match kind {
             "harden-shard" => Some("Shard"),
             "harden-burst" => Some("Burst"),
             _ => None,
@@ -81,7 +81,7 @@ pub(super) fn route(name: &str, value: &Value) -> Option<&'static str> {
 }
 
 pub(super) fn payload(name: &str, value: Value) -> Value {
-    if name == "NativeHardenEffect" {
+    if name == "HardenEffect" {
         if value["kind"].as_str() == Some("harden-shard") {
             json!({"owner":value,"body":value})
         } else {
@@ -93,14 +93,14 @@ pub(super) fn payload(name: &str, value: Value) -> Value {
 }
 
 pub(super) fn prepare(name: &str, value: &mut Value) -> Result<(), String> {
-    if name == "NativeGolemDeathAnimation"
+    if name == "GolemDeathAnimation"
         && let Some(fragments) = value["fragments"].as_array_mut()
     {
         for fragment in fragments {
             body_keys(fragment, BOUNCER_FIELDS, false);
         }
     }
-    if name == "NativeEtherDrainState" {
+    if name == "EtherDrainState" {
         for field in ["loose", "queried"] {
             if let Some(references) = value[field].as_array_mut() {
                 for reference in references {
@@ -124,9 +124,9 @@ pub(super) fn prepare(name: &str, value: &mut Value) -> Result<(), String> {
         }
     }
     let nested = match name {
-        "NativeWeldActorBase" => Some("owner"),
-        "NativePlayerStaffMeleeAction" | "NativePlayerStaffSpinAction" => Some("base"),
-        "NativeWeldGroundSparkFadeActorState" => Some("seed"),
+        "WeldActorBase" => Some("owner"),
+        "PlayerStaffMeleeAction" | "PlayerStaffSpinAction" => Some("base"),
+        "WeldGroundSparkFadeActorState" => Some("seed"),
         _ => None,
     };
     if let Some(field) = nested {
@@ -135,7 +135,7 @@ pub(super) fn prepare(name: &str, value: &mut Value) -> Result<(), String> {
     // Internally tagged serde enums buffer their body before decoding it, so their
     // nested fields no longer pass through SourceValue. Adapt only those typed
     // bodies here; IDs and arbitrary map keys retain their original spelling.
-    if name == "NativeFlameChannelBirth"
+    if name == "FlameChannelBirth"
         && let Some(ribbon) = value["ribbon"].as_object_mut()
     {
         for (source, native) in [("widthFactor", "width_factor"), ("phaseDegrees", "phase_degrees")]
@@ -149,10 +149,10 @@ pub(super) fn prepare(name: &str, value: &mut Value) -> Result<(), String> {
         use solomon_sim::spells::weld::{FlameChannelBirth, FlameFadeBirth};
         let source = value["flameVisual"].clone();
         let body = match name {
-            "NativeWeldChannelActorState" => {
+            "WeldChannelActorState" => {
                 serde_json::to_value(super::decode::<FlameChannelBirth>(source)?)
             }
-            "NativeWeldFlameLashFadeState" => {
+            "WeldFlameLashFadeState" => {
                 serde_json::to_value(super::decode::<FlameFadeBirth>(source)?)
             }
             _ => return Ok(()),
@@ -165,14 +165,14 @@ pub(super) fn prepare(name: &str, value: &mut Value) -> Result<(), String> {
 }
 
 pub(super) fn finish(name: &str, value: &mut Value) {
-    if name == "NativeGolemDeathAnimation"
+    if name == "GolemDeathAnimation"
         && let Some(fragments) = value["fragments"].as_array_mut()
     {
         for fragment in fragments {
             body_keys(fragment, BOUNCER_FIELDS, true);
         }
     }
-    if name == "NativeSecondaryActorState" {
+    if name == "SecondaryActorState" {
         for (field, owner) in [("golemDeath", "golem-death"), ("etherDrain", "ether-drain")] {
             if value[field].is_null() && value["kind"] != owner {
                 value.as_object_mut().expect("secondary actor is an object").remove(field);
@@ -180,17 +180,15 @@ pub(super) fn finish(name: &str, value: &mut Value) {
         }
     }
     // A Meteor field never enters flight; the source still writes its literal phase.
-    if name == "NativeWeldMeteorFieldState" {
+    if name == "WeldMeteorFieldState" {
         value["phase"] = json!("held");
     }
     let nested: &[&str] = match name {
-        "NativeWeldActorBase" => &["owner"],
-        "NativePlayerStaffMeleeAction" | "NativePlayerStaffSpinAction" => &["base"],
-        "NativeWeldGroundSparkFadeActorState" => &["seed"],
-        "NativeHardenEffect" if value["kind"].as_str() == Some("harden-shard") => {
-            &["owner", "body"]
-        }
-        "NativeHardenEffect" => &["owner"],
+        "WeldActorBase" => &["owner"],
+        "PlayerStaffMeleeAction" | "PlayerStaffSpinAction" => &["base"],
+        "WeldGroundSparkFadeActorState" => &["seed"],
+        "HardenEffect" if value["kind"].as_str() == Some("harden-shard") => &["owner", "body"],
+        "HardenEffect" => &["owner"],
         _ => &[],
     };
     for field in nested {
@@ -206,15 +204,15 @@ pub(super) fn finish(name: &str, value: &mut Value) {
             | "PrimarySpellEtherBlast"
             | "PrimarySpellEtherPierceStreak"
             | "PrimarySpellFirePatch"
-            | "NativeHardenEffect"
-            | "NativePlayerStaffActionBase"
-            | "NativePlayerStaffContactEvent"
-            | "NativePlayerStaffContactKnockback"
-            | "NativePlayerStaffPikeBreakVfx"
-            | "NativePlayerStaffSmokeVfx"
-            | "NativePlayerStaffMoveFadeVfx"
-            | "NativePlayerStaffPerspectiveVfx"
-            | "NativeStaffKnockbackActor"
+            | "HardenEffect"
+            | "PlayerStaffActionBase"
+            | "PlayerStaffContactEvent"
+            | "PlayerStaffContactKnockback"
+            | "PlayerStaffPikeBreakVfx"
+            | "PlayerStaffSmokeVfx"
+            | "PlayerStaffMoveFadeVfx"
+            | "PlayerStaffPerspectiveVfx"
+            | "StaffKnockbackActor"
     ) {
         value.as_object_mut().expect("serialized spell is an object").remove("lightRegistration");
     }
@@ -243,20 +241,18 @@ pub(super) fn transparent_wrapper(name: &str, variant: &str) -> bool {
     matches!(
         (name, variant),
         ("PrimarySpellTransient", "Weld" | "Staff" | "Harden")
-            | ("NativeWeldWorldActor", "Persistent" | "HailChild")
-            | ("NativePlayerStaffTransient", "Action" | "Vfx")
+            | ("WeldWorldActor", "Persistent" | "HailChild")
+            | ("PlayerStaffTransient", "Action" | "Vfx")
     )
 }
 
 pub(super) fn kind(name: &str, variant: &str) -> Option<String> {
     let prefix = match name {
-        "NativeWeldWorldActor" => "weld-",
-        "NativeWeldHailChildActorState" => "weld-hail-",
-        "NativePlayerStaffTransient" | "NativePlayerStaffAction" | "NativePlayerStaffVfx" => {
-            "player-staff-"
-        }
-        "NativeHardenEffect" => "harden-",
-        "NativeWeldPersistentActorState" => return Some("weld-persistent".into()),
+        "WeldWorldActor" => "weld-",
+        "WeldHailChildActorState" => "weld-hail-",
+        "PlayerStaffTransient" | "PlayerStaffAction" | "PlayerStaffVfx" => "player-staff-",
+        "HardenEffect" => "harden-",
+        "WeldPersistentActorState" => return Some("weld-persistent".into()),
         _ => return None,
     };
     Some(format!("{prefix}{}", super::kebab(variant)))
