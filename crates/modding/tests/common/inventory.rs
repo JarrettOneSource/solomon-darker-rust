@@ -23,7 +23,7 @@ pub fn item_value(item: &HubInventoryItem) -> Value {
         ("iconTints", item.icon_tints.map(|value| json!(value))),
         ("inventorySlot", item.inventory_slot.map(|value| json!(value))),
         ("nativeSelector", item.selector.map(|value| json!(value))),
-        ("nativeEffects", item.native_effects.as_ref().map(|value| json!(value))),
+        ("nativeEffects", item.effects.as_ref().map(|value| json!(value))),
         ("modContent", item.mod_content.as_ref().map(|value| json!(value))),
         ("modItemContent", item.mod_item_content.as_ref().map(|value| json!(value))),
         ("modAffixes", item.mod_affixes.as_ref().map(|value| json!(value))),

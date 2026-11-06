@@ -203,7 +203,7 @@ fn read_item(value: &Value) -> HubInventoryItem {
         name: value["name"].as_str().unwrap().into(),
         subtype: value["nativeSubtype"].as_u64().map(|value| value as u32),
         selector: value["nativeSelector"].as_u64().map(|value| value as u32),
-        native_effects: value["nativeEffects"]
+        effects: value["nativeEffects"]
             .as_array()
             .map(|values| values.iter().map(read_effect).collect()),
         type_id: value["nativeTypeId"].as_u64().unwrap() as u32,

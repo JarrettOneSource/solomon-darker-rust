@@ -280,7 +280,7 @@ fn random_equipment(
     item.equipment_type = Some(equipment_type);
     item.generated_level = Some(generated.item_level);
     item.icon_tints = icon_tints;
-    item.native_effects = Some(generated.effects);
+    item.effects = Some(generated.effects);
     item.selector = Some(selector);
     item
 }

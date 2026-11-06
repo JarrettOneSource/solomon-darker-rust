@@ -225,7 +225,7 @@ pub(crate) fn base_item(
         name: name.to_owned(),
         subtype,
         selector: None,
-        native_effects: None,
+        effects: None,
         type_id,
         quantity: 1,
         rarity: None,
@@ -622,7 +622,7 @@ impl HubEconomyState {
                 && item.equipment_type == Some(kind)
                 && item.generated_level.is_none()
                 && item.kind == HubItemKind::Equipment
-                && item.native_effects.is_none()
+                && item.effects.is_none()
                 && item.selector.is_none()
                 && item.recipe_index.is_none()
             {

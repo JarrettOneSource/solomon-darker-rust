@@ -306,7 +306,7 @@ pub fn hub_item_tooltip_lines(
         }
     }
     let effects = item
-        .native_effects
+        .effects
         .as_deref()
         .unwrap_or_else(|| item.recipe_index.map_or(&[], equipment_recipe_effects));
     for effect in effects {

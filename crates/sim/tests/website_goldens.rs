@@ -1525,7 +1525,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             name: value["name"].as_str().unwrap().to_owned(),
             subtype: value["nativeSubtype"].as_u64().map(|value| value as u32),
             selector: value["nativeSelector"].as_u64().map(|value| value as u32),
-            native_effects: value["nativeEffects"].as_array().map(|values| {
+            effects: value["nativeEffects"].as_array().map(|values| {
                 values
                     .iter()
                     .map(|effect| EquipmentEffect {
@@ -1554,7 +1554,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             "recipeIndex":item.recipe_index, "generatedLevel":item.generated_level,
             "iconRecords":item.icon_records, "iconTints":item.icon_tints,
             "nativeSelector":item.selector,
-            "nativeEffects":item.native_effects.as_ref().map(|effects| effects.iter().map(|effect| json!({
+            "nativeEffects":item.effects.as_ref().map(|effects| effects.iter().map(|effect| json!({
                 "kind":effect.kind,"magnitude":effect.magnitude,"operator":effect.operator,"target":effect.target,
             })).collect::<Vec<_>>()),
             "rarity":item.rarity.map(|rarity| match rarity { ItemRarity::Epic => "Epic", ItemRarity::Rare => "Rare" }),

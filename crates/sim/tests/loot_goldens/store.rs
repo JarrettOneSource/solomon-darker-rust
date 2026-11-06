@@ -189,7 +189,7 @@ fn read_item(value: &Value) -> HubInventoryItem {
         name: value["name"].as_str().unwrap().to_owned(),
         subtype: value["nativeSubtype"].as_u64().map(|id| id as u32),
         selector: value["nativeSelector"].as_u64().map(|id| id as u32),
-        native_effects: value["nativeEffects"].as_array().map(|rows| {
+        effects: value["nativeEffects"].as_array().map(|rows| {
             rows.iter()
                 .map(|effect| EquipmentEffect {
                     kind: effect["kind"].as_u64().unwrap() as u32,

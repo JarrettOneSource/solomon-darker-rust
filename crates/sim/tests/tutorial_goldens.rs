@@ -297,7 +297,7 @@ fn item_row(item: &HubInventoryItem) -> Value {
     if let Some(tints) = item.icon_tints {
         row["iconTints"] = json!(tints);
     }
-    if let Some(effects) = &item.native_effects {
+    if let Some(effects) = &item.effects {
         row["nativeEffects"] = json!(
             effects
                 .iter()

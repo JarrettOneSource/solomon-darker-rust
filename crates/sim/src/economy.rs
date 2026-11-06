@@ -185,7 +185,8 @@ pub enum ItemRarity {
 }
 
 /// One item in an inventory, Sack, equipment slot or shop. `None` in `contents` or
-/// `native_effects` means the field is absent, which is not the same as an empty list.
+/// `effects` means the field is absent, which is not the same as an empty list. An item
+/// without its own `effects` takes its recipe's.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubInventoryItem {
@@ -208,7 +209,8 @@ pub struct HubInventoryItem {
     pub subtype: Option<u32>,
     #[cfg_attr(feature = "persistence", serde(rename = "native_selector"))]
     pub selector: Option<u32>,
-    pub native_effects: Option<Vec<EquipmentEffect>>,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_effects"))]
+    pub effects: Option<Vec<EquipmentEffect>>,
     #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
     pub type_id: u32,
     pub quantity: u32,

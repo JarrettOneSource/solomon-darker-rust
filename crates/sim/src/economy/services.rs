@@ -639,7 +639,7 @@ impl HubEconomyState {
         {
             return Err(Rejection::IneligibleItem);
         }
-        let recipe_backed = item.recipe_index.is_some() || item.native_effects.is_some();
+        let recipe_backed = item.recipe_index.is_some() || item.effects.is_some();
         let (kind, amount) = if item.type_id == 7008 || !recipe_backed {
             let amount = self.rng.draw_integer(4) as u64 + 2;
             self.gold += amount;

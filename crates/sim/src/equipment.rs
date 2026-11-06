@@ -251,7 +251,7 @@ pub fn resolve_equipment_effects(
 }
 
 fn effect_source(item: &HubInventoryItem) -> EquipmentEffectSource {
-    let effects = match &item.native_effects {
+    let effects = match &item.effects {
         Some(effects) => effects.clone(),
         None => item
             .recipe_index
