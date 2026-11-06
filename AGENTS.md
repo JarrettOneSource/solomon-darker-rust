@@ -66,8 +66,7 @@ and the packaged journey on each affected platform before release.
 
 For browser changes, run the affected journeys against your own server and review
 their screenshots and error reports. See [Testing](README.md#testing) and
-[GPU UI](docs/GPU-UI.md). Use a free port from 4181 upward; a separate local service
-owns 4180.
+[GPU UI](docs/GPU-UI.md). Serve on a free port; the README's examples use 4181.
 
 Documentation-only work needs link, command, and consistency review. Report the
 checks actually run. A local test, published artifact, installed release, and live
