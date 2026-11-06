@@ -412,29 +412,6 @@ pub fn loot_disable_mask(current: u32, enable_operand: i32, mask: u32) -> u32 {
     if enable_operand == 0 { disabled ^ mask } else { disabled }
 }
 
-/// An arena's item level range for drops, and its mode.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LootArenaDropLimits {
-    pub item_level_maximum: i32,
-    pub item_level_minimum: i32,
-    pub mode: i32,
-}
-
-#[must_use]
-pub fn loot_arena_drop_limits(
-    mode: i32,
-    range_mode: u32,
-    first: i32,
-    second: i32,
-) -> LootArenaDropLimits {
-    match range_mode {
-        0 => LootArenaDropLimits { item_level_maximum: 9999, item_level_minimum: -9999, mode },
-        1 => LootArenaDropLimits { item_level_maximum: first, item_level_minimum: first, mode },
-        2 => LootArenaDropLimits { item_level_maximum: second, item_level_minimum: first, mode },
-        _ => panic!("native item range mode is in0..3"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -450,9 +427,5 @@ mod tests {
         assert_eq!([1, 2, 3, 4, 5, 7, 8, 25].map(gold_tier), [0, 0, 1, 1, 2, 2, 3, 3]);
         assert_eq!(loot_disable_mask(0b1010, 0, 0b0110), 0b1000);
         assert_eq!(loot_disable_mask(0b1010, 1, 0b0110), 0b1110);
-        assert_eq!(
-            loot_arena_drop_limits(1, 2, 5, 12),
-            LootArenaDropLimits { item_level_maximum: 12, item_level_minimum: 5, mode: 1 }
-        );
     }
 }
