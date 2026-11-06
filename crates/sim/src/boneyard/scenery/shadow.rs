@@ -11,7 +11,7 @@ use super::{SceneryLayer, SceneryPlan, ScenerySource};
 
 /// A glyph record's size and registered origin, which place its shadow quad.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSceneryShadowGlyph {
+pub struct SceneryGlyphGeometry {
     pub width: f64,
     pub height: f64,
     pub anchor_x: f64,
@@ -65,7 +65,7 @@ pub struct SceneryShadowQuad {
 const FULL_UVS: [Vec2; 4] =
     [Vec2::ZERO, Vec2::new(1.0, 0.0), Vec2::new(0.0, 1.0), Vec2::new(1.0, 1.0)];
 
-fn glyph_vertices(glyph: NativeSceneryShadowGlyph) -> [Vec2; 4] {
+fn glyph_vertices(glyph: SceneryGlyphGeometry) -> [Vec2; 4] {
     [
         Vec2::new(-glyph.anchor_x, -glyph.anchor_y),
         Vec2::new(glyph.width - glyph.anchor_x, -glyph.anchor_y),
@@ -75,7 +75,7 @@ fn glyph_vertices(glyph: NativeSceneryShadowGlyph) -> [Vec2; 4] {
 }
 
 #[must_use]
-pub fn flat_glyph_shadow_vertices(glyph: NativeSceneryShadowGlyph) -> [Vec2; 4] {
+pub fn flat_glyph_shadow_vertices(glyph: SceneryGlyphGeometry) -> [Vec2; 4] {
     let mut vertices = glyph_vertices(glyph);
     let x = f(glyph.height * 0.25);
     let y = f(x * 1.25);
@@ -89,7 +89,7 @@ fn glyph_quad(
     entry: usize,
     position: Vec2,
     root_mask: bool,
-    glyph: &dyn Fn(usize) -> Option<NativeSceneryShadowGlyph>,
+    glyph: &dyn Fn(usize) -> Option<SceneryGlyphGeometry>,
 ) -> Option<SceneryShadowQuad> {
     let glyph = glyph(entry)?;
     let vertices =
@@ -116,7 +116,7 @@ pub fn scenery_shadow_plan(
     plan: &SceneryPlan,
     layer: &SceneryLayer,
     complex_shadows: bool,
-    glyph: &dyn Fn(usize) -> Option<NativeSceneryShadowGlyph>,
+    glyph: &dyn Fn(usize) -> Option<SceneryGlyphGeometry>,
 ) -> Vec<SceneryShadowQuad> {
     match layer.source {
         ScenerySource::FencePost { index, .. } => {
@@ -237,7 +237,7 @@ pub fn goodie_shadow_plan(
     subtype: u32,
     phase: usize,
     complex_shadows: bool,
-    glyph: &dyn Fn(usize) -> Option<NativeSceneryShadowGlyph>,
+    glyph: &dyn Fn(usize) -> Option<SceneryGlyphGeometry>,
 ) -> Vec<SceneryShadowQuad> {
     assert_eq!(subtype, 0, "unsupported native Goodie shadow subtype");
     if complex_shadows {
@@ -307,13 +307,13 @@ impl ScrubShadowState {
 #[allow(clippy::too_many_arguments)] // Borrowed glyph records keep asset I/O outside the kernel.
 pub fn scrub_shadow_plan(
     entry: usize,
-    glyph: NativeSceneryShadowGlyph,
+    glyph: SceneryGlyphGeometry,
     position: Vec2,
     state: &mut ScrubShadowState,
     records: &[ShadowRecord],
     complex_shadows: bool,
     special_surface_at: &dyn Fn(Vec2) -> bool,
-    reflection: NativeSceneryShadowGlyph,
+    reflection: SceneryGlyphGeometry,
 ) -> Vec<SceneryShadowQuad> {
     if !complex_shadows {
         return vec![SceneryShadowQuad {

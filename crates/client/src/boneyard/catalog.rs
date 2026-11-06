@@ -44,8 +44,8 @@ impl SceneryCatalog {
 }
 
 impl SceneryRecord {
-    pub fn shadow_glyph(&self) -> super::NativeSceneryShadowGlyph {
-        super::NativeSceneryShadowGlyph {
+    pub fn shadow_glyph(&self) -> super::SceneryGlyphGeometry {
+        super::SceneryGlyphGeometry {
             width: self.w,
             height: self.h,
             anchor_x: self.anchor_x,

@@ -137,12 +137,12 @@ fn authored_placements_shared_posts_and_private_broken_halves_match_source() {
     }
 }
 
-fn shadow_glyph(fixture: &Value, entry: usize) -> Option<NativeSceneryShadowGlyph> {
+fn shadow_glyph(fixture: &Value, entry: usize) -> Option<SceneryGlyphGeometry> {
     let glyph = &fixture["glyphs"][entry];
     if glyph.is_null() {
         return None;
     }
-    Some(NativeSceneryShadowGlyph {
+    Some(SceneryGlyphGeometry {
         width: glyph["width"].as_f64().unwrap(),
         height: glyph["height"].as_f64().unwrap(),
         anchor_x: glyph["anchorX"].as_f64().unwrap(),
