@@ -1,4 +1,5 @@
-//! Player/shared stock, purchases and restock clocks from `mod-shop-engine.ts`.
+//! Mod shop stock: purchases, the quantity left in each row and restock timers. A shop's stock
+//! scope decides whether each player has their own stock or everyone shares it.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use super::{
     MAXIMUM_SAFE_INTEGER, duration_ticks, validate_player, validate_tick, validate_tick_rate,
 };
 
+/// The remaining stock of each mod shop row, per player or shared, with its restock tick.
 pub struct ModShopEngine {
     catalog: Arc<PreparedModContentCatalog>,
     ticks_per_second: u32,

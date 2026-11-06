@@ -1,11 +1,12 @@
-//! Shared secondary motion from `native-expanding-wave.ts` and `native-stoneskin.ts`.
+//! Secondary motion shared by several abilities: bouncing debris, expanding waves and the
+//! Stoneskin warp grid.
 
 use crate::float::{cos, fround, sin};
 use crate::secondary::SecondaryActorState;
 use crate::{Rng, Vec2};
 
 /// Both Comet debris and Stoneskin chips retain the same ordinary Bouncer fields.
-/// The Source converts its stored radians to degrees for each shared motion step.
+/// The stored radians are converted to degrees for each shared motion step.
 pub(super) fn step_secondary_bouncer(
     source: &SecondaryActorState,
     actor: &mut SecondaryActorState,
@@ -36,6 +37,7 @@ pub(super) fn step_secondary_bouncer(
 pub const STONESKIN_GRID_SIDE: usize = 10;
 pub const STONESKIN_GRID_COMPONENTS: usize = 200;
 
+/// An expanding wave's radius, growth, shake scalar, life and fade threshold.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ExpandingWave {
     pub radius: f64,
@@ -45,6 +47,8 @@ pub struct ExpandingWave {
     pub fade_threshold: f64,
 }
 
+/// One expanding wave step: the new radius, shake scalar and life, the camera
+/// displacement, and whether the wave lives on.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ExpandingWaveStep {
     pub radius: f64,

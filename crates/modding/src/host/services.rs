@@ -1,4 +1,5 @@
-//! Authored skill, shop, scene and UI actions from `prepared-mod-host.ts`.
+//! Player actions on mod content: choosing a skill, buying from or reforging at a shop,
+//! moving between scenes and through portals, and actions on authored UI.
 
 use solomon_sim::economy::find_inventory_item;
 use solomon_sim::modding::content::PreparedModUiDefinition;
@@ -12,6 +13,7 @@ use crate::host_intents::grant_item;
 
 use super::*;
 
+/// A player's request to run one named action of a visible mod UI, with its arguments.
 pub struct PreparedModUiActionInput<'a> {
     pub action: &'a str,
     pub arguments: LuaObject,
@@ -94,8 +96,8 @@ impl PreparedModHost {
             return Err("inventory cannot accept the mod shop purchase".into());
         }
         *game = candidate;
-        // In Source only an explicitly rejected rule result rolls the purchase
-        // back. A fatal VM/dispatch error propagates after this committed grant.
+        // Only a rule result that rejects the purchase rolls it back. A fatal VM or
+        // dispatch error propagates with this grant still committed.
         let result = self.act_raw(
             &PreparedModActionInput {
                 action: "shop.purchase".into(),

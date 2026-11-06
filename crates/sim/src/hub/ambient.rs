@@ -2,23 +2,21 @@
 //! teacher's clock.
 //!
 //! The ambient state advances once per 10 ms tick from its own xorshift sampler, so it never
-//! disturbs the player's collision sampler and the two replay independently. Reference:
-//! `Website/frontend/src/game/core-server/hub-ambient.ts`; the colour helpers come from
-//! `hub-presentation.ts`.
+//! disturbs the player's collision sampler and the two replay independently.
 
 use crate::collision::Vec2;
 use crate::float;
 use crate::hub::teacher::{HubTeacherBurst, HubTeacherWorldRelease, hub_teacher_burst_at};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
-/// Seed of the ambient sampler at world creation (`createHubAmbientState`).
+/// Seed of the ambient sampler at world creation.
 pub const HUB_AMBIENT_RNG_SEED: u32 = 0x2f6e_2b1d;
-/// World position the spray is drawn from (`HUB_FOUNTAIN_ORIGIN`).
+/// World position the spray is drawn from.
 pub const HUB_FOUNTAIN_ORIGIN: Vec2 = Vec2::new(957.0, 333.0);
-/// Spray brighter than this is clamped (`FOUNTAIN_ALPHA_LIMIT`).
+/// Spray brighter than this is clamped.
 pub const FOUNTAIN_ALPHA_LIMIT: f64 = 0.25;
 
-/// A zero xorshift state would stay zero forever; the reference substitutes this word.
+/// A zero xorshift state would stay zero forever, so the sampler substitutes this word.
 const RNG_ZERO_ESCAPE: u32 = 0x6d2b_79f5;
 const FOUNTAIN_ROLL_RANGE: u32 = 80;
 const FOUNTAIN_SPAWN_ROLL: u32 = 3;
@@ -99,11 +97,11 @@ impl HubAmbientState {
         }
     }
 
-    /// Advances one tick (`stepHubAmbient`): ages and spawns spray, drifts both seal phases,
-    /// bobs the statue, and moves the teacher's clock.
+    /// Advances one tick: ages and spawns spray, drifts both seal phases, bobs the statue,
+    /// and moves the teacher's clock.
     ///
-    /// The sampler is drawn in the reference's order: the spawn roll, the new drop's lifetime
-    /// when the roll hits, then the two seal increments.
+    /// The sampler is drawn in this order: the spawn roll, the new drop's lifetime when the
+    /// roll hits, then the core and glyph seal increments.
     pub fn step(&mut self, painter_order: Option<&mut WorldPainterOrder>) {
         let (state, roll) = random_integer(self.rng_state, FOUNTAIN_ROLL_RANGE);
         self.rng_state = state;
@@ -165,13 +163,13 @@ impl HubAmbientState {
     }
 }
 
-/// How bright one drop of spray draws (`hubFountainParticleAlpha`).
+/// How bright one drop of spray draws.
 #[must_use]
 pub fn hub_fountain_particle_alpha(particle: &HubFountainParticle) -> f64 {
     particle.remaining.min(FOUNTAIN_ALPHA_LIMIT)
 }
 
-/// An RGBA colour with unit channels (`HubColor`).
+/// An RGBA colour with unit channels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubColor {
     pub red: f64,
@@ -238,8 +236,8 @@ pub struct HubSealColors {
     pub glyphs: HubColor,
 }
 
-/// `hubSealColors`: the core cycles white to cyan; the glyphs cycle blue to white, half
-/// desaturated.
+/// The seal's tints this tick: the core cycles white to cyan; the glyphs cycle blue to
+/// white, half desaturated.
 #[must_use]
 pub fn hub_seal_colors(state: &HubAmbientState) -> HubSealColors {
     HubSealColors {
@@ -248,7 +246,7 @@ pub fn hub_seal_colors(state: &HubAmbientState) -> HubSealColors {
     }
 }
 
-/// Where the statue's art sits relative to its registered origins (`hubStatueOffsets`).
+/// Where the statue's art sits relative to its registered origins.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubStatueOffsets {
     pub aura: Vec2,

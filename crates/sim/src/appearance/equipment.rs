@@ -1,4 +1,4 @@
-//! Native inventory-to-sprite projection from `core-kernels/player-equipment-appearance.ts`.
+//! Inventory-to-sprite projection for a wizard's equipped hat, robe and weapon.
 //! Inventory owns the items; this projection preserves their selector and independent tints.
 
 use crate::economy::{EquipmentType, HubEquipmentState, HubInventoryItem};
@@ -6,6 +6,7 @@ use crate::modding::inventory::{ModItemContent, ModWearableSlot};
 use crate::profile::WizardElement;
 use crate::spells::casting::PlayerWeaponKind;
 
+/// A stock garment sprite: its selector and its primary and secondary tints.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerEquipmentTintedSelector {
@@ -14,6 +15,7 @@ pub struct PlayerEquipmentTintedSelector {
     pub selector: usize,
 }
 
+/// A stock weapon sprite: its kind and selector.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerWeaponAppearance {
@@ -21,6 +23,8 @@ pub struct PlayerWeaponAppearance {
     pub selector: usize,
 }
 
+/// A living wizard's equipment in stock sprites only; empty slots are `None`. Memorial
+/// portraits store this form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerLivingEquipmentAppearance {
@@ -29,6 +33,7 @@ pub struct PlayerLivingEquipmentAppearance {
     pub weapon: Option<PlayerWeaponAppearance>,
 }
 
+/// The stock hat, robe and weapon drawn for a wizard's death; empty slots use defaults.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlayerDeathEquipmentAppearance {
     pub hat: PlayerEquipmentTintedSelector,
@@ -36,6 +41,7 @@ pub struct PlayerDeathEquipmentAppearance {
     pub weapon: PlayerWeaponAppearance,
 }
 
+/// A mod garment's content with its primary and secondary tints.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerModTintedEquipmentAppearance {
     pub content: ModItemContent,
@@ -43,6 +49,7 @@ pub struct PlayerModTintedEquipmentAppearance {
     pub secondary_tint: u32,
 }
 
+/// A garment as drawn on a living wizard: a stock sprite or a mod's custom art.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlayerRenderableGarmentAppearance {
     Native(PlayerEquipmentTintedSelector),
@@ -59,6 +66,7 @@ impl PlayerRenderableGarmentAppearance {
     }
 }
 
+/// A weapon as drawn on a living wizard: a stock sprite or a mod staff's custom art.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlayerRenderableWeaponAppearance {
     Native(PlayerWeaponAppearance),
@@ -75,6 +83,7 @@ impl PlayerRenderableWeaponAppearance {
     }
 }
 
+/// A living wizard's hat, robe and weapon as drawn, keeping mod art where it is equipped.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerRenderableEquipmentAppearance {
     pub hat: Option<PlayerRenderableGarmentAppearance>,
@@ -102,8 +111,8 @@ pub fn player_living_equipment_appearance(
     }
 }
 
-/// `playerLivingNativeEquipmentAppearance`: native-only consumers use deathShape
-/// for custom wearables. This is also the source memorial portrait contract.
+/// A living wizard's equipment in stock sprites only: custom wearables use their authored
+/// `death_shape`. Memorial portraits store this form.
 #[must_use]
 pub fn player_living_native_equipment_appearance(
     element: WizardElement,
@@ -146,7 +155,7 @@ fn default_garment(element: WizardElement) -> PlayerEquipmentTintedSelector {
     }
 }
 
-/// `HUB_STARTER_EQUIPMENT_PRIMARY_TINT`: shared stock sprite/icon fallback palette.
+/// Each element's fallback primary tint, shared by stock sprites and icons.
 #[must_use]
 pub const fn wizard_icon_primary_tint(element: WizardElement) -> u32 {
     match element {

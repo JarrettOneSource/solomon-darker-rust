@@ -1,5 +1,6 @@
-//! Immutable catalog preparation from `modding/content/mod-content-catalog.ts`.
-//! The phase order is observable when a package has multiple invalid entries.
+//! Prepares the immutable mod content catalog, validating compiled definitions one content
+//! family at a time. The phase order is observable when a package has multiple invalid
+//! entries.
 
 mod definitions;
 mod fields;
@@ -155,8 +156,8 @@ fn compare_content(
     collator: &SourceCollator,
 ) -> std::cmp::Ordering {
     collator.compare(&left.mod_id, &right.mod_id).then_with(|| {
-        // Definition compilation generated these decimal u64 identities. Source
-        // sorts their numeric BigInt values, rather than decimal string order.
+        // Definition compilation generated these decimal u64 identities. Sort by
+        // their numeric values, rather than decimal string order.
         let left = left.content_id.parse::<u64>().expect("compiled content has a numeric identity");
         let right =
             right.content_id.parse::<u64>().expect("compiled content has a numeric identity");

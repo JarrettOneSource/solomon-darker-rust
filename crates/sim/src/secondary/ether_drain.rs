@@ -1,4 +1,5 @@
-//! Retained field identities and private animations from `native-ether-drain.ts`.
+//! Ether Drain's retained field state: the targets it has found, its private animations
+//! and the world animations it pulls in.
 //! A registration ordinal distinguishes a removed/reused world ID from its former actor.
 
 mod field;
@@ -9,6 +10,7 @@ pub use kernel::*;
 
 use crate::Vec2;
 
+/// Something an Ether Drain field pulls: an enemy, Golem, loot or player.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "kebab-case"))]
@@ -19,6 +21,8 @@ pub enum EtherDrainTargetRef {
     Player { id: String },
 }
 
+/// A world animation an Ether Drain field pulls: death effects, transients, secondary
+/// actors, death weapons and Golem fragments.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "kebab-case"))]
@@ -30,6 +34,7 @@ pub enum EtherDrainWorldAnimationRef {
     GolemFragment { id: u64, index: usize },
 }
 
+/// The highest world animation ID seen in each family, so newer animations can join.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EtherDrainWorldAnimationIds {
@@ -45,6 +50,7 @@ pub struct EtherDrainWorldAnimationIds {
     pub golem_fragment: u64,
 }
 
+/// The atlas a captured enemy's image comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EtherDrainAtlas {
@@ -62,6 +68,7 @@ pub struct EtherDrainCapturedImage {
     pub body_y_offset: u32,
 }
 
+/// One of an Ether Drain field's private animations: flying debris or a captured image.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "kebab-case"))]
@@ -84,12 +91,14 @@ pub enum EtherDrainAnimation {
     },
 }
 
+/// An Ether Drain field's retained targets, scenery, private animations and world
+/// animation cursors.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EtherDrainState {
     pub animations: Vec<EtherDrainAnimation>,
     pub targets_initialized: bool,
-    /// Source's -1 is the initial notification cursor; actual registrations are nonnegative.
+    /// -1 is the initial notification cursor; actual registrations are nonnegative.
     pub last_loot_registration_ordinal: i64,
     pub loose: Vec<EtherDrainTargetRef>,
     pub queried: Vec<EtherDrainTargetRef>,

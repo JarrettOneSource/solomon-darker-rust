@@ -1,5 +1,5 @@
-//! Observable source supervisor behavior over real HTTP and WebSocket connections.
-//! The fixture was recorded from the unchanged Website public supervisor entry point.
+//! Observable supervisor behavior over real HTTP and WebSocket connections. The fixtures
+//! were recorded through the Website's public supervisor entry point.
 
 use std::collections::VecDeque;
 use std::io::{Read, Write};
@@ -97,8 +97,8 @@ impl Host {
             .name("hosted-supervisor-journey".into())
             .stack_size(16 * 1024 * 1024)
             .spawn(move || {
-                // Native Lua VMs belong to the actual authority thread. Only plain
-                // configuration and the transport cross this test's thread boundary.
+                // Lua VMs belong to the authority thread. Only plain configuration and
+                // the transport cross this test's thread boundary.
                 let authority = HostedSupervisor::new(config)?;
                 let result = authority.run(server, signal);
                 if let Err(reason) = &result {
@@ -196,8 +196,8 @@ struct Client {
     save_progress: Option<(u64, usize, usize)>,
 }
 
-// Source connect() keeps a live message listener on every socket. Waiting for one
-// client's observation must not stop another client's ACKs, pongs or reliable input.
+// Each client socket has its own reading worker. Waiting for one client's observation
+// must not stop another client's ACKs, pongs or reliable input.
 fn drive_client(
     mut socket: WebSocket<TcpStream>,
     writes: Receiver<ClientWrite>,
@@ -267,8 +267,8 @@ fn drive_client(
         match socket.read() {
             Ok(Message::Text(text)) => {
                 let mut message = snapshots.decode::<Value>(&text)?;
-                // The Source browser detaches its session message listener before
-                // closing. Drain in-flight observations without ACKing a closed writer.
+                // A closing client still drains in-flight observations but sends no ACK
+                // once its writer has closed.
                 if let ServerMessage::WelcomeChunk { data, offset, total_length } = message {
                     if offset == 0 {
                         eprintln!(
@@ -486,7 +486,8 @@ fn console_and_learned_bots_follow_the_actual_source_supervisor_lifecycle() {
     rows.push(json!({"case":"admitted-bot-roster","names":names}));
     let (status, mut health) = host.request("GET", "/health", Value::Null, false);
     assert_eq!(status, 200);
-    // Each runtime owns its wire protocol; compare the same supervisor health fields.
+    // Protocol fields are this runtime's own; check them directly and compare the rest
+    // with the recording.
     assert_eq!(health["protocol"], "solomon-game-v1");
     health.as_object_mut().unwrap().remove("protocol");
     assert_eq!(health.as_object_mut().unwrap().remove("deploymentProtocol"), Some(json!(2)));
@@ -711,7 +712,7 @@ impl Client {
                     if accept(&message) {
                         return *message;
                     }
-                    // Source next() retains unmatched reliable messages. In particular,
+                    // Unmatched messages stay queued for later waits. In particular,
                     // waiting for Loaded cannot consume the run's only checkpoint.
                     self.pending.push_back(*message);
                 }
@@ -847,8 +848,8 @@ fn report103_restored_hosted_solo_boneyards_advance_after_the_actual_renderer_an
         if source.metadata.integrity == solomon_assets::website_save::SaveIntegrity::GlobalClean {
             vec!["/admin/hub/tickets", "/admin/sessions"]
         } else {
-            // The actual ZIP witness is local-only. Its source continuation may enter a
-            // private College; admitting it into Global would weaken the trust boundary.
+            // The ZIP witness is local-only. Its continuation may enter a private College;
+            // admitting it into Global would weaken the trust boundary.
             vec!["/admin/sessions"]
         };
     for route in routes {
@@ -938,7 +939,7 @@ fn report103_restored_hosted_solo_boneyards_advance_after_the_actual_renderer_an
             observer.until(|message| matches!(message, ServerMessage::Welcome { .. }));
             // The browser witness keeps its original Global run alive while importing
             // a private continuation, then closes the imported browser. Retaining an
-            // actual observer keeps this owner from being pruned before its next epoch.
+            // observer keeps this owner from being pruned before its next epoch.
             client.close();
             client.finish_close();
             let deadline = Instant::now() + Duration::from_secs(8);
@@ -1442,7 +1443,7 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
         "privateSessions":health["privateSessions"]}));
 
     // A replacement process starts with no hidden player/world restoration. The first
-    // signed browser continuation seeds one actual run; other members wait for Hello.
+    // signed browser continuation seeds one run; other members wait for Hello.
     host.finish();
     host = Host::start_with_revision(&target_revision);
     let previous_recovery = json!({"content":content()["content"],
@@ -1519,8 +1520,8 @@ fn supervisor_replays_source_http_colleges_broker_and_party_membership() {
         "privatePath":private_seed["path"].as_str().unwrap().starts_with("/game-sessions/"),
         "samePlayer":credentials.player_id==alpha,"sameRun":frame.snapshot["run"]["run_id"]==loaded.run_id,
         "privateSessions":health["privateSessions"]}));
-    // Source JSON has one Number type: a frame width serialized as 1.0 carries
-    // exactly the same value as 1. Arrays and every numeric value remain exact.
+    // The recording's JSON has one number type: a frame width serialized as 1.0
+    // carries exactly the same value as 1. Arrays and every numeric value remain exact.
     let expected = fixture["rows"].as_array().unwrap();
     assert_eq!(rows.len(), expected.len(), "every independent Source observation is retained");
     for (actual, expected) in rows.into_iter().zip(expected) {

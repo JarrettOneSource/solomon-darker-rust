@@ -1,4 +1,5 @@
-//! Cast payloads and offensive arithmetic recorded by the unchanged Website kernels.
+//! Cast payloads and offensive arithmetic, against unmodified recordings from the Website
+//! client.
 
 #[path = "support/stat_book.rs"]
 mod stat_book;

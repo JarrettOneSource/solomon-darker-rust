@@ -1,4 +1,5 @@
-//! Secondary actor providers and MiscLight from `native-boneyard-light-model.ts`.
+//! Light sources for secondary spell actors: provider lights, and the MiscLight entries
+//! (magic circles and burns) that are appended after every provider.
 
 use crate::float::fround;
 use crate::random_domain::random_float_from_word;
@@ -25,7 +26,7 @@ pub fn secondary_provider_light_source(
 }
 
 /// The display sampler supplies fractional age without changing logical light
-/// queries. Ether Fade retains the source's explicit floor before decay steps.
+/// queries. Ether Fade floors that age before counting its decay steps.
 #[must_use]
 pub fn secondary_provider_light_source_at_age(
     actor: &SecondaryActorState,
@@ -101,7 +102,7 @@ pub fn secondary_misc_light_source(actor: &SecondaryActorState) -> Option<Boneya
 }
 
 /// Burn lights become present after age zero, including a fractional display
-/// sample before the first complete tick. The source does not floor this test.
+/// sample before the first complete tick. This test does not floor the age.
 #[must_use]
 pub fn secondary_misc_light_source_at_age(
     actor: &SecondaryActorState,

@@ -1,4 +1,4 @@
-//! Normal Boneyard world epoch from `core-server/boneyard-world.ts`.
+//! The normal Boneyard world epoch: the world's part of one simulation tick.
 //!
 //! The session owns player resources, secondary/primary phases and the one painter allocator.
 //! This epoch owns movement, loot, encounter/waves, enemy authority and real terminal rewards.
@@ -53,6 +53,8 @@ pub struct BoneyardPlayerCombatStatus<'a> {
     pub owned_recipe_indexes: &'a [usize],
 }
 
+/// One participant's part of a world tick: their wizard, combat status, movement input,
+/// viewport and light registration.
 pub struct BoneyardWorldParticipant<'a> {
     pub wizard: &'a mut HubWizard,
     pub combat: BoneyardPlayerCombatStatus<'a>,
@@ -63,6 +65,8 @@ pub struct BoneyardWorldParticipant<'a> {
     pub overlay_effect_phase: f64,
 }
 
+/// What one world tick reads from the session: participants, the light environment,
+/// external spawns, navigation and optional mod loot.
 pub struct BoneyardWorldTickContext<'a> {
     pub enhanced_effects: bool,
     pub tick: u64,
@@ -73,6 +77,8 @@ pub struct BoneyardWorldTickContext<'a> {
     pub custom_loot: Option<&'a dyn Fn(u32, EnemyToken) -> Vec<HubInventoryItem>>,
 }
 
+/// What one world tick reports back: each player's movement, the loot step, enemy events,
+/// damage to players and enemy rewards.
 #[derive(Clone, Debug)]
 pub struct BoneyardWorldTickResult {
     pub movement: BTreeMap<String, BoneyardMovementStep>,

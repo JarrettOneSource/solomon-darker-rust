@@ -13,7 +13,7 @@ use solomon_graphics::Renderer;
 
 impl SecondaryView {
     /// Joins visible children directly from PrimarySpellTransient::Staff. Action
-    /// and contact owners have no source painter; their emitted VFX own the rows.
+    /// and contact owners have no painter of their own; their emitted VFX own the rows.
     #[must_use]
     pub fn staff_painter(state: &PlayerStaffTransient) -> Option<SecondaryPainter> {
         let position = match state {
@@ -49,7 +49,7 @@ impl SecondaryView {
             PlayerStaffTransient::PikeBreak(state) => {
                 self.draw_staff_pike_break(renderer, camera, state, world_tint)
             }
-            // These source owners perform combat work and have no visual root.
+            // These owners perform combat work and have no visual root.
             PlayerStaffTransient::Action(_)
             | PlayerStaffTransient::Contact(_)
             | PlayerStaffTransient::ContactKnockback(_)

@@ -2,6 +2,7 @@ use js_sys::{Reflect, Uint8Array};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 
+/// Mod content kept in the browser's CacheStorage when available, verified with Web Crypto.
 #[derive(Clone)]
 pub(super) struct ContentCache {
     cache: Option<web_sys::Cache>,
@@ -13,7 +14,7 @@ impl ContentCache {
         let window = web_sys::window().ok_or("The game has no browser window")?;
         let property = Reflect::get(&window, &"caches".into()).map_err(describe)?;
         let cache = if property.is_undefined() || property.is_null() {
-            // Source permits browsers without CacheStorage; verification remains mandatory.
+            // Browsers without CacheStorage run uncached; every download is still verified.
             None
         } else {
             Some(

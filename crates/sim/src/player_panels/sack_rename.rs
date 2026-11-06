@@ -1,5 +1,6 @@
-//! Current Website `hub-sack-rename.ts` and `hub-sack-rename-dialog-layout.ts`.
-//! Selection is borrowed; only the inventory authority validates and commits a new name.
+//! Sack renaming: the Sack a rename targets, the font check for its name and the rename
+//! dialog layout. Selection is borrowed; only the inventory authority validates and
+//! commits a new name.
 
 use crate::economy::{
     HubEconomyState, HubInventoryItem, HubItemKind, find_inventory_item,
@@ -11,6 +12,7 @@ use crate::ui_text::{UiFontName, ui_font};
 pub const INVENTORY_SACK_RENAME_BUTTON: HudRect = HudRect::new(1310.0, 440.0, 250.0, 44.0);
 pub const INVENTORY_SACK_RENAME_BUTTON_SCALE: f64 = 44.0 / 69.0;
 
+/// Where a selected item is held. Only backpack and storage Sacks can be renamed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InventorySackRenameOwner {
     Backpack,
@@ -19,6 +21,7 @@ pub enum InventorySackRenameOwner {
     Unowned,
 }
 
+/// A selected item that may be the Sack to rename, and where it is held.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InventorySackRenameSelection {
     pub item_id: u64,
@@ -55,6 +58,7 @@ pub fn inventory_sack_name_needs_browser_font(name: &str) -> bool {
     name.chars().any(|character| character != ' ' && font.glyph(character as u32).is_none())
 }
 
+/// Screen rectangles, scales and text baselines of the Sack rename dialog.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InventorySackRenameDialogLayout {
     pub art_scale: f64,

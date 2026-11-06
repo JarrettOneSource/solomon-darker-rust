@@ -1,4 +1,4 @@
-//! Weld channel and held-slot composition from `primary-spells.ts`. Native
+//! Weld casting: channel emissions, held persistent builds and their release. Native
 //! constructors own their random programs; this phase owns only IDs, queue order
 //! and the player's shared cast clock.
 

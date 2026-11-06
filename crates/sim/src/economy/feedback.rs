@@ -1,4 +1,6 @@
-//! `HubActionFeedback` and its producer in `core-server/game-simulation.ts`.
+//! The receipt of a participant's latest inventory or service command, and the cursor that
+//! delivers each skill book outcome once.
+//!
 //! The receipt belongs to the canonical economy and survives rejected transactions.
 //! Service admission failures and NPC hint acknowledgements do not replace it.
 
@@ -8,6 +10,8 @@ use super::{
 };
 use crate::profile::SKILL_CATALOG;
 
+/// How the player asked for a storage transfer: by dragging the item, or by activating it
+/// twice in quick succession.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HubTransferGesture {
@@ -16,6 +20,7 @@ pub enum HubTransferGesture {
     Drag,
 }
 
+/// Which command a `HubActionFeedback` receipt describes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HubActionFeedbackAction {
@@ -77,6 +82,8 @@ impl HubActionFeedbackAction {
     }
 }
 
+/// What reading a Book of Skill granted: a bonus skill choice, or one rank in a random learned
+/// skill. `skill_id` is `None` when no skill could rise.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SkillBookOutcome {
@@ -84,6 +91,9 @@ pub enum SkillBookOutcome {
     Rank { skill_id: Option<usize> },
 }
 
+/// The receipt of a participant's latest inventory or service command: the command, its
+/// acceptance or rejection reason, and any outcome to present. `sequence` rises with each
+/// receipt.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubActionFeedback {
@@ -101,7 +111,8 @@ pub struct HubActionFeedback {
     pub unforge_outcome: Option<UnforgeOutcome>,
 }
 
-/// `skill-book-feedback.ts::SkillBookFeedbackCursor`: retained receipts never replay.
+/// Remembers the last receipt sequence a consumer has seen, so a retained skill book receipt
+/// never replays.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SkillBookFeedbackCursor {
     sequence: u64,
@@ -135,7 +146,8 @@ impl SkillBookFeedbackCursor {
     }
 }
 
-/// `nativeSkillBookResultText`: only the authored rank-award rows 8..81 are valid.
+/// The text announcing a Book of Skill rank award: the skill's name and `+1`. Only the
+/// authored rank-award rows 8 through 81 are valid.
 pub fn skill_book_result_text(skill_id: usize) -> Result<String, String> {
     if !(8..=81).contains(&skill_id) {
         return Err("Book result must name a native rank-award skill".to_owned());

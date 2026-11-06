@@ -1,4 +1,5 @@
-//! Native browser Intl and Date behavior, retaining the Website display contract.
+//! Browser locale formatting: text comparison, lowercase, counts, dates and timestamps through
+//! the browser's own string, `Intl` and `Date` operations.
 use std::cmp::Ordering;
 
 use js_sys::{Date, Function, JsString, Object, Reflect};
@@ -13,8 +14,7 @@ pub fn lowercase(value: &str) -> String {
 }
 
 pub fn integer(value: u64) -> Result<String, String> {
-    // Number.toLocaleString uses this native Intl operation. An empty locale
-    // list selects the browser default, matching the source's omitted argument.
+    // An empty locale list selects the browser's default locale.
     let formatter = js_sys::Intl::NumberFormat::new(&js_sys::Array::new(), &Object::new());
     formatter
         .format()

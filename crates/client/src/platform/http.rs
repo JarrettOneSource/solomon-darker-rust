@@ -13,12 +13,15 @@ pub use native::Response;
 #[cfg(not(target_arch = "wasm32"))]
 use native::Transport;
 
+/// How a browser request may use the HTTP cache: normally, or reusing any cached copy of
+/// immutable content. Desktop requests ignore it.
 #[derive(Clone, Copy)]
 pub enum CachePolicy {
     Default,
     Immutable,
 }
 
+/// Why reading a Website response body failed: it exceeded the size limit or the transport failed.
 #[derive(Debug)]
 pub enum ReadError {
     TooLarge,
@@ -40,6 +43,7 @@ impl From<&str> for ReadError {
     }
 }
 
+/// An HTTP client bound to one configured Website origin; it refuses requests elsewhere.
 #[derive(Clone)]
 pub struct Client {
     base: url::Url,

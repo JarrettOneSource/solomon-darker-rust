@@ -1,6 +1,6 @@
-//! Stock bitmap typography from Website `native-ui/native-ui-text.ts` and
-//! `native-ui/native-ui-catalog.ts`. Pens, wrapping and ink placement share the
-//! authored tables in `catalog`; browser and world painters consume the same layout.
+//! Stock bitmap typography: the game's fonts and their text measurement, wrapping and
+//! glyph layout. Pens, wrapping and ink placement share the authored tables in
+//! `catalog`; browser and world painters consume the same layout.
 
 pub mod buttons;
 mod catalog;
@@ -8,6 +8,7 @@ pub mod messages;
 
 use std::collections::BTreeSet;
 
+/// The texture atlas a font's glyphs come from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiAtlasName {
     ControlPanel,
@@ -32,6 +33,7 @@ impl UiAtlasName {
     }
 }
 
+/// The game's stock bitmap fonts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiFontName {
     Belt,
@@ -77,6 +79,8 @@ impl UiFontName {
     }
 }
 
+/// One glyph of a bitmap font: code point, atlas record and frame, logical size, trim
+/// origin and metrics.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiGlyphRecord {
     pub code_point: u32,
@@ -88,6 +92,7 @@ pub struct UiGlyphRecord {
     pub metrics: [f64; 3],
 }
 
+/// A kerning adjustment between a left and a right code point.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiKerning {
     pub left: u32,
@@ -95,6 +100,7 @@ pub struct UiKerning {
     pub adjustment: f64,
 }
 
+/// A stock bitmap font: its atlas, metrics, glyphs and kerning pairs.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiBitmapFont {
     pub atlas: UiAtlasName,
@@ -140,6 +146,7 @@ pub const fn ui_font(name: UiFontName) -> &'static UiBitmapFont {
     }
 }
 
+/// Horizontal text alignment about the text's `x`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiTextAlign {
     Left,
@@ -147,12 +154,16 @@ pub enum UiTextAlign {
     Right,
 }
 
+/// How `y` places text: as the first baseline, or as the top of a box in which the ink is
+/// centered vertically.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiTextPlacement {
     Baseline,
     Box,
 }
 
+/// A request to lay out text: font, string, position, alignment, placement, scale, alpha,
+/// tint, line height and wrap width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiTextSpec<'a> {
     pub font: UiFontName,
@@ -187,6 +198,7 @@ impl<'a> UiTextSpec<'a> {
     }
 }
 
+/// A run of text with its own scale, advance scale, offset and italics.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiTextRun<'a> {
     pub text: &'a str,
@@ -204,6 +216,7 @@ impl<'a> UiTextRun<'a> {
     }
 }
 
+/// One placed glyph: its record, character, center, scale, alpha, tint and italics.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiGlyphLayout {
     pub glyph: &'static UiGlyphRecord,
@@ -216,6 +229,7 @@ pub struct UiGlyphLayout {
     pub italic: bool,
 }
 
+/// The rectangle that a placed glyph's visible ink covers.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiGlyphInkBounds {
     pub left: f64,
@@ -224,6 +238,7 @@ pub struct UiGlyphInkBounds {
     pub height: f64,
 }
 
+/// One laid-out line: its text, left edge, baseline and width.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiTextLineLayout {
     pub text: String,
@@ -232,6 +247,7 @@ pub struct UiTextLineLayout {
     pub width: f64,
 }
 
+/// Laid-out text: its glyphs, lines and size, and the code points the font lacks.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiTextLayout {
     pub font: UiFontName,

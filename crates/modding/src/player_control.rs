@@ -1,6 +1,7 @@
-//! Lua controller leases and observations from `host/mod-player-control.ts`.
-//! Entrance guidance reuses the canonical Source navigator; observations borrow
-//! real Session rows and never advance a player, enemy, RNG or clock.
+//! Lua control of players during a Boneyard run: a mod controller leases a living player's
+//! input for a short time and receives observations of the world. Entrance guidance reuses
+//! `BoneyardEntranceNavigator`; observations borrow Session rows and never advance a
+//! player, enemy, RNG or clock.
 
 use std::collections::BTreeMap;
 
@@ -19,6 +20,8 @@ use solomon_sim::session::{GameSession, GameSessionInput};
 
 use crate::intents::ModIntentExecutionContext;
 
+/// A mod controller's hold on one player's input: the input to apply, the mod and owner that
+/// hold it, and when it expires.
 #[derive(Clone)]
 pub struct ModControlLease {
     pub expires_at_ms: f64,
@@ -27,6 +30,8 @@ pub struct ModControlLease {
     pub owner: String,
 }
 
+/// The Lua control leases on players in the current Boneyard run, with an entrance navigator
+/// for each observed player.
 #[derive(Default)]
 pub struct ModPlayerControl {
     entrances: BTreeMap<String, BoneyardEntranceNavigator>,

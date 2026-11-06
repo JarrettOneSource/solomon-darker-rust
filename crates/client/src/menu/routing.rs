@@ -1,5 +1,5 @@
-//! GPU versions of `PartyJoinConsentDialog`, `ModdedPlayDialog` and
-//! `GameSaveModMismatchDialog`. Only the coordinator owns actual admission.
+//! The play-routing dialogs: Party join consent, modded play, a save's mod mismatch and
+//! enabling cheats in a private College. Only the hosted coordinator admits sessions.
 use super::HostedMenuAction;
 use crate::gpu_ui::UiFrame;
 use crate::hosted::{ActiveWebMod, PartyJoinTarget};
@@ -10,6 +10,8 @@ use std::cell::RefCell;
 
 mod presentation;
 pub(crate) use presentation::{consent_button, consent_button_size, consent_frame};
+/// Mod download progress shown in a routing dialog: bytes completed of the total and
+/// the mod being fetched.
 pub struct RoutingDownloadProgress<'a> {
     pub completed_bytes: u64,
     pub total_bytes: u64,
@@ -21,6 +23,8 @@ enum Prompt {
     Mismatch(GameSaveModMismatch),
     Cheats,
 }
+/// The open play-routing dialog with its request ID, busy state, download progress and
+/// error.
 pub(super) struct RoutingView {
     request_id: Option<u64>,
     prompt: Option<Prompt>,
@@ -80,7 +84,7 @@ impl RoutingView {
     pub(super) fn stack_level(&self) -> i32 {
         match self.prompt {
             Some(Prompt::Mismatch(_)) => 40,
-            // c140 play-routing.css keeps this consent above retained Settings.
+            // This consent stacks above the Settings screen that stays open beneath it.
             Some(Prompt::Cheats) => 100_001,
             _ => 52_000,
         }
@@ -95,8 +99,8 @@ impl RoutingView {
         Ok(())
     }
 
-    /// A successful coordinator transition unmounts the source dialog. Closing
-    /// invalidates late progress/completion without cancelling an accepted session.
+    /// A successful coordinator transition closes the dialog. Closing invalidates late
+    /// progress/completion without cancelling an accepted session.
     pub fn close(&mut self) {
         self.request_id = None;
         self.prompt = None;

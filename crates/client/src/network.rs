@@ -33,11 +33,13 @@ const MAX_PENDING_SEND_BYTES: usize = 1024 * 1024;
 pub type NativeServerMessage = ServerMessage<Box<GameCheckpoint>>;
 pub type NativeSnapshot = SnapshotFrame<Box<GameCheckpoint>>;
 
+/// A decoded host snapshot frame and its arrival time in milliseconds.
 pub struct ReceivedNativeSnapshot {
     pub frame: Box<NativeSnapshot>,
     pub received_at_ms: f64,
 }
 
+/// A reliable connection event: opened, a server message with its arrival time, closed or failed.
 pub enum NetworkEvent {
     Opened,
     Message { message: Box<NativeServerMessage>, received_at_ms: f64 },
@@ -45,6 +47,8 @@ pub enum NetworkEvent {
     Failed(String),
 }
 
+/// Everything delivered since the last poll: reliable events, the newest snapshot, if any, and
+/// whether the ping changed.
 #[derive(Default)]
 pub struct NetworkPoll {
     pub events: Vec<NetworkEvent>,
@@ -52,6 +56,8 @@ pub struct NetworkPoll {
     pub ping_changed: bool,
 }
 
+/// A client's connection to the native authority, with command and input sequencing, resume
+/// credentials and the last acknowledged host state.
 pub struct NativeSession {
     connection: NativeConnection,
     input: ClientInputSequence,

@@ -1,6 +1,6 @@
-//! Weld world-effect constructors and their ordered native epochs from
-//! `native-weld-primary-runtime.ts`, `native-weld-flame-lash.ts`,
-//! `native-weld-ground-spark.ts` and `primary-spells.ts`.
+//! Weld world actors: the queue entry for every kind, plus the constructors and
+//! per-tick steps of channels, Flame Lash fades, ground sparks, impacts, debris and
+//! Meteor flashes.
 
 use super::blizzard::{WeldBlizzardChainFrostState, WeldBlizzardGlowState};
 use super::flame_state::{FlameChannelVisual, FlameFadeBirth, FlameFadeVisual, flame_fade_alpha};
@@ -23,6 +23,8 @@ use crate::spells::earth_debris::{
 use crate::spells::water::water_frost_jet_lifetime_ticks;
 use crate::{Rng, Vec2};
 
+/// The visible beam of a channel Weld: its endpoint, midpoint, target, power and any
+/// Flame Lash visual.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldChannelActorState {
@@ -38,6 +40,7 @@ pub struct WeldChannelActorState {
     pub variant: u32,
 }
 
+/// Inputs for creating a channel Weld's beam actor.
 pub struct WeldChannelInput<'a> {
     pub birth: WeldActorBirth<'a>,
     pub endpoint: Option<Vec2>,
@@ -72,6 +75,7 @@ fn enhanced_effects_default() -> bool {
     true
 }
 
+/// Where a Flame Lash fade appears: at the lash's source, at its endpoint, or on a chain.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WeldFlameLashFadeVariant {
@@ -80,6 +84,7 @@ pub enum WeldFlameLashFadeVariant {
     Source,
 }
 
+/// A fading flame sprite of a Flame Lash: position, rotation, scale, color and alpha.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldFlameLashFadeState {
@@ -97,6 +102,7 @@ pub struct WeldFlameLashFadeState {
     pub wrapper_scalar: f64,
 }
 
+/// Inputs for creating a Flame Lash fade.
 pub struct WeldFlameLashFadeInput<'a> {
     pub birth: WeldActorBirth<'a>,
     pub alpha: f64,
@@ -139,7 +145,7 @@ pub fn create_weld_flame_lash_fade(
     let registration = if let Some(order) = painters {
         order.register(WorldManagerLane::Transient)
     } else {
-        // Source standalone kernel callers seed both manager lanes from the ID.
+        // Callers without a painter order use the actor's ID as its registration ordinal.
         PainterRegistration {
             manager_lane: WorldManagerLane::Transient,
             registration_ordinal: birth.id as usize,
@@ -166,6 +172,8 @@ pub fn create_weld_flame_lash_fade(
     }
 }
 
+/// One fading spark left by Crawling Shock's ground spark: alpha, position, record,
+/// rotation and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldGroundSparkFadeSeed {
@@ -226,6 +234,7 @@ pub fn create_weld_ground_spark_fade_program(
     fades
 }
 
+/// A Crawling Shock spark fade in the world.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldGroundSparkFadeActorState {
@@ -244,6 +253,8 @@ pub fn create_weld_ground_spark_fade_actor(
     }
 }
 
+/// The impact a Weld projectile leaves where it hits: its fade, sound and, for a
+/// boulder, the terminal charge.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldImpactActorState {
@@ -291,6 +302,7 @@ pub fn create_primary_spell_weld_impact(
     }
 }
 
+/// A Weld boulder debris bit in the world.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldBoulderDebrisActorState {
@@ -311,6 +323,7 @@ pub fn create_weld_boulder_debris_actor(
     }
 }
 
+/// A rock fade that a held Hailstones cluster sheds as it grows, visible for 400 ticks.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailRockFadeActorState {
@@ -328,6 +341,7 @@ pub fn create_weld_hail_rock_fade_actor(
     WeldHailRockFadeActorState { common: birth.actor(), position, rotation_degrees }
 }
 
+/// The fading flash of a Meteor impact.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldMeteorFlashActorState {
@@ -365,6 +379,7 @@ pub fn create_weld_meteor_flash(
     }
 }
 
+/// A Weld world actor of any kind, kept in the shared transient queue.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WeldWorldActor {
@@ -428,6 +443,8 @@ impl WeldWorldActor {
     }
 }
 
+/// One Weld actor tick: whether it lives, the debris it threw, and an Ethereal Boulder
+/// that reached terrain.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldWorldActorStep {
     pub alive: bool,

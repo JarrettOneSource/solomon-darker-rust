@@ -1,4 +1,5 @@
-//! Session run lifecycle, ported from `core-kernels/game-run.ts`.
+//! The session's run lifecycle, from a run's start in the College through Game Over to the
+//! post-run loadout.
 //!
 //! A terminal run remains visible through the native Game Over gate and fade, then waits
 //! for each eligible player to confirm the next loadout before returning to the College.
@@ -11,8 +12,8 @@ pub const GAME_OVER_INPUT_EXIT_FADE_TICKS: u64 = 20;
 pub const GAME_OVER_AUTOMATIC_ACCEPT_TICK: u64 = 951;
 pub const GAME_OVER_AUTOMATIC_EXIT_FADE_TICKS: u64 = 250;
 
-/// Current Source `gameRunWorldTick`: terminal UI keeps ticking while the resident
-/// Boneyard and its retained presentation history stay at their stopped world clock.
+/// The world clock for `tick`. During Game Over the terminal UI keeps ticking while the
+/// resident Boneyard and its retained presentation history stay at their stopped world clock.
 #[must_use]
 pub fn game_run_world_tick(tick: f64, run: &GameRunLifecycle) -> f64 {
     if run.phase == GameRunPhase::GameOver {
@@ -22,6 +23,8 @@ pub fn game_run_world_tick(tick: f64, run: &GameRunLifecycle) -> f64 {
     }
 }
 
+/// Where the session is in the run lifecycle: the College, an active run, the Game Over
+/// screen, or the post-run loadout.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameRunPhase {
@@ -43,6 +46,8 @@ impl GameRunPhase {
     }
 }
 
+/// How Game Over is being left: automatically at tick 951 or by a player's input, each with
+/// its own exit fade.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameOverExitKind {
@@ -107,7 +112,7 @@ impl GameRunLifecycle {
         }
     }
 
-    /// `startGameRun`: only the College can admit a new run.
+    /// Starts a run for these players. Only the College can admit a new run.
     pub fn start(&mut self, run_id: String, player_ids: &[String]) {
         assert!(!run_id.is_empty(), "game run id must not be empty");
         assert_eq!(self.phase, GameRunPhase::Hub, "a game run can start only in the College");

@@ -1,6 +1,7 @@
-//! Native enemy births from Website `core-server/enemies/construction.ts`.
+//! Enemy births: turning spawn requests into actors with their configuration, brain and
+//! placement.
 //!
-//! Constructor draws remain in source order, including inherited family constructors,
+//! Constructor RNG draws happen in a fixed order, including inherited family constructors,
 //! rejected Imp births, grouped placements, private action state and locomotion phases.
 
 use super::config::{
@@ -52,8 +53,8 @@ impl EnemyWorld {
         )
     }
 
-    /// `materializeSpawnIntents`: draw the constructor envelope even when the live Imp
-    /// cap later rejects a birth. A placement group reuses its first accepted position.
+    /// Materializes spawn requests as actors. The constructor envelope is drawn even when the
+    /// live Imp cap later rejects a birth. A placement group reuses its first accepted position.
     pub fn spawn(
         &mut self,
         intents: &[EnemySpawnIntent],
@@ -90,8 +91,8 @@ impl EnemyWorld {
             let split = self.draw_unit();
             let split_many_unit =
                 if intent.flags.contains(&EnemyFlag::SplitMany) { self.draw_unit() } else { 0.0 };
-            // The source constructor forwards strafe only through the authored Archer
-            // family recipe; its separate custom intent field is retained but not read.
+            // Strafing reaches the constructor only through the authored Archer family
+            // recipe; the intent's separate `archer_strafing` field is retained but not read.
             let mut config_intent = intent.clone();
             config_intent.archer_strafing = false;
             let mut config = evaluate_enemy_config(

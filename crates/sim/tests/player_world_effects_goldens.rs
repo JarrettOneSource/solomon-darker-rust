@@ -1,4 +1,5 @@
-//! Actual Website death crossings, cosmetic weapon bounces and bounded level-up particles.
+//! Death crossings, cosmetic weapon bounces and bounded level-up particles, against
+//! recordings from the Website client.
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::appearance::equipment::PlayerWeaponAppearance;
@@ -19,7 +20,7 @@ fn point(value: &Value) -> Vec2 {
     Vec2::new(number(value, "x"), number(value, "y"))
 }
 fn trig_equal(actual: f64, expected: f64) {
-    // V8 and Rust may differ in the final bit of trigonometry and pow.
+    // Trigonometry and pow may differ in the final bit from the recording.
     assert!((actual - expected).abs() <= 1.0e-10, "{actual} != {expected}");
 }
 

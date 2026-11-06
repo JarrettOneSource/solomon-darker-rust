@@ -1,4 +1,5 @@
-//! Faculty:1..90 raw hand attachments from the pinned Website editor/manifest/faculty.json.
+//! The Faculty's hand positions: the raw attachment points of bundle records `Faculty:1..90`,
+//! indexed by body pose, facing and hand.
 use crate::Vec2;
 pub const FACULTY_HAND_ATTACHMENTS: [[[Vec2; 2]; 18]; 5] = [
     [

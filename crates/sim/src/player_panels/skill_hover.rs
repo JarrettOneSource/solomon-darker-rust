@@ -1,5 +1,6 @@
-//! Current `skill-book-model.ts` and `renderer/native-skill-hover-box-layout.ts`.
-//! The catalog owns authored text; the box owns its independent 380/400-pixel wraps.
+//! Skill hover boxes for the Skillbook and the skill picker: their rows, inline text
+//! commands and layout. The catalog owns authored text; the box owns its independent
+//! 380/400-pixel wraps.
 
 use crate::Vec2;
 use crate::hud::HudRect;
@@ -14,6 +15,7 @@ use super::skill_text::skill_page_tint;
 pub const SKILL_HOVER_CONTENT_MARGIN: f64 = 25.0;
 pub const SKILL_HOVER_LINE_GAP: f64 = 10.0;
 
+/// What a skill hover row shows; the kind also selects the row's tint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SkillHoverLineKind {
     Bonus,
@@ -42,18 +44,22 @@ impl SkillHoverLineKind {
     }
 }
 
+/// One skill hover row before wrapping.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkillHoverLine {
     pub kind: SkillHoverLineKind,
     pub text: String,
 }
 
+/// One skill hover row after wrapping into display lines.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkillHoverRenderedLine {
     pub kind: SkillHoverLineKind,
     pub sources: Vec<String>,
 }
 
+/// A laid-out skill hover box: wrapped rows, content width, screen rectangle and line
+/// height.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkillHoverBoxLayout {
     pub rendered: Vec<SkillHoverRenderedLine>,
@@ -169,8 +175,9 @@ pub fn skill_hover_line_tint(kind: SkillHoverLineKind, skill_id: usize) -> u32 {
     }
 }
 
-/// `nativeSkillExactTextRuns`: malformed commands remain literal text. Only the
-/// source's decimal grammar is accepted; exponent/plus/whitespace forms are not commands.
+/// Splits authored skill text into runs at its `_i`, `_s(scale)` and `_o(x,y)` commands.
+/// Malformed commands remain literal text. Only plain decimals are accepted;
+/// exponent/plus/whitespace forms are not commands.
 #[must_use]
 pub fn skill_exact_text_runs(source: &str) -> Vec<UiTextRun<'_>> {
     let mut runs = Vec::new();
@@ -287,7 +294,7 @@ pub fn skill_hover_box_layout(lines: &[SkillHoverLine], source: Vec2) -> SkillHo
     let margin = SKILL_HOVER_CONTENT_MARGIN;
     let width = content_width + margin * 2.0;
     let height = content_height + margin * 2.0;
-    // Source uses max/min rather than clamp: very tall authored boxes still pin to25.
+    // Use max/min rather than clamp: very tall authored boxes still pin to 25.
     let x = margin.max((1600.0 - margin - width).min(source.x - width / 2.0));
     let mut y = source.y - 50.0 - height;
     if y < margin {

@@ -7,6 +7,7 @@ use solomon_sim::hub::college_intro::{
 };
 use solomon_sim::viewport::game_viewport;
 
+/// The College intro's stock title and cover, drawn during the courtyard walk.
 pub struct CollegeIntroOverlay {
     atlas: StockAtlas,
     view: Option<(usize, f64, f64, f64)>,

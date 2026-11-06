@@ -1,4 +1,5 @@
-//! Conservative author-facing suggestions from `web-lua-suggestions.ts`.
+//! Conservative author-facing suggestions: the closest known name to a misspelled one,
+//! within a small edit distance.
 
 pub fn suggest_web_lua_name<'a>(
     input: &str,

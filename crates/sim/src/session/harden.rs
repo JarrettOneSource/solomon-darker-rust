@@ -1,4 +1,5 @@
-//! Contact-born chips and coating transitions from `core-server/player-harden-effects.ts`.
+//! A player's Harden effects: contact-born chips, and the sounds and breakup of coating
+//! transitions.
 //! Effects share the primary spell queue; impact sounds share the secondary event cursor.
 
 use crate::harden_effects::{
@@ -12,9 +13,10 @@ use crate::secondary::{
 use crate::spells::model::{PrimarySpellTransient, SpellState};
 use crate::{Rng, Vec2};
 
-/// `native-harden.ts`: this crossing plays the formed sound twice.
+/// Crossing this coating plays the formed sound twice.
 const HARDEN_FORMED_THRESHOLD: f64 = 0.25;
 
+/// A Harden chip knocked off by a contact, waiting to be enrolled as a shard.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PendingPlayerHardenChip {
     pub chip: HardenChip,
@@ -23,6 +25,8 @@ pub struct PendingPlayerHardenChip {
     pub world_key: String,
 }
 
+/// What synchronizing one player's Harden effects reads and writes: coating before and
+/// after, position, spells, secondary events, RNG and painter order.
 pub struct PlayerHardenContext<'a> {
     pub enhanced_effects: bool,
     pub player_id: &'a str,
@@ -99,8 +103,8 @@ pub fn synchronize_player_harden_effects(
 }
 
 fn enroll(context: &mut PlayerHardenContext<'_>, mut effect: HardenEffect) {
-    // `nativePrimaryPainterRegistrationContract`: shards belong to the transient
-    // post-world queue; the expanding burst occupies an ordinary actor row.
+    // Shards belong to the transient post-world queue; the expanding burst occupies an
+    // ordinary actor row.
     let lane = match effect {
         HardenEffect::Shard { .. } => WorldManagerLane::Transient,
         HardenEffect::Burst { .. } => WorldManagerLane::Actor,

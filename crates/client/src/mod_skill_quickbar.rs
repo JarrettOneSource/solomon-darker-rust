@@ -30,6 +30,8 @@ struct QuickbarButton {
     name: String,
     image_url: Option<String>,
 }
+/// The authored skill quickbar: buttons for bound mod spells, their number keys and the casts
+/// they request.
 pub struct ModSkillQuickbarView {
     surface: Surface,
     buttons: Vec<QuickbarButton>,
@@ -247,7 +249,8 @@ impl ModSkillQuickbarView {
                 else {
                     return KeyboardEffect::Pass;
                 };
-                // Source also handles editable or previously prevented key events.
+                // Bound keys cast even while a text field has focus or after another handler
+                // claimed the key.
                 if let Some(action) =
                     cast_mod_skill_quickbar_spell(&binding.content_id, state.player)
                 {

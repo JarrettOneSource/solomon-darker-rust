@@ -1,5 +1,5 @@
-//! Weld point contacts and shared combat births from source
-//! `spell-combat/projectiles.ts` and `spell-combat/work.ts`.
+//! Weld projectile point contacts, Frost Missile area cold, and the combat births
+//! (detonations, debris and actors) that the Weld contacts share.
 
 use super::*;
 use crate::secondary::SecondaryElectricBurnEffectState;

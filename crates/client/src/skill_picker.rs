@@ -13,6 +13,8 @@ use solomon_sim::skill_picker::{
     skill_picker_panel, skill_picker_reveal,
 };
 use solomon_sim::ui_text::{UiFontName as Font, UiTextSpec as TextSpec};
+/// A choice made in the level-up skill picker: take a skill, reroll the offer, or save
+/// the choice for later.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SkillPickerAction {
     Choose(PlayerSkillChoice),
@@ -34,6 +36,8 @@ enum PickerEvent {
     Key(String),
 }
 
+/// The level-up skill picker: the displayed offer, selection and detail state, opening
+/// and closing timing, and actions waiting for the game.
 pub struct SkillPicker {
     ui: StockAtlas,
     skills: StockAtlas,

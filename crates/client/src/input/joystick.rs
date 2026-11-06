@@ -1,5 +1,5 @@
-//! Source TouchJoystick's actual GPU circle, knob and physical input geometry.
-//! Saved rotation changes its art; the canonical knob/input kernels retain screen aim.
+//! The touch joysticks: GPU circle, knob and label art and their input geometry. Saved
+//! rotation turns the art; the simulation's knob and input kernels keep aim in screen space.
 use super::*;
 use egui::{Color32, Pos2, Rect, Stroke, Vec2 as EVec2};
 use solomon_sim::mobile_ui::{
@@ -11,6 +11,7 @@ pub(super) fn layer_id() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Middle, egui::Id::unique("gameplay-joysticks"))
 }
 
+/// A touch joystick's screen center, size, saved rotation and scale for one frame.
 #[derive(Clone, Copy)]
 pub(super) struct JoystickGeometry {
     pub center: Pos2,
@@ -173,7 +174,8 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
                     geometry.rotation.to_degrees() as f64,
                 );
                 let center = geometry.center + rotation * egui::vec2(offset.x as f32, offset.y as f32);
-                // CSS's farthest-corner radius at 40% 35% of the 100px knob.
+                // The gradient is centered at (40%, 35%) of the 100-unit knob box and
+                // reaches the box's farthest corner.
                 let gradient_extent = 60.0_f32.hypot(65.0) * geometry.scale;
                 let knob_radius = 50.0 * geometry.scale;
                 radial(
@@ -194,8 +196,8 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
                     Stroke::new(2.0 * geometry.scale, Color32::from_rgba_unmultiplied(232, 220, 181, 158)),
                 );
                 let text = if lane == JoystickLane::Movement { "MOVE" } else { "AIM / CAST" };
-                // Source cancels only the native frame's display scale in its
-                // font size; player UI/custom sizing still scales the label.
+                // The label size cancels the display scale but keeps the player's UI
+                // size and custom joystick scale.
                 let font_size = 11.0 * geometry.scale / geometry.display_scale;
                 let opacity = if movement != Vec2::ZERO { 0.45 } else { 1.0 };
                 let anchor = geometry.center
@@ -220,7 +222,7 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
                         opacity,
                         shadows: vec![crate::gpu_ui::ImageShadow {
                             offset: rotation * egui::vec2(0.0, geometry.scale),
-                            // CSS text-shadow's 3px blur radius is sigma 1.5px.
+                            // A 3-unit blur radius is a Gaussian sigma of 1.5.
                             blur: 1.5 * geometry.scale,
                             color: Color32::BLACK,
                         }],
@@ -249,7 +251,7 @@ pub(super) fn paint(input: &MovementInput, frame: &UiFrame<'_>) -> Result<(), St
         }).inner?;
     Ok(())
 }
-/// The two authored CSS radial gradients become ordinary coloured GPU triangles.
+/// Paints an authored radial gradient as colored triangles in six rings of 64 segments.
 fn radial(
     painter: &egui::Painter,
     center: Pos2,

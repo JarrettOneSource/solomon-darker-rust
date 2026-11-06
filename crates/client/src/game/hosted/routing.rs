@@ -1,14 +1,17 @@
-//! MainMenuScene's explicit vanilla, private-College and party-content choices.
+//! The main menu's explicit vanilla, private-College and party-content choices.
 
 use super::*;
 use solomon_sim::social::GameSessionKind;
 
+/// The main menu choice a route follows: local play with active mods, vanilla play, or
+/// joining a party.
 pub(super) enum RouteKind {
     Local,
     Vanilla,
     Party(PartyJoinResolution),
 }
 
+/// A route to prepare: its kind, the player's selection, sign-in state and active mods.
 pub(super) struct RouteRequest {
     pub request_id: u64,
     kind: RouteKind,
@@ -18,11 +21,13 @@ pub(super) struct RouteRequest {
     vanilla_shared: bool,
 }
 
+/// A prepared route, or its error, with the active mod set after any changes.
 pub(super) struct CompletedRoute {
     active_mods: Vec<ActiveWebMod>,
     result: Result<PreparedRoute, String>,
 }
 
+/// A route ready to begin: its admission, mod and cheat policy, and character selection.
 pub(super) struct PreparedRoute {
     admission: Admission,
     allow_mod_mismatch: bool,
@@ -255,7 +260,7 @@ impl Game {
             self.commit_settings(settings)?;
         }
         if self.has_game {
-            // Source leaveGameplayForPartyTransfer preserves its exact checkpoint
+            // Leaving for a party transfer preserves the exact checkpoint
             // through Create and cannot destroy the old session before storage commits.
             self.native_menu_action(&MenuAction::Leave)?;
             self.hosted.as_mut().unwrap().pending_transfer = Some((request_id, prepared));

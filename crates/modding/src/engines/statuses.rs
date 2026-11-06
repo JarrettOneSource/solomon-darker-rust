@@ -1,4 +1,5 @@
-//! Status stacking, expiry and ordered modifiers from `mod-status-engine.ts`.
+//! Mod statuses on targets: stacking, expiry, and their incoming-damage and mana-spend
+//! modifiers, which take effect in the order the statuses were applied.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -11,6 +12,7 @@ use solomon_sim::modding::runtime::{ActiveModStatus, ModStatusCheckpoint};
 
 use super::{MAXIMUM_SAFE_INTEGER, duration_ticks, validate_tick, validate_tick_rate};
 
+/// The active mod status instances on each target, in the order they were applied.
 pub struct ModStatusEngine {
     catalog: Arc<PreparedModContentCatalog>,
     ticks_per_second: u32,
@@ -164,7 +166,7 @@ impl ModStatusEngine {
                 value = apply_modifier(value, modifier, definition, lane)?;
             }
         }
-        // Math.max propagates NaN; Rust's f64::max would silently choose 0.
+        // A NaN result stays NaN rather than being clamped; `f64::max` would turn it into 0.
         Ok(if value.is_nan() { value } else { value.max(0.0) })
     }
 }

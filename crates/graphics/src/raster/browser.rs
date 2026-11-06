@@ -5,6 +5,7 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
 use super::Paint;
 
+/// A Canvas2D surface that rasterizes generated scenery strokes in the browser.
 pub struct Raster {
     canvas: HtmlCanvasElement,
     context: CanvasRenderingContext2d,

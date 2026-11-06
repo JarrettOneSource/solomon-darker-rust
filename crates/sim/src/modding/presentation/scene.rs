@@ -1,8 +1,9 @@
-//! The authored SVG scene, from `mod-ui/mod-scene-model.ts`.
+//! The authored room map: a mod scene's rooms, read from the accepted Lua snapshot.
 
 use super::{integer, rows, text};
 use crate::modding::{LuaObject, LuaValue};
 
+/// One room of a mod scene: its identity, size, floor, walls and props.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModRoomModel<'a> {
     pub content_id: &'a str,
@@ -15,6 +16,7 @@ pub struct ModRoomModel<'a> {
     pub width: f64,
 }
 
+/// A mod scene to draw: its rooms, the current room and the scene epoch.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModSceneModel<'a> {
     pub content_id: &'a str,

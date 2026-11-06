@@ -1,5 +1,5 @@
-//! Inventory and learned Skillbook geometry from `hub-inventory-render-contract.ts` and
-//! `skill-book-model.ts`. The view reads canonical ownership; it never grants items or skills.
+//! Inventory and learned Skillbook geometry, tooltip text and rejection notices. The view
+//! reads canonical ownership; it never grants items or skills.
 
 pub mod dialogue;
 pub mod dye;
@@ -18,15 +18,16 @@ use crate::profile::{SkillBookState, SkillDefinition, skill_category, skill_rule
 pub const INVENTORY_CAPACITY: usize = 88;
 pub const INVENTORY_CELL_SIZE: f64 = 72.0;
 
+/// The authored message box for an inventory rejection: its title and body.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InventoryRejectionNotice {
     pub title: &'static str,
     pub body: &'static str,
 }
 
-/// `HubInventorySurface.tsx` uses bad-action feedback for ordinary rejections. Only the
-/// authored Hagatha, Shlorio and required-clothing cases open a message box; machine
-/// reason codes are never product copy. The panel fixture retains the source strings.
+/// Ordinary rejections get bad-action feedback only. Only the authored Hagatha, Shlorio
+/// and required-clothing cases open a message box; machine reason codes are never product
+/// copy. The `player-panels-goldens` fixture pins this copy.
 #[must_use]
 pub fn inventory_rejection_notice(
     action: &HubInventoryAction,
@@ -89,6 +90,8 @@ pub fn equipment_slot_rects(slot: EquipmentSlot) -> Vec<HudRect> {
     }
 }
 
+/// One Skillbook page: a learned root skill, its learned dependents, and the page's
+/// position and width.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkillBookPagePlacement {
     pub root_skill_id: usize,
@@ -215,9 +218,9 @@ pub fn format_skill_tooltip_line(source: &str, definition: &SkillDefinition, ran
     result.replace("[CR]", "\n").replace("\"\r\n\t\"", "\n").replace('"', "")
 }
 
-/// JavaScript `toFixed` rounds exact half values away from zero; Rust's formatter uses
-/// ties-to-even. Work from the binary significand so 2.5 becomes 3 while 2.55 remains 2.5
-/// at one decimal. Multiplying the float first would lose that second distinction.
+/// Rounds the exact binary value half away from zero; Rust's formatter uses ties-to-even.
+/// Work from the binary significand so 2.5 becomes 3 while 2.55 remains 2.5 at one
+/// decimal. Multiplying the float first would lose that second distinction.
 #[must_use]
 pub fn tooltip_fixed(value: f64, digits: u32) -> String {
     assert!(value.is_finite() && digits <= 2, "native tooltip stat range");

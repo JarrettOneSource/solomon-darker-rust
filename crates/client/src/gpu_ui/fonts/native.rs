@@ -11,6 +11,7 @@ thread_local! {
     static FONTS: RefCell<Weak<RefCell<FontSystem>>> = const { RefCell::new(Weak::new()) };
 }
 
+/// Keeps the native font system, with the stock faces loaded, alive for the UI.
 pub(crate) struct PlatformFonts {
     _owner: Rc<RefCell<FontSystem>>,
 }

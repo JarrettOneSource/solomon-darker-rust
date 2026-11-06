@@ -21,6 +21,8 @@ struct State {
     transport: Option<Arc<Model>>,
 }
 
+/// What a native text edit returned this frame: its response, whether it submitted, and any
+/// rejection reason.
 pub struct NativeEditOutput {
     pub response: Response,
     pub submitted: bool,
@@ -34,7 +36,7 @@ impl std::ops::Deref for NativeEditOutput {
     }
 }
 
-/// Source field policy is supplied here once and reused synchronously by the
+/// The field's policy is supplied here once and reused synchronously by the
 /// native input transport. There is no independent browser control renderer.
 pub struct NativeTextEdit<'a> {
     text: &'a mut String,
@@ -463,7 +465,7 @@ fn paint_native_name(
 ) {
     use solomon_sim::menu::create_name::layout_create_wizard_name;
     use solomon_sim::ui_text::{UiFontName, UiTextLayout};
-    // Source permits the empty editable draft and paints no heading glyphs.
+    // An empty draft is allowed while editing and paints no heading glyphs.
     // Genericus is substituted only by final loadout admission.
     if text.is_empty() {
         return;

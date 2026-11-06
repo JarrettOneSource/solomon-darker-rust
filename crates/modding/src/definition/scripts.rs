@@ -1,4 +1,5 @@
-//! Packed includes from `web-lua-script-bundle.ts`.
+//! Packed includes: a mod's included Lua scripts bundled into its entry script after a
+//! marker comment, and read back from it.
 
 use solomon_sim::modding::LuaValue;
 

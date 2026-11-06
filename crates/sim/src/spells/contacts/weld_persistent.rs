@@ -1,6 +1,6 @@
-//! Released Weld Boulder/Hail pools and Meteor contacts from source
-//! `spell-combat/transients.ts`. Native gathers retain their separate root/cell
-//! ordering; each accepted contact updates the real enemy before the next query.
+//! Contacts for released Weld Boulder and Hail damage pools, and for Meteors.
+//! Native gathers retain their separate root/cell ordering; each accepted contact
+//! updates the real enemy before the next query.
 
 use super::*;
 

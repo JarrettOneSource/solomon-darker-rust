@@ -1,5 +1,5 @@
-//! Weld light formulas from `core-kernels/native-boneyard-light-model.ts`.
-//! Values are the source-owned projectile/rock/meteor fields; no actor clocks live here.
+//! Light sources for Weld projectiles, rocks and meteors. Callers pass each actor's own
+//! fields; no actor clocks live here.
 
 use crate::Vec2;
 use crate::float::fround;

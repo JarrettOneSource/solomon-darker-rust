@@ -1,5 +1,5 @@
-//! Source discriminators route into the canonical nested Weld, Staff and Harden enums.
-//! No wrapper tags are written to disk: the source has one flat `kind` per live actor.
+//! The document's `kind` discriminators route into the canonical nested Weld, Staff and
+//! Harden enums. No wrapper tags are written to disk: each live actor has one flat `kind`.
 
 use serde_json::{Value, json};
 
@@ -179,7 +179,7 @@ pub(super) fn finish(name: &str, value: &mut Value) {
             }
         }
     }
-    // A Meteor field never enters flight; the source still writes its literal phase.
+    // A Meteor field never enters flight; the document still records its phase as `held`.
     if name == "WeldMeteorFieldState" {
         value["phase"] = json!("held");
     }
@@ -194,8 +194,8 @@ pub(super) fn finish(name: &str, value: &mut Value) {
     for field in nested {
         super::enemies::flatten(value, field);
     }
-    // These source families own painter roots without declaring a light slot.
-    // The shared Rust transient base retains that slot for native host snapshots.
+    // In the document these families own painter roots without a light slot. The
+    // shared transient base keeps that slot for native host snapshots, so drop it here.
     if matches!(
         name,
         "PrimarySpellAirHurricane"

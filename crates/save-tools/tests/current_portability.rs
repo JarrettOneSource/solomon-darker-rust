@@ -1,4 +1,4 @@
-//! Current Account import/export cases recorded from the unmodified Website APIs.
+//! Account save import and export cases, replayed from a recording of the Website client.
 
 use serde_json::{Value, json};
 use solomon_assets::native_save::{

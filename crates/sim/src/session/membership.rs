@@ -1,5 +1,5 @@
-//! Participant add/remove, Hub transfer and active-run detach/rejoin from the public
-//! Game API. Connection generations and reservation deadlines belong to the host.
+//! Participant add/remove, Hub transfer and active-run detach/rejoin. Connection
+//! generations and reservation deadlines belong to the host.
 
 use super::*;
 use crate::game_run::GameRunPhase;
@@ -15,6 +15,8 @@ pub struct ParticipantProfile {
     pub advanced_unlocks: [bool; 8],
 }
 
+/// A participant detached from an active run so it can rejoin later, with its run ID and
+/// the next entity ID.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DetachedSessionParticipant {
@@ -25,9 +27,9 @@ pub struct DetachedSessionParticipant {
 }
 
 impl GameSession {
-    /// `partitionGameSimulationPlayers` retains both source world values and removes
-    /// the opposite cohort in entity order. No constructor, RNG draw or painter birth
-    /// occurs while selecting a party for a hosted run or a save document.
+    /// Splits the session into selected and remaining copies. Each keeps the original world
+    /// values and removes the other cohort in entity order. No constructor, RNG draw or
+    /// painter birth occurs while selecting a party for a hosted run or a save document.
     pub fn partition(&self, selected_ids: &[String]) -> Result<SessionPartition, String> {
         let selected_set: std::collections::BTreeSet<_> = selected_ids.iter().collect();
         if selected_set.len() != selected_ids.len()
@@ -71,9 +73,8 @@ impl GameSession {
         true
     }
 
-    /// Retire the wizard, then hydrate the fresh character from its durable
-    /// profile (`retireGameSaveWizard` / `hydrateGameSaveProfile`). A shared
-    /// active run must transfer that profile to its Hub rather than reset peers.
+    /// Retire the wizard, then hydrate the fresh character from its durable profile. A
+    /// shared active run must transfer that profile to its Hub rather than reset peers.
     pub fn reset_participant(&mut self, id: &str, selection: NewGameSelection) -> bool {
         if !self.participants.contains_key(id) {
             return false;
@@ -131,8 +132,8 @@ impl GameSession {
         })
     }
 
-    /// `game-host.ts::synchronizePartyRejoinMilestones` uses the first retained
-    /// entity's current progression, rather than recreating policy from wall time.
+    /// A rejoining participant's milestone comes from the first retained entity's current
+    /// progression, rather than recreating policy from wall time.
     #[must_use]
     pub fn rejoin_milestone(
         &self,
@@ -216,7 +217,7 @@ impl GameSession {
     }
 
     /// Hub reconnect/transfer retains the actual profile and character. It
-    /// enrolls a fresh lighting owner and resets source cast occupancy only.
+    /// enrolls a fresh lighting owner and resets only its primary cast state.
     pub fn import_hub_participant(
         &mut self,
         mut participant: SessionParticipant,
@@ -253,8 +254,8 @@ impl GameSession {
         true
     }
 
-    /// `hydrateGameSaveProfile`: replace the durable economy, refresh its derived
-    /// book and resources, migrate starter tints, then restore unlocks and owned effects.
+    /// Replaces the durable economy, refreshes its derived book and resources, migrates
+    /// starter tints, then restores unlocks and owned effects.
     pub fn hydrate_participant_profile(
         &mut self,
         id: &str,
@@ -279,7 +280,7 @@ impl GameSession {
         Ok(())
     }
 
-    /// `migratePlayerStarterEquipmentAppearance` also applies to a continued wizard.
+    /// Starter equipment appearance migration also applies to a continued wizard.
     /// Its private offer seed owns the replacement colours; the session RNG is untouched.
     pub fn migrate_participant_starter_appearance(&mut self, id: &str) -> Result<(), String> {
         let participant = self
@@ -418,6 +419,7 @@ impl GameSession {
     }
 }
 
+/// The two sessions a partition produces: the selected participants and the rest.
 #[derive(Clone, Debug)]
 pub struct SessionPartition {
     pub remaining: GameSession,

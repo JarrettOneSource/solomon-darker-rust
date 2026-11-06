@@ -1,5 +1,6 @@
-//! Native Cold Aura cache and repeated float stores from `native-cold-aura.ts`.
-//! Radius is the authored feet/7 skill cache; target queries convert it separately.
+//! Cold Aura's cached radius scale, alpha decay, lifetime and fading visual, with each step
+//! stored at single precision. Radius is the authored feet/7 skill cache; target queries
+//! convert it separately.
 use crate::float::fround;
 
 pub const COLD_AURA_PERIOD_TICKS: u64 = 6;
@@ -37,6 +38,7 @@ pub fn cold_aura_lifetime_ticks(alpha_decay: f64) -> u64 {
     }
     ticks
 }
+/// One emitted Cold Aura visual's age, alpha decay and rotation parameters.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColdAuraVisualInput {
     pub age_ticks: f64,
@@ -44,6 +46,7 @@ pub struct ColdAuraVisualInput {
     pub initial_rotation_degrees: f64,
     pub rotation_step_degrees: f64,
 }
+/// A Cold Aura visual at its current age: alpha, red channel, rotation and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColdAuraVisualState {
     pub alpha: f64,

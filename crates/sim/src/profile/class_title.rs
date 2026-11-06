@@ -1,4 +1,5 @@
-//! Native wizard class names and elemental fallback from `core-kernels/native-wizard-class.ts`.
+//! Wizard class titles by element and discipline. An elemental discipline falls back to
+//! the plain WIZARD title.
 
 use super::{WizardDiscipline, WizardElement};
 

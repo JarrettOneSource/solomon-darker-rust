@@ -1,5 +1,5 @@
-//! Scoped reducer cells from `modding/runtime/mod-state-store.ts`.
-//! Migration callbacks are borrowed from the real VM during restore; saved cells
+//! Reducer state cells: one schema-checked value per mod, reducer key and scope.
+//! Migration callbacks are borrowed from the mod's VM during restore; saved cells
 //! retain only schema identity, scope and ordinary ordered values.
 
 use solomon_sim::modding::definition::WebLuaSchemaDefinition;
@@ -20,6 +20,7 @@ struct StoredCell {
     value: LuaValue,
 }
 
+/// The reducer state cells of every registered mod, each checked against its schema.
 pub struct ModStateStore {
     cells: Vec<StoredCell>,
     closed: bool,
@@ -126,7 +127,7 @@ impl ModStateStore {
         let mut candidate: Vec<StoredCell> = Vec::new();
         for snapshot in &checkpoint.cells {
             validate_scope(&snapshot.scope)?;
-            // Source Map construction retains the last definition of an equal key.
+            // When several definitions share a key, the last one wins.
             let Some(definition) = definitions.iter().rev().find(|definition| {
                 definition.mod_id == snapshot.mod_id
                     && definition.key == snapshot.key

@@ -1,4 +1,4 @@
-//! Shared line quads and packed colors from `core-kernels/native-line.ts`.
+//! Line quads and packed line colors shared by the seeker and spider web presentations.
 //! Retail: 0x00455840 / 0x005E4510 -> 0x0041FB90.
 
 use crate::Vec2;
@@ -30,7 +30,7 @@ pub fn line_vertices(start: Vec2, end: Vec2, width: f64) -> [f64; 8] {
 
 #[must_use]
 pub fn line_color(red: f64, green: f64, blue: f64, alpha: f64) -> u32 {
-    // The source truncates and wraps each channel with &0xff, without clamping.
+    // Each channel is truncated and wrapped with &0xff, without clamping.
     let channel = |value| (fround(value) * 255.0).trunc().rem_euclid(256.0) as u32;
     channel(red) | channel(green) << 8 | channel(blue) << 16 | channel(alpha) << 24
 }

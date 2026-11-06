@@ -1,5 +1,5 @@
-//! The authoritative five-element contact transaction from
-//! `core-server/boneyard-spell-combat.ts` and its `spell-combat` modules.
+//! The authoritative contact transaction for primary spells of all five elements and
+//! their Welds: hits, damage, pushback and the effects contacts leave behind.
 //! Projectile motion has committed before this step. EnemyWorld owns acceptance
 //! and semantic events; secondary status ownership receives the returned patches.
 
@@ -35,6 +35,7 @@ mod weld_persistent;
 
 const WELD_FROST_SLOW_FACTOR: f64 = 0.5;
 
+/// The spell or spell effect that dealt a hit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoneyardSpellHitKind {
     Air,
@@ -73,6 +74,7 @@ impl BoneyardSpellHitKind {
     }
 }
 
+/// One spell hit on an enemy: amount, owner, spell and whether it killed.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardSpellHit {
     pub actor_id: usize,
@@ -84,17 +86,20 @@ pub struct BoneyardSpellHit {
     pub tick: u64,
 }
 
+/// A Fire burn that a contact hands to the secondary status owner.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardSpellBurnContact {
     pub damage: f64,
     pub owner_id: String,
     pub target_id: usize,
 }
+/// An Ether burn that a contact hands to the secondary status owner.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardSpellEtherBurnContact {
     pub owner_id: String,
     pub target_id: usize,
 }
+/// A status patch, such as a cold slow or stun, for an enemy's secondary target effects.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardSpellTargetEffectContact {
     pub patch: SecondaryTargetEffectPatch,
@@ -110,13 +115,14 @@ pub enum BoneyardSpellDamageNotice {
     HealthDamage { actor_id: usize, amount: f64, maximum_health: f64, owner_id: String },
 }
 
+/// What a contact pass produced: hits, burns, status patches and damage notices.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BoneyardSpellCombatResult {
     pub burns: Vec<BoneyardSpellBurnContact>,
     pub ether_burns: Vec<BoneyardSpellEtherBurnContact>,
     pub hits: Vec<BoneyardSpellHit>,
     pub target_effects: Vec<BoneyardSpellTargetEffectContact>,
-    /// Source observer order, including reward before attribution on a lethal hit.
+    /// In observer order: on a lethal hit the reward precedes the damage attribution.
     pub damage_notices: Vec<BoneyardSpellDamageNotice>,
 }
 
@@ -124,6 +130,7 @@ pub type BoneyardSpellDamageMultiplier<'a> = dyn Fn(usize, BoneyardSpellHitKind,
 pub type BoneyardSpellWorldContact<'a> = dyn Fn(Vec2, Vec2, f64) -> Option<f64> + 'a;
 pub type ResolveBoneyardSpellEnemyMovement<'a> = dyn FnMut(usize, Vec2, Vec2, f64) -> Vec2 + 'a;
 
+/// This tick's cast output and the world callbacks that a contact pass reads.
 pub struct BoneyardSpellCombatContext<'a> {
     pub enhanced_effects: bool,
     pub channel_emissions: &'a [PrimarySpellChannelEmission],
@@ -161,14 +168,15 @@ pub struct BoneyardSpecialDeathInput<'a> {
     pub enhanced_effects: bool,
 }
 
+/// The spells a special death created and the contacts they made.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BoneyardSpecialDeathResult {
     pub spells: SpellState,
     pub combat: BoneyardSpellCombatResult,
 }
 
-/// Source `resolveBoneyardSpecialDeathPayload`: execute only the newborn's
-/// receiver pass through the canonical contact transaction, without old actors.
+/// Executes only the newborn's receiver pass through the canonical contact
+/// transaction, without old actors.
 pub fn resolve_boneyard_special_death_payload(
     enemies: &mut EnemyWorld,
     input: BoneyardSpecialDeathInput<'_>,
@@ -409,7 +417,7 @@ impl ContactWork<'_, '_> {
             && !matches!(actor.brain, crate::enemies::model::EnemyBrain::Cocoon(_))
         {
             // A true lethal hit preserves config. Armor conversion is accepted but
-            // nonlethal; Cocoons and Maggots have no source onReward callback here.
+            // nonlethal; Cocoons and Maggots publish no lethal reward here.
             self.result.damage_notices.push(BoneyardSpellDamageNotice::LethalReward {
                 actor_id,
                 enemy: Box::new(actor.config.clone()),
@@ -530,7 +538,7 @@ impl ContactWork<'_, '_> {
         let debris = create_weld_boulder_contact_debris_program(charge, self.rng);
         let id = self.next_id;
         self.next_id += 1;
-        // The source consumes the contact program and id before testing a 0/0 pool.
+        // The contact program and ID are consumed before testing a 0/0 pool.
         if !charge.is_finite() {
             return;
         }
@@ -1038,7 +1046,7 @@ impl ContactWork<'_, '_> {
             reach: if emission.underpowered { 205.0 } else { profile.reach },
             targets: &targets,
         });
-        // Keep the source query snapshot while mutation updates the authoritative store.
+        // Keep the query's target snapshot while mutation updates the authoritative store.
         let contacts: Vec<_> = contacts.into_iter().cloned().collect();
         for target in contacts {
             let row =
@@ -1333,7 +1341,7 @@ fn root_target_rows(enemies: &EnemyWorld, origin: Vec2, reach: f64, mask: u32) -
         .into_iter()
         .map(|target| target.id.as_str())
         .collect();
-    // The source gather selects membership, then resumes the store's actor order.
+    // The root gather selects membership; the rows keep the store's actor order.
     rows.into_iter().filter(|row| ids.contains(row.target.id.as_str())).collect()
 }
 

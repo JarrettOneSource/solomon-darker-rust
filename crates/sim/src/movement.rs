@@ -14,6 +14,8 @@ use crate::constants::{COLLISION_RESPONSE, ENEMY_MOVEMENT, PLAYER_MOVEMENT};
 use crate::float::{fround, hypot};
 use crate::rng::Rng;
 
+/// A wizard's movement state: intent, velocity accumulator, speed multipliers, step scale and
+/// damping mode.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerMovementState {
     /// Requested direction; magnitudes above one are normalized.
@@ -44,12 +46,14 @@ impl PlayerMovementState {
     }
 }
 
+/// An active knockback: its origin and the distance still to travel.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct KnockbackState {
     pub origin: Vec2,
     pub remaining_distance: f64,
 }
 
+/// A wizard's moving body: position, collision radius, movement state and any knockback.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerActor {
     pub position: Vec2,
@@ -170,6 +174,7 @@ impl PlayerActor {
     }
 }
 
+/// An enemy family, which decides its base movement speed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EnemyFamily {
     Imp,
@@ -222,6 +227,8 @@ pub fn create_enemy_base_speed(family: EnemyFamily, rng: &mut Rng) -> f64 {
     }
 }
 
+/// An enemy's moving body: position, radius, direction, move cadence, insertion slot and speed
+/// factors.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyActor {

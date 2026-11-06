@@ -1,5 +1,5 @@
-//! Parses the tracked retail bundles and checks their record counts against the counts the
-//! Website extractor asserts. `SOLOMON_STOCK_DIR` selects an external retail root's images.
+//! Parses the tracked retail bundles and checks each bundle's known record count.
+//! `SOLOMON_STOCK_DIR` selects an external retail root's images.
 
 use std::path::PathBuf;
 

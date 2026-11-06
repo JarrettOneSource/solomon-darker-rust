@@ -1,5 +1,5 @@
-//! Fire's projectile-private fan, embers, persistent patches and friendly Imps from
-//! `core-kernels/primary-spell-fire-effects.ts`. The shared enemy path kernel owns routing.
+//! The Fire primary's effects: the detonation and its private ember fan, embers, fire
+//! patches and friendly Imps. The shared enemy path kernel owns routing.
 
 use super::model::*;
 use super::targeting::{PrimarySpellTarget, primary_target_eligible};
@@ -61,6 +61,8 @@ fn fire_presentation_word(id: u64, sample: u64, channel: u32) -> u32 {
     value = (value ^ (value >> 15)).wrapping_mul(0x735a_2d97);
     value ^ (value >> 15)
 }
+/// What a fireball carries into its detonation: burn, explosion and ember damage, the
+/// explosion radius, ember count, private seed and what spent embers become.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FireProjectilePayload {
     pub burn_damage: f64,
@@ -99,6 +101,7 @@ pub struct FireExplosionState {
     pub world_key: String,
 }
 
+/// What a spent ember becomes: nothing, an immolation explosion or a friendly Imp.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FireEmberRetirement {
     None,
@@ -113,12 +116,15 @@ pub enum FireEmberRetirement {
     },
 }
 
+/// The result of one ember tick: whether it stays and what it retires into.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FireEmberStep {
     pub retained: bool,
     pub retirement: FireEmberRetirement,
 }
 
+/// A finished detonation: its explosion, embers, the contacts from the embers'
+/// pre-ticks, sound pitch and the next free spell ID.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FireDetonation {
     pub contacts: Vec<FireRadialContact>,
@@ -128,6 +134,7 @@ pub struct FireDetonation {
     pub sound_pitch: f64,
 }
 
+/// Inputs for creating a fire patch; each `None` takes the patch type's default.
 pub struct CreateFirePatchOptions {
     pub atlas_phase_step: Option<f64>,
     pub burn_damage: f64,
@@ -147,6 +154,7 @@ pub struct CreateFirePatchOptions {
     pub world_key: String,
 }
 
+/// Inputs for spawning a friendly Imp: its damage, lifetime, owner and position.
 pub struct SpawnFireGoodImpOptions {
     pub burn_damage: f64,
     pub damage: f64,
@@ -157,12 +165,14 @@ pub struct SpawnFireGoodImpOptions {
     pub world_key: String,
 }
 
+/// What a friendly Imp's step reads from the world: occupancy, navigation and targets.
 pub struct FireGoodImpStepContext<'a> {
     pub can_occupy: &'a dyn Fn(Vec2) -> bool,
     pub navigation: Option<&'a dyn EnemyNavigation>,
     pub targets: &'a [PrimarySpellTarget],
 }
 
+/// The result of one friendly Imp tick: whether it stays and the contact it made.
 pub struct FireGoodImpStep {
     pub contact: Option<FireTargetContact>,
     pub retained: bool,
@@ -477,7 +487,7 @@ pub fn fire_direct_damage(base_damage: f64, explode_damage: f64) -> f64 {
     (if explode_damage > 0.0 { base_damage - explode_damage } else { base_damage }).max(0.0)
 }
 
-/// The constructor fan is resumable at the Source observer boundaries: explosion,
+/// The constructor fan is resumable at its observer boundaries: explosion,
 /// Ember registration, then each of its ten immediate receiver contacts. It owns
 /// only private fan state; the caller still passes the one shared gameplay RNG.
 pub struct FireEmberFan<'a> {
@@ -492,6 +502,8 @@ pub struct FireEmberFan<'a> {
     heading_step: f64,
 }
 
+/// A detonation's start: its optional explosion, sound pitch and the ember fan still to
+/// be constructed.
 pub struct FireDetonationBirth<'a> {
     pub explosion: Option<FireExplosionState>,
     pub sound_pitch: f64,

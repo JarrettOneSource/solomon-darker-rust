@@ -10,6 +10,8 @@ use solomon_sim::profile::WizardElement;
 use crate::gpu_ui::UiFrame;
 use solomon_graphics::assets;
 
+/// Stock wizard portrait frames, with each heading's staff orb socket and whether the
+/// staff draws in front.
 #[derive(Deserialize)]
 pub(crate) struct StockPortraits {
     frames: BTreeMap<String, Vec<Option<[i32; 7]>>>,

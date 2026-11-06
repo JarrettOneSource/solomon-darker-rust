@@ -1,4 +1,4 @@
-//! Screen-space world labels from `renderer/native-world-{nameplate,speech}.ts`.
+//! Screen-space world labels: nameplates and speech bubbles above actors.
 //! Text uses the shared authored bitmap metrics; camera scale affects anchors only.
 
 use crate::Vec2;
@@ -14,6 +14,7 @@ pub const WORLD_SPEECH_WORLD_OFFSET_Y: f64 = -78.0;
 pub const WORLD_SPEECH_LINE_HEIGHT: f64 = 16.0;
 pub const WORLD_SPEECH_CONTENT_MAX_WIDTH: f64 = 240.0;
 
+/// A nameplate's glyphs and plate width, with the offsets that center the name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldNameplateVisualLayout {
     pub cap_box: [f64; 2],
@@ -23,6 +24,7 @@ pub struct WorldNameplateVisualLayout {
     pub width: f64,
 }
 
+/// One wrapped line of a speech bubble: its text, glyphs and advance.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldSpeechLine {
     pub advance: f64,
@@ -30,6 +32,7 @@ pub struct WorldSpeechLine {
     pub text: String,
 }
 
+/// A speech bubble's wrapped lines and its size.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldSpeechLayout {
     pub glyph_count: usize,
@@ -97,7 +100,8 @@ pub fn layout_world_speech(text: &str) -> WorldSpeechLayout {
     }
 }
 
-/// `projectNativeWorldPoint` culls the anchor before its whole-pixel placement.
+/// Projects a world point to the screen, culling the anchor before its whole-pixel
+/// placement.
 #[must_use]
 pub fn project_world_point(
     point: Vec2,
@@ -166,7 +170,7 @@ fn wrap_world_speech(text: &str) -> Vec<String> {
     lines
 }
 
-// Source \s treats a BOM as whitespace, but keeps NEL inside a word.
+// Speech wraps at JavaScript `\s` whitespace: a BOM breaks words, but NEL stays inside one.
 fn is_javascript_whitespace(character: char) -> bool {
     matches!(character, '\t'..='\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'..='\u{200a}'
         | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}')

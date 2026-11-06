@@ -1,8 +1,7 @@
 //! Readers for the stock Solomon Dark asset containers.
 //!
 //! The retail `images/*.bundle` files are flat arrays of sprite records that index into the
-//! PNG atlas of the same name. The layout (little-endian) is recorded in the Website's
-//! `tools/native_bundle_art.py`:
+//! PNG atlas of the same name. Each record has this little-endian layout:
 //!
 //! | offset | type        | field                                      |
 //! |--------|-------------|--------------------------------------------|

@@ -149,7 +149,7 @@ impl GameSession {
         if self.run.game_over_ticks != 300 {
             return;
         }
-        // The source sorts Hall rows, independently of entity/registration order.
+        // Hall rows are sorted independently of entity/registration order.
         for participant in self.participants.values_mut() {
             let heading = self.gameplay_rng.draw_scaled_float(65.0, true);
             let scale = self.gameplay_rng.draw_scaled_float(0.15_f32 as f64, false);

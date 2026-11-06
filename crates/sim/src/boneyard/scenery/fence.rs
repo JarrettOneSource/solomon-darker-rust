@@ -1,12 +1,14 @@
-//! Fence materialization in `core-kernels/boneyard-fence-posts.ts` and
-//! `editor/native-fence-geometry.ts`. Broken halves own a private seeded RNG;
-//! generating a scene never consumes the game's accepted random stream.
+//! Fence geometry built from a scene's fences: shared posts, the two halves of a
+//! broken fence and the quad of an intact grate. Broken halves own a private seeded
+//! RNG; generating a scene never consumes the game's accepted random stream.
 
 use crate::float::{fround as f, hypot};
 use crate::{Rng, Vec2};
 
 use super::super::BoneyardFence;
 
+/// A fence post shared by every fence ending at its position: the first fence that placed
+/// it, its glyph variant and its style (1 beside a rail).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SceneryFencePost {
     pub fence_index: usize,
@@ -50,6 +52,8 @@ pub fn boneyard_fence_posts(fences: &[BoneyardFence]) -> Vec<SceneryFencePost> {
     posts
 }
 
+/// One half of a broken fence: its quad corners, painter root, private RNG seed and the
+/// inset base line that its shadow steps along in 8-unit steps.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BrokenFenceHalf {
     /// Upper start/end, lower start/end: indices 0,1,2 / 2,1,3.
@@ -82,8 +86,8 @@ pub fn broken_fence_halves(
         let selector = if is_start { start_variant } else { end_variant };
         let seed_input =
             f(f(f(f64::from(selector) + 1.0 + anchor.x) + anchor.y) * f(anchor.x * anchor.y));
-        // JavaScript's bitwise conversion keeps the low word, including when
-        // coordinate products exceed a signed native integer.
+        // Keep the low 32 bits of the truncated value, including when coordinate
+        // products exceed a signed 32-bit integer.
         let mut word = if seed_input.is_finite() {
             seed_input.trunc().rem_euclid(4_294_967_296.0) as u32
         } else {
@@ -130,6 +134,8 @@ pub fn broken_fence_halves(
     halves
 }
 
+/// The quad of an intact grate fence, inset 12 units from each end and 52 units tall, with
+/// its length and horizontal texture span.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NativeFenceGrate {
     pub corners: [Vec2; 4],

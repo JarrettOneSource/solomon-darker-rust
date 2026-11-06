@@ -1,5 +1,5 @@
-//! Secondary actor and articulated Golem projection from
-//! `client/native-secondary-presentation.ts`.
+//! Display sampling of secondary spell actors, including the articulated Golem, between
+//! two accepted snapshots.
 
 use solomon_sim::secondary::SecondarySimulationState;
 
@@ -20,8 +20,8 @@ pub(super) fn project(
         blend,
         |actor| actor.id,
         |first, next, blend| {
-            // Source keeps the older row when an ID changes kind; no invented
-            // halfway actor may cross that discrete presentation boundary.
+            // Keep the older row when an ID changes kind; no invented halfway actor
+            // may cross that discrete presentation boundary.
             if first.kind != next.kind {
                 return first.clone();
             }

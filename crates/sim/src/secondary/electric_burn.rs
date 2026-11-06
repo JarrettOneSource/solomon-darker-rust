@@ -87,6 +87,7 @@ pub(super) fn step_flare(
     *retain = alpha >= 0.0;
 }
 
+/// One horizontal clip band of an Electric Burn arc and the painter row it draws at.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ElectricBurnArcBand {
     pub clip_y: f64,
@@ -94,6 +95,8 @@ pub struct ElectricBurnArcBand {
     pub painter_y: f64,
 }
 
+/// An Electric Burn arc ready to draw: its lightning body and the clip bands that split it
+/// across painter rows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ElectricBurnArcPlan {
     pub body: Vec<AirRibbonLayer>,
@@ -101,7 +104,7 @@ pub struct ElectricBurnArcPlan {
     pub bands: Vec<ElectricBurnArcBand>,
 }
 
-/// `NativeElectricBurnArcView`: born quality owns the factory geometry; current
+/// The Electric Burn arc's draw plan. Born quality owns the factory geometry; current
 /// quality changes only its ordinary ZAnimSplit masks. No glow belongs here.
 #[must_use]
 pub fn electric_burn_arc_plan(
@@ -144,7 +147,7 @@ pub fn electric_burn_arc_plan(
     let count = ((maximum - minimum) / height).ceil() as usize;
     let bands = (0..count)
         .map(|index| {
-            // NativeZAnimSplit uses ordinary Number arithmetic, unlike Flame's stores.
+            // Band splitting uses plain f64 arithmetic, unlike Flame's float32 stores.
             let y = minimum + index as f64 * height;
             ElectricBurnArcBand { clip_y: y, clip_height: height, painter_y: y + height }
         })

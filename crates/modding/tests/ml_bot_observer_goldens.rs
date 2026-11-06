@@ -1,4 +1,5 @@
-//! Complete policy frames borrow restored canonical Sessions and the existing Source collator.
+//! Complete ML bot policy frames observe restored canonical Sessions and order player IDs
+//! with the shared `SourceCollator`.
 
 use std::collections::BTreeMap;
 
@@ -231,8 +232,8 @@ fn source_legal_masks_and_all_action_heads_preserve_the_interpreted_intent() {
         };
         let mut frame =
             MlBotPolicyObserver::new("local".into()).unwrap().observe(&session, &context).unwrap();
-        // These are explicit inputs to actions.ts's public frame contract, applied
-        // after a real observation. They do not claim a separate gameplay trace.
+        // These patches are explicit inputs to the action-mask plan, applied after
+        // a real observation. They do not claim a separate gameplay trace.
         let patch = &case["patch"];
         let player = &mut session.participants.get_mut("local").unwrap().player;
         if let Some(id) = patch["primary"].as_u64() {
@@ -508,8 +509,8 @@ fn real_source_controller_preserves_async_admission_deadlines_and_captured_actio
                     ));
                 }
                 "finishRun" => {
-                    // Source drives its public run kernel here. This fixture tests
-                    // controller precedence, not a second combat-death journey.
+                    // Step the run back to Loadout. This fixture tests controller
+                    // precedence, not a second combat-death journey.
                     let mut count = 0;
                     while session.run.phase != GameRunPhase::Loadout {
                         session.run.step(&[]);

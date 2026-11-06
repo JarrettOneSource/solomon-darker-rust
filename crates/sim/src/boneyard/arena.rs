@@ -1,10 +1,12 @@
-//! Generated Boneyard entrance bounds, ported from `boneyard-arena-transition.ts`.
+//! A generated Boneyard's entrance bounds: when combat starts, the camera closes from the full
+//! entrance area onto the smaller combat bounds and the arena seals.
 
 use crate::Vec2;
 use crate::float::fround;
 
 use super::BoneyardBounds;
 
+/// The arena's stage: open before combat, locking while the camera closes in, then sealed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum ArenaPhase {
@@ -13,6 +15,7 @@ pub enum ArenaPhase {
     Sealed,
 }
 
+/// The side of the Boneyard that players enter from, chosen by the spawn position.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EntrySide {
@@ -71,7 +74,7 @@ impl ArenaTransition {
         self.seal_ticks_remaining = 400;
     }
 
-    /// The reference narrows both the interpolated bounds and growing blend each tick.
+    /// Each tick narrows both the interpolated bounds and the growing blend to single precision.
     pub fn step(&mut self) {
         if self.phase == ArenaPhase::Open {
             return;

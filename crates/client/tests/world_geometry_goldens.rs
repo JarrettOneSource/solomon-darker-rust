@@ -1,4 +1,5 @@
-//! Native constructor placement through the source's actual complete-world callback boundary.
+//! Constructor placement through the complete-world geometry callbacks, checked against
+//! frozen recordings from the Website client.
 
 use std::cell::Cell;
 use std::path::PathBuf;

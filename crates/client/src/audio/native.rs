@@ -14,6 +14,7 @@ use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+/// Decoded PCM samples for one sound.
 #[derive(Clone)]
 pub(super) struct AudioBuffer(SamplesBuffer);
 impl AudioBuffer {
@@ -47,6 +48,8 @@ struct Engine {
     started: Instant,
     error: Arc<Mutex<Option<String>>>,
 }
+/// The native audio engine: the default output device with root, master and effects
+/// mixer buses, or only a clock when there is no device.
 #[derive(Clone)]
 pub(super) struct AudioEngine(Rc<Engine>);
 
@@ -208,6 +211,7 @@ fn voice_source(
     Ok(Box::new(source.speed(options.playback_rate as f32).delay(duration(delay)?)))
 }
 
+/// One playing sound on a mixer bus; empty when there is no output device.
 pub(super) struct Voice(Option<Player>);
 impl Voice {
     pub fn set_volume(&self, value: f32) {
@@ -231,6 +235,7 @@ enum MusicPlayback {
     Silent { paused: Cell<bool> },
 }
 
+/// One song streamed from its encoded bytes, or a silent stand-in without an output device.
 pub(super) struct Music {
     playback: MusicPlayback,
     bytes: Arc<[u8]>,

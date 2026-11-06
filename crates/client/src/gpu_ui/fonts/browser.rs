@@ -1,6 +1,6 @@
 //! Licensed WOFF2 faces and system fallbacks, rasterized one glyph at a time.
 //!
-//! Website `main.tsx` imports Cinzel/Alegreya/JetBrains Mono. Its narrative face
+//! The bundled faces are Cinzel, Alegreya and JetBrains Mono. The narrative face
 //! deliberately falls back to Georgia; system font files are never redistributed.
 
 use std::cell::RefCell;
@@ -22,6 +22,7 @@ thread_local! {
     static GLYPHS: RefCell<Option<GlyphCanvas>> = const { RefCell::new(None) };
 }
 
+/// The stock faces registered with the document's font set; dropping it unregisters them.
 pub(crate) struct PlatformFonts {
     set: FontFaceSet,
     faces: Vec<FontFace>,

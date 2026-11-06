@@ -1,5 +1,5 @@
-//! Twenty native Coffin BoulderBits from `native-coffin-emergence.ts` and
-//! `core-server/enemies/coffin-emergence.ts`. Births and bounces share steering RNG.
+//! The twenty BoulderBit rocks a Coffin throws up as it starts to rise. Their births and
+//! bounces share the enemy steering RNG.
 
 use super::effects::{DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec};
 use super::model::{EnemyDeathEffect, EnemyDeathEffectKind, EnemyEffectAtlas, EnemyEffectBlend};
@@ -10,6 +10,8 @@ use crate::painter::WorldPainterOrder;
 use crate::spells::earth_debris::{BoulderDebrisMotion, step_boulder_debris_motion};
 use crate::{Rng, Vec2};
 
+/// One rock thrown up by a rising Coffin: its debris motion, sprite record, scale and whether
+/// it draws a shadow under enhanced effects.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CoffinEmergenceParticle {

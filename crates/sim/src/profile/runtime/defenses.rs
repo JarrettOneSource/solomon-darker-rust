@@ -1,7 +1,8 @@
-//! Native Harden coating from `native-harden.ts`.
+//! The Harden coating, which builds armor while a wizard channels Water.
 
 use crate::float::fround;
 
+/// Harden's current armor and its visible coating fraction.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HardenState {
@@ -9,6 +10,7 @@ pub struct HardenState {
     pub coating: f64,
 }
 
+/// What the wizard channels this tick, which decides whether Harden grows, holds or breaks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HardenChannel {
     Water,

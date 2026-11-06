@@ -1,6 +1,8 @@
-//! Generated stock bindings from Website `game-audio-assets.ts`.
-//! Regenerate with tools/website-oracle/audio-catalog.py. Assets stay outside git.
+//! Generated stock audio catalog: each cue's ID, asset path under `assets/stock/audio/` and
+//! playback kind. Regenerate with tools/website-oracle/audio-catalog.py.
 
+/// How a cue plays: an overlapping sound, a stream that replaces its own earlier playback,
+/// an owned loop, or scene music.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AudioKind {
     Sound,
@@ -9,6 +11,7 @@ pub enum AudioKind {
     Music,
 }
 
+/// Every stock audio cue; `definition` returns its catalog row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[repr(usize)]
@@ -248,6 +251,7 @@ pub enum AudioCue {
     TutorialYourPerversions,
 }
 
+/// One catalog row: a cue's stable string ID, asset path and playback kind.
 pub struct AudioDefinition {
     pub cue: AudioCue,
     pub id: &'static str,

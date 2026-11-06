@@ -1,5 +1,5 @@
 //! Private Rust archive encoding: one canonical checkpoint table plus references.
-//! Source lifecycle/summary semantics are retained; V8 serialization is not a runtime dependency.
+//! Each distinct archived state is stored once, and checkpoints refer to it by index.
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -16,6 +16,8 @@ use super::recorder::{
     ArchivedState, RunArchive, RunArchiveCheckpoint, RunArchiveEndReason, RunArchivePerformance,
 };
 
+/// An archived checkpoint as stored: an index into the state table plus its tick's inputs,
+/// enemy spawn intents and duration.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StoredCheckpoint {
@@ -24,6 +26,8 @@ pub struct StoredCheckpoint {
     pub enemy_spawn_intents: Vec<EnemySpawnIntent>,
     pub tick_ms: f64,
 }
+/// A run archive's metadata: identities, versions, times, end reason, content, scene,
+/// retained checkpoints and tick timing.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ArchiveMetadata {
@@ -45,6 +49,7 @@ pub struct ArchiveMetadata {
     pub final_state: usize,
     pub performance: RunArchivePerformance,
 }
+/// A run archive file: its encoding name and version, the state table and the metadata.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RunArchiveFile<S = ArchivedState, M = ArchiveMetadata> {
@@ -54,6 +59,7 @@ pub struct RunArchiveFile<S = ArchivedState, M = ArchiveMetadata> {
     pub archive: M,
 }
 
+/// Time spent serializing an archive: the total and the slowest single slice.
 #[derive(Clone, Copy, Default)]
 pub struct SerializationMetrics {
     pub total_ms: f64,
@@ -62,8 +68,8 @@ pub struct SerializationMetrics {
 struct Timed<'a, T>(&'a T, &'a Cell<SerializationMetrics>);
 impl<T: Serialize> Serialize for Timed<'_, T> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // This worker owns the queue. Yield between the same complete-world slices
-        // that Source preloads into V8's shared object table.
+        // This worker owns the queue. Yield before each slice (one archived state or the
+        // metadata) so other threads can run between slices.
         std::thread::yield_now();
         let started = Instant::now();
         let result = self.0.serialize(serializer);
@@ -187,6 +193,7 @@ pub fn decode_archive(bytes: &[u8]) -> Result<RunArchiveFile, String> {
     Ok(file)
 }
 
+/// A player in an archive summary: ID, latest display name and last tick alive.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchivePlayer {

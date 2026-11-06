@@ -1,5 +1,6 @@
 //! Publication observation and the durable-save/transport retirement barrier.
 
+/// One observed Website publication: its game revision, sequence and readiness.
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Debug)]
 pub(super) struct Publication {
@@ -8,6 +9,8 @@ pub(super) struct Publication {
     pub ready: bool,
 }
 
+/// The page's revision, the last observed publication and the restart barrier that waits for
+/// the save and transport retirement.
 pub(super) struct DeploymentState {
     #[cfg_attr(
         all(not(target_arch = "wasm32"), not(test)),

@@ -1,5 +1,6 @@
-//! Source `protocol/game-string-transfer.ts`: a four-chunk acknowledged window.
-//! UTF-16 units keep offsets and split surrogate pairs identical across endpoints.
+//! Chunked transfer of long strings, such as a Welcome or a save checkpoint, through a
+//! four-chunk acknowledged window. UTF-16 units keep offsets and split surrogate pairs
+//! identical across endpoints.
 
 use std::collections::VecDeque;
 
@@ -10,6 +11,7 @@ pub const GAME_STRING_CHUNK_WINDOW: usize = 4;
 pub const GAME_STRING_STREAM_THRESHOLD: usize = 64 * 1024;
 pub const GAME_WELCOME_PROGRESS_TIMEOUT_MS: u64 = 5_000;
 
+/// One chunk of a transferred string: UTF-16 units starting at `offset` of `total_length`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GameStringChunk {
     pub data: Vec<u16>,
@@ -17,6 +19,7 @@ pub struct GameStringChunk {
     pub total_length: usize,
 }
 
+/// What an acknowledgement did to a transfer: nothing (stale), advanced it, or completed it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameStringAcknowledgement {
     Stale,
@@ -24,11 +27,14 @@ pub enum GameStringAcknowledgement {
     Complete,
 }
 
+/// The result of an acknowledgement and the chunks it allows the sender to send next.
 pub struct GameStringTransferProgress {
     pub acknowledgement: GameStringAcknowledgement,
     pub chunks: Vec<GameStringChunk>,
 }
 
+/// The sending side of a string transfer, with at most `GAME_STRING_CHUNK_WINDOW` chunks
+/// awaiting acknowledgement.
 pub struct GameStringSender {
     data: Vec<u16>,
     outstanding: VecDeque<usize>,
@@ -114,6 +120,8 @@ struct ReceivingString {
     data: Vec<u16>,
 }
 
+/// The receiving side of a string transfer: it assembles chunks in order and enforces a
+/// byte limit on the finished string.
 pub struct GameStringReceiver {
     current: Option<ReceivingString>,
     maximum_bytes: usize,
@@ -126,8 +134,8 @@ impl GameStringReceiver {
         Self { current: None, maximum_bytes, field }
     }
 
-    /// No partial value escapes. Source TextEncoder replaces an isolated surrogate
-    /// when checking bytes, but the retained string itself still owns its exact units.
+    /// No partial value escapes. The byte check replaces an isolated surrogate when
+    /// counting UTF-8 bytes, but the returned string keeps its exact units.
     pub fn accept(&mut self, chunk: &GameStringChunk) -> Result<Option<Vec<u16>>, String> {
         if chunk.total_length == 0
             || chunk.total_length > self.maximum_bytes

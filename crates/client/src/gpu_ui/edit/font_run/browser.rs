@@ -8,6 +8,8 @@ use web_sys::{
     CanvasRenderingContext2d, Document, Element, HtmlCanvasElement, SvgTextContentElement,
 };
 
+/// A hidden SVG text element and canvas that measure and rasterize text with the browser's
+/// fonts.
 pub(super) struct FontProbe {
     root: Element,
     text: SvgTextContentElement,

@@ -1,4 +1,4 @@
-//! Skeleton, Archer and Mage layers from `native-enemy-skeleton-presentation.ts`.
+//! Layers for Skeletons, Skeleton Archers and Skeleton Mages.
 
 use super::layers::*;
 use super::model::*;
@@ -394,7 +394,7 @@ fn compose_family(
     (body, hit_body)
 }
 
-/// `nativeSkeletonBaseTint` is shared with EtherDrain's accepted head capture.
+/// A Skeleton's base tint, shared with Ether Drain's accepted head capture.
 #[must_use]
 pub fn skeleton_base_tint(actor: &EnemyActor, age: u64, include_fire: bool) -> u32 {
     if !include_fire && actor.lighting.charge > 0.0 {

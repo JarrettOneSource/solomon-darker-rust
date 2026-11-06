@@ -1,4 +1,6 @@
-//! Float narrowing helpers shared by every kernel.
+//! The game's deterministic math: single-precision narrowing, `hypot`, and fdlibm's `sin`,
+//! `cos`, `atan2` and `pow`. Platform libm can differ in the last bit; these give the same
+//! bits on native and WebAssembly, which recorded goldens and saved trajectories depend on.
 
 mod atan;
 mod pow;
@@ -8,7 +10,7 @@ pub use atan::atan2;
 pub use pow::pow;
 pub use sincos::{cos, sin};
 
-/// Source pair of `Math.sin` and `Math.cos`, evaluated from the same scalar operand.
+/// The scalar `sin` and `cos` of one operand, rather than a combined platform routine.
 #[must_use]
 pub fn sin_cos(value: f64) -> (f64, f64) {
     (sin(value), cos(value))
@@ -16,27 +18,29 @@ pub fn sin_cos(value: f64) -> (f64, f64) {
 
 /// Narrows a double to the nearest `f32` and widens it back.
 ///
-/// This is JavaScript's `Math.fround` and the native x87 32-bit store. The reference kernels
-/// round at exactly these points, so the port rounds there too and nowhere else.
+/// This is the original game's x87 store to a 32-bit float. Each call is a single-precision
+/// boundary: kernels otherwise compute in `f64`, and adding or removing a boundary changes
+/// saved and recorded trajectories.
 #[inline]
 #[must_use]
 pub const fn fround(value: f64) -> f64 {
     value as f32 as f64
 }
 
-/// Euclidean length, computed the way V8 computes `Math.hypot`.
+/// Euclidean length of `(x, y)`.
 ///
-/// The reference kernels call `Math.hypot`, and V8 scales both operands by the larger one and
-/// sums the squares with Kahan compensation before the square root. Reproducing that algorithm
-/// (rather than `sqrt(x² + y²)`, which can differ by an ulp) keeps the port bit-identical to
-/// the Website kernels, which the differential goldens in `tests/website_goldens.rs` require.
+/// Both operands are scaled by the larger magnitude, and their squares are summed with Kahan
+/// compensation before the square root. Plain `sqrt(x² + y²)` can differ by an ulp and
+/// overflows sooner; the recordings in `tests/website_goldens.rs` and saved trajectories
+/// depend on these exact bits.
 #[inline]
 #[must_use]
 pub fn hypot(x: f64, y: f64) -> f64 {
     hypot_components([x, y])
 }
 
-/// The same V8 scaled sum for a native three-dimensional boulder orientation axis.
+/// The same scaled, compensated length for three components, such as a boulder's 3D
+/// orientation axis.
 #[inline]
 #[must_use]
 pub fn hypot3(x: f64, y: f64, z: f64) -> f64 {

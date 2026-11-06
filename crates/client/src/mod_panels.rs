@@ -7,30 +7,35 @@ use solomon_sim::economy::{HubInventoryItem, HubItemKind};
 use solomon_sim::hub::regions::HubRegion;
 use solomon_sim::modding::{LuaObject, LuaValue};
 
+/// The scene the local player is in, which decides where mounted shops appear.
 #[derive(Clone, Copy)]
 pub enum ModPanelsWorld {
     Hub { region: Option<HubRegion> },
     Boneyard,
 }
 
+/// The local player's position and backpack, used for nearby actions and Reforge offers.
 pub struct ModPanelsPlayer<'a> {
     pub position: Vec2,
     pub backpack: &'a [HubInventoryItem],
 }
 
+/// A Boneyard scene object's type and position; portal rows need a nearby monument.
 pub struct ModPanelsSceneObject {
     pub type_id: u32,
     pub position: Vec2,
 }
 
+/// The accepted state the authored panels read: mod runtime, local player, scene and objects.
 pub struct ModPanelsSnapshot<'a> {
     pub runtime: Option<&'a LuaObject>,
     pub player: Option<ModPanelsPlayer<'a>>,
     pub world: ModPanelsWorld,
-    /// The actual `session.getBoneyard()?.scene.objects` projection, or empty.
+    /// The current Boneyard's scene objects, or empty outside the Boneyard.
     pub scene_objects: &'a [ModPanelsSceneObject],
 }
 
+/// A request from an authored panel button: cast, buy, reforge an item or enter a portal.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ModPanelAction {
     Cast { content_id: String, position: Vec2 },
@@ -46,6 +51,8 @@ struct ButtonRow {
     action: Option<ModPanelAction>,
 }
 
+/// The authored panel buttons in the lower-right corner and the actions clicked since the last
+/// `take_actions`.
 pub struct ModPanelsView {
     rows: Vec<ButtonRow>,
     actions: Vec<ModPanelAction>,
@@ -101,7 +108,8 @@ impl ModPanelsView {
                                     ..Default::default()
                                 },
                             )?;
-                            // Source 7.2px/10.4px padding inside its 1px border.
+                            // 7.2 px vertical and 10.4 px horizontal padding inside a
+                            // 1 px border.
                             let (bounds, response) = ui
                                 .add_enabled_ui(!row.disabled, |ui| {
                                     ui.allocate_exact_size(

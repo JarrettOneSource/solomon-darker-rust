@@ -1,4 +1,5 @@
-//! `pages/Game.tsx` native transfer controller: browser files at the edge, one save writer.
+//! Native save transfer: import previews from chosen files and exports to a native archive.
+//! Browser files stay at the edge, with one save writer.
 
 use crate::platform::files::SelectedFile;
 use solomon_assets::native_save::{
@@ -7,11 +8,13 @@ use solomon_assets::native_save::{
 
 use super::*;
 
+/// A save transfer job: inspect chosen files for import, or export a save document.
 pub(super) enum TransferRequest {
     Inspect { request_id: u64, files: Vec<SelectedFile> },
     Export { request_id: u64, document: String },
 }
 
+/// The result of a save transfer job, tagged with its request ID.
 pub(super) enum TransferCompletion {
     Inspected { request_id: u64, result: Result<Box<GameSaveImportPreview>, String> },
     Exported { request_id: u64, result: Result<Box<PortableExportResult>, String> },

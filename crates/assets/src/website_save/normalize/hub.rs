@@ -1,5 +1,5 @@
-//! Saved Hub admission: validate retained rows before the source deliberately reconstructs
-//! its ambient population, and restart the superseded pre-schema-15 College walk.
+//! Saved Hub admission: validate retained rows before restoration deliberately reconstructs
+//! the ambient population, and restart the superseded pre-schema-15 College walk.
 
 use serde_json::{Value, json};
 use solomon_sim::hub::college_intro::CollegeIntroState;

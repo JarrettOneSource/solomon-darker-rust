@@ -1,4 +1,5 @@
-//! Scoped cells use actual Lua migrations and exact Source ordered JSON budgets.
+//! Scoped mod state cells run real Lua migrations and enforce exact JSON byte budgets,
+//! checked against recorded transactions and checkpoints.
 
 mod common;
 use serde::Deserialize;

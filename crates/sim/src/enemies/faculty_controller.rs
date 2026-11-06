@@ -1,11 +1,13 @@
-//! Faculty action and orbit clocks from `native-faculty.ts` and
-//! `native-faculty-actions.ts`. The actor and spell producer own their world effects.
+//! The Faculty's controller: its construction, orbit and light clocks, cast timing and action
+//! programs. The actor and spell producer own their world effects.
 
 use super::model::{BossPhase, FacultyAction, FacultyActionKind, FacultyBrain};
 use super::path::EnemyPathState;
 use crate::Rng;
 use crate::float::fround;
 
+/// What the Faculty's controller reads each tick: whether its action may advance, its time
+/// scale, its line of sight and distance to its target, and the tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FacultyContext {
     pub advance_action: bool,
@@ -15,6 +17,8 @@ pub struct FacultyContext {
     pub tick: u64,
 }
 
+/// One step of a Faculty action: the advanced action, its body pose, and whether it reached
+/// its marker, released its spell, locked its facing or finished.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FacultyActionStep {
     pub action: FacultyAction,
@@ -25,6 +29,8 @@ pub struct FacultyActionStep {
     pub marker: bool,
 }
 
+/// What one controller tick produced: whether the action reached its marker, and the kind of
+/// spell to release, if any.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FacultyStep {
     pub marker: bool,

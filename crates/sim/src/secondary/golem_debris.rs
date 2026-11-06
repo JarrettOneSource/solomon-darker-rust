@@ -1,4 +1,4 @@
-//! Native Golem assembly's four twenty-four-piece bursts from `native-golem-debris.ts`.
+//! The four twenty-four-piece debris bursts of a Golem's assembly.
 
 use crate::float::{self, fround};
 use crate::spells::earth_debris::{

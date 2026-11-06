@@ -1,4 +1,5 @@
-//! Unholy:99..146 raw eye attachments from the pinned Website editor/manifest/unholy.json.
+//! The Discorporeal's eye positions: the raw attachment points of bundle records
+//! `Unholy:99..146`, indexed by body pose, facing and eye.
 use crate::Vec2;
 pub const DEMON_SKULL_EYE_ATTACHMENTS: [[[Vec2; 2]; 24]; 2] = [
     [

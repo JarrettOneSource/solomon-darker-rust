@@ -1,6 +1,7 @@
 //! Direct-session projection and routing. Pure party/chat rules live in `sim::social`;
-//! this owner supplies admitted membership, actual profiles, recipient sockets and time.
-//! Reference: `host/game-host.ts::chatRecipients`, `localClientByReference` and chat branch.
+//! this owner supplies admitted membership, retained profiles, recipient sockets and time.
+//! It publishes social snapshots, routes chat and player cards, and applies kicks and
+//! departures.
 
 use std::collections::BTreeSet;
 
@@ -240,8 +241,8 @@ impl NativeAuthority {
             recipients = self.connected_ids();
             None
         };
-        // The source counts only an admitted route. An unavailable recipient or channel
-        // cannot consume a player's five accepted sends in the 5,000 ms window.
+        // Only an admitted route counts. An unavailable recipient or channel cannot
+        // consume a player's five accepted sends in the 5,000 ms window.
         let retry_after = connection.chat_limit.record(now_ms as u64);
         if retry_after != 0 {
             return reject_chat(

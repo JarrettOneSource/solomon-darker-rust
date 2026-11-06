@@ -13,6 +13,7 @@ use solomon_sim::mobile_ui::*;
 use std::rc::Rc;
 
 pub(crate) use preview::MobileEditorPlayerPreview;
+/// The stock UI, Skills and Inventory atlases that the layout editor paints with.
 pub(crate) struct MobileEditorArt {
     ui: StockAtlas,
     skills: StockAtlas,
@@ -107,6 +108,8 @@ impl HitTarget {
         delta.x.abs() <= self.size.x / 2.0 && delta.y.abs() <= self.size.y / 2.0
     }
 }
+/// The touch-control layout editor: the draft layout, selection, gestures, undo history and
+/// save request.
 pub(crate) struct MobileUiEditor {
     art: Rc<MobileEditorArt>,
     root_bounds: HudRect,
@@ -128,7 +131,7 @@ pub(crate) struct MobileUiEditor {
     past: Vec<EditorSnapshot>,
     future: Vec<EditorSnapshot>,
     recorded_interaction: bool,
-    // Source Map insertion order determines which two touches form a pinch.
+    // Touches stay in arrival order; the first two form a pinch.
     element_pointers: Vec<(i32, Vec2)>,
     element_owner: Option<MobileUiElementId>,
     element_interaction: Option<ElementInteraction>,

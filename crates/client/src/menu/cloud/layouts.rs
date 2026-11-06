@@ -1,4 +1,5 @@
-//! `DarkCloudLayouts.tsx` retains actual saved-layout admission and completion.
+//! The Dark Cloud Layouts tab: load a shared mobile UI layout by code or publish the
+//! player's own, with one pending request at a time and a copyable share code.
 use super::{
     super::widgets,
     art::CloudArt,
@@ -18,6 +19,8 @@ struct CopyCompletion {
     generation: u64,
     result: Result<(), String>,
 }
+/// The Layouts tab's state: the typed code, the pending load or publish request, its
+/// shared result and the copy-to-clipboard status.
 pub(super) struct LayoutsView {
     account: Option<String>,
     customized: bool,
@@ -182,8 +185,8 @@ impl LayoutsView {
         enabled: bool,
         actions: &mut Vec<String>,
     ) -> Result<(), String> {
-        // Pinned dark-cloud-content.css uses viewport breakpoints, centered
-        // bounded columns and a one-column receipt on phones.
+        // The layout uses viewport breakpoints, centered bounded columns and a
+        // one-column receipt on phones.
         let viewport = frame.ctx.content_rect().size();
         let phone = viewport.x <= 700.0;
         let short = !phone && viewport.y <= 620.0;

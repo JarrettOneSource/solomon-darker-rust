@@ -1,6 +1,7 @@
-//! One wizard's canonical components, composed as in `core-server/player-entity-store.ts`
-//! and `game-simulation.ts`. Movement belongs to the active world; secondary clocks belong
-//! to `SecondarySimulationState::players`. Menus never own copies of these values.
+//! One wizard's canonical components: loadout selection, skill and stat books, economy,
+//! progression, combat, belt and skill runtime. Movement belongs to the active world;
+//! secondary clocks belong to `SecondarySimulationState::players`. Menus never own copies
+//! of these values.
 
 mod console;
 
@@ -20,11 +21,12 @@ use crate::profile::{
     refresh_player_combat_from_skill_stats, skill_category,
 };
 
-/// Authored Hagatha selector values from `native-hagatha-effects.ts`.
+/// Authored Hagatha perk selector values.
 const REVELATION: u32 = 6;
 const WEIRD_CASTER: u32 = 14;
 const SORCERORS_CHARM: u32 = 17;
 
+/// One wizard's loadout selection, skills, economy, progression, combat state and belt.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerState {
@@ -104,8 +106,8 @@ impl PlayerState {
             .collect()
     }
 
-    /// `autofillPlayerEntitySkillSelections`: choices and derived combat capacities
-    /// commit together. The caller resets the wizard's cast only if its primary changed.
+    /// Fills missing skill selections. Choices and derived combat capacities commit
+    /// together. The caller resets the wizard's cast only if its primary changed.
     pub fn autofill_skill_selections(&mut self, rng: &mut Rng) -> bool {
         let previous = self.book.clone();
         self.skill_runtime.autofill_selections_with_stat_book(
@@ -399,8 +401,8 @@ impl PlayerState {
         true
     }
 
-    /// `replacePlayerEntitySkillChoiceWithMod` opens/finalizes the next pending native
-    /// offer after the authored host has accepted its own skill reward transaction.
+    /// Replaces a pending skill choice with a mod reward, then opens or finalizes the next
+    /// pending offer. The authored host has already accepted its own skill reward transaction.
     pub fn replace_skill_with_mod(&mut self, offer_sequence: u64, gameplay_rng: &mut Rng) -> bool {
         if !self.progression.replace_choice_with_mod(offer_sequence) {
             return false;
@@ -415,7 +417,7 @@ impl PlayerState {
         true
     }
 
-    /// The Game host commits the seed draw only when the current offer accepts a reroll.
+    /// Commits the seed draw only when the current offer accepts a reroll.
     pub fn reroll_skill_offer(&mut self, offer_sequence: u64, gameplay_rng: &mut Rng) -> bool {
         if !self.owns_sorcerors_charm() {
             return false;
@@ -456,8 +458,8 @@ impl PlayerState {
         self.refresh_hagatha_skill_effects(gameplay_rng);
     }
 
-    /// `refreshPlayerEntityHagathaSkillEffects`: restore owned skill effects without
-    /// replaying purchase-only charges. An actual Weird Caster acquisition reseeds offers.
+    /// Restores owned Hagatha skill effects without replaying purchase-only charges. An
+    /// actual Weird Caster acquisition reseeds offers.
     pub fn refresh_hagatha_skill_effects(&mut self, gameplay_rng: &mut Rng) -> Option<usize> {
         let previous = self.book.clone();
         if self.economy.owned_perk_selectors.contains(&REVELATION) {
@@ -591,7 +593,7 @@ impl PlayerState {
         Some(id)
     }
 
-    /// `replacePlayerLoadout` retains durable unlocks and economy while replacing
+    /// Replaces the loadout, retaining durable unlocks and economy while replacing
     /// learned/runtime/combat components. A new loadout rearms its owned one-use perks.
     pub fn replace_loadout(
         &mut self,

@@ -1,4 +1,5 @@
-//! All authored equipment, complete sets and every native effect lane against the Website.
+//! All authored equipment, complete sets and every native effect lane, against recordings
+//! from the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::equipment::{

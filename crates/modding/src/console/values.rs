@@ -1,10 +1,13 @@
-//! Console-specific normalization and error ordering from `web-lua-values.ts`.
+//! Console value normalization: Lua values and saved state become JSON values within node,
+//! depth, string, array and key limits, checked in a fixed order that decides which error
+//! is reported.
 
 use crate::definition::values::{LuaTableEntries, lua_table_entries};
 use mlua::Value;
 use solomon_sim::modding::{LuaObject, LuaValue};
 use std::collections::HashSet;
 
+/// The node count and the tables on the current path while one Lua value is normalized.
 #[derive(Default)]
 pub(super) struct ValueBudget {
     nodes: usize,
@@ -88,7 +91,7 @@ pub(super) fn normalize(value: &Value, field: &str) -> Result<LuaValue, String> 
     }
     Ok(output)
 }
-/// Save restoration enters as JSON values, before the Wasmoon table boundary.
+/// Saved state is restored as JSON values, without converting them to Lua tables.
 /// Preserve empty arrays here; turning them into Lua tables would erase their
 /// JSON shape and change both the retained state and its byte admission.
 pub(super) fn normalize_saved(value: &LuaValue, field: &str) -> Result<LuaValue, String> {

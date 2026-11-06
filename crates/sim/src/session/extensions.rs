@@ -1,5 +1,5 @@
-//! Authored mutations from `game-simulation.ts::applyFilteredManaDelta` and the
-//! entity-level boast resolver. Prepared VMs stay outside Session/checkpoints.
+//! Mod-authored mutations inside the session: filtered mana changes and the entity-level
+//! boast resolver. Prepared VMs stay outside Session/checkpoints.
 
 use crate::economy::HubEquipmentState;
 use crate::hub::interaction::BoastFailureProducer;

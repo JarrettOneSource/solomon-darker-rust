@@ -1,4 +1,5 @@
-//! Public cast and owner phases preserve the source Air/Water queue and combat RNG.
+//! Public cast and owner phases reproduce the Air/Water queue and combat RNG recorded
+//! from the Website client.
 use serde_json::{Value, json};
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::{WorldManagerLane, WorldPainterOrder};

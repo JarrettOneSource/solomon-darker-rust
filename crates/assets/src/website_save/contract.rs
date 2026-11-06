@@ -1,4 +1,4 @@
-//! The public envelope and validation from Website `save/game-save-contract.ts`.
+//! The save document's public envelope and its validation across schema versions.
 
 use std::collections::BTreeSet;
 
@@ -13,6 +13,8 @@ pub const SCHEMA_VERSION: u64 = 52;
 pub const MAX_SAVE_BYTES: usize = 96 * 1024 * 1024;
 pub const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
+/// Whether a save may enter the global College (`GlobalClean`) or only a private one
+/// (`LocalOnly`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SaveIntegrity {
@@ -20,6 +22,7 @@ pub enum SaveIntegrity {
     LocalOnly,
 }
 
+/// The world a saved continuation resumes in: the Hub or a Boneyard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SaveWorldKind {
@@ -27,6 +30,7 @@ pub enum SaveWorldKind {
     Boneyard,
 }
 
+/// A saved continuation's summary: its owner and character, run phase, world and save tick.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct SaveSummary {
     pub active_run: bool,
@@ -40,6 +44,7 @@ pub struct SaveSummary {
 
 pub use crate::native_save_source::{NativeSaveFile, NativeSaveSource};
 
+/// Save-wide metadata: integrity, the active mods and their state, and any attached native save.
 #[derive(Clone, Debug)]
 pub struct SaveMetadata {
     pub integrity: SaveIntegrity,
@@ -48,6 +53,7 @@ pub struct SaveMetadata {
     pub native_source: Option<NativeSaveSource>,
 }
 
+/// A saved continuation as validated JSON: the simulation, the loaded Boneyard and its summary.
 #[derive(Clone, Debug)]
 pub struct ParsedContinuation {
     pub loaded_boneyard: Value,
@@ -55,6 +61,8 @@ pub struct ParsedContinuation {
     pub summary: SaveSummary,
 }
 
+/// A validated save document before restoration: the continuation, profile JSON and metadata,
+/// with the schema version it was written in.
 #[derive(Clone, Debug)]
 pub struct ParsedSaveDocument {
     pub continuation: Option<ParsedContinuation>,
@@ -144,7 +152,7 @@ pub fn parse(document: &str) -> Result<ParsedSaveDocument, String> {
         SaveIntegrity::LocalOnly
     };
     let mods = if version >= 2 { parse_mods(&root["mods"])? } else { Vec::new() };
-    // LuaObject's own visitor preserves JS property order. Parsing the whole envelope
+    // LuaObject's own visitor preserves the document's key order. Parsing the whole envelope
     // through serde_json::Value would sort those arbitrary state-cell keys.
     #[derive(Deserialize)]
     struct OrderedState {

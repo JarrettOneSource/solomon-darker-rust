@@ -1,5 +1,5 @@
 //! One revision-checked save contract over IndexedDB, native files, or the Website.
-//! Preferences retain the Website formats and legacy migration rules.
+//! Preferences keep the stored settings format, its storage keys and legacy migration rules.
 
 #[cfg(target_arch = "wasm32")]
 mod browser;
@@ -24,12 +24,15 @@ pub(crate) use native::{data_directory, preference_stamp, scoped_key, with_prefe
 use serde::{Deserialize, Serialize};
 use solomon_sim::settings::GameSettings;
 
+/// Where the save lives: a local slot (IndexedDB or a native file) or the account's
+/// Website cloud save.
 #[derive(Clone)]
 pub enum SaveStore {
     Local(LocalSaveStore),
     Cloud(crate::hosted::WebsiteApi),
 }
 
+/// A save document and the revision that the next write must match.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredSave {
     pub revision: u64,

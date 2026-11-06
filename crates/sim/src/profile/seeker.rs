@@ -1,12 +1,13 @@
-//! Hagatha Seeker segments and textured quads from
-//! `core-kernels/native-hagatha-effects.ts`. The host projects current loot
-//! targets and draws these owner-local plans with the authored color ramp.
+//! The Hagatha Seeker lines that point from the wizard toward loot, as segments and
+//! textured quads. The host projects current loot targets and draws these owner-local
+//! plans with the authored color ramp.
 
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::line::line_vertices;
 
+/// The authored constants of the Seeker lines: distances, radii, pulse, colors and width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HagathaSeekerProgram {
     pub distance_cap: f64,
@@ -42,6 +43,7 @@ pub const HAGATHA_SEEKER_RAMP_RGBA: [u8; 8] = [255, 255, 255, 0, 216, 186, 112, 
 pub const HAGATHA_SEEKER_TRANSPARENT_U: f64 = 0.25;
 pub const HAGATHA_SEEKER_VISIBLE_U: f64 = 0.75;
 
+/// The kind of loot a Seeker line points at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HagathaSeekerTargetKind {
     Bonus,
@@ -60,6 +62,7 @@ impl HagathaSeekerTargetKind {
     }
 }
 
+/// One loot target for the Seeker lines: its ID, kind and position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HagathaSeekerTarget {
     pub id: usize,
@@ -67,6 +70,8 @@ pub struct HagathaSeekerTarget {
     pub position: Vec2,
 }
 
+/// One of a Seeker line's two segments: its endpoints, which ends are visible, alpha and
+/// width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HagathaSeekerSegment {
     pub alpha: f64,
@@ -79,6 +84,7 @@ pub struct HagathaSeekerSegment {
     pub width: f64,
 }
 
+/// A Seeker segment as a textured quad: vertices, UVs and quantized alpha.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HagathaSeekerMeshPlan {
     pub alpha: f64,

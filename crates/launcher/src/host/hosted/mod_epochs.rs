@@ -1,5 +1,5 @@
-//! Source `game-host.ts` tick interleaving: player control leases, prepared actors,
-//! canonical simulation, then events and rules. All state borrows the actual world.
+//! The order of work in one hosted tick: mod player-control leases and prepared actors, the
+//! simulation step, then derived events and mod rules. Every stage borrows the live world.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -45,8 +45,8 @@ impl HostedGameHost {
                     else {
                         continue;
                     };
-                    // Source observes resource changes caused by the prepared actor
-                    // epoch too, so retain these facts before runtime.tick.
+                    // Rule events also report resource changes caused by the prepared
+                    // actors, so capture these facts before `runtime.tick`.
                     before_runs.insert(
                         scope.party_id.clone(),
                         GameSimulationEventSnapshot::capture(&run.state),
@@ -167,8 +167,8 @@ impl HostedGameHost {
                         eligible.insert(player.id.clone());
                     }
                 }
-                // Source includes admitted bots in both Memorial profile and
-                // eligibility projections, independently of human Submit Runs.
+                // Admitted bots join both the Memorial profiles and the eligible set,
+                // regardless of any human's Submit Runs preference.
                 for bot in &self.bots.rows {
                     profiles.insert(
                         bot.id.clone(),
@@ -202,8 +202,8 @@ impl HostedGameHost {
                 if stepped.memorial_changed
                     && let Some(file) = &self.memorial_persistence
                 {
-                    // Source invokes the shared-Hub callback before post-world rules.
-                    // A disk failure must cross the host's fatal boundary as it does there.
+                    // The Memorial is persisted before post-world rules run, and a disk
+                    // failure must cross the host's fatal boundary.
                     file.persist(&worlds.hub.hub_memorial)?;
                 }
                 if let Some(hub) = stepped.hub {
@@ -238,8 +238,8 @@ impl HostedGameHost {
             }
         }
         self.commit_flame_histories()?;
-        // Shared Source dispatches the developer Console before prepared rules;
-        // private Source dispatches it afterwards. Both read the completed world.
+        // A shared Hub dispatches developer Console events before prepared rules;
+        // a private College dispatches them afterwards. Both read the completed world.
         if shared {
             self.finish_console_epoch(console_epoch.take())?;
             self.commit_flame_histories()?;

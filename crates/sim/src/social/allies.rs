@@ -1,16 +1,18 @@
-//! Ally identities and durable/offline health presentation from Website `ally-hud.ts`.
+//! The ally HUD: party members' and Golems' identities, health, and offline or dead state.
 
 use crate::combat::PlayerLifeState;
 use crate::profile::WizardElement;
 
 use super::PartyRosterPlayer;
 
+/// Who an ally HUD row shows: a player with a name and element, or a Golem.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AllyHudIdentity {
     Player { display_name: String, element: WizardElement },
     Golem,
 }
 
+/// One ally HUD row: identity, health ratio, and whether the ally is connected or dead.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AllyHudRow {
     pub connected: bool,

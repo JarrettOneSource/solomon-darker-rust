@@ -1,7 +1,7 @@
-//! `.sdml` checkpoint boundary from Website `ml-bot-policy/checkpoint.ts`.
+//! The `.sdml` ML bot policy checkpoint: a JSON header followed by little-endian f32 tensors.
 //!
 //! The deployed policy is data, not a training/runtime dependency. Metadata keeps its
-//! Source property order and unknown fields so re-encoding follows JSON.stringify.
+//! stored property order and unknown fields so re-encoding writes the same JSON.
 
 use std::collections::BTreeSet;
 
@@ -16,6 +16,7 @@ const MAGIC: [u8; 8] = [0x53, 0x44, 0x4d, 0x4c, 0x56, 0x37, 0, 1];
 const PREFIX_BYTES: usize = 12;
 const SPEC_JSON: &str = include_str!("../data/ml-bot-policy-v7-spec.json");
 
+/// A decoded policy checkpoint: its JSON metadata and the schema v7 weight tensors.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyCheckpoint {
     pub metadata: LuaValue,
@@ -74,7 +75,7 @@ pub fn decode_ml_bot_policy_checkpoint(encoded: &[u8]) -> Result<MlBotPolicyChec
         return Err("ML bot policy checkpoint header is truncated".into());
     }
     let payload_start = payload_start as usize;
-    // Source TextDecoder replaces malformed UTF-8 and consumes an initial BOM.
+    // Decode the header leniently: replace malformed UTF-8 and drop an initial BOM.
     let header_text = String::from_utf8_lossy(&encoded[PREFIX_BYTES..payload_start]);
     let header_text = header_text.strip_prefix('\u{feff}').unwrap_or(&header_text);
     let header: LuaValue = serde_json::from_str(header_text)
@@ -128,8 +129,8 @@ pub fn decode_ml_bot_policy_checkpoint(encoded: &[u8]) -> Result<MlBotPolicyChec
         }
         maximum_end = maximum_end.max(descriptor.byte_offset + descriptor.byte_length);
     }
-    // The pinned decoder checks the maximum endpoint, not pairwise disjoint ranges.
-    // Its accepted overlapping-slice case is retained in the oracle as well.
+    // Only the maximum endpoint is checked, not pairwise disjoint ranges. The Website
+    // recording retains an accepted overlapping-slice case as well.
     if payload_start as u64 + maximum_end != encoded.len() as u64 {
         return Err("ML bot policy checkpoint contains trailing or overlapping payload data".into());
     }

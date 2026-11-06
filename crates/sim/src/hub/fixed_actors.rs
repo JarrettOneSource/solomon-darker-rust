@@ -1,11 +1,12 @@
 //! Immovable Hub bodies shared by authority and local display prediction.
-//! Retail `0x00525800 -> 0x00526520`, Website parity ledger 013: resistance 90,
-//! strength 0, the five Courtyard NPCs and complete private-room collider tables.
+//! Retail `0x00525800 -> 0x00526520`: resistance 90, strength 0, the five Courtyard
+//! NPCs and complete private-room collider tables.
 
 use crate::Vec2;
 use crate::actor_physics::ActorPhysicsBody;
 use crate::hub::regions::HubRegion;
 
+/// An immovable Hub body (an NPC or prop): its ID, position and collision radius.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubFixedActorCollider {
     pub id: &'static str,

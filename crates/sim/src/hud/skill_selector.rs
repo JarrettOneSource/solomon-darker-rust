@@ -1,8 +1,9 @@
-//! HUD primary/concentration choices from Website `hud-skill-selector.ts`.
+//! The HUD skill selector: choosing the primary attack or a concentration from learned skills.
 
 use crate::hud::HudRect;
 use crate::profile::{SKILL_CATALOG, SkillBookState, skill_category};
 
+/// Which HUD binding the selector fills: the primary attack or one of two concentrations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HudSkillSelectorTarget {
     Primary,
@@ -36,6 +37,7 @@ impl HudSkillSelectorTarget {
     }
 }
 
+/// One learned skill the selector offers: its ID, name and icon record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HudSkillSelectorOption {
     pub icon_record: usize,
@@ -70,6 +72,7 @@ pub fn hud_skill_selector_options(
     options
 }
 
+/// The selector's panel rectangle, title position and option strip, in logical HUD units.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HudSkillSelectorLayout {
     pub panel: HudRect,

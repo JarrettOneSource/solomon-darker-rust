@@ -1,5 +1,6 @@
-//! Stock cast/loop cue ownership from `native-weld-primary-runtime.ts`.
+//! Each Weld build's stock cast cue and its one-shot, variant and loop sounds.
 
+/// The named cast cue of each Weld build.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WeldCastCue {
     BallLightning,
@@ -32,6 +33,7 @@ impl WeldCastCue {
     }
 }
 
+/// A Weld build's sounds: its cue, loop sounds, one-shot sounds and random variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WeldAudioPlan {
     pub build_id: u32,

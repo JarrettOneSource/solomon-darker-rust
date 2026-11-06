@@ -13,6 +13,7 @@ use skrifa::instance::{LocationRef, NormalizedCoord, Size};
 use vello_cpu::kurbo::{Affine, Diagonal2, Stroke};
 use vello_cpu::{Glyph, Pixmap, RenderContext, Resources};
 
+/// The font families, size, weight, slant and spacing used to shape text.
 pub struct TextStyle<'a> {
     /// A CSS family list; registered stock faces precede system fallbacks.
     pub families: &'a str,
@@ -23,6 +24,7 @@ pub struct TextStyle<'a> {
     pub line_height: Option<f32>,
 }
 
+/// Registered fonts with the Parley layout and Vello rasterization state for UI text.
 #[derive(Default)]
 pub struct FontSystem {
     fonts: FontContext,
@@ -30,12 +32,14 @@ pub struct FontSystem {
     resources: Resources,
 }
 
+/// Text broken into lines, with the bounds of its inked pixels.
 pub struct ShapedText {
     /// Native layout is also the source for cursor and selection geometry.
     pub layout: Layout<()>,
     pub ink: Rect,
 }
 
+/// Rasterized text as an RGBA image.
 pub struct TextBitmap {
     pub width: u16,
     pub height: u16,
@@ -43,6 +47,7 @@ pub struct TextBitmap {
     pub rgba: Vec<u8>,
 }
 
+/// An outline stroked around each glyph before its fill: width and RGBA colour.
 #[derive(Clone, Copy)]
 pub struct TextStroke {
     pub width: f32,
@@ -81,7 +86,7 @@ impl FontSystem {
         }
         let mut layout = builder.build(text);
         layout.break_all_lines(None);
-        // The source text containers own alignment; runs retain visual order
+        // Callers' text containers own alignment; runs retain visual order
         // within a left-origin line even when their paragraph is right-to-left.
         layout.align(Alignment::Left, AlignmentOptions::default());
         let ink = ink_bounds(&layout)?;

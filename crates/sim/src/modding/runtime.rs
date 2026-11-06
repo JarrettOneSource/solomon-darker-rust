@@ -1,10 +1,12 @@
-//! Plain mutable authored-content records from `modding/content/*-engine.ts`.
+//! Plain mutable records of mod runtime state and their checkpoints.
 //! Prepared native owners execute their rules; these rows cross save and client
 //! boundaries without Lua handles or a second stock player/world model.
 
 use super::definition::{ResolvedWebLuaContentReference, WebLuaSchemaDefinition, WebLuaScopeKind};
 use super::{LuaObject, LuaValue};
 
+/// An active mod status on a target: its content, mod, instance ID and the ticks it starts
+/// and expires.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -17,6 +19,7 @@ pub struct ActiveModStatus {
     pub target_id: String,
 }
 
+/// Saved mod statuses: the active instances, the next instance ID and a revision.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -32,6 +35,7 @@ impl Default for ModStatusCheckpoint {
     }
 }
 
+/// An affix rolled onto an item: its content, name, modifiers and roll.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -42,6 +46,7 @@ pub struct RolledModAffix {
     pub roll: u32,
 }
 
+/// The tick at which a player's mod spell is ready again.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -51,6 +56,7 @@ pub struct ModSpellCooldown {
     pub ready_tick: u64,
 }
 
+/// Saved mod spell cooldowns and a revision.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -59,6 +65,7 @@ pub struct ModSpellCheckpoint {
     pub revision: u64,
 }
 
+/// A player's mod skill bound to a quickbar slot.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -68,6 +75,7 @@ pub struct ModSkillBinding {
     pub slot: u64,
 }
 
+/// A player's rank in a mod skill.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -77,6 +85,7 @@ pub struct ModSkillRank {
     pub rank: u64,
 }
 
+/// A mod skill offer made to a player: the offered skills and the offer's sequence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -86,6 +95,7 @@ pub struct ModSkillOffer {
     pub sequence: u64,
 }
 
+/// Saved mod skill bindings, ranks and pending offers, and a revision.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -96,6 +106,7 @@ pub struct ModSkillCheckpoint {
     pub revision: u64,
 }
 
+/// One mod shop purchase: the shop, stock row, item, quantity and price.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -107,6 +118,7 @@ pub struct ModShopPurchase {
     pub shop_content_id: String,
 }
 
+/// A player's remaining stock in one shop row, and the tick it restocks.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -118,6 +130,7 @@ pub struct ModShopStockState {
     pub shop_content_id: String,
 }
 
+/// Saved mod shop stock and a revision.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModShopCheckpoint {
@@ -125,6 +138,7 @@ pub struct ModShopCheckpoint {
     pub stock: Vec<ModShopStockState>,
 }
 
+/// The scope a piece of mod state belongs to: its kind and ID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModStateScope {
@@ -132,6 +146,7 @@ pub struct ModStateScope {
     pub kind: WebLuaScopeKind,
 }
 
+/// One semantic state value a mod keeps under a key in a scope.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -142,6 +157,7 @@ pub struct ModSemanticValue {
     pub value: LuaValue,
 }
 
+/// Saved mod semantic values and a revision.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModSemanticStateCheckpoint {
@@ -149,8 +165,8 @@ pub struct ModSemanticStateCheckpoint {
     pub values: Vec<ModSemanticValue>,
 }
 
-/// Source's save decoder accepts a nonempty life-state string before engine
-/// restore. The zero-health/null-death witness also passes the engine's two
+/// A mod enemy's life state. The save decoder accepts any nonempty life-state string
+/// before engine restore. The zero-health/null-death witness also passes the engine's two
 /// biconditionals, so an unrecognized value must survive unchanged.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ModEnemyLifeState {
@@ -200,6 +216,7 @@ impl<'de> serde::Deserialize<'de> for ModEnemyLifeState {
     }
 }
 
+/// A player's ID and position, as mod actors see it.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModActorPlayer {
@@ -208,6 +225,8 @@ pub struct ModActorPlayer {
     pub y: f64,
 }
 
+/// A live mod enemy: its content, health, position, heading, targets, attack timing and life
+/// state.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -229,6 +248,7 @@ pub struct ActiveModEnemy {
     pub y: f64,
 }
 
+/// One mod enemy attack on a player and its damage.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -238,6 +258,7 @@ pub struct ModEnemyAttack {
     pub player_id: String,
 }
 
+/// Saved mod enemies, the next enemy ID and a revision.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -253,6 +274,7 @@ impl Default for ModEnemyCheckpoint {
     }
 }
 
+/// A spawned mod powerup: its content, mod, ID, spawn tick and position.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -265,6 +287,7 @@ pub struct ActiveModPowerup {
     pub y: f64,
 }
 
+/// Saved mod powerups, the next powerup ID and a revision.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -280,6 +303,7 @@ impl Default for ModPowerupCheckpoint {
     }
 }
 
+/// A player collecting a mod powerup: the powerup, player, tick and position.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -292,6 +316,7 @@ pub struct ModPowerupCollectionEvent {
     pub y: f64,
 }
 
+/// A mod scene open for an owner: the scene, its parent, the current room and its epoch.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -303,6 +328,7 @@ pub struct ActiveModScene {
     pub scene_content_id: String,
 }
 
+/// An owner's stack of entered mod scenes and their room indexes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -312,6 +338,7 @@ pub struct ModSceneStack {
     pub scene_content_ids: Vec<String>,
 }
 
+/// Saved mod scenes, scene stacks and the next scene epoch.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -327,6 +354,7 @@ impl Default for ModSceneCheckpoint {
     }
 }
 
+/// Whether any party member may use a mod portal, or the leader must confirm it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -335,6 +363,7 @@ pub enum ModPortalPolicy {
     LeaderConfirms,
 }
 
+/// A prepared mod portal: its ID, scene, object kind, prompt, destination and use policy.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -347,6 +376,7 @@ pub struct PreparedModPortal {
     pub scene: String,
 }
 
+/// The shape of a mod spell effect: an area, a channel or a projectile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -356,6 +386,7 @@ pub enum ModSpellEffectKind {
     Projectile,
 }
 
+/// One effect a mod spell effect applies: its kind and fields.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModEffectTemplate {
@@ -363,6 +394,8 @@ pub struct ModEffectTemplate {
     pub kind: String,
 }
 
+/// A live mod spell effect: its owner, kind, position and target, radius, speed, pulse timing,
+/// effects and the targets it has hit.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -388,6 +421,7 @@ pub struct ActiveModSpellEffect {
     pub y: f64,
 }
 
+/// Saved mod spell effects, the next effect ID and intent sequence, and a revision.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -404,6 +438,7 @@ impl Default for ModSpellEffectCheckpoint {
     }
 }
 
+/// Whether a mod spell effect target is a mod enemy or a stock enemy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -422,6 +457,7 @@ impl ModSpellEffectTargetKind {
     }
 }
 
+/// A target a mod spell effect can hit: its kind, ID and position.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModSpellEffectTarget {
@@ -431,6 +467,7 @@ pub struct ModSpellEffectTarget {
     pub y: f64,
 }
 
+/// An intent a mod produced: its kind, fields, owner, scope and sequence.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -443,6 +480,7 @@ pub struct ModSpellEffectIntent {
     pub sequence: u64,
 }
 
+/// A batch of mod intents, with their context and scope.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModSpellEffectBatch {
@@ -451,6 +489,7 @@ pub struct ModSpellEffectBatch {
     pub scope: ModStateScope,
 }
 
+/// One mod state cell's value, by mod, key and scope, with its schema version.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -462,6 +501,7 @@ pub struct ModStateCellSnapshot {
     pub value: LuaValue,
 }
 
+/// Saved mod state cells and a revision.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModStateCheckpoint {
@@ -485,6 +525,7 @@ pub struct ModStateCellDefinition {
     pub scope: WebLuaScopeKind,
 }
 
+/// A state cell's new value and the revision it was written at.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModStateUpdate {
@@ -494,6 +535,7 @@ pub struct ModStateUpdate {
 
 pub type ModIntent = ModSpellEffectIntent;
 
+/// An event dispatched to mod rules: its name, payload, context, scope and tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModRuleDispatchInput {
@@ -504,6 +546,8 @@ pub struct ModRuleDispatchInput {
     pub tick: u64,
 }
 
+/// What a rule dispatch produced: intents, errors, the invocation count and whether the budget
+/// was exceeded.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -514,6 +558,8 @@ pub struct ModRuleDispatchResult {
     pub invocations: u32,
 }
 
+/// A saved mod rule timer: its event, due tick, interval, remaining runs, payload, context and
+/// scope.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -530,6 +576,7 @@ pub struct ModRuleTimerCheckpoint {
     pub scope: ModStateScope,
 }
 
+/// A reducer's saved failure count and whether it has been disabled.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -540,6 +587,7 @@ pub struct ModReducerHealthCheckpoint {
     pub mod_id: String,
 }
 
+/// Whether a reducer run succeeded or failed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -548,6 +596,8 @@ pub enum ModReducerTraceOutcome {
     Ok,
 }
 
+/// A trace of one reducer run: its event, scope and tick, outcome and error, intent count and
+/// failure state.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -564,6 +614,8 @@ pub struct ModReducerTrace {
     pub tick: u64,
 }
 
+/// Saved rule engine state: reducer state and health, timers, and the next timer ID and intent
+/// sequence.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -575,6 +627,7 @@ pub struct ModRuleEngineCheckpoint {
     pub timers: Vec<ModRuleTimerCheckpoint>,
 }
 
+/// The result of a scheduled rule run, with its context and scope.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModScheduledRuleResult {
@@ -583,6 +636,7 @@ pub struct ModScheduledRuleResult {
     pub scope: ModStateScope,
 }
 
+/// The saved rule engine state and the graph digest of each prepared mod.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -592,6 +646,8 @@ pub struct PreparedModCheckpoint {
     pub graph_sha256: Vec<String>,
 }
 
+/// What one prepared mod step produced: whether it was accepted, intents, errors, the
+/// invocation count and whether the budget was exceeded.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -603,6 +659,7 @@ pub struct PreparedModStepResult {
     pub invocations: u32,
 }
 
+/// An event delivered to prepared mods: its name, payload, context and scope.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreparedModEvent {
@@ -612,6 +669,7 @@ pub struct PreparedModEvent {
     pub scope: ModStateScope,
 }
 
+/// One prepared mod step's input: its tick and events.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreparedModStepInput {
@@ -619,6 +677,7 @@ pub struct PreparedModStepInput {
     pub tick: u64,
 }
 
+/// The compiled mod catalog and mod state projected for one viewer.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -628,7 +687,7 @@ pub struct PreparedModProjection {
     pub viewer_id: String,
 }
 
-/// `PreparedModHostCheckpoint`: all mutable authored engines plus reducer state.
+/// The saved host state of prepared mods: all mutable authored engines plus reducer state.
 /// The VM and immutable package catalogs are reconstructed by the native owner.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -646,6 +705,7 @@ pub struct PreparedModHostCheckpoint {
     pub statuses: ModStatusCheckpoint,
 }
 
+/// A presentation intent from a mod: its kind, fields, sequence and tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -657,6 +717,7 @@ pub struct PreparedModPresentationIntent {
     pub tick: u64,
 }
 
+/// The kind of a presentation intent; `Present` is the only one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -664,6 +725,8 @@ pub enum PreparedModPresentationKind {
     Present,
 }
 
+/// A player action delivered to prepared mods: its name, payload, context, scope, request ID
+/// and tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]

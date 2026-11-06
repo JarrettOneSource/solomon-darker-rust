@@ -1,4 +1,5 @@
-//! Full Website actor rows shared by the single and multi-participant primary replays.
+//! Primary spell actors projected into the full row format of the Website client's
+//! recordings, shared by the single and multi-participant primary replays.
 use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::profile::primary::SpentEmber;

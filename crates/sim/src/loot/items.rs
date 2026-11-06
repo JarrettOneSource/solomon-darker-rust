@@ -1,5 +1,5 @@
-//! Loot item construction from Website `core-kernels/native-loot-items.ts`.
-//! All drops use the same inventory item model as College services and saved profiles.
+//! Loot item construction: Goodie contents, enemy item drops, equipment, potions and other
+//! items. All drops use the same inventory item model as College services and saved profiles.
 
 use crate::Rng;
 use crate::appearance::{clamp_unit, rgb_tint};
@@ -18,6 +18,7 @@ use crate::float::fround;
 
 use super::{LootItemIds, LootSelectionInput};
 
+/// What an opened Goodie holds: gold and items.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GoodieContents {
     pub gold: u64,
@@ -133,7 +134,7 @@ pub fn select_enemy_item(
             }
         }
         // The approved override ignores arena bounds and items on the ground.
-        // If every pool member is owned, Source draws from the original pool.
+        // If every pool member is owned, the draw uses the whole pool.
         let candidates = if missing.is_empty() { &pool } else { &missing };
         let recipe = candidates[rng.draw_integer(candidates.len() as i32) as usize];
         return Some(equipment_recipe_item(recipe, item_ids, rng));
@@ -199,8 +200,9 @@ pub fn select_enemy_item(
     })
 }
 
-/// `direBossItemRecipePool` from current Website `core-kernels/dire-boss-loot.ts`.
-/// Source identity and original recipe UID admit only the retained three faculty bosses.
+/// The item recipe pool of a Dire faculty boss: its equipment set, plus recipe 3 for Dire
+/// Lucritius. The Boneyard source hash and recipe UID admit only the three retained faculty
+/// bosses: Dire Sirmin, Dire Lucritius and Dire Aliss.
 #[must_use]
 pub fn dire_boss_item_recipe_pool(
     source_sha256: Option<&str>,
@@ -370,7 +372,7 @@ fn tint_color(tint: u32) -> [f64; 3] {
 }
 
 fn desaturate_named_color(color: [f64; 3]) -> u32 {
-    // Named clones use native-color.ts: one luminance rounding, unlike random clothing.
+    // Named recipe colors round luminance once, unlike random clothing colors.
     let luminance = fround(
         color[0] * (0.3086_f32 as f64)
             + color[1] * (0.6094_f32 as f64)

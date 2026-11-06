@@ -1,5 +1,5 @@
-//! Incoming hit and Flash decisions from `player-harmful-contact.ts`. This pure
-//! stage owns its RNG draws; the host applies its damage through existing combat state.
+//! Incoming hit and Flash decisions for a player. This pure stage owns its RNG draws;
+//! the host applies its damage through existing combat state.
 
 use crate::float;
 use crate::float::fround;
@@ -12,12 +12,15 @@ pub const CONCENTRATED_DEFLECT_DAMAGE_FACTOR: f64 = 5.0;
 pub const DEFLECT_REFLECTION_PADDING: f64 = 25.0;
 pub const FLASH_RESPONSE_RADIUS: f64 = 100.0;
 
+/// The physical and magic damage of one hit on a player, before deflection and armor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerIncomingDamage {
     pub physical_damage: f64,
     pub magic_damage: f64,
 }
 
+/// What one harmful contact does to a player: damage after resistances and armor, any
+/// Harden chip, the amount offered to a magic shield, and damage reflected to the attacker.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerHarmfulContactResult {
     pub physical_damage: f64,
@@ -25,10 +28,12 @@ pub struct PlayerHarmfulContactResult {
     pub harden_chip: Option<HardenChip>,
     pub shield_damage: f64,
     pub reflected_damage: f64,
-    /// Some(pitch) is the source's deflected branch; None is the received branch.
+    /// The deflect sound's pitch when the hit was deflected; `None` when it was received.
     pub deflect_pitch: Option<f64>,
 }
 
+/// The player state a harmful contact is resolved against, including whether the attacker
+/// is close enough to reflect damage onto.
 pub struct PlayerHarmfulContactContext<'a> {
     pub runtime: &'a PlayerSkillRuntimeState,
     pub derived: &'a PlayerSkillDerivedStats,
@@ -39,6 +44,8 @@ pub struct PlayerHarmfulContactContext<'a> {
     pub enhanced_effects: bool,
 }
 
+/// A triggered Flash: the camera jolt, how long nearby enemies stay dazzled, the scales of
+/// its growing flashes and the pitch of its sound.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerFlashResponse {
     pub camera_displacement: Vec2,
@@ -99,8 +106,8 @@ pub fn resolve_player_harmful_contact(
             context.rescue_protection,
         ),
         magic_damage: rescue_damage(magic, context.rescue_protection),
-        // Shield interception precedes armor in the Source contact system, so its
-        // two rescued lanes must be added independently at this final float store.
+        // Shield interception precedes armor in the contact system, so its two
+        // rescued lanes must be added independently at this final float store.
         shield_damage: fround(
             rescue_damage(physical, context.rescue_protection)
                 + rescue_damage(magic, context.rescue_protection),

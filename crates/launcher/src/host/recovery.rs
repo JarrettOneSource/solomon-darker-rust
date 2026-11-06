@@ -1,6 +1,6 @@
-//! Source `host/party-recovery-claim.ts`: signed owner continuations bind the account,
-//! content, roster and exact normalized Website document. They never trust browser
-//! integrity claims to recover a server-ranked lineage.
+//! Signed party recovery claims: an owner's continuation bound to the account, content,
+//! roster and normalized Website save document. They never trust browser integrity claims
+//! to recover a server-ranked lineage.
 
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -21,6 +21,8 @@ use super::signing::{SOURCE_BASE64URL, credentials_equal, sign, signature_matche
 pub const MAX_PARTY_RECOVERY_CLAIM_LENGTH: usize = 8_192;
 const CLAIM_PREFIX: &str = "sdrpr2";
 
+/// The signed facts that let a player recover a party run: account, content digest,
+/// integrity, party roster and run identity.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyRecoveryClaim {
@@ -41,6 +43,8 @@ pub struct PartyRecoveryClaim {
     pub target_revision: Option<String>,
 }
 
+/// One party member as a recovery claim records it: identity, name, element, life state
+/// and health.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PartyRecoveryRosterMember {
@@ -78,10 +82,9 @@ pub fn create_party_recovery_claim(
         document_sha256: sha256(&normalized),
         version: 2,
     };
-    // Use the existing source JSON.stringify boundary, including unrounded numbers,
-    // insertion order and numeric property names in the retained save document.
-    // Serializing via the struct preserves its source host property order. Parsing that
-    // ordered text as a Lua value then uses the shared ECMAScript number writer.
+    // The payload keeps the struct's field order. Reading that text back as a `LuaValue`
+    // and writing it with `json_value::stringify` spells it like the save document:
+    // unrounded ECMAScript numbers, insertion order and numeric property names.
     let text = serde_json::to_string(&signed).map_err(|error| error.to_string())?;
     let value: LuaValue = serde_json::from_str(&text).map_err(|error| error.to_string())?;
     let payload_json = solomon_assets::json_value::stringify(&value)?;

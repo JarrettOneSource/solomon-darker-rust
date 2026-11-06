@@ -1,12 +1,14 @@
-//! Native enemy steering, flanking, short cached routes and stall recovery.
+//! Enemy steering, flanking, short cached routes and stall recovery.
 //!
-//! Reference: Website `core-kernels/native-enemy-pathfinding.ts`. The navigation boundary
-//! answers authored world geometry; this module owns route timing and waypoint selection.
+//! The navigation boundary answers authored world geometry; this module owns route timing and
+//! waypoint selection.
 
 use crate::float;
 use crate::float::{atan2, fround, hypot};
 use crate::{Rng, Vec2};
 
+/// A movement cadence chosen by visibility: whether the actor moves this tick, how many ticks
+/// one step covers, and whether it is both on screen and lit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EnemyMovementClock {
     pub due: bool,
@@ -37,6 +39,8 @@ pub fn enemy_movement_clock(
     }
 }
 
+/// An enemy's retained steering state: turn rate, wander heading, flank, cached two-point
+/// route, speed and turn factors, stall counter and reorientation timer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyPathState {
@@ -57,7 +61,8 @@ pub struct EnemyPathState {
 }
 
 impl EnemyPathState {
-    /// `createNativeEnemyPathState`: wander, turn, flank magnitude/sign, flank radius.
+    /// A new path state, drawn in RNG order: wander heading, turn rate, flank magnitude, flank
+    /// sign and flank radius.
     #[must_use]
     pub fn new(rng: &mut Rng) -> Self {
         let wander_heading_deg = rng.draw_scaled_float(360.0, false);
@@ -95,8 +100,8 @@ impl EnemyPathState {
         self.route_waypoints = None;
     }
 
-    /// `selectNativeEnemyFlank`: always consumes a wander draw; the duration draw only
-    /// belongs to an enabled flank.
+    /// Picks a new wander heading, which always consumes a draw. Only an enabled flank also
+    /// draws its duration and raises the speed and turn factors.
     pub fn select_flank(&mut self, rng: &mut Rng, flanking_enabled: bool) {
         self.wander_heading_deg = rng.draw_scaled_float(360.0, false);
         if flanking_enabled {
@@ -106,7 +111,8 @@ impl EnemyPathState {
         }
     }
 
-    /// `stepNativeEnemyReorientation`: track the target immediately during state 0D.
+    /// While a reorientation lasts (state 0D), face the target immediately instead of turning
+    /// toward it. Without a target the reorientation ends.
     pub fn step_reorientation(
         &mut self,
         heading: f64,
@@ -124,8 +130,8 @@ impl EnemyPathState {
         heading_to(position, target, heading)
     }
 
-    /// `stepNativeEnemyPathRecovery`: one movement epoch, whose stall counter increments
-    /// once even when the epoch spans two simulation ticks.
+    /// Advances stall recovery by one movement epoch, whose stall counter increments once even
+    /// when the epoch spans two simulation ticks. Returns whether a reorientation started.
     pub fn step_recovery(&mut self, rng: &mut Rng, request: PathRecoveryRequest) -> bool {
         assert!(
             request.status_factor.is_finite() && request.status_factor > 0.0,
@@ -161,6 +167,7 @@ impl EnemyPathState {
     }
 }
 
+/// How steering moves along the line to the target: away from it, neither, or toward it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RadialDirection {
     Retreat,
@@ -178,6 +185,7 @@ impl RadialDirection {
     }
 }
 
+/// Which way steering circles the target, if at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TangentDirection {
     Counterclockwise,
@@ -195,6 +203,8 @@ impl TangentDirection {
     }
 }
 
+/// The inputs to one steering step: the actor's heading and position, cadence and speed, radial
+/// and tangent directions, status factor, and the target or goal to steer by.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemySteeringRequest {
     pub actor_heading_deg: f64,
@@ -210,6 +220,7 @@ pub struct EnemySteeringRequest {
     pub target_position: Option<Vec2>,
 }
 
+/// The result of one steering step: the requested displacement, new heading and path state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemySteering {
     pub delta: Vec2,
@@ -217,6 +228,8 @@ pub struct EnemySteering {
     pub state: EnemyPathState,
 }
 
+/// One movement epoch's progress for stall recovery: the requested and travelled distances,
+/// status factor, tick and whether the enemy may flank.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PathRecoveryRequest {
     pub flanking_enabled: bool,
@@ -226,8 +239,8 @@ pub struct PathRecoveryRequest {
     pub traveled_distance: f64,
 }
 
-/// The world supplies navigation facts. Route expiry and two-waypoint caching stay in
-/// the enemy kernel, so every world caller uses the same native lifecycle.
+/// The world supplies navigation facts. Route expiry and two-waypoint caching stay in this
+/// module, so every world caller uses the same route lifecycle.
 pub trait EnemyNavigation {
     fn direct_path_clear(&self, start: Vec2, end: Vec2, clearance: f64, body_radius: f64) -> bool;
     fn find_route(
@@ -239,6 +252,8 @@ pub trait EnemyNavigation {
     ) -> Option<Vec<Vec2>>;
 }
 
+/// The inputs to route resolution: the actor's position and body radius, the raw steering goal,
+/// the target, navigation clearance, cadence and the route refresh delay.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyPathGoalRequest {
     pub actor_position: Vec2,
@@ -250,6 +265,8 @@ pub struct EnemyPathGoalRequest {
     pub target_refresh_ticks: u64,
 }
 
+/// The goal to steer toward after route resolution, the updated path state, and whether a
+/// failed route asks the actor to turn around.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyPathGoal {
     pub goal: Vec2,
@@ -268,8 +285,9 @@ pub fn enemy_target_refresh_ticks(mode: u8) -> u64 {
     }
 }
 
-/// `nativeEnemySteeringGoal`: radial/tangential range control, target-relative flanking,
-/// a distance-scaled approach offset, or a long wander ray when no target exists.
+/// The point to steer toward: 10 units along the flee heading when fleeing, the supplied goal,
+/// a long wander ray when no target exists, radial/tangential range control, target-relative
+/// flanking, or a distance-scaled approach offset.
 #[must_use]
 pub fn enemy_steering_goal(state: &EnemyPathState, request: &EnemySteeringRequest) -> Vec2 {
     if request.radial_direction == RadialDirection::Retreat
@@ -322,8 +340,8 @@ pub fn enemy_steering_goal(state: &EnemyPathState, request: &EnemySteeringReques
     offset_point(target, state.wander_heading_deg, (distance / 500.0).min(1.0) * 300.0)
 }
 
-/// `buildNativeEnemySteering`: turn and move one small step per cadence tick, rather than
-/// turning once and multiplying the resulting displacement.
+/// Turns and moves one small step per cadence tick, rather than turning once and multiplying
+/// the resulting displacement.
 #[must_use]
 pub fn build_enemy_steering(
     source: EnemyPathState,
@@ -369,8 +387,8 @@ pub fn build_enemy_steering(
     EnemySteering { delta, heading_deg, state }
 }
 
-/// `resolveNativeEnemyPathGoal`: reuse two authored route points until passed/expired;
-/// re-path only after the configured refresh delay. A failed route asks the actor to turn.
+/// Reuses two cached route points until they are passed or expire, and re-paths only after
+/// the configured refresh delay. A failed route asks the actor to turn.
 #[must_use]
 pub fn resolve_enemy_path_goal(
     mut state: EnemyPathState,

@@ -1,5 +1,6 @@
-//! Report 103's accepted Website policy through the shared authority control interface.
-//! The optional multiplayer countdown never replaces renderer/recovery/close readiness.
+//! Report 103's hold policy through the shared authority control interface. The resume
+//! countdown needs two or more connected, materialized humans, and it never replaces
+//! renderer, recovery or close readiness.
 
 use std::collections::BTreeSet;
 

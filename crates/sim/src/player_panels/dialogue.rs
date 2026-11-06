@@ -1,8 +1,10 @@
-//! Current `hub-inventory-renderer.ts::renderChat` and `hubChatTextRuns`.
-//! A click changes only the presentation clock; authored speech and authority stay intact.
+//! Scrolling and italic text runs for College NPC dialogue. A click changes only the
+//! presentation clock; authored speech and authority stay intact.
 
 use crate::ui_text::UiTextRun;
 
+/// One frame of the dialogue scroll: distance travelled, the text's y offset and whether
+/// the text has fully scrolled out.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubChatScrollFrame {
     pub complete: bool,

@@ -1,4 +1,5 @@
-//! Spider world callbacks, Silk contacts and target-owned Cocoons from `enemies/spider.ts`.
+//! Spiders in the enemy world: movement, bites, sucking and spat Silk, Silk contacts that web
+//! players, web upkeep, and the Cocoon that stays with the player it holds.
 use super::combat::{attack_marker, direct_player_damage};
 use super::config::EnemyFamilyConfig;
 use super::effects::{

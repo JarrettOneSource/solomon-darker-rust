@@ -1,5 +1,5 @@
-//! Pure operator activity from Source `host/game-activity-events.ts`.
-//! These compact before/after facts never retain or advance another Session.
+//! Operator activity events for party actions, player connections and run milestones. Run
+//! events compare compact before/after facts, which never retain or advance a Session.
 
 use serde::{Deserialize, Serialize};
 use solomon_sim::combat::PlayerLifeState;
@@ -9,12 +9,14 @@ use solomon_sim::social::{PartyJoinRequester, PartyVisibility, SocialAction};
 
 use super::{HostedGameHost, HostedWorlds};
 
+/// One world's activity facts captured before a tick, to compare with the world after it.
 pub(super) struct RuntimeActivityEpoch {
     party_id: Option<String>,
     before: GameActivitySnapshot,
     boneyard: Option<serde_json::Value>,
 }
 
+/// Party facts captured before a social action, so its activity event can describe the change.
 pub(in crate::host) struct PartyActivityBefore {
     party_id: Option<String>,
     visibility: Option<PartyVisibility>,
@@ -290,6 +292,7 @@ pub(super) fn boneyard_activity(
     })
 }
 
+/// A player's identity, level, health, life state and position in a `GameActivitySnapshot`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct GameActivityPlayer {
@@ -306,11 +309,14 @@ pub(super) struct GameActivityPlayer {
     y: f64,
 }
 
+/// The current wave in a `GameActivitySnapshot`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(super) struct GameActivityWave {
     ordinal: u64,
 }
 
+/// The compact facts about one world that run activity events compare: phase, run, tick, wave
+/// and players.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct GameActivitySnapshot {
@@ -321,6 +327,7 @@ pub(super) struct GameActivitySnapshot {
     wave: Option<GameActivityWave>,
 }
 
+/// One derived run activity event: its name, message and details.
 #[derive(Serialize)]
 pub(super) struct GameActivityEvent {
     pub details: LuaObject,

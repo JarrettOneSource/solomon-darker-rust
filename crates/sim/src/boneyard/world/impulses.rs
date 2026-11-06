@@ -1,4 +1,5 @@
-//! Collision-resolved enemy impulses from `boneyard-world-placement.ts`.
+//! Collision-resolved enemy knockbacks, including area knockbacks that report which
+//! hostile enemies their target touches.
 
 use super::*;
 use crate::actor_physics::{ActorPhysicsWorld, ActorRootContact};
@@ -6,7 +7,7 @@ use crate::float::fround;
 
 impl BoneyardWorld {
     /// Body positions carry through successive ordinary impulses, including
-    /// temporary player pushes. Source commits only enemy/lantern roots.
+    /// temporary player pushes. Only enemy and lantern roots are committed.
     pub fn apply_secondary_enemy_knockbacks(
         &mut self,
         knockbacks: &[(usize, Vec2)],
@@ -15,9 +16,9 @@ impl BoneyardWorld {
         let _ = self.apply_enemy_knockbacks(knockbacks, players, false);
     }
 
-    /// `moveBoneyardKnockbackAreaTarget` owns one target's two physics passes.
-    /// Each call rebuilds player bodies from the resolved characters, while
-    /// previously committed enemy/lantern roots remain visible to the next call.
+    /// Moves one area-knockback target in two physics passes and returns the hostile
+    /// enemies it touches. Each call rebuilds player bodies from the resolved characters,
+    /// while previously committed enemy/lantern roots remain visible to the next call.
     pub fn move_knockback_area_target(
         &mut self,
         target_id: usize,
@@ -96,8 +97,9 @@ impl BoneyardWorld {
     }
 }
 
-/// The Source area separation pass stores its zero-delta request as float32.
-/// Ordinary impulses deliberately retain their existing double request above.
+/// The area separation pass rounds its zero-delta requested point to single precision.
+/// Ordinary impulses deliberately keep the unrounded double request of
+/// `BoneyardPhysicsWorld`.
 struct KnockbackAreaPhysics<'a> {
     bounds: BoneyardBounds,
     collision: &'a super::super::collision::BoneyardCollisionWorld,

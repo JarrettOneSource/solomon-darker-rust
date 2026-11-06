@@ -1,4 +1,4 @@
-//! `protocol/codecs/mod-content.ts::modContentProjection` and its value/frame checks.
+//! Decoding the host's mod content projection, with its value and frame checks.
 
 use std::collections::BTreeSet;
 

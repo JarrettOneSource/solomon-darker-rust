@@ -1,5 +1,4 @@
-//! Flame Lash, Blizzard and Steam channel contacts from source
-//! `spell-combat/channels.ts` and its native pushback helpers.
+//! Flame Lash, Blizzard and Steam channel contacts, with their native pushback helpers.
 
 use crate::spells::model::PrimarySpellTransient;
 use crate::spells::weld::WeldWorldActor;
@@ -349,7 +348,7 @@ impl ContactWork<'_, '_> {
                 .push(PrimarySpellTransient::Weld(WeldWorldActor::Channel(factory.channel)));
             self.next_id += 1;
         } else {
-            // Source compatibility inputs have no retained ribbon recipe.
+            // An emission without retained native geometry has no ribbon recipe.
             self.publish_flame_fade(
                 emission,
                 WeldFlameLashFadeVariant::Source,

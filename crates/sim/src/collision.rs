@@ -7,6 +7,7 @@
 use crate::constants::COLLISION_RESPONSE;
 use crate::float::{fround, hypot};
 
+/// A point or vector in world units.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct Vec2 {
@@ -23,6 +24,7 @@ impl Vec2 {
     }
 }
 
+/// A named axis-aligned rectangle that blocks circle movement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionRectangle {
     pub id: String,
@@ -39,6 +41,8 @@ impl CollisionRectangle {
     }
 }
 
+/// Why a set of collision rectangles is invalid: a duplicate ID, or bounds that are not
+/// finite and ordered.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CollisionRectangleError {
     AmbiguousId(String),

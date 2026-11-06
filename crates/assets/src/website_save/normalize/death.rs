@@ -1,4 +1,5 @@
-//! Persisted mutable death owners from Source `protocol/codecs/death-animations.ts`.
+//! Validation of persisted mutable death animations: a golem's death fragments and
+//! dropped death weapons.
 
 use std::collections::BTreeSet;
 

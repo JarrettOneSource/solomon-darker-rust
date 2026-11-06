@@ -1,4 +1,5 @@
-//! `JoinPartyScene.tsx` and `join-party.css`: native text, fluid grid and badges.
+//! Painting for the Join Party screen: the party code field, a responsive grid of
+//! directory rows and their badges.
 use super::JoinView;
 use crate::gpu_ui::{FontRunOptions, NativeFontRun, UiFrame};
 use crate::hosted::{PartyActivity, PublicGameParty};

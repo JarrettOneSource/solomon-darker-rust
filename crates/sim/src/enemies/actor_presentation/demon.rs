@@ -1,4 +1,4 @@
-//! Planted Demon limbs, connectors and flames from `native-enemy-demon-presentation.ts`.
+//! Demon layers: its planted limbs, their connectors and its flames.
 
 use super::layers::*;
 use super::model::*;
@@ -7,6 +7,8 @@ use crate::Vec2;
 use crate::enemies::model::{DemonExtremity, DemonPhase, EnemyActor, EnemyBrain, EnemyLifeState};
 use crate::float;
 
+/// The Demon's limbs in actor space for one frame: front and rear offsets and rotations, body bob
+/// and bomb pose.
 #[derive(Clone, Copy)]
 pub(super) struct DemonArticulationVisual {
     pub front: Vec2,

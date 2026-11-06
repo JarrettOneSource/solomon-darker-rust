@@ -1,4 +1,5 @@
-//! MagicMissile's double-pass compositor from `renderer/primary-spell-ether-native.ts`.
+//! Sprite plans for the Ether primary, MagicMissile: its double-pass flight compositor,
+//! impacts and pierce streaks.
 
 use super::model::{PrimarySpellEtherImpact, PrimarySpellEtherPierceStreak};
 use super::presentation::{SpellBlend, SpellSprite, SpellSpritePlan};
@@ -102,7 +103,7 @@ pub fn ether_primary_compositor_plan(
             let radius = draw_random() * 20.0 * sampled_scale;
             let scale = (0.25 + draw_random() * 0.2) * sampled_scale;
             let alpha = draw_random() * 0.75;
-            // The source samples degrees before the view converts them to radians.
+            // The rotation is sampled in degrees, then converted to radians.
             let rotation = draw_random() * 360.0 * std::f64::consts::PI / 180.0;
             plan.draws.push(SpellSprite {
                 alpha,

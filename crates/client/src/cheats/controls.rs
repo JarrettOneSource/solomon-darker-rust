@@ -9,6 +9,8 @@ use solomon_sim::menu::cheats::{
 };
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
+/// The cheat forms' local drafts: target, gold, experience, seed, enemy spawn and
+/// developer fields.
 pub(super) struct CheatControls {
     target: String,
     selected_target: String,
@@ -477,7 +479,7 @@ fn skill_maximum(catalogs: &CheatMenuCatalogs, id: &str) -> i64 {
 }
 
 fn integer_input(value: &str, label: &str, minimum: f64, maximum: f64) -> Result<f64, String> {
-    // Number(value), including the source's empty-string-to-zero conversion.
+    // `parse_javascript_number` reads an empty field as zero.
     let number = crate::ui::parse_javascript_number(value);
     if !number.is_finite()
         || number.fract() != 0.0

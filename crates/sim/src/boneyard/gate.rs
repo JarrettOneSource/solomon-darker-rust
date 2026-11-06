@@ -1,4 +1,4 @@
-//! Swinging fence gates, ported from `core-kernels/boneyard-gate.ts`.
+//! Swinging fence gates: their leaves, player contact and per-tick swing.
 
 use crate::Vec2;
 use crate::float::{atan2, hypot};
@@ -45,7 +45,7 @@ impl GateLeaf {
             Vec2::new(direction.x / length * CONTACT_SPEED, direction.y / length * CONTACT_SPEED);
     }
 
-    /// `stepBoneyardGateLeaf`: retain hinge distance, bounce outside travel, damp velocity.
+    /// Retain hinge distance, bounce outside travel, damp velocity.
     pub fn step(&mut self) {
         let speed_squared = self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y;
         if speed_squared <= STOP_SPEED_SQUARED {
@@ -81,7 +81,7 @@ impl GateLeaf {
     }
 }
 
-/// The seed owns the same private FNV/xorshift stream as the Website's gate constructor.
+/// The run seed starts a private FNV/xorshift stream that sets each leaf's initial sway.
 #[must_use]
 pub fn create_gate_leaves(fences: &[BoneyardFence], seed: &str) -> Vec<GateLeaf> {
     let mut random_state = seed_from_text(seed);

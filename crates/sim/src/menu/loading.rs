@@ -1,8 +1,9 @@
-//! Match-loading lifecycle presentation from Website `match-loading.ts`.
+//! The match-loading screen's stages, labels and progress.
 //! The session coordinator supplies stages and time; this state never advances a load.
 
 pub const MATCH_LOADING_PRESENTATION_DELAY_MS: f64 = 150.0;
 
+/// What a match load enters: a Boneyard or the Hub.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatchLoadingFlow {
     Boneyard,
@@ -19,6 +20,7 @@ impl MatchLoadingFlow {
     }
 }
 
+/// One stage of loading a match, from waking the transport to entering gameplay.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatchLoadingStage {
     ConnectingTransport,
@@ -160,6 +162,7 @@ impl MatchLoadingStage {
     }
 }
 
+/// A loading stage's ID, label and progress fraction.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MatchLoadingStageDefinition {
     pub id: &'static str,
@@ -173,6 +176,7 @@ impl MatchLoadingStageDefinition {
     }
 }
 
+/// The loading screen's flow, current stage, start time and progress.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MatchLoadingState {
     pub flow: MatchLoadingFlow,
@@ -193,7 +197,7 @@ impl MatchLoadingState {
 
     pub fn advance(&mut self, stage: MatchLoadingStage) {
         let definition = stage.definition();
-        // Two authored stages share .66. Source retains the first label at equal progress.
+        // Two authored stages share .66; at equal progress the first label stays.
         if definition.progress <= self.progress {
             return;
         }

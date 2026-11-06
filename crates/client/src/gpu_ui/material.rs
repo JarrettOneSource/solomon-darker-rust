@@ -14,12 +14,15 @@ struct ShadowKey {
     output: ShadowOutput,
 }
 
+/// Where a material's texture comes from: a cached image or a managed texture, by ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum TextureSource {
     Image(u64),
     Managed(u64),
 }
 
+/// How one image is drawn this frame: texture, blend, mask, sampling, color filter and an
+/// optional alpha shadow, stored as comparable bits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct Material {
     pub source: TextureSource,
@@ -90,6 +93,7 @@ impl Material {
     }
 }
 
+/// This frame's materials, each given a texture ID the painter can resolve.
 #[derive(Default)]
 pub(super) struct Materials {
     ids: BTreeMap<Material, u64>,

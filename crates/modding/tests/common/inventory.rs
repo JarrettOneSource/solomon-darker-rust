@@ -1,5 +1,5 @@
-//! Fixture-only spelling bridge. Website JSON and native checkpoints deliberately
-//! use different inventory field/enum names; domain values remain unchanged.
+//! Fixture-only spelling bridge. The Website client's recorded JSON and Rust checkpoints
+//! deliberately use different inventory field/enum names; domain values remain unchanged.
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{

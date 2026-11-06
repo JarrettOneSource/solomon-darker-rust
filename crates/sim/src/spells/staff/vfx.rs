@@ -1,10 +1,13 @@
-//! Ordered staff proc sounds, smoke, disabled-hit particles and source lifetimes.
+//! A staff contact's presentation: proc sounds, smoke, disabling-hit particles and pike
+//! debris in their fixed random order, and how long each lasts.
 
 use super::*;
 use crate::float;
 use crate::float::fround;
 use crate::profile::runtime::PlayerStaffAttackOutcome;
 
+/// Inputs for presenting a staff contact: the action, targets hit and their mean
+/// position, element tint, sound pitches and the first free ID.
 pub struct StaffContactPresentationInput<'a> {
     pub first_id: u64,
     pub action: &'a PlayerStaffAction,

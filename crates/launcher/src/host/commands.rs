@@ -1,5 +1,5 @@
-//! Reliable commands call the canonical participant API once. Source counterparts:
-//! `host/game-host.ts` command branches and `core-server/game-simulation.ts` commands.
+//! Reliable game commands. Each command sequence reaches the session at most once, a retry
+//! of the latest one gets its stored receipt back, and gameplay holds limit which apply.
 
 use solomon_protocol::{GameCommand, HostErrorCode, PauseSource, ResumeGraceReason, ServerMessage};
 use solomon_sim::belt::BeltCommand;
@@ -154,7 +154,7 @@ impl NativeAuthority {
 }
 
 /// Apply only player-domain commands. Host-owned reset and social operations must be
-/// resolved against the actual party/world before reaching this boundary.
+/// resolved against the host's party and world before reaching this boundary.
 pub(super) fn apply_session_command(
     session: &mut GameSession,
     id: &str,
@@ -227,8 +227,10 @@ pub(super) fn apply_session_command_with_extensions(
     Ok(SessionCommandResult { accepted, inventory_result, mod_consumption })
 }
 
-/// Network holds are outside `GameSession`. Preserve the source resume-grace
-/// admission branch, `pauseAllowsInventoryAction` and selection permissions here.
+/// Gameplay holds live outside `GameSession`, so the host filters commands here. A resume
+/// grace admits only skill offers, chat, wizard resets and Tutorial actions. A pause admits
+/// social, skill-offer and Tutorial commands from anyone, and from its owner the inventory,
+/// belt and skill-selection commands that the pausing surface offers, plus a wizard reset.
 pub(super) fn surface_allows_command(
     control: &GameplayControl,
     id: &str,

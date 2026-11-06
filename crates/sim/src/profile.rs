@@ -1,5 +1,5 @@
-//! Canonical wizard identity and learned skills, from Website `core-kernels/player-character.ts`
-//! and `player-progression.ts`. `profile-goldens.json` pins every stock stat-book row.
+//! Canonical wizard identity and learned skills: element and discipline, the skill book,
+//! skill rules and Weld builds. `profile-goldens.json` pins every stock stat-book row.
 
 mod catalog;
 mod class_title;
@@ -43,6 +43,7 @@ pub use class_title::wizard_class_title;
 
 use crate::appearance::StarterColorOwner;
 
+/// A wizard's chosen element, which sets its primary spell root.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WizardElement {
@@ -80,6 +81,8 @@ impl From<WizardElement> for StarterColorOwner {
     }
 }
 
+/// A wizard's discipline: Arcane, Body or Mind, or a second element that Create chose at
+/// random.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WizardDiscipline {
@@ -94,7 +97,7 @@ pub enum WizardDiscipline {
 }
 
 impl WizardDiscipline {
-    /// `WIZARD_DISCIPLINE_CHOICES`: the three ordinary manual Create choices.
+    /// The three ordinary manual Create choices.
     pub const CHOICES: [Self; 3] = [Self::Arcane, Self::Body, Self::Mind];
     /// Accepted identities also include Create's randomized second elemental root.
     pub const ALL: [Self; 8] = [
@@ -161,6 +164,8 @@ pub struct NewGameSelection {
 pub const SKILL_ROW_COUNT: usize = 83;
 pub const SPELL_WELDING_SKILL_ID: usize = 52;
 
+/// A skill's acquisition rule: minimum level, root, category, and the skills it requires
+/// or forbids.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SkillRule {
     pub skill_id: usize,
@@ -190,6 +195,7 @@ pub fn skill_category(skill_id: usize) -> Option<u32> {
     skill_rule(skill_id).map(|rule| rule.category)
 }
 
+/// A stock numeric skill property: a single value, or one value per rank.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SkillValue {
     Scalar(f64),
@@ -209,6 +215,7 @@ impl SkillValue {
     }
 }
 
+/// A named numeric property of a stock skill.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SkillProperty {
     pub name: &'static str,
@@ -248,6 +255,8 @@ pub fn skill_stat(skill_id: usize, property: &str, rank: u32) -> Option<f64> {
     SKILL_CATALOG.get(skill_id)?.stat(property, rank)
 }
 
+/// One of the ten Weld builds: component and primary skills, color roots, icon, name and
+/// description.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WeldBuild {
     pub color_roots: [usize; 2],
@@ -283,7 +292,7 @@ pub struct SkillBookState {
 }
 
 impl SkillBookState {
-    /// `createPlayerSkillBook`: root rows and exactly two element-owned starter skills.
+    /// A new skill book: root rows and exactly two element-owned starter skills.
     #[must_use]
     pub fn new(element: WizardElement, discipline: WizardDiscipline) -> Self {
         let (element_root, primary, secondary) = match element {
@@ -311,7 +320,7 @@ impl SkillBookState {
         }
     }
 
-    /// `unlockPlayerAdvancedSkill`: buying a spell unlocks acquisition; it grants no rank.
+    /// Buying an advanced spell unlocks its acquisition; it grants no rank.
     pub fn unlock_advanced(&mut self, skill_id: usize) -> bool {
         if !(72..=79).contains(&skill_id) || self.advanced_unlocks[skill_id - 72] {
             return false;
@@ -320,7 +329,7 @@ impl SkillBookState {
         true
     }
 
-    /// `grantPlayerSkillRanks`: acquisition order is stable and ranks cap at the stock maximum.
+    /// Acquisition order is stable and ranks cap at the stock maximum.
     pub fn grant_ranks(&mut self, skill_id: usize, ranks: u32) {
         assert!(ranks > 0, "granted skill ranks must be positive");
         assert!(
@@ -345,7 +354,7 @@ impl SkillBookState {
         }
     }
 
-    /// `grantPlayerWeldBuild`: acquire its missing components before the synthetic skill.
+    /// Acquires the build's missing components before the synthetic Weld skill.
     pub fn grant_weld_build(&mut self, build_id: u32) {
         let build = weld_build(build_id).expect("an authored native Weld build");
         for skill_id in build.component_skill_ids {

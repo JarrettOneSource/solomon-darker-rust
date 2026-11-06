@@ -1,8 +1,8 @@
-//! Player health, mana, status ordering and death, from `core-kernels/player-combat.ts`.
+//! Player health, mana, status ordering and death.
 //!
-//! Puppet hit timing comes from `native-puppet-hit.ts`; cold and dazzle movement factors
-//! come from `boneyard-enemy-modifiers.ts`. `tests/combat_goldens.rs` replays the Website's
-//! resource transactions, status precedence, death frame edges and respawn contract.
+//! This module also owns Puppet hit timing and the cold, circle and dazzle movement factors.
+//! `tests/combat_goldens.rs` replays recorded resource transactions, status precedence, death
+//! frame edges and the respawn contract.
 
 use crate::float::fround;
 
@@ -20,6 +20,8 @@ const DEATH_FRAME_THREE_TICK: u64 = 159;
 const WRAITH_DAZZLE_TICKS: u64 = 50;
 const HIT_TIMER_STEP: f64 = 0.05_f32 as f64;
 
+/// A player's life stage: alive, lethally hit (dying from the next tick), playing the death
+/// animation, or spectating.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PlayerLifeState {
@@ -76,8 +78,8 @@ impl PuppetHitState {
     }
 }
 
-/// `stepNativePuppetHitTimer`: visual +0x78 and movement reaction +0x80 use the
-/// same float32 subtraction, but receiving one latch does not imply the other.
+/// Visual +0x78 and movement reaction +0x80 use the same float32 subtraction, but
+/// receiving one latch does not imply the other.
 #[must_use]
 pub fn step_puppet_hit_timer(mut timer: f64, elapsed_ticks: u64) -> f64 {
     for _ in 0..elapsed_ticks.min(20) {
@@ -89,6 +91,7 @@ pub fn step_puppet_hit_timer(mut timer: f64, elapsed_ticks: u64) -> f64 {
     timer
 }
 
+/// A player's health, mana, status effects, hit feedback and death progress.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerCombatState {
@@ -112,6 +115,8 @@ pub struct PlayerCombatState {
     pub poison_ticks_remaining: u64,
 }
 
+/// The death milestones one combat tick reached: a new death epoch, the death burst frame,
+/// or the end of the death presentation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PlayerCombatTickResult {
     pub began_death_epoch: bool,
@@ -419,7 +424,7 @@ impl PlayerCombatState {
         let maximum_mana = self.maximum_mana;
         let corpse_consumed = self.corpse_consumed;
         *self = Self::new();
-        // The Source spreads this retained flag. Only a new death epoch clears it.
+        // A new run keeps this flag. Only a new death epoch clears it.
         self.corpse_consumed = corpse_consumed;
         self.maximum_health = maximum_health;
         self.current_health = maximum_health;
@@ -441,7 +446,7 @@ pub fn player_death_frame_at_tick(tick: u64) -> usize {
     }
 }
 
-/// The Website holds the final native pose while stretching 300 native ticks over 500 ticks.
+/// Stretches the 300-tick death animation over 500 ticks, holding its final pose at tick 298.
 #[must_use]
 pub fn player_death_presentation_tick_at_age(age_ticks: u64) -> u64 {
     let age = age_ticks.min(PLAYER_DEATH_PRESENTATION_DURATION_TICKS);
@@ -453,7 +458,7 @@ fn require_nonnegative(value: f64, name: &str) {
     assert!(value.is_finite() && value >= 0.0, "{name} must be finite and nonnegative");
 }
 
-/// `playerPoisonHealthDamage`: poison may reach zero health but never makes it negative.
+/// Poison may reach zero health but never makes it negative.
 #[must_use]
 pub fn player_poison_health_damage(current_health: f64, amount: f64) -> f64 {
     current_health.max(0.0).min(amount)

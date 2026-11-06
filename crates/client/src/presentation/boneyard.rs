@@ -1,4 +1,5 @@
-//! World/encounter/loot projection from `client/boneyard-presentation-timeline.ts`.
+//! Boneyard display sampling between two accepted snapshots: world, encounter, loot,
+//! enemy and Puppet hit state.
 
 use std::collections::BTreeMap;
 
@@ -21,8 +22,8 @@ use super::PresentationClocks;
 use super::enemies::{self, EnemyPresentationMetadata};
 use super::math::{interpolate_members, interpolate_projected_members, lerp, lerp_cycle, lerp_vec};
 
-/// `host/game-snapshot.ts` samples Spider appearance with the host's logical
-/// light query and fixed stock viewport, before any client camera projection.
+/// Samples Spider appearance with the host's logical light query and fixed stock
+/// viewport, before any client camera projection.
 pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentationMetadata> {
     let world = session.boneyard.as_ref()?;
     let players: Vec<_> = session
@@ -311,7 +312,7 @@ fn project_puppet_hits(
         if let Some(before) = before.filter(|before| before.hit_tick == next.hit_tick) {
             hit.feedback.timer = lerp(before.feedback.timer, next.feedback.timer, blend);
             hit.feedback.tick = tick.floor() as u64;
-            // Source samples this timer at the fractional display tick itself.
+            // This timer is sampled at the fractional display tick itself.
             clocks.puppet_hits.insert(
                 hit.target_id.clone(),
                 fround(hit.feedback.strength * hit.feedback.timer).min(1.0),
@@ -330,7 +331,7 @@ fn project_puppet_hits(
         output.push(hit);
     }
     if blend < 1.0 {
-        // The source Map preserves older insertion order, not sorted target IDs.
+        // Older hits keep their original order, not sorted target IDs.
         for before in older {
             if previous.contains_key(before.target_id.as_str()) {
                 clocks.puppet_hits.insert(before.target_id.clone(), before.feedback.alpha(tick));

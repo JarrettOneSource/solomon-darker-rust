@@ -1,5 +1,5 @@
-//! The unchanged editor's global local-draft drawer and one-use IndexedDB handoff.
-//! Source: `editor/store.ts`, `cloud.ts`, `workshop-request-store.ts`.
+//! The Website editor's local draft drawer, cloud draft map and one-use IndexedDB
+//! handoff, read and written in the editor's own storage format.
 use crate::hosted::WebsiteMount;
 use crate::storage::{request_result, transaction_done};
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,7 @@ const WORKSHOP_DATABASE: &str = "solomon-dark-boneyard-workshop";
 const WORKSHOP_STORE: &str = "requests";
 const WORKSHOP_TOKEN: &str = "sdr:boneyard:workshop:";
 
+/// A local Boneyard draft's index entry: its ID, name, update time and resident count.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct DraftMeta {
@@ -38,7 +39,7 @@ pub(super) fn list(window: &Window) -> Vec<DraftMeta> {
         };
         serde_json::from_str(&raw).map_err(|_| "Draft index is not valid".to_owned())
     };
-    // Source treats unavailable or malformed local indices as an empty device drawer.
+    // Unavailable or malformed local indices read as an empty device drawer.
     let mut entries = read().unwrap_or_default();
     entries.sort_by(|a, b| b.updated_at.total_cmp(&a.updated_at));
     entries
@@ -140,7 +141,7 @@ pub(super) fn set_cloud_id(
             .unwrap_or_else(|| json!({}))
     });
     map[draft_id] = cloud_id.into();
-    // Source retains this mapping in memory when local quota is full; cloud opening still works.
+    // Keep this mapping in memory when local quota is full; cloud opening still works.
     if storage(window)
         .and_then(|storage| {
             storage

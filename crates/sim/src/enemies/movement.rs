@@ -1,4 +1,5 @@
-//! Native two-tick steering, collision commit and gait writers from `enemies/movement.ts`.
+//! Shared enemy movement: steering on a two-tick cadence (the visibility clock when fleeing),
+//! the collision commit and the gait, pose and stride phases that movement advances.
 
 use super::EnemyToken;
 use super::config::{EnemyFamilyConfig, SkeletonWeapon};
@@ -27,7 +28,8 @@ pub fn staff_movement_speed(actor: &EnemyActor) -> f64 {
     speed * actor.staff_movement_factor
 }
 
-/// Shared Spider/Wraith inherited route branch from `enemies/movement.ts`.
+/// Routes a Spider or Wraith steering goal through the enemy's path state. Without a target, a
+/// goal beyond the arena is first pulled back to where the line toward it leaves the bounds.
 pub fn route_enemy_goal(
     actor: &mut EnemyActor,
     raw_goal: Vec2,

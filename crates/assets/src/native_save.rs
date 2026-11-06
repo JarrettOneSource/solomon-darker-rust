@@ -1,5 +1,6 @@
-//! Native `.cfg`/`.sav` and launcher archive interchange from Website `save/`.
-//! Unknown native payloads remain in their original tree so exporting does not lose them.
+//! The original game's `.cfg`/`.sav` files and the launcher archive, and their interchange
+//! with web game saves. Unknown native payloads remain in their original tree so exporting
+//! does not lose them.
 
 mod archive;
 mod bridge;
@@ -66,7 +67,8 @@ pub use portable::{
 };
 pub use template::{decode_native_hub_template, load_embedded_native_hub_template};
 
-/// Match atob before the source's separate canonical-base64 integrity check.
+/// Forgiving base64 decoding: ASCII whitespace is skipped, padding is optional and trailing
+/// bits are allowed. Integrity checks compare against the canonical encoding separately.
 fn decode_base64(value: &str, claim: &str) -> Result<Vec<u8>, String> {
     use base64::Engine;
     use base64::alphabet;

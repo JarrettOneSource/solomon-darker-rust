@@ -1,5 +1,5 @@
-//! Spider's native movement-call state machine from `core-kernels/native-spider.ts`.
-//! Cadence belongs to the actor wrapper; one call owns its precise random draw order.
+//! The Spider's movement-call state machine: approach, close movement, strafe, spit, retreat
+//! and attach. Cadence belongs to the actor wrapper; one call owns its precise random draw order.
 use super::model::SpiderBrain;
 use super::silk::{SilkCreation, create_silk};
 use crate::float::{fround, hypot};
@@ -7,6 +7,8 @@ use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::direction_from_heading;
 use crate::{Rng, Vec2};
 
+/// What a Spider knows about its target: position, heading, collision radius, whether it is a
+/// player, how badly it is webbed and its velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpiderTarget {
     pub position: Vec2,
@@ -16,12 +18,16 @@ pub struct SpiderTarget {
     pub web_severity: f64,
     pub velocity_per_tick: Vec2,
 }
+/// A Spider goal after route resolution: the point to move toward, whether it follows a cached
+/// route, and whether a failed route turns the Spider around.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpiderRouteGoal {
     pub goal: Vec2,
     pub following_route: bool,
     pub turn_around: bool,
 }
+/// The inputs to one Spider movement call: an optional goal router, heading, position, speed,
+/// status factor, light, target, wander heading, web settings and the Silk spit limits.
 pub struct SpiderMovementRequest<'a> {
     pub route_goal: Option<&'a mut dyn FnMut(Vec2) -> SpiderRouteGoal>,
     pub heading_deg: f64,
@@ -36,6 +42,8 @@ pub struct SpiderMovementRequest<'a> {
     pub live_silk_count: usize,
     pub shared_spit_ticks_remaining: u64,
 }
+/// The outcome of one Spider movement call: its controller state, heading, position and goal,
+/// whether it bit or sucked, any Silk it spat, the bite sounds and the shared spit cooldown.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpiderMovementResult {
     pub state: SpiderBrain,

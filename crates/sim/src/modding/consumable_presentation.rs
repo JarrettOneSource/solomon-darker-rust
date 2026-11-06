@@ -1,4 +1,4 @@
-//! The consumable carrier from `renderer/mod-consumable-effect-presentation.ts`.
+//! How a used mod consumable is drawn: a pulsing tinted ring and its opening flash.
 //! Its private four-word cosmetic stream is seeded by the accepted use ID and
 //! never consumes authoritative randomness.
 
@@ -8,6 +8,8 @@ use super::inventory::GameSimulationModEffect;
 
 pub const MOD_CONSUMABLE_TEXTURE_SIZE: u32 = 128;
 
+/// A consumable effect's drawing at one tick: the ring's alpha, radius and tint, and each of
+/// the four flash layers' alpha, rotation and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModConsumableEffectPlan {
     pub alpha: f64,
@@ -63,7 +65,7 @@ pub fn mod_consumable_ring_alpha(x: f64, y: f64) -> f64 {
     (outer + inner).clamp(0.0, 1.0)
 }
 
-/// Exact ImageData bytes from `mod-consumable-effect-view.ts::createRingTexture`.
+/// The ring texture's RGBA bytes: white pixels whose alpha is the ring alpha scaled to 210.
 #[must_use]
 pub fn mod_consumable_ring_rgba() -> Vec<u8> {
     let mut pixels = Vec::with_capacity((MOD_CONSUMABLE_TEXTURE_SIZE.pow(2) * 4) as usize);
@@ -82,7 +84,7 @@ pub fn mod_consumable_effect_id(effect: &GameSimulationModEffect) -> String {
 }
 
 fn effect_random(use_id: u64) -> [f64; 4] {
-    // This source stream deliberately permits zero, unlike the actor/wave RNG.
+    // This cosmetic xorshift stream deliberately permits zero, unlike the actor/wave RNG.
     let mut state = use_id as u32;
     std::array::from_fn(|_| {
         state ^= state << 13;

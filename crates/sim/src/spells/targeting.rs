@@ -1,4 +1,5 @@
-//! Native primary queries and Ether tracking from `core-kernels/primary-spell-targeting.ts`.
+//! Primary spell target queries (point, cone, circle, rectangle and polygon) and Ether
+//! missile tracking.
 //!
 //! Actor cell bindings and registration order are part of contact selection. In particular,
 //! Fire and Ether query their post-move cell, rather than sweeping against every enemy.
@@ -16,8 +17,8 @@ pub const PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK: u32 = 0x700;
 pub const PRIMARY_HOSTILE_FLAG: u32 = 0x2;
 pub const ETHER_PRIMARY_INITIAL_TURN: f64 = 0.01_f32 as f64;
 
-/// `nativePrimaryViewRayEndpoint`: range ends at the current camera view, with
-/// float32 stores before and after the shared bounds query.
+/// Where a primary's range ends: at the edge of the current camera view, with float32
+/// stores before and after the shared bounds query.
 #[must_use]
 pub fn primary_view_ray_endpoint(start: Vec2, direction: Vec2, view: BoneyardBounds) -> Vec2 {
     let far = Vec2::new(
@@ -28,6 +29,7 @@ pub fn primary_view_ray_endpoint(start: Vec2, direction: Vec2, view: BoneyardBou
     Vec2::new(fround(endpoint.x), fround(endpoint.y))
 }
 
+/// What a primary spell target is: an enemy, a gravestone, a projectile or scenery.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimarySpellTargetKind {
     Enemy,
@@ -36,12 +38,16 @@ pub enum PrimarySpellTargetKind {
     Scenery,
 }
 
+/// How queries find a target: by its 100-unit grid cell, or in the transient list that
+/// follows the grid targets in registration order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimarySpellQueryLane {
     Grid,
     Transient,
 }
 
+/// Something a primary spell can hit, with the flags, cell binding and registration order
+/// that decide contact selection.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrimarySpellTarget {
     pub active: bool,
@@ -61,6 +67,8 @@ pub struct PrimarySpellTarget {
     pub registration_order: usize,
 }
 
+/// A point contact query: the first eligible target in the point's grid cell that lies
+/// within the query radius.
 #[derive(Clone, Copy)]
 pub struct PrimaryPointContactQuery<'a> {
     pub actor_mask: u32,
@@ -69,12 +77,16 @@ pub struct PrimaryPointContactQuery<'a> {
     pub targets: &'a [PrimarySpellTarget],
 }
 
+/// A fireball's point contact query. A non-hostile contact is passed over while a hostile
+/// target lies in the corridor ahead.
 pub struct FireballPointContactQuery<'a> {
     pub contact: PrimaryPointContactQuery<'a>,
     pub direction: Vec2,
     pub hostile_corridor_length: f64,
 }
 
+/// A cone query: eligible targets within reach and the half-angle of the aim, in line of
+/// sight.
 pub struct PrimaryConeQuery<'a> {
     pub actor_mask: u32,
     pub aim_direction: Vec2,
@@ -85,6 +97,7 @@ pub struct PrimaryConeQuery<'a> {
     pub targets: &'a [PrimarySpellTarget],
 }
 
+/// The Air primary's target query: aim, range, line of sight and the previous target.
 pub struct AirPrimaryTargetQuery<'a> {
     pub aim_direction: Vec2,
     pub has_line_of_sight: &'a dyn Fn(&PrimarySpellTarget) -> bool,
@@ -94,6 +107,7 @@ pub struct AirPrimaryTargetQuery<'a> {
     pub targets: &'a [PrimarySpellTarget],
 }
 
+/// A Lightning bolt's source, midpoint and endpoint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AirPrimaryBoltGeometry {
     pub endpoint: Vec2,
@@ -324,8 +338,8 @@ pub fn primary_root_targets(
         .collect()
 }
 
-/// `nativePrimaryCircleTargets`: native cell order, then the exact squared-radius
-/// contact test. Adding the radii first admits targets the Source excludes.
+/// Targets in native cell order that pass the exact squared-radius contact test. Adding
+/// the radii before squaring would admit targets this test excludes.
 #[must_use]
 pub fn primary_circle_targets(
     origin: Vec2,
@@ -424,6 +438,8 @@ pub fn native_point_in_polygon(point: Vec2, polygon: &[Vec2]) -> bool {
     inside
 }
 
+/// One tick of Ether missile homing: position, heading, speed, turn state and the target
+/// position, if any.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EtherPrimaryHomingInput {
     pub heading_degrees: f64,
@@ -435,6 +451,7 @@ pub struct EtherPrimaryHomingInput {
     pub turn_input: f64,
 }
 
+/// An Ether missile's position, direction, heading and turn accumulator after homing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EtherPrimaryHomingResult {
     pub direction: Vec2,
@@ -443,6 +460,8 @@ pub struct EtherPrimaryHomingResult {
     pub turn_accumulator: f64,
 }
 
+/// One tick of Ether missile tracking: the homing state, the current target and whether
+/// the missile may pick a new one.
 pub struct EtherPrimaryTrackingInput<'a> {
     pub heading_degrees: f64,
     pub movement_scalar: f64,
@@ -455,6 +474,7 @@ pub struct EtherPrimaryTrackingInput<'a> {
     pub turn_input: f64,
 }
 
+/// An Ether missile after tracking: its movement, target and reacquire flag.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EtherPrimaryTrackingResult {
     pub movement: EtherPrimaryHomingResult,

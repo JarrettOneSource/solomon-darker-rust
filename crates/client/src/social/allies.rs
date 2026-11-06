@@ -8,6 +8,8 @@ use solomon_sim::social::{
 use super::SocialUi;
 use crate::gpu_ui::UiFrame;
 
+/// Ally row animation: each row's eased health and appearance time, visibility and the
+/// reduced-motion preference.
 #[derive(Default)]
 pub(super) struct AllyMotion {
     rows: Vec<AllyRowMotion>,
@@ -296,7 +298,8 @@ impl SocialUi {
     }
 }
 
-// The source pseudo-element is a repeating115deg gradient inside the row clip.
+// A row whose signal is lost shows stripes: a repeating 115-degree gradient inside the
+// row's rounded clip.
 fn paint_signal_loss(painter: &egui::Painter, bounds: Rect, offset: f32) {
     let mut clip = Vec::with_capacity(36);
     for (center, radius, angle) in [

@@ -1,13 +1,16 @@
-//! Source `native-ui/native-ui-notebox.ts`: one timed instruction/failure notice.
+//! The notebox: one timed instruction or failure notice, with its fade and layout.
 
 use crate::ui_text::{UiFontName, UiTextSpec, layout_ui_text};
 
+/// Whether a notebox shows a failure, for 5.2 seconds, or an instruction, for 10.2
+/// seconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoteboxKind {
     Failure,
     Instruction,
 }
 
+/// A notebox's panel and text placement, sized to fit its text.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]

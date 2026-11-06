@@ -1,4 +1,5 @@
-//! Shared world admission and reset order from the public Game simulation API.
+//! Shared world admission and reset order: new sessions, Boneyard installation and the
+//! return to the College.
 
 use super::*;
 use crate::Rng;
@@ -20,8 +21,8 @@ impl GameSession {
             .expect("one participant has a unique identity")
     }
 
-    /// Configurations arrive in the source Record's entity order, which controls
-    /// creation RNG and painter enrollment. Barrier cohorts sort IDs separately.
+    /// Configurations arrive in entity order, which controls creation RNG and painter
+    /// enrollment. Barrier cohorts sort IDs separately.
     pub fn new_participants(
         selections: Vec<(String, NewGameSelection)>,
         options: GameSessionOptions,

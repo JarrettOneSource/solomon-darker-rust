@@ -8,6 +8,7 @@ use crate::float::hypot;
 
 const RELEVANT_BUTTONS: [usize; 12] = [0, 2, 3, 4, 5, 7, 8, 9, 12, 13, 14, 15];
 
+/// One standard-layout gamepad's state this frame: index, connection, both sticks and 16 buttons.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StandardGamepadSnapshot {
     pub index: u32,
@@ -18,6 +19,7 @@ pub struct StandardGamepadSnapshot {
     pub buttons: [bool; 16],
 }
 
+/// A one-shot gameplay command: interact, open the Inventory or skills, chat, or pause.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameplayAction {
     Interact,
@@ -27,6 +29,7 @@ pub enum GameplayAction {
     Pause,
 }
 
+/// What the selected gamepad requested this frame: actions, aim, primary cast and quickbar use.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StandardGameplaySample {
     pub actions: Vec<GameplayAction>,
@@ -54,6 +57,8 @@ impl StandardGameplaySample {
     }
 }
 
+/// Controller state kept between frames: the selected pad, quickbar selection and hold, last
+/// aim direction and previous buttons.
 #[derive(Clone, Debug, Default)]
 pub struct StandardGameplayState {
     aim_direction: Option<Vec2>,
@@ -179,6 +184,7 @@ pub enum GameplayAim {
     Retain,
 }
 
+/// One frame of gameplay input from every device: movement, aim, casts, belt use and actions.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameplayInputSample {
     pub movement: Vec2,
@@ -193,6 +199,7 @@ pub struct GameplayInputSample {
     pub belt_pressed: Vec<usize>,
 }
 
+/// The physical input holding a belt slot: the gamepad, a key, a mouse button or a touch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BeltInputSource {
     Gamepad,
@@ -201,6 +208,7 @@ pub enum BeltInputSource {
     Touch(usize),
 }
 
+/// The belt slots held by each input source, in press order; the latest press is current.
 #[derive(Default)]
 pub struct HeldBeltInputs {
     entries: Vec<(BeltInputSource, usize)>,
@@ -263,8 +271,9 @@ impl HeldBeltInputs {
     }
 }
 
-/// Website `input/gameplay-pointer.ts`. The caller supplies the actual drawing viewport,
-/// including any renderer letterbox, rather than assuming that it fills the canvas.
+/// Maps a pointer on the drawing surface to a world point. The caller supplies the actual
+/// drawing viewport, including any renderer letterbox, rather than assuming that it fills the
+/// canvas.
 #[must_use]
 pub fn project_world_pointer(
     pointer: Vec2,

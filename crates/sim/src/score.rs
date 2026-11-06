@@ -1,4 +1,5 @@
-//! Run score, streak and archive portrait from `core-kernels/hall-of-fame-score.ts`.
+//! Hall of Fame run score: awesomeness awards, kill streak, awesomest kill and the archived
+//! portrait.
 
 use crate::Rng;
 use crate::enemies::config::{
@@ -9,6 +10,8 @@ use crate::heading::heading_index;
 
 pub const SCORE_ARCHIVE_DEATH_TICK: u64 = 300;
 
+/// One run's Hall of Fame record: awesomeness, kills and streak, the awesomest kill, and
+/// the time and portrait archived when the run ends.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFameRunState {
@@ -23,6 +26,8 @@ pub struct HallOfFameRunState {
     pub started_at_tick: u64,
 }
 
+/// The player state a score award reads: health, level and whether low health multiplies
+/// points.
 #[derive(Clone, Copy, Debug)]
 pub struct HallOfFamePlayerScoreState {
     pub current_health: f64,
@@ -76,7 +81,7 @@ impl HallOfFameRunState {
         self.record_ordinary_kill(player, region_pulse_accumulator);
     }
 
-    /// Best-kill and ordinary-kill are separate source events during some terminal programs.
+    /// Best-kill and ordinary-kill are separate events during some terminal programs.
     pub fn record_awesomest_kill(
         &mut self,
         enemy: &EnemyConfig,

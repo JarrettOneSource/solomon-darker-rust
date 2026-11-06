@@ -1,5 +1,5 @@
-//! Host-authored social records from Website `protocol/party-state.ts`,
-//! `protocol/game-chat.ts`, `game-chat.ts` and `party-menu-presentation.ts`.
+//! Host-authored social records: session and world kinds, player cards, invitations, the
+//! social snapshot and the actions a view can request.
 //!
 //! The native host owns admission, membership and accepted chat sequences. A view reads
 //! this projection and emits commands; it never creates a member or accepts its own chat.
@@ -26,6 +26,8 @@ pub use speech::*;
 
 use crate::profile::{WizardDiscipline, WizardElement};
 
+/// The kind of session a player is in: the Global Hub, a private College or standalone
+/// play.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameSessionKind {
@@ -34,6 +36,7 @@ pub enum GameSessionKind {
     Standalone,
 }
 
+/// Whether a player is in the Hub or a Boneyard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameChatWorldKind {
@@ -41,7 +44,7 @@ pub enum GameChatWorldKind {
     Hub,
 }
 
-/// The Website hello's self-reported social identity. It never grants authority.
+/// The hosted hello's self-reported social identity. It never grants authority.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerSocialProfile {
@@ -50,7 +53,8 @@ pub struct PlayerSocialProfile {
     pub total_playtime_ms: Option<u64>,
 }
 
-/// `DEFAULT_GAME_ONLINE_PREFERENCES` from `protocol/game-chat.ts`.
+/// A player's online preferences: activity messages, Global chat and run submission, all
+/// on by default.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -69,6 +73,7 @@ impl Default for GameOnlinePreferences {
     }
 }
 
+/// An invitation to another player's College: its ID, inviter, join code and expiry.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameCollegeInvitation {
@@ -78,6 +83,8 @@ pub struct GameCollegeInvitation {
     pub join_code: String,
 }
 
+/// The profile a player card shows: identity, element and discipline, activity, gold and
+/// account statistics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GamePlayerCardProfile {
@@ -95,6 +102,8 @@ pub struct GamePlayerCardProfile {
     pub total_playtime_ms: Option<u64>,
 }
 
+/// Host-authored social state for one local player: session and world kind, directory and
+/// chat availability, party, chat messages and player cards.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SocialSnapshot {
@@ -109,6 +118,8 @@ pub struct SocialSnapshot {
     pub player_cards: Vec<GamePlayerCardProfile>,
 }
 
+/// A social command a view sends to the host: chat, player cards, party membership,
+/// invitations and party settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SocialAction {

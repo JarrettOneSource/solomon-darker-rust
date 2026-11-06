@@ -1,4 +1,4 @@
-//! Save-before-close uses the same source checkpoint and durable revision owner
+//! Save-before-close uses the same checkpoint and durable revision owner
 //! as Save and Leave. The OS loop keeps polling it even when drawing is suspended.
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -12,6 +12,7 @@ use crate::menu::MenuAction;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::{gpu_ui::GpuUi, storage};
 
+/// A desktop window close in progress: still saving, or finished with the save's result.
 pub(super) enum DesktopClose {
     Saving,
     Complete(Result<(), String>),

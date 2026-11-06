@@ -1,4 +1,4 @@
-//! Stock terminal-run overlay from `GameOverOverlay.tsx` and `boneyard.css`.
+//! The stock Game Over overlay shown when a run ends, with Solomon's riff.
 //! The session owns every clock and admission check; this view only emits Continue.
 
 use crate::gpu_ui::{UiFrame, native_text};
@@ -10,6 +10,7 @@ use solomon_sim::game_run::presentation::{
 use solomon_sim::game_run::{GameRunLifecycle, GameRunPhase};
 use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 
+/// The player's Continue from a run's Game Over, identified by run and event.
 #[derive(Clone, Debug)]
 pub struct ContinueGameOver {
     pub run_id: String,
@@ -23,6 +24,7 @@ pub struct GameOverAnchor {
     pub zoom: f64,
 }
 
+/// The Game Over overlay's current presentation, its accepted Continue and queued actions.
 pub struct GameOverOverlay {
     view: Option<(GameOverPresentation, SolomonRiffPresentation, GameOverAnchor)>,
     accepted: Option<ContinueGameOver>,

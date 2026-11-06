@@ -1,15 +1,19 @@
-//! Borrowed rows from Source `mod-ui/ModSkillBook.tsx` and `ModSkillPicker.tsx`.
+//! Borrowed rows for the mod skill book and skill picker.
 //! The accepted runtime owns ranks, offers, spells and bindings. These functions
-//! preserve the different first/last-row lookups used by the two Source views.
+//! keep the two views' different lookups: the book takes the last matching row, the picker
+//! the first.
 
 use crate::modding::{LuaObject, LuaValue};
 
+/// A mod skill's icon: its mod and image path.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModSkillIcon<'a> {
     pub mod_id: &'a str,
     pub path: &'a str,
 }
 
+/// A learned mod skill in the skill book: its name, description, icon, rank and maximum rank,
+/// and whether it is a subskill.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModLearnedSkill<'a> {
     pub content_id: &'a str,
@@ -21,6 +25,7 @@ pub struct ModLearnedSkill<'a> {
     pub subskill: bool,
 }
 
+/// A mod spell in the skill book and its quickbar slot, if bound.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModSpellBinding<'a> {
     pub content_id: &'a str,
@@ -32,12 +37,14 @@ pub struct ModSpellBinding<'a> {
     pub bound: bool,
 }
 
+/// The mod skill book: learned skills and spell bindings.
 #[derive(Debug, PartialEq)]
 pub struct ModSkillBookModel<'a> {
     pub learned: Vec<ModLearnedSkill<'a>>,
     pub spells: Vec<ModSpellBinding<'a>>,
 }
 
+/// A mod skill offered in the picker, with the rank it would reach.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModOfferedSkill<'a> {
     pub content_id: &'a str,
@@ -47,6 +54,7 @@ pub struct ModOfferedSkill<'a> {
     pub next_rank: f64,
 }
 
+/// A mod skill offer to pick from: its sequence and offered skills.
 #[derive(Debug, PartialEq)]
 pub struct ModSkillPickerModel<'a> {
     pub sequence: f64,
@@ -60,7 +68,7 @@ pub fn project_mod_skill_book(runtime: Option<&LuaObject>) -> Option<ModSkillBoo
     let mut learned = Vec::new();
     for skill in rows(runtime.get("skills")) {
         let content_id = text(skill.get("content_id"));
-        // Source builds a Map: duplicate rank rows are last-wins here.
+        // Duplicate rank rows are last-wins here.
         let rank = ranks
             .iter()
             .rev()
@@ -121,7 +129,7 @@ pub fn project_mod_skill_picker<'a>(
         if !offered.iter().any(|id| id.as_str() == Some(content_id)) {
             continue;
         }
-        // Source Picker uses find rather than the Book's last-wins Map.
+        // The picker takes the first matching row, unlike the book's last-wins lookup.
         let rank = rows(runtime.get("skill_ranks"))
             .find(|rank| rank.get("content_id") == skill.get("content_id"))
             .map_or(0.0, |rank| integer(rank.get("rank")));

@@ -1,5 +1,5 @@
-//! Native Hurricane charge, eight-lane presentation, contact cadence and orbit
-//! force from `core-kernels/native-hurricane.ts`.
+//! Hurricane, the Air skill that summons a storm while firing lightning: its charge,
+//! eight-lane presentation, contact cadence, orbit force and damage.
 
 use crate::float::fround;
 use crate::{Rng, Vec2};
@@ -13,6 +13,8 @@ pub const HURRICANE_CONTACT_COOLDOWN: u64 = 100;
 pub const HURRICANE_LOW_CHARGE_THRESHOLD: f64 = 0.5;
 pub const HURRICANE_LANE_COUNT: usize = 8;
 
+/// One tick of Hurricane charge: the charge contacts use, the next tick's charge, and whether
+/// the Lightning channel refreshed it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HurricaneChargeTick {
     pub contact_charge: f64,
@@ -20,6 +22,8 @@ pub struct HurricaneChargeTick {
     pub refreshed: bool,
 }
 
+/// One of the storm's eight presentation lanes: its angle, angular velocity, radius and
+/// vertical offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HurricaneLane {
@@ -29,12 +33,14 @@ pub struct HurricaneLane {
     pub vertical_offset: f64,
 }
 
+/// The storm's presentation: its eight lanes and their shared phase.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HurricanePresentationProgram {
     pub lanes: [HurricaneLane; HURRICANE_LANE_COUNT],
     pub phase_degrees: f64,
 }
 
+/// One Hurricane damage draw scaled by charge, and whether low charge silences the hit sound.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HurricaneDamageResult {
     pub damage: f64,
@@ -156,7 +162,8 @@ pub fn draw_hurricane_damage(
     }
 }
 
-/// Shared native reciprocal-square-root approximation (`nativeHurricaneFastDistance`).
+/// The distance for a squared distance, through the native fast reciprocal-square-root
+/// approximation.
 #[must_use]
 pub fn hurricane_fast_distance(squared: f64) -> f64 {
     let half = fround(squared * 0.5);

@@ -1,4 +1,5 @@
-//! Existing stock tables projected as `web-lua-developer-grants.ts` catalogs.
+//! The stock enemy, item, skill and Weld tables, projected as the developer Lua API's grant
+//! catalogs.
 
 use crate::economy::{
     DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubInventoryItem,
@@ -8,6 +9,7 @@ use crate::economy::{
 use crate::enemies::EnemyToken;
 use crate::profile::{SKILL_CATALOG, WELD_BUILDS};
 
+/// A stock enemy that Lua can spawn: its key and enemy token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WebLuaStockEnemy {
     pub key: &'static str,
@@ -27,6 +29,7 @@ pub const WEB_LUA_STOCK_ENEMIES: [WebLuaStockEnemy; 11] = [
     WebLuaStockEnemy { key: "zombie", token: EnemyToken::Zombie },
 ];
 
+/// An item a developer can grant: its key, kind, name, type and subtype, and recipe.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct WebLuaDeveloperItemDescriptor {
@@ -39,6 +42,8 @@ pub struct WebLuaDeveloperItemDescriptor {
     pub type_id: u32,
     pub recipe_index: Option<usize>,
 }
+/// A skill a developer can grant: its ID, name, family, maximum rank and whether only a
+/// Weld provides it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct WebLuaDeveloperSkillDescriptor {
@@ -48,6 +53,7 @@ pub struct WebLuaDeveloperSkillDescriptor {
     pub name: &'static str,
     pub weld_only: bool,
 }
+/// A Weld a developer can grant: its build ID, name and component skill IDs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct WebLuaDeveloperWeldDescriptor {

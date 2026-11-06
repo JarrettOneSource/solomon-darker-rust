@@ -1,4 +1,4 @@
-//! Enemy-family differential fixtures recorded from the pinned Website kernels.
+//! Enemy-family differential fixtures, recorded from a pinned build of the Website client.
 
 #![recursion_limit = "256"]
 
@@ -116,7 +116,7 @@ fn enemy_constructor_stats_authored_recipes_and_ordered_flags_match_the_website(
     }
 }
 
-// JSON has one numeric type at the source; serde preserves the writer's integer spelling.
+// The recorded numbers are all doubles; serde preserves the writer's integer spelling.
 // Compare the doubles rather than treating the encodings `1` and `1.0` as different values.
 fn assert_json_equal(actual: &Value, expected: &Value, context: &str) {
     match (actual, expected) {
@@ -448,7 +448,7 @@ fn path_record(state: &solomon_sim::enemies::path::EnemyPathState) -> [f64; 20] 
     ]
 }
 
-// Trigonometric results alone may differ in the last bit across V8 and the platform libm.
+// Only trigonometric results may differ in the last bit between the recording and libm.
 fn assert_trig(actual: f64, expected: f64, context: &str) {
     assert!((actual - expected).abs() <= 1e-9, "{context}: expected {expected}, got {actual}");
 }
@@ -1892,7 +1892,7 @@ fn mage_lightning_json(pulse: &solomon_sim::enemies::projectiles::MageLightningP
         "seed":pulse.seed,"source":point_json(pulse.source),"tick":pulse.tick})
 }
 
-// Current authority traces use the canonical V8 math kernels. Retain every
+// These traces' math matches the game's deterministic math kernels. Retain every
 // independently evolving root, heading and effect value in the exact comparison.
 fn assert_current_enemy_json(actual: &Value, expected: &Value, label: &str) {
     source::assert_website_json(actual, expected, label, &[]);
@@ -2544,7 +2544,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
     let mut failed_cases = Vec::new();
     for case in goldens["cases"].as_array().unwrap() {
         // Every case constructs fresh authority and RNG. Keep its exact first
-        // assertion failure, then continue other independent source programs.
+        // assertion failure, then continue with the other independent cases.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| replay_case(case)));
         if result.is_err() {
             failed_cases.push(case["name"].as_str().unwrap());

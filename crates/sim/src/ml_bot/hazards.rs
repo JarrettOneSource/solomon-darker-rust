@@ -1,4 +1,4 @@
-//! Source `ml-bot-policy/hazards.ts`: projectile and Mage-lightning threat rows.
+//! The bot's hazard observation: projectile and Mage-lightning threat rows.
 
 use crate::Vec2;
 use crate::boneyard::collision::closest_point_on_segment;

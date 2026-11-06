@@ -1,4 +1,4 @@
-//! Skill descriptors, equipped rows and offer priority from Source `skill-*.ts`.
+//! The bot's skill descriptors, equipped skill rows and scripted offer priority.
 
 use crate::profile::{
     PlayerSkillChoice, PlayerStatBookComponent, SKILL_CATALOG, SkillBookState, SkillDefinition,
@@ -9,6 +9,8 @@ use crate::session::GameSession;
 use super::OPTION_DESCRIPTOR_WIDTH;
 use super::spec::{OPTION_DESCRIPTOR_NAMES, scales};
 
+/// What a skill descriptor describes: the skill, the rank it would reach, how many ranks it
+/// applies and any Weld build.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotPolicySkillDescriptorInput {
     pub apply_count: f64,
@@ -17,6 +19,8 @@ pub struct MlBotPolicySkillDescriptorInput {
     pub weld_build_id: Option<u32>,
 }
 
+/// A pending skill offer encoded for the choice head: one descriptor row per option, the
+/// option skill IDs, the mask, coverage keys and the offer's generation.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicySkillOfferDescription {
     pub coverage_keys: Vec<String>,
@@ -202,8 +206,8 @@ fn ranked(value: Option<&SkillStatBookValue>, rank: f64) -> Option<f64> {
                 return None;
             }
             let index = rank.max(0.0).min((values.len() - 1) as f64);
-            // JavaScript array lookup at a fractional property is undefined. Only
-            // the clamping endpoints can turn an out-of-range fraction into a row.
+            // A fractional rank selects no row. Only the clamping endpoints
+            // can turn an out-of-range fraction into a row.
             if index.fract() != 0.0 {
                 return None;
             }
@@ -222,9 +226,9 @@ pub fn ml_bot_policy_skill_coverage_key(id: usize, weld_build_id: Option<u32>) -
 }
 
 fn policy_skill_catalog_row(id: usize) -> Option<&'static SkillDefinition> {
-    // Source appends Nullskill (82) only to playerStatBook, after the 82 catalog
-    // skills. The Rust table also retains that sentinel, but it is not a known
-    // catalog skill for descriptor membership or coverage-family selection.
+    // Index 82 is the Nullskill sentinel after the 82 catalog skills. The table
+    // retains that sentinel, but it is not a known catalog skill for descriptor
+    // membership or coverage-family selection.
     SKILL_CATALOG.get(id).filter(|_| id < 82)
 }
 
@@ -300,8 +304,9 @@ pub fn observe_ml_bot_policy_skill_loadout(
     Ok(values)
 }
 
-/// The host controller dispatches this selection through the canonical command path.
-/// Source's scripted chooser computes its temporary applied state before dispatch; no
+/// Picks the scripted bot's skill from the pending offer: an eligible Weld first, then its
+/// element's primary and band, Health Up, unlearned primaries and the rest in offer order.
+/// The host controller dispatches this selection through the canonical command path; no
 /// world/RNG ownership is transferred to this read-only priority calculation.
 pub fn choose_ml_bot_policy_scripted_skill(
     session: &GameSession,

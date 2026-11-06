@@ -1,5 +1,5 @@
-//! Commit late spell targets before the next enemy pass, from
-//! `core-server/enemies/puppet-hits.ts::finalizeBoneyardPuppetQueries`.
+//! Commits late spell targets before the next enemy pass: query targets for players,
+//! Golems and Skull Missiles, and puppet targets for the world and enemy projectiles.
 
 use std::collections::HashSet;
 
@@ -52,7 +52,7 @@ impl GameSession {
             }
         }
         // These bindings mutate the same store that owns the spell rows. Collect only
-        // the source values needed by the next pass, rather than cloning the store.
+        // the spell values the next pass needs, rather than cloning the store.
         let skulls: Vec<_> = world
             .enemies
             .boss_spells

@@ -1,4 +1,5 @@
-//! Source native affine transforms, registered atlas texels and packed vertex colors.
+//! Low-level secondary spell submission: affine transforms, registered atlas texels
+//! and packed vertex colors.
 
 use solomon_sim::Vec2;
 use solomon_sim::float;
@@ -12,6 +13,7 @@ use crate::beam_mesh::clip_to_rect;
 use crate::courtyard::Camera;
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 
+/// How to draw a render-target texture: center, scale, alpha, blend, tint and color mode.
 pub(super) struct TargetDraw {
     pub center: Vec2,
     pub scale: f64,
@@ -21,6 +23,8 @@ pub(super) struct TargetDraw {
     pub color_mode: TextureColorMode,
 }
 
+/// A sprite's texture, source rectangle, logical size and registered origin; `texels`
+/// marks atlas records, whose UVs are inset from the rectangle's edges.
 pub(super) struct SpriteRecord<'a> {
     pub texture: &'a Texture,
     pub source: [f32; 4],
@@ -79,8 +83,8 @@ impl SecondaryView {
         self.draw_sprite_with_color_mode(renderer, camera, root, draw, region_tint, mode);
     }
 
-    /// Stock geometry shared with Goodie and enemy diffuse-hit copies. The native
-    /// diffuse pass and Storm's white ColorMatrixFilter are distinct operations.
+    /// Stock geometry shared with Goodie and enemy diffuse-hit copies. The diffuse
+    /// pass (`AlphaMask`) and Storm's white filter (`WhiteAlphaFilter`) are distinct.
     pub fn draw_sprite_with_color_mode(
         &self,
         renderer: &mut Renderer,
@@ -134,7 +138,7 @@ impl SecondaryView {
         let texels = texels(&record);
         let vertices = std::array::from_fn(|index| {
             let (x, y) = bounds[index];
-            // `writeNativeRotationThenScaleMatrix`: unequal scales follow rotation.
+            // Rotation comes before scale, so unequal scales stretch along world axes.
             let transformed_x = (cosine * x - sine * y) * draw.scale_x;
             let transformed_y = (sine * x + cosine * y) * draw.scale_y;
             let projected = camera.project(
@@ -207,8 +211,8 @@ impl SecondaryView {
             }
             self.draw_air_corona(renderer, camera, plan.root, &lightning.contact_corona);
         }
-        // Equal Z indices preserve the source container's creation order: mesh,
-        // gradients, quad. Sprites begin after all mesh and quad indices.
+        // Equal Z indices draw in creation order: mesh, gradients, quad. Sprites
+        // begin after all mesh and quad indices.
         for index in 0..plan.meshes.len().max(plan.quads.len()).max(1) {
             if let Some(mesh) = plan.meshes.get(index) {
                 self.draw_mesh(renderer, camera, plan.root, mesh, tint);
@@ -299,7 +303,7 @@ impl SecondaryView {
     ) {
         let record = draw.atlas.zip(draw.entry).map(|(atlas, entry)| self.record(atlas, entry));
         let uv = record.as_ref().map(texels).unwrap_or([[0.0, 0.0]; 4]);
-        // Source mesh order is TL, TR, BL, BR, while registered sprite UVs are clockwise.
+        // Quad vertices are ordered TL, TR, BL, BR, while registered sprite UVs are clockwise.
         let uv = [uv[0], uv[1], uv[3], uv[2]];
         let vertices = std::array::from_fn(|index| {
             let projected = camera.project(
@@ -429,7 +433,7 @@ pub(super) fn rgba(tint: u32, alpha: f64, light: [f32; 3]) -> [f32; 4] {
 
 pub(super) fn texels(record: &SpriteRecord<'_>) -> [[f32; 2]; 4] {
     let [x, y, width, height] = record.source;
-    // `nativeSpriteRecordUvs`: retained half-texel start and quarter-texel end.
+    // Atlas records start half a texel in and end a quarter texel past their far edge.
     let (left, top, right, bottom) = if record.texels {
         (x + 0.5, y + 0.5, x + width + 0.25, y + height + 0.25)
     } else {

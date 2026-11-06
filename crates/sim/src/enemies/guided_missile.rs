@@ -1,4 +1,5 @@
-//! Faculty's private missile from `core-kernels/native-guided-missile.ts`.
+//! The homing flight of the Faculty's Skull Missile: its birth draws, turns toward the target,
+//! speed decay to a floor and the terrain probe ahead.
 
 use crate::float;
 use crate::float::fround;
@@ -6,6 +7,8 @@ use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::heading_turn_direction;
 use crate::{Rng, Vec2};
 
+/// A Skull Missile in flight: heading, position, speed and its floor, turn rate, remaining
+/// lifetime, and the visual phase and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GuidedMissileState {
     pub heading_deg: f64,
@@ -18,6 +21,8 @@ pub struct GuidedMissileState {
     pub visual_scale: f64,
 }
 
+/// One tick of Skull Missile flight: the new state, and the point five steps ahead whose line
+/// from the missile is tested against terrain.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GuidedMissileStep {
     pub state: GuidedMissileState,

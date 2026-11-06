@@ -1,5 +1,4 @@
 //! Tutorial instructions, HUD access, forced entrance movement and authored reward items.
-//! Reference: `core-kernels/native-tutorial.ts`.
 
 use crate::Vec2;
 use crate::economy::{EquipmentType, HubInventoryItem, HubItemKind, base_item};
@@ -8,6 +7,7 @@ use crate::float::fround;
 
 use super::{TutorialStage as Stage, TutorialState, advance_tutorial_intro_blend};
 
+/// Which HUD controls the current Tutorial stage allows; all are open outside the Tutorial.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TutorialHudAccess {
     pub combat: bool,
@@ -17,12 +17,14 @@ pub struct TutorialHudAccess {
     pub spell: bool,
 }
 
+/// Whether Tutorial instructions describe keyboard and mouse or touch joystick controls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TutorialInputMode {
     Desktop,
     Mobile,
 }
 
+/// The player's current key labels, quoted in Tutorial instructions.
 #[derive(Clone, Copy, Debug)]
 pub struct TutorialBindingLabels<'a> {
     pub inventory: &'a str,
@@ -35,6 +37,8 @@ pub struct TutorialBindingLabels<'a> {
     pub skills: &'a str,
 }
 
+/// The instruction heading and subheading for the current Tutorial stage, with its HUD
+/// access.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TutorialPresentation {
     pub heading: Option<String>,
@@ -42,6 +46,7 @@ pub struct TutorialPresentation {
     pub subheading: Option<String>,
 }
 
+/// Screen baselines for a stage's instruction heading and optional subheading.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TutorialInstructionBaselines {
     pub heading: f64,
@@ -159,7 +164,7 @@ pub fn tutorial_instruction_baselines(
 
 #[must_use]
 pub fn tutorial_forced_velocity(state: &TutorialState) -> Option<Vec2> {
-    // `player-character.ts::PLAYER_CHARACTER_STEADY_SPEED`, distinct from the lane cap.
+    // The player character's steady speed, distinct from the lane cap.
     const STEADY_SPEED: f64 = 100.0;
     if state.intro_active {
         let delay_after_tick = state.intro_delay_ticks_remaining.saturating_sub(1);

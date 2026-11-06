@@ -1,4 +1,5 @@
-//! Launcher ZIP framing and manifest contract (`save/native-save-archive.ts`).
+//! The launcher's save archive: a stored ZIP holding `manifest.json` and the native save
+//! files, each checked against the manifest's size and SHA-256.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -20,12 +21,15 @@ const ZIP_UTF8: u16 = 0x0800;
 
 pub const WEB_GAME_SAVE_SUPPORT_ARCHIVE_PATH: &str = "solomondark/browser-game-save.json";
 
+/// One file in a save archive: its path and bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeArchiveFile {
     pub bytes: Vec<u8>,
     pub path: String,
 }
 
+/// A launcher save archive's contents: the profile (`darkdata.cfg`), one wizard's
+/// `gamestate.sav` under its run name, and any other retained files.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeSaveArchive {
     pub darkdata: Vec<u8>,
@@ -159,7 +163,7 @@ pub fn create_stored_zip(files: &[NativeArchiveFile]) -> Result<Vec<u8>, String>
         write_u32(&mut local, 0, ZIP_LOCAL_FILE);
         write_u16(&mut local, 4, 20);
         write_u16(&mut local, 6, ZIP_UTF8);
-        // Stable source DOS date: 2000-01-01 at midnight.
+        // A fixed DOS date, 2000-01-01 at midnight, keeps the archive bytes stable.
         write_u16(&mut local, 12, 10_273);
         write_u32(&mut local, 14, crc);
         write_u32(&mut local, 18, file.bytes.len() as u32);

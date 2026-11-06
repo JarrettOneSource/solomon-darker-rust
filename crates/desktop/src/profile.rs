@@ -9,6 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// The locked application profile: its directory, save documents and second-launch listener.
 pub struct Profile {
     pub root: PathBuf,
     pub documents: PathBuf,
@@ -16,6 +17,7 @@ pub struct Profile {
     _lock: File,
 }
 
+/// The result of opening a profile: this launch owns it, or a running launch was focused.
 pub enum OpenProfile {
     Primary(Profile),
     AlreadyRunning,

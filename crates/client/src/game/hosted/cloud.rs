@@ -1,4 +1,5 @@
-//! `DarkCloudScene.tsx` requests against the existing Website control plane.
+//! Dark Cloud requests (mod catalog, details, comments, subscriptions, presence and
+//! shared mobile layouts) against the existing Website control plane.
 //! Subscription receipts carry the actual refreshed set, including automatic disablement.
 
 use super::*;
@@ -9,22 +10,28 @@ use crate::hosted::{
 use crate::menu::ModSubscriptionAction;
 use crate::mod_content::{GameContentDownloadProgress, ModContentCache};
 
+/// A Dark Cloud menu action to run against the Website API.
 pub(super) struct CloudRequest {
     pub action: HostedMenuAction,
     signed_in: bool,
     mobile_layout: Option<serde_json::Value>,
 }
 
+/// The Dark Cloud catalog: published mods and the player's subscriptions, loaded
+/// independently.
 pub(super) struct CloudCatalog {
     pub mods: Result<Vec<ModSummary>, String>,
     pub subscriptions: Result<Vec<ModSubscription>, String>,
 }
 
+/// An update delivered while a subscription change runs: the refreshed active mod set, then
+/// the reloaded catalog.
 pub(super) enum SubscriptionUpdate {
     ActiveMods(Vec<ActiveWebMod>),
     Catalog { request_id: u64, catalog: CloudCatalog },
 }
 
+/// The result of a finished Dark Cloud request.
 pub(super) enum CloudCompletion {
     Catalog(CloudCatalog),
     Detail(Result<Box<ModDetail>, String>),

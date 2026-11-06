@@ -1,5 +1,6 @@
-//! Native secondary ability profiles and cast timing from the pinned Website.
-//! The same canonical skillbook, equipment lanes and gameplay RNG serve primary spells.
+//! Secondary abilities: their ranked stats, mana costs and cooldowns, and the modules that
+//! cast and simulate them. The same canonical skillbook, equipment lanes and gameplay RNG
+//! serve primary spells.
 
 mod actors;
 mod casting;
@@ -67,6 +68,7 @@ use crate::profile::offensive::{
 };
 use crate::profile::{SKILL_CATALOG, SkillBookState, skill_stat};
 
+/// A secondary ability, numbered by its skill ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -134,12 +136,14 @@ impl SecondaryAbilityId {
     }
 }
 
+/// One named stat of a secondary ability at a rank.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryStatValue {
     pub name: &'static str,
     pub value: f64,
 }
 
+/// A secondary ability's stats at one rank.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryAbilityRankStats {
     pub rank: u32,
@@ -163,8 +167,8 @@ pub fn effective_secondary_ability_rank_stats(
     secondary_ability_rank_stats(ability, skill_book.effective_ranks[ability.skill_id()])
 }
 
-/// `nativeSecondaryAbilityRankStats` admits Revelation's rank two even for a
-/// normally single-rank ability. Short authored arrays retain their final row.
+/// Admits Revelation's rank two even for a normally single-rank ability. Short authored
+/// arrays retain their final row.
 #[must_use]
 pub fn secondary_ability_rank_stats(
     ability: SecondaryAbilityId,
@@ -195,7 +199,7 @@ pub fn resolved_secondary_ability_rank_stats(
     offensive_factors: &OffensiveSpellFactors,
 ) -> SecondaryAbilityRankStats {
     let mut stats = effective_secondary_ability_rank_stats(skill_book, ability);
-    // Source keeps Leviathan's ranked base on the retained parent. Each bolt
+    // Leviathan keeps its ranked base on the retained parent. Each bolt
     // resolves the live caster's modifiers when that appendage actually fires.
     if ability == SecondaryAbilityId::CallLeviathan {
         return stats;
@@ -235,9 +239,9 @@ pub fn secondary_ability_mana_cost(
     resolve_skill_mana_cost_value(ability.skill_id(), cost, offensive_factors)
 }
 
-/// The actual snapshot/authority supplement uses the player's stat book,
-/// retaining rank-zero upgrade costs (`game-snapshot.ts` and `game-simulation.ts`).
-/// Base secondary rank tables intentionally remain the source shared catalog.
+/// Adds the Explosive Shield, Golem and Magic Storm upgrade costs from the player's stat
+/// book, including rank-zero costs. Base secondary rank tables intentionally remain the
+/// shared stock catalog.
 #[must_use]
 pub fn secondary_ability_mana_cost_with_stat_book(
     skill_book: &SkillBookState,

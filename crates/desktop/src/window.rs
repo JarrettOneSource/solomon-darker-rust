@@ -19,6 +19,7 @@ use winit::dpi::LogicalSize;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
+/// The application's OS window with its current OpenGL context and surface.
 pub struct NativeWindow {
     gl: GraphicsContext,
     surface: Surface<WindowSurface>,

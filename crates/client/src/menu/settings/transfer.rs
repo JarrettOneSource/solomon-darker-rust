@@ -1,5 +1,5 @@
-//! GPU `NativeSaveTransferSettings`: platform file selection/export at the edge;
-//! inspection and durable replacement stay with the host.
+//! The Settings save import and export section. File selection and export use the
+//! platform; inspection and durable replacement stay with the host.
 use super::{SettingsView, widgets};
 use crate::gpu_ui::UiFrame;
 use crate::menu::HostedMenuAction;
@@ -19,6 +19,8 @@ enum RequestKind {
     Export,
     Replace,
 }
+/// Save import and export state: the file picker, the pending inspection, export or
+/// replacement request, its preview, and the status or error shown.
 pub(super) struct SaveTransferView {
     surface: Surface,
     picker: FilePicker,

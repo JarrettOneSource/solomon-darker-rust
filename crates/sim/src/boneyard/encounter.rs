@@ -1,6 +1,7 @@
-//! The opening Solomon encounter from `core-kernels/boneyard-encounter.ts`.
+//! The opening Solomon encounter: he digs until a player comes close, turns to face them and
+//! speaks, then retreats and escapes. The start of his escape begins the run's ordinary waves.
 //!
-//! Animation cursors and the private native RNG advance in the source order. Voice durations
+//! Animation cursors and the encounter's private RNG advance in a fixed order. Voice durations
 //! are authoritative PCM durations rounded up to 100 Hz ticks; audio playback does not own
 //! the encounter clock. Collision/pathfinding may resolve the requested escape position.
 
@@ -40,6 +41,7 @@ const DIG_TAIL_SLOWDOWN: f64 = 0.05_f32 as f64;
 const DIG_BODY_BOB_AMPLITUDE_MINIMUM: f64 = 5.0;
 const DIG_BODY_BOB_AMPLITUDE_RANGE: f64 = 5.0;
 
+/// Solomon's stage in the encounter, from digging in his grave until he is gone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SolomonPhase {
@@ -67,6 +69,8 @@ impl SolomonPhase {
     }
 }
 
+/// Whether Solomon plays his own greeting, laugh and "get him boys" lines, or speaks for the
+/// Tutorial's fixed dialogue duration without queuing voice events.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SolomonDialogueMode {
@@ -84,6 +88,7 @@ impl SolomonDialogueMode {
     }
 }
 
+/// One of Solomon's voice lines, with its audio cue ID and duration in ticks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SolomonVoiceCue {
@@ -121,6 +126,7 @@ impl SolomonVoiceCue {
     }
 }
 
+/// A shovel or thrown-dirt sound made while Solomon digs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SolomonDigCue {
@@ -142,6 +148,7 @@ impl SolomonDigCue {
     }
 }
 
+/// A voice line Solomon started, numbered from one in the order the lines were queued.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SolomonVoiceEvent {
@@ -149,6 +156,7 @@ pub struct SolomonVoiceEvent {
     pub id: u64,
 }
 
+/// A digging sound with its sequence number and tick; the encounter keeps the latest eight.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SolomonDigEvent {
@@ -157,6 +165,7 @@ pub struct SolomonDigEvent {
     pub tick: u64,
 }
 
+/// A living player's ID and position, which Solomon uses to choose whom to face.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolomonPlayer<'a> {
     pub id: &'a str,

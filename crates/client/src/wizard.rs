@@ -60,7 +60,7 @@ struct WeaponFrame<'a> {
     enchant: bool,
 }
 
-/// The actual participant and source presentation clock, sampled once for this draw.
+/// A participant's player and effect state and the presentation tick, sampled once per draw.
 pub struct WizardPlayerPresentation<'a> {
     pub player: &'a PlayerState,
     pub secondary: Option<&'a SecondaryPlayerState>,
@@ -103,6 +103,8 @@ enum WizardDrawPass {
     Hit,
 }
 
+/// Draws wizards from the Clothes atlas: body, clothing, attachments, weapon and material
+/// effects, with the current equipment and per-draw presentation state.
 pub struct WizardView {
     records: Vec<SpriteRecord>,
     atlas: Texture,
@@ -688,8 +690,8 @@ impl WizardView {
                 kind: PlayerWeaponKind::Wand,
                 ..
             })) => {
-                // The pinned Website installs the same complete wand composite in both
-                // passes. Preserve its hand/body order and front gait offset.
+                // Both passes draw the complete wand composite, hand before body; only the
+                // front pass adds the front attachment offset.
                 let index = frame.wand_pose * HEADINGS + frame.heading;
                 self.draw_cell_layer(
                     renderer,

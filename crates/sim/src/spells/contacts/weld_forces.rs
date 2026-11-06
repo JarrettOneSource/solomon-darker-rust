@@ -1,4 +1,4 @@
-//! Existing Hail knockback and Steam contacts from `spell-combat/forces.ts`.
+//! Knockback from existing Weld Hail children, and Steam particle contacts.
 //! Steam status damage belongs to the secondary epoch; these actors admit its
 //! modifier; the admitted secondary terminal receiver owns its detonation.
 

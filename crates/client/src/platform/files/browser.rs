@@ -5,6 +5,7 @@ use web_sys::{Event, HtmlAnchorElement, HtmlInputElement};
 
 use crate::platform::Surface;
 
+/// A file the player chose in the browser's file picker.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectedFile(pub(crate) web_sys::File);
 
@@ -32,6 +33,7 @@ impl SelectedFile {
     }
 }
 
+/// A browser file input for the given extensions; each selection is queued until taken.
 pub struct FilePicker {
     input: HtmlInputElement,
     selected: Rc<RefCell<Vec<Vec<SelectedFile>>>>,

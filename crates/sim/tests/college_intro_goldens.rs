@@ -1,5 +1,6 @@
-//! The admission controller replays the pinned Website before/after the existing Hub
-//! character commit. Static/dynamic actor collision is owned by the enclosing world.
+//! Replays the College intro's admission controller, which plans before the existing Hub
+//! character commit and steps after it, against recordings from the Website client.
+//! Static/dynamic actor collision is owned by the enclosing world.
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::hub::HubWizard;

@@ -1,8 +1,8 @@
 //! Compiler used by native checkpoints written before retained wave tables existed.
 //!
-//! The old standalone package reconstructed its tables with the ed0a2d59 Website
-//! compiler. Only missing-table checkpoint migration uses this implementation;
-//! all new directors use the current compiler in `timeline`.
+//! Those checkpoints expect this earlier compiler's exact draws. Only missing-table
+//! checkpoint migration uses this implementation; all new directors use the current
+//! compiler in `timeline`.
 
 use super::timeline::WAVE_LABEL_TO_FIRST_SPAWN_TICKS;
 use super::{CompiledSpawnBurst, CompiledWaveEntry, CompiledWaveSection, WaveDef};

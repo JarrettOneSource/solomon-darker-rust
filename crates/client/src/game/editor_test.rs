@@ -1,5 +1,6 @@
-//! Website `editor/EditorTestRuntime.tsx`: one anonymous, disposable admission.
-//! The embedding document retains its draft; no save slot or resume token belongs here.
+//! The mod editor's Test: plays a draft Boneyard inside the editor's page through one
+//! anonymous, disposable admission. The embedding document retains its draft; no save
+//! slot or resume token belongs here.
 
 use super::*;
 use serde::Deserialize;
@@ -9,6 +10,8 @@ use solomon_sim::settings::game_online_preferences;
 use solomon_sim::social::PlayerSocialProfile;
 use wasm_bindgen::JsValue;
 
+/// The editor's Test request: the draft's name and bytes, the account name, and whether it
+/// was cancelled.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct EditorTestRequest {
@@ -18,6 +21,7 @@ pub(super) struct EditorTestRequest {
     cancelled: bool,
 }
 
+/// Progress of an editor Test: connecting, starting, playing or disposed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum EditorTestPhase {
     Connecting,

@@ -1,4 +1,5 @@
-//! Source component ownership at `restoreGameSaveDocument`'s live-session boundary.
+//! Restores a save document's continuation as a live session, turning its component rows
+//! into the simulation's owners.
 
 use serde_json::{Value, json};
 use solomon_sim::boneyard::world::BoneyardSceneryTargetRetention;
@@ -14,6 +15,8 @@ use super::contract::{
 };
 use super::value::decode;
 
+/// A save document restored as a live session: the session, its loaded Boneyard if any, the
+/// owner's player ID and the save metadata.
 #[derive(Clone, Debug)]
 pub struct RestoredGameSave {
     pub session: GameSession,

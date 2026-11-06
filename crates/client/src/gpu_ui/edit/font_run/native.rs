@@ -10,6 +10,7 @@ use super::{FontRunOptions, RasterLine, TILE_CONTENT, TILE_WIDTH};
 use crate::gpu_ui::edit::geometry::{Caret, Cluster, Geometry, Line};
 use crate::gpu_ui::fonts::{font_spec, with_fonts};
 
+/// A font and letter spacing for measuring text with the native shaper.
 pub(super) struct FontProbe {
     font: FontId,
     spacing: f32,

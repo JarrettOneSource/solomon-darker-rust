@@ -1,4 +1,5 @@
-//! Whole secondary ownership, damage and status actor transactions against Website.
+//! Whole secondary ownership, damage and status actor transactions, against recordings
+//! from the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};

@@ -1,5 +1,5 @@
-//! The articulated material captures in `player-harden-view.ts`,
-//! `player-webbed-view.ts` and `native-player-diffuse-capture.ts`.
+//! Wizard body layers, Magic Shield and material effects. Harden and Webbed draw the posed
+//! wizard into a diffuse capture, then add it back as tinted, scaled copies.
 
 use solomon_sim::enemies::webbed::cocoon_tilt;
 use solomon_sim::float;

@@ -4,12 +4,14 @@ use egui::{Pos2, Rect, Vec2, pos2};
 
 use super::model::Selection;
 
+/// A caret position: its UTF-16 index and the rectangle drawn for it.
 #[derive(Clone, Debug)]
 pub struct Caret {
     pub index: usize,
     pub rect: Rect,
 }
 
+/// One grapheme cluster on a line: its UTF-16 range, leading and trailing edges, and boxes.
 #[derive(Clone, Debug)]
 pub struct Cluster {
     pub start: usize,
@@ -19,12 +21,16 @@ pub struct Cluster {
     pub rects: Vec<Rect>,
 }
 
+/// A horizontal range of a line's raster and the shift it is painted with; tab stops split
+/// a line into several spans.
 #[derive(Clone, Debug)]
 pub struct PaintSpan {
     pub source: std::ops::Range<f32>,
     pub offset: f32,
 }
 
+/// One wrapped line of a font run: its UTF-16 range, text, vertical metrics, carets,
+/// clusters and paint spans.
 #[derive(Clone, Debug)]
 pub struct Line {
     pub start: usize,
@@ -66,6 +72,7 @@ impl Line {
     }
 }
 
+/// A font run's laid-out lines and total size.
 #[derive(Clone, Debug)]
 pub struct Geometry {
     pub lines: Vec<Line>,

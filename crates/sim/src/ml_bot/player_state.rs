@@ -1,4 +1,4 @@
-//! Source `ml-bot-policy/player-state.ts`: vitals, cast occupancy and real belt slots.
+//! The bot's player observation: vitals, cast occupancy and real belt slots.
 
 use crate::profile::primary::{PrimarySkillProfile, primary_skill_profile_with_stat_book};
 use crate::profile::{MAX_PLAYER_LEVEL, WELD_BUILDS};
@@ -11,6 +11,8 @@ use crate::session::GameSession;
 use super::numbers::{ratio, unsigned, write};
 use super::spec::scales;
 
+/// One quickbar slot as the bot sees it: its skill, whether it holds a secondary ability, and
+/// whether that ability is ready and affordable.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MlBotPolicySecondarySlot {
     pub affordable: bool,
@@ -19,6 +21,8 @@ pub struct MlBotPolicySecondarySlot {
     pub skill_id: Option<usize>,
 }
 
+/// A player observation: the encoded blocks A, B and C, the primary's affordability and
+/// range, and each quickbar slot.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyPlayerObservation {
     pub block_a: Vec<f32>,
@@ -51,11 +55,11 @@ pub fn observe_ml_bot_policy_player_state(
     let offensive_factors = derived.offensive_factors(&player.skill_runtime);
     let primary_profile =
         primary_skill_profile_with_stat_book(&player.book, &player.stat_book, &offensive_factors);
-    // Source passes Reverie's manaCostWaived to both primary and secondary
+    // Reverie's mana-cost waiver applies to both primary and secondary
     // cost resolution. It waives the completed cost, including equipment flats.
     let mana_cost_waived = player.progression.hagatha_runtime.reverie_active;
     let primary_mana_cost = if mana_cost_waived { 0.0 } else { primary_profile.common().mana_cost };
-    // These are the two Source PRIMARY_SPELL_*_REACH constants, before Water's
+    // These are the two base primary spell reaches, before Water's
     // authored widen modifier; this observer intentionally uses that base reach.
     let primary_range = match &primary_profile {
         PrimarySkillProfile::Air(_) | PrimarySkillProfile::Water(_) => 205.0,
@@ -76,7 +80,7 @@ pub fn observe_ml_bot_policy_player_state(
                 .as_ref()
                 .and_then(|world| world.waves.as_ref())
                 .map_or(0.0, |waves| unsigned(waves.state.wave_ordinal as f64, scales::WAVE)),
-            // Source PLAYER_CHARACTER_STEADY_SPEED is 100, independent of lane cap.
+            // The player's steady speed is 100, independent of the lane cap.
             unsigned(100.0 * derived.movement_factor * movement_scale, scales::VELOCITY),
             f64::from(character.velocity.x != 0.0 || character.velocity.y != 0.0),
             f64::from(cast_active),

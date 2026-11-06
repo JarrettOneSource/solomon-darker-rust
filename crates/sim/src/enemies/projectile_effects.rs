@@ -1,4 +1,5 @@
-//! Projectile-owned particles and Arrow tumble from `enemies/projectile-effects.ts`.
+//! Effects owned by enemy projectiles: trail particles, impact bursts and Arrows tumbling out of
+//! flight, and how each fades and moves.
 use super::effects::DeathEffectOwner;
 use super::model::*;
 use super::projectiles::*;
@@ -9,6 +10,8 @@ use crate::float;
 use crate::float::{fround, hypot};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
+/// What an effect belongs to: its owner's id (usually a projectile), the enemy responsible and
+/// the owner's age in ticks.
 #[derive(Clone, Copy, Debug)]
 pub struct ProjectileEffectOwner {
     pub id: usize,
@@ -20,11 +23,14 @@ impl From<&EnemyProjectileState> for ProjectileEffectOwner {
         Self { id: state.id, owner_actor_id: state.owner_actor_id, age_ticks: state.age_ticks }
     }
 }
+/// The sprite entry, lifetime and default painter lane of a projectile effect.
 pub struct ProjectileEffectSpec {
     pub entry: usize,
     pub lifetime_ticks: u64,
     pub registration_lane: WorldManagerLane,
 }
+/// Optional settings that replace a projectile effect's defaults: alpha and fade, spin, atlas,
+/// blend, painter registrations, phase origin, rotation, scale, tint and velocity.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ProjectileEffectOverrides {
     pub alpha: Option<f64>,

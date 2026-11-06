@@ -1,15 +1,15 @@
 //! Private College room geometry and authored placements.
 //!
-//! Reference: `Website/frontend/src/game/core-kernels/hub-private-room-layout.ts`;
-//! `renderer/hub-private-room-presentation.ts` supplies the flame anchors and flicker.
-//! The segment coordinates below already include each table-to-world offset, exactly once.
-//! `tests/website_goldens.rs` replays `hub-rooms-goldens.json`.
+//! Each room has a collision table, NPCs, props and flame anchors, and its flames flicker
+//! independently. The segment coordinates below already include each table-to-world offset,
+//! exactly once. `tests/website_goldens.rs` replays `hub-rooms-goldens.json`.
 
 use super::regions::HubRegion;
 use super::{HubSegment, PLAYER_CHARACTER_RADIUS, is_traversable_against_segments};
 use crate::Vec2;
 use crate::float::atan2;
 
+/// An NPC in a private room: its ID, registration ordinal, collision circle and draw position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubRoomActor {
     pub id: &'static str,
@@ -20,6 +20,7 @@ pub struct HubRoomActor {
     pub painter_y: f64,
 }
 
+/// How a room prop is drawn: as a portrait, a room frame or the whole room layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubRoomPropKind {
     Portrait,
@@ -27,6 +28,7 @@ pub enum HubRoomPropKind {
     RoomLayer,
 }
 
+/// A room prop's drawing: its kind, frame, position, painter row position and marker flag.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubRoomPropVisual {
     pub kind: HubRoomPropKind,
@@ -36,6 +38,8 @@ pub struct HubRoomPropVisual {
     pub marker: bool,
 }
 
+/// A fixed prop in a private room: its ID, registration ordinal, collision circle and optional
+/// drawing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubRoomProp {
     pub id: &'static str,
@@ -601,7 +605,7 @@ impl HubRegion {
 }
 
 /// The player is weaker than room fixtures (12 push strength against 90 resistance),
-/// so `actor-physics.ts::resolveActorMotion` applies the full unweighted correction.
+/// so the shared actor solver applies the full unweighted correction.
 /// A correction must be a valid full placement; it does not sweep around a blocking wall.
 #[must_use]
 pub fn separate_from_room_actors(
@@ -639,6 +643,7 @@ pub fn separate_from_room_actors(
     position
 }
 
+/// A room flame's flicker at one tick: its rotation and horizontal and vertical scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubRoomFlameTransform {
     pub rotation: f64,
@@ -646,7 +651,7 @@ pub struct HubRoomFlameTransform {
     pub scale_y: f64,
 }
 
-/// `hubRoomFlameTransform`: a stateless hash keeps each flame's flicker independent.
+/// Flame `index`'s flicker at `tick`; a stateless hash keeps each flame's flicker independent.
 #[must_use]
 pub fn hub_room_flame_transform(
     region: HubRegion,
@@ -680,7 +685,7 @@ fn unit_sample(region: HubRegion, tick: u64, index: usize, lane: u32) -> f64 {
     f64::from(value) / 4_294_967_296.0
 }
 
-/// `hubMemoratorHeadingIndex`: the sixteen-frame caretaker faces the local wizard.
+/// The heading index, out of sixteen, that turns the Memorator to face the local wizard.
 #[must_use]
 pub fn hub_memorator_heading_index(player_position: Vec2) -> usize {
     let radians = atan2(player_position.x - 628.0, -(player_position.y - 770.0));

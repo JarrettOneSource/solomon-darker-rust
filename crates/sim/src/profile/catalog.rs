@@ -1,4 +1,4 @@
-//! Stock skill/stat and Weld tables from Website player-progression.ts.
+//! Stock skill definitions, Weld builds and skill acquisition rules.
 //! Values are extracted without rounding; profile-goldens.json pins every row.
 
 use super::{SkillDefinition, SkillProperty, SkillRule, SkillValue, WeldBuild};

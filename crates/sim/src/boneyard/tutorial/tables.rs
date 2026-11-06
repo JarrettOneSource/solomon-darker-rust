@@ -1,5 +1,6 @@
-//! Authored Tutorial rows from `core-kernels/native-tutorial.ts`.
-//! The differential fixture pins all seven recipes, six UID groups, six waves and 24 cues.
+//! The Tutorial's authored tables: narration cues, monster recipes, UID groups, wave spawn
+//! batches, scripted fires and IDs. The differential fixture pins all seven recipes, six
+//! UID groups, six waves and 24 cues.
 
 use crate::Vec2;
 use crate::enemies::config::{
@@ -19,6 +20,7 @@ pub const TUTORIAL_SCRIPT_COMMAND_IDS: [u32; 18] = [
     1065, 1066,
 ];
 
+/// Who speaks a Tutorial narration cue.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum TutorialSpeaker {
@@ -35,6 +37,7 @@ impl TutorialSpeaker {
     }
 }
 
+/// One of the 24 Tutorial narration cues; each has a stable ID and an authored definition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum TutorialCue {
@@ -64,6 +67,7 @@ pub enum TutorialCue {
     ImBored,
 }
 
+/// A narration cue's speaker, spoken text and PCM-derived duration in ticks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TutorialCueDefinition {
     pub duration_ticks: u64,
@@ -258,6 +262,7 @@ impl TutorialCue {
     }
 }
 
+/// An authored Tutorial enemy: its enemy token, flanking flag, pathfinding mode and recipe.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TutorialMonsterRecipe {
     pub enemy_token: EnemyToken,
@@ -479,6 +484,8 @@ pub fn tutorial_monster_recipe(uid: usize) -> Option<TutorialMonsterRecipe> {
     Some(TutorialMonsterRecipe { enemy_token, flanking: true, pathfinding_mode, recipe })
 }
 
+/// An authored Tutorial spawn group: its member recipe UIDs, whether the members share one
+/// placement group, and a recorded position-cache word.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TutorialUidGroup {
     pub member_uids: &'static [usize],
@@ -524,6 +531,8 @@ pub fn tutorial_uid_group(uid: usize) -> Option<TutorialUidGroup> {
     })
 }
 
+/// One authored Tutorial wave spawn: a recipe or UID group, an optional count, its position
+/// policy and the tick after the wave starts at which it spawns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TutorialSpawnBatch {
     pub count: Option<usize>,
@@ -654,6 +663,8 @@ pub fn tutorial_wave_batches(wave_ordinal: u64) -> &'static [TutorialSpawnBatch]
     }
 }
 
+/// A scripted fire placed when a Tutorial run starts: its position, radius, damage and
+/// lifetime.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TutorialFire {
     pub damage: f64,

@@ -1,5 +1,6 @@
-//! Primary display membership, ages and fields from `client/primary-spell-*-presentation.ts`.
-//! Integer simulation clocks stay intact; the fractional ages travel with the display frame.
+//! Primary spell display sampling: which projectiles and transients appear, their ages and
+//! blended fields. Integer simulation clocks stay intact; the fractional ages travel with
+//! the display frame.
 
 mod transients;
 mod weld;
@@ -18,6 +19,8 @@ use solomon_sim::spells::weld::WeldWorldActor;
 use super::PresentationClocks;
 use super::math::{interpolate_projected_members, lerp, lerp_option, lerp_vec};
 
+/// The painter registrations first seen for each Water Hail transient, kept so later
+/// snapshots can be checked against them.
 #[derive(Default)]
 pub(super) struct PrimaryPresentationMemory {
     hail_registrations: BTreeMap<u64, Vec<PainterRegistration>>,
@@ -87,7 +90,7 @@ pub(super) fn project(
     )
     .into_iter()
     .collect();
-    // Source retains an older-only Hail at its older snapshot age until removal.
+    // An older-only Hail keeps its older snapshot age until it is removed.
     for effect in output.transients.iter_mut() {
         if !clocks.primary.contains_key(&effect.common().id) {
             let snapshot = if blend < 1.0 { older_tick } else { newer_tick };

@@ -1,5 +1,5 @@
-//! `save/discorporeal-save.ts`: retain the complete boss action program, validate its
-//! source signed counters, and reject unknown action/visual fields before typed decoding.
+//! The saved Discorporeal boss: retain its complete action program, validate its signed
+//! counters, and reject unknown action/visual fields before typed decoding.
 
 use serde_json::Value;
 

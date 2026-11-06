@@ -1,5 +1,5 @@
-//! Current Source `renderer/native-screen-feedback.ts` and its Hub/Boneyard
-//! intake order. This is a renderer owner; accepted Session feedback is not drawn.
+//! Screen shake and screen flashes for each world, taking accepted events in a fixed Hub or
+//! Boneyard order. This is a renderer owner; accepted Session feedback is not drawn.
 
 use std::collections::BTreeMap;
 
@@ -25,13 +25,15 @@ use crate::presentation::PresentationClocks;
 const MAGNITUDE_DECAY: f64 = 0.94_f32 as f64;
 const MAGNITUDE_CUTOFF: f64 = 0.001_f32 as f64;
 
+/// The scene a feedback frame belongs to; Hub and Boneyard take events in different orders.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScreenFeedbackScene {
     Hub,
     Boneyard,
 }
 
-/// One actual display frame and the unshaken camera used for point attenuation.
+/// One display frame's feedback inputs. `context` carries the unshaken camera used for
+/// point attenuation.
 pub struct WorldScreenFeedbackFrame<'a> {
     pub scene: ScreenFeedbackScene,
     pub world_key: &'a str,
@@ -46,6 +48,8 @@ pub struct WorldScreenFeedbackFrame<'a> {
     pub context: SecondaryScreenFeedbackContext,
 }
 
+/// A frame's screen feedback: the flash overlay, the shake magnitude and the camera
+/// displacement.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WorldScreenFeedbackSample {
     pub overlay: Option<SecondaryScreenOverlay>,

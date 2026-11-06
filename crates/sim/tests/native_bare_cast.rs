@@ -1,4 +1,5 @@
-//! Exact retail no-item actions, not regenerated historical Website goldens.
+//! Exact retail no-item actions, checked against the retail program rather than the
+//! Website client's recordings.
 #![cfg(feature = "persistence")]
 
 use solomon_sim::float::fround;
@@ -279,7 +280,7 @@ fn cast2_staff_marker_zero_and_wand_bare_marker_one_keep_native_endpoints() {
     let mut wizard = HubWizard::at(Vec2::ZERO);
     let mut spells = SpellState::default();
     let mut rng = Rng::new(125);
-    // Exact f32 .5 birth rate lands at1 and the native helper also admits departure.
+    // Exact f32 .5 birth rate lands at 1 and the native helper also admits departure.
     let factor = 0.5 / (0.095_f32 as f64);
     for tick in 0..=3 {
         step(

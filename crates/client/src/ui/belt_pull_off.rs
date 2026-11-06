@@ -8,6 +8,8 @@ use std::cell::Cell;
 thread_local! {
     static NEXT_SEQUENCE: Cell<u64> = const { Cell::new(0) };
 }
+/// Where and when to draw a Belt pull-off burst: center, time, scale, rotation and
+/// widget ID.
 pub(crate) struct BeltPullOffDraw<'a> {
     pub center: egui::Pos2,
     pub now: f64,
@@ -15,6 +17,8 @@ pub(crate) struct BeltPullOffDraw<'a> {
     pub rotation: f32,
     pub id: &'a str,
 }
+/// The cosmetic burst shown when an entry is pulled off the Belt: its randomized members,
+/// start time and the reduced-motion preference.
 pub(crate) struct BeltPullOffBurst {
     sequence: u64,
     started_at: f64,

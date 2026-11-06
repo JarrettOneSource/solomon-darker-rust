@@ -25,6 +25,8 @@ use crate::host::hosted::{
 use crate::host::signing::{credentials_equal, random_token};
 use crate::transport::{HostedHttpRequest, HostedHttpResponse, NativeServer};
 
+/// The admission fields of a ticket request: the content package, developer access and an
+/// optional leaderboard account.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct AdmissionRequest {
@@ -785,7 +787,7 @@ impl HostedSupervisor {
         now_ms: f64,
     ) -> Result<HostedHttpResponse, String> {
         // Package execution can yield while the leader moves, changes visibility or
-        // revokes the code. Re-resolve the actual party before reserving a place.
+        // revokes the code. Re-resolve the party before reserving a place.
         let (index, target, request_token) = match self.join_target(intent_id, now_ms) {
             Ok(target) => target,
             Err(response) => return Ok(response),

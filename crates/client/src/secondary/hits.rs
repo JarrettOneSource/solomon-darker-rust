@@ -1,5 +1,5 @@
-//! `NativeLeviathanCompositeView::setPuppetHit`: diffuse copies of Main sprites
-//! and the appendage target, with the source's separate capture/output alpha.
+//! Leviathan Puppet hit feedback: diffuse copies of its main sprites and the appendage
+//! target, with separate capture and output alpha.
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -143,8 +143,8 @@ pub(super) fn clear_triangles(x: f64, y: f64, width: f64, height: f64) -> [[Vert
     let vertices = points.map(|point| Vertex {
         position: [point[0] as f32, point[1] as f32],
         texel: [0.0; 2],
-        // Source's lower clear Sprite uses transparent Texture.EMPTY. Multiply
-        // must clear both RGB and alpha, including the diffuse-hit target.
+        // The lower clear is fully transparent. Multiply must clear both RGB and
+        // alpha, including the diffuse-hit target.
         tint: [0.0; 4],
     });
     [[vertices[0], vertices[1], vertices[2]], [vertices[1], vertices[2], vertices[3]]]

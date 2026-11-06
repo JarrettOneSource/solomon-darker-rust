@@ -1,6 +1,6 @@
-//! Display-only interpretation of accepted native snapshots. Source:
-//! `client/{hub,boneyard}-presentation-timeline.ts` and `game-client-session.ts`.
-//! The authority is copied, never stepped, restored, acknowledged or saved here.
+//! Display-only interpretation of accepted native snapshots: the timeline buffers
+//! snapshots and samples display frames between them. The authority is copied, never
+//! stepped, restored, acknowledged or saved here.
 
 mod boneyard;
 mod enemies;
@@ -106,8 +106,8 @@ enum WorldScope {
 }
 
 impl WorldScope {
-    /// `sameHubPresentationOwner` in `client/game-client-session.ts`: resident
-    /// College and post-run Create may reuse a world kind but have distinct clocks.
+    /// Resident College and post-run Create may reuse a world kind but have distinct
+    /// clocks, so a Hub scope also compares the run phase and local light registration.
     fn same_owner(&self, other: &Self) -> bool {
         match (self, other) {
             (
@@ -134,6 +134,8 @@ fn scope(session: &GameSession, local_player_id: &str) -> WorldScope {
     }
 }
 
+/// Buffers accepted snapshots and samples display frames between them, with local Hub
+/// prediction and retained primary spell and flame presentation state.
 pub struct PresentationTimeline {
     history: VecDeque<TimedSession>,
     tick_rate: u32,
@@ -412,7 +414,7 @@ impl PresentationTimeline {
                 );
             }
             if let Some(prediction) = &mut self.local_prediction {
-                // sendInput advances the old held input before changing it. This
+                // Advance with the old held input before switching to the new one. This
                 // matters when direction changes between accepted snapshots.
                 if current_input != self.current_input {
                     prediction.advance(

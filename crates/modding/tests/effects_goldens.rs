@@ -1,4 +1,5 @@
-//! Continuous custom spell actors produce actual Source ordered effect batches.
+//! Custom spell actors replay recorded spawns, ticks, retirements and restores; each
+//! effect batch and checkpoint must match the recording in order.
 
 mod common;
 use serde::Deserialize;

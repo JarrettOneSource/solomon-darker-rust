@@ -1,5 +1,5 @@
-//! Stock ground loot and Goodie layers from `renderer/native-loot-presentation.ts`.
-//! Scatter seeds belong to the view; planning never advances the loot store's RNG.
+//! Sprite layers and painter layers for stock ground loot and Goodies. Gold scatter seeds
+//! belong to the view; planning never advances the loot store's RNG.
 
 use super::{BoneyardGoodiePhase, BoneyardGoodieState, BoneyardLootActor};
 use crate::Vec2;
@@ -9,6 +9,8 @@ use crate::loot::{BonusKind, LootDropKind, OrbKind};
 use crate::presentation::native_puppet_hit_tint;
 use crate::spells::presentation::{SpellAtlas, SpellBlend};
 
+/// One sprite layer of a ground loot or Goodie drawing: atlas entry, offset, scale,
+/// rotation, tint, alpha and blend.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootVisualLayer {
     pub alpha: f64,
@@ -41,6 +43,7 @@ impl LootVisualLayer {
     }
 }
 
+/// The sprite layers for one ground loot actor and the gold scatter seed to use next.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootPresentationPlan {
     pub layers: Vec<LootVisualLayer>,

@@ -1,8 +1,10 @@
-//! Authored enemy recipe data from Website `boneyard-enemy-config-model.ts`.
+//! Enemy configuration: authored recipes, family options, loot policies and arena scalars, and
+//! the evaluation that turns a spawn request into the configuration an enemy keeps for life.
 
 use super::{EnemyFlag, EnemySpawnIntent, EnemyToken};
 use crate::float::fround;
 
+/// Whether an enemy is a normal enemy, a boss, a miniboss or one of several bosses.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyClassification {
@@ -13,6 +15,7 @@ pub enum EnemyClassification {
     MultipleBoss,
 }
 
+/// What a Skeleton fights with: its claws, or a sword, mace, flail, axe or pike.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SkeletonWeapon {
@@ -25,6 +28,7 @@ pub enum SkeletonWeapon {
     Pike,
 }
 
+/// The arrows a Skeleton Archer shoots: normal, fire or poison.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum ArrowType {
@@ -34,6 +38,7 @@ pub enum ArrowType {
     Poison,
 }
 
+/// The element a Skeleton Mage casts: fire, lightning, frost or poison.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum MageElement {
@@ -56,6 +61,8 @@ pub struct EnemyLootPolicies {
     pub specific_item: u32,
 }
 
+/// A Faculty boss's look and spell choices: body and head colors, sex, headgear, and its primary
+/// and secondary spells.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FacultyAppearance {
@@ -67,6 +74,7 @@ pub struct FacultyAppearance {
     pub secondary: u8,
 }
 
+/// Family-specific options from an authored recipe; `Default` keeps the constructor values.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum AuthoredEnemyFamily {
@@ -107,7 +115,7 @@ pub enum AuthoredEnemyFamily {
 }
 
 /// A parsed retail MonsterRecipe. The wave director supplies data; enemy construction
-/// applies the recipe, then source flags in order, then arena scalars.
+/// applies the recipe, then the spawn request's flags in order, then arena scalars.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct AuthoredEnemyRecipe {
@@ -129,6 +137,7 @@ pub struct AuthoredEnemyRecipe {
     pub miniboss_die_program: bool,
 }
 
+/// Arena-wide multipliers for enemy health, damage, speeds and experience; all default to one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyArenaScalars {
     pub attack_speed: f64,
@@ -156,6 +165,8 @@ impl Default for EnemyArenaScalars {
     }
 }
 
+/// The random draws enemy construction makes before evaluating a configuration: base speed,
+/// collision radius, random armor and split rolls.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct EnemyConfigRandom {
     pub base_speed_unit: f64,
@@ -166,6 +177,8 @@ pub struct EnemyConfigRandom {
     pub split_unit: u8,
 }
 
+/// An enemy's evaluated family options, such as a Skeleton's weapon, a Mage's element and shields,
+/// or a Coffin's Maggot stats.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyFamilyConfig {
@@ -265,9 +278,9 @@ pub struct EnemyConfig {
     pub miniboss_die_program: bool,
 }
 
-/// `evaluateBoneyardEnemyConfig`: constructor stats, authored recipe, flags in order,
-/// then arena scalars. Numeric narrowing follows the Website, not the older base-speed
-/// helper whose native float-store contract is used by the native movement fixtures.
+/// Evaluates an enemy's configuration: constructor stats, authored recipe, flags in order,
+/// then arena scalars. Its numeric narrowing deliberately differs from
+/// `movement::create_enemy_base_speed`, whose float-store contract the movement fixtures use.
 #[must_use]
 pub fn evaluate_enemy_config(
     intent: &EnemySpawnIntent,
@@ -776,7 +789,8 @@ fn inclusive_three_way_index(unit: f64) -> i64 {
     (unit * 3.0).floor().min(2.0) as i64
 }
 
-/// `nativeDesaturateColor`, also used by the save boundary's Faculty palette migration.
+/// Mixes a color toward its luminance by `amount`. The save boundary's Faculty palette
+/// migration uses it too.
 #[must_use]
 pub fn desaturate_color(color: [f64; 4], amount: f64) -> [f64; 4] {
     let luminance = fround(

@@ -1,4 +1,5 @@
-//! Complete Tutorial progression, retained cursors and authored tables against the Website.
+//! Complete Tutorial progression, retained cursors and authored tables, against recordings
+//! from the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;

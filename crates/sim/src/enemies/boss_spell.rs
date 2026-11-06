@@ -1,4 +1,6 @@
-//! Persistent Faculty and Heartmonger spell rows from `native-boss-spell.ts`.
+//! Boss spell records: shared owner state plus the kind-specific state of each Faculty,
+//! Discorporeal and Heartmonger spell. Each new spell takes a projectile ID and a painter
+//! registration at birth.
 
 use super::faculty_spells::{DarkFireballState, DireFireState, RainOfBonesState};
 use super::guided_missile::GuidedMissileState;
@@ -8,6 +10,8 @@ use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 mod storage;
 pub use storage::BossSpells;
 
+/// The state every boss spell shares: its projectile ID, casting enemy, damage, position, age
+/// and painter registration.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BossSpellOwner {
@@ -20,6 +24,7 @@ pub struct BossSpellOwner {
     pub spawn_tick: u64,
 }
 
+/// The light a Death Magic fade casts: its radius and an intensity that falls each tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BossSpellLight {
@@ -28,6 +33,7 @@ pub struct BossSpellLight {
     pub loss_per_tick: f64,
 }
 
+/// A boss spell's kind and the state only that kind keeps.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BossSpellKind {
@@ -178,6 +184,7 @@ impl BossSpellKind {
     }
 }
 
+/// A live boss spell: its shared owner state and its kind.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BossSpell {

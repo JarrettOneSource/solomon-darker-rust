@@ -1,4 +1,4 @@
-//! `mod-ui/ModSkillQuickbar.tsx` and `mod-skill-quickbar-keyboard.ts`.
+//! The mod skill quickbar: its slots, Shift+number casting and the cast intent.
 //! Accepted runtime rows own bindings/spells; this projection and cast intent own no
 //! request sequence, cooldown, player state or gameplay clock.
 
@@ -10,6 +10,7 @@ use super::presentation::{integer, rows, text};
 use crate::Vec2;
 use crate::heading::heading_vector;
 
+/// One mod skill quickbar slot: its slot number, spell and icon.
 pub struct ModSkillQuickbarSlot<'a> {
     pub slot: i64,
     pub content_id: &'a str,
@@ -17,6 +18,7 @@ pub struct ModSkillQuickbarSlot<'a> {
     pub image: Option<&'a GameModAsset>,
 }
 
+/// The local player's position and heading, used to aim a quickbar cast.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModSkillQuickbarPlayer {
     pub position: Vec2,
@@ -30,9 +32,10 @@ pub struct ModCastAction {
     pub target: Vec2,
 }
 
+/// A key press the quickbar may handle: its numeric value and its modifier and repeat flags.
 #[derive(Clone, Copy, Debug)]
 pub struct ModSkillQuickbarKey {
-    /// Browser `Number(event.key)`, including NaN for shifted punctuation.
+    /// The key's text as a number; NaN when it is not numeric, as for shifted punctuation.
     pub number: f64,
     pub shift: bool,
     pub control: bool,
@@ -48,7 +51,7 @@ pub fn project_mod_skill_quickbar<'a>(
 ) -> Vec<ModSkillQuickbarSlot<'a>> {
     let mut spells = BTreeMap::new();
     for spell in rows(runtime, "spells") {
-        // Source Map construction retains the last spell with the same content ID.
+        // The map keeps the last spell with a given content ID.
         spells.insert(text(spell.get("content_id")), spell);
     }
     let mut bindings = rows(runtime, "mod_quickbar");
@@ -74,16 +77,16 @@ pub fn project_mod_skill_quickbar<'a>(
     slots
 }
 
-/// Source deliberately uses the key's numeric value, not its physical code, and
-/// has no editable-focus or previously-prevented-event exception.
+/// The slot a Shift+number press selects. It deliberately uses the key's numeric value,
+/// not its physical code, and has no editable-focus or previously-prevented-event exception.
 #[must_use]
 pub fn mod_skill_quickbar_keyboard_slot(key: ModSkillQuickbarKey) -> Option<i64> {
     if !key.shift || key.control || key.alt || key.meta || key.repeat {
         return None;
     }
     let slot = key.number - 1.0;
-    // Every displayed slot came through Source Number.isSafeInteger. No other
-    // numeric event value can equal it, including fractional, NaN or infinite keys.
+    // Every displayed slot is a safe integer, so no other numeric event value can
+    // equal it, including fractional, NaN or infinite keys.
     if !slot.is_finite() || slot.fract() != 0.0 || slot.abs() > 9_007_199_254_740_991.0 {
         return None;
     }

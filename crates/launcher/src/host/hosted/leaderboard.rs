@@ -1,4 +1,4 @@
-//! `game-host.ts` score completion, run-wide eligibility and once-only receipts.
+//! Signed leaderboard receipts: score completion, run-wide eligibility and once-only receipts.
 //! Retain only the previous elapsed-score facts, never a cloned authoritative world.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -13,6 +13,7 @@ use crate::host::authority::send_control;
 use crate::host::signing::leaderboard_receipt;
 use crate::host::source_utc_timestamp;
 
+/// Each participant's elapsed score in one run, captured before a tick to detect completion.
 pub(super) struct LeaderboardRunSnapshot {
     run_id: String,
     scores: BTreeMap<String, Option<u64>>,
@@ -36,6 +37,7 @@ struct LeaderboardClient<'a> {
     socket_open: bool,
 }
 
+/// Runs that can no longer earn receipts, and the receipts already issued per run and player.
 #[derive(Default)]
 pub(super) struct LeaderboardRunState {
     ineligible_run_ids: BTreeSet<String>,
@@ -47,7 +49,7 @@ impl LeaderboardRunState {
         self.ineligible_run_ids.insert(run_id.to_owned());
     }
 
-    /// Source builds the Hall entry and reads the wall clock only after this exact
+    /// `produce` builds the Hall entry and reads the wall clock only after this completion
     /// edge is eligible. A missing portrait must not consume the once-only key.
     fn receipt_for(
         &mut self,
@@ -77,7 +79,7 @@ impl LeaderboardRunState {
             return Ok(None);
         }
         let Some(receipt) = produce(user_id)? else { return Ok(None) };
-        // The Source key is committed before socket.send, so a later I/O failure
+        // The key is committed before the receipt is sent, so a later I/O failure
         // cannot manufacture a second signed receipt from the same completed edge.
         self.issued_receipts.insert(key);
         Ok(Some(receipt))
@@ -107,8 +109,8 @@ impl HostedGameHost {
         self.leaderboard_runs.taint(run_id);
     }
 
-    /// Called after prepared actors/controls and immediately before the canonical
-    /// simulation epoch, at the same previous-state boundary as Source.
+    /// Called after prepared actors and controls and immediately before the simulation
+    /// step, so each snapshot holds its run's scores from before that step.
     pub(super) fn capture_leaderboard_runs(&mut self) {
         self.leaderboard_previous_runs.clear();
         if self.editor_test {
@@ -130,8 +132,8 @@ impl HostedGameHost {
         }
     }
 
-    /// Source publishes after prepared rules and detached milestone synchronization.
-    /// Both player order and per-player Submit Runs come from the actual connections.
+    /// Called after prepared rules and the rejoin milestone synchronization. Receipts follow
+    /// the order of `players`, and each player's own Submit Runs preference decides eligibility.
     pub(in crate::host) fn publish_leaderboard_receipts(&mut self) -> Result<(), String> {
         for previous in std::mem::take(&mut self.leaderboard_previous_runs) {
             let completed = match &self.worlds {

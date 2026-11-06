@@ -10,6 +10,8 @@ use egui::{Ui, Vec2};
 use solomon_sim::ui_text::{UiFontName, UiTextAlign};
 use std::cell::RefCell;
 use std::rc::Rc;
+/// The Settings fullscreen row: it toggles fullscreen, or shows install help where only
+/// an installed web app can go fullscreen, and keeps the last request's error.
 pub(super) struct SettingsFullscreen {
     surface: Surface,
     mode: ControlMode,

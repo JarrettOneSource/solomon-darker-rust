@@ -1,6 +1,5 @@
-//! One standalone desktop authority, a
-//! reusable shared credential and a fresh simulation after its last human leaves.
-//! The supervisor's dispatcher owns Console, mods and saves.
+//! One standalone desktop authority: a reusable shared credential, and a fresh simulation
+//! after its last human leaves. The supervisor's dispatcher owns Console, mods and saves.
 
 use std::sync::Arc;
 
@@ -80,8 +79,8 @@ impl HostedSupervisor {
             fresh.install_ml_bot_policy(Arc::clone(policy))?;
         }
         fresh.runtime_events = self.runtime_events.as_ref().map(|publisher| publisher.sink());
-        // Pending, not-yet-admitted sockets survive the last player's close.
-        // The retained catalog also keeps Source's entry-lifetime navigation cache.
+        // Pending, not-yet-admitted sockets survive the last player's close. The previous
+        // content loader, with its prepared-navigation cache, is kept across the reset.
         fresh.connections = std::mem::take(&mut previous.connections);
         std::mem::swap(&mut fresh.content_loader, &mut previous.content_loader);
         college.host = fresh;

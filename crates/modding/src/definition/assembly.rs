@@ -1,4 +1,5 @@
-//! Friendly definition lowering from `web-lua-definition-assembly.ts`.
+//! Friendly definition lowering: the assets, content and rules a script created, with their
+//! authoring shorthands, become the definition's canonical lists.
 //! Creation registries remain the source of node identity; explicit lists only
 //! change their initial order, and never silently discard unlisted definitions.
 
@@ -12,6 +13,7 @@ use super::error::{WebLuaDefinitionErrorCode as Code, WebLuaDefinitionIssue as I
 use super::schemas::{content_schema, is_token};
 use super::suggestions::{did_you_mean, suggest_web_lua_name};
 
+/// The assets, content, rules and systems (reducer keys) listed explicitly in `sd.mod`.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct WebLuaExplicitLists {
     pub assets: Vec<WebLuaExplicitAsset>,
@@ -20,12 +22,14 @@ pub struct WebLuaExplicitLists {
     pub systems: Vec<String>,
 }
 
+/// An asset listed in `sd.mod` under a key, referring to the node that created it.
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct WebLuaExplicitAsset {
     pub key: String,
     pub node: u32,
 }
 
+/// The assets, content and rules a definition script created, with the mod's identity.
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct WebLuaAssemblyInput {
     pub assets: Vec<WebLuaAssetDefinition>,
@@ -34,6 +38,7 @@ pub struct WebLuaAssemblyInput {
     pub rules: Vec<WebLuaRuleDefinition>,
 }
 
+/// The lowered assets, content and rules of one mod definition.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AssembledWebLuaDefinition {
     pub assets: Vec<WebLuaAssetDefinition>,

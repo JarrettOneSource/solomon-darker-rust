@@ -68,6 +68,7 @@ pub fn create_primary_spell_weld_fire_detonation(
     }
 }
 
+/// The effects a Weld Steam detonation adds to the spell queue, and the next free ID.
 pub struct WeldSteamSpellDetonation {
     pub next_id: u64,
     pub transients: Vec<PrimarySpellTransient>,

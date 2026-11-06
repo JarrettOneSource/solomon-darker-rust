@@ -1,6 +1,5 @@
-//! Runtime `buildStaticWorld` composition. Source references are
-//! `boneyard-static-world.ts`, `boneyard-native-static-art.ts`, and
-//! `boneyard-off-camera-cleanup.ts`; scene hashes identify data, never art files.
+//! Composes a Boneyard's static world when it loads: Terrain tiles, original scenery
+//! glyphs, Walls, shadows and off-camera cleanup. Scene hashes identify data, never art files.
 
 use super::catalog::SceneryCatalog;
 use super::*;
@@ -34,7 +33,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
     };
 
     // Only generated Terrain pixels enter tiles. Original glyphs retain their
-    // own source registration and direct GPU art; Walls have independent grids.
+    // own registration and direct GPU art; Walls have independent grids.
     compiler.load_surface_images().await?;
     let tiles = canvas::terrain_tiles(scene, &compiler.images, &BTreeSet::new()).await?;
     let mut base_tiles = BTreeMap::new();
@@ -202,7 +201,7 @@ pub(super) async fn load(loaded: &LoadedBoneyard) -> Result<PreparedBoneyardView
         for (tile_id, layer_index) in base_tiles {
             let name = format!("generated:terrain-clean:{tile_id}");
             // A retired tile can be wholly empty. Keep its existing rectangle
-            // transparent so the source base painter can clear its old pixels.
+            // transparent so the base painter can clear its old pixels.
             let image = if let Some(painted) = cleaned.get(&tile_id) {
                 let original = &compiler.layers[layer_index].bounds;
                 expand_paint(painted, original)

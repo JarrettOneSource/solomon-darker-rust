@@ -1,4 +1,5 @@
-//! Ground loot, Goodies and completion cleanup from `core-server/boneyard-loot-store.ts`.
+//! The Boneyard loot store: ground loot, Goodies, their effects and events, and the cleanup
+//! queries used when the arena seals and for Hagatha's Last Word.
 //!
 //! The shared RNG belongs here, including enemy seed writes and presentation draws. A session
 //! lends its one painter allocator for births; the store keeps no parallel registration clock.
@@ -36,6 +37,7 @@ const ORB_ACTIVE_VALUE_FLOOR: f64 = 0.01_f32 as f64;
 const BONUS_LIFETIME_TICKS: i64 = 1200;
 const GOODIE_EFFECT_ID_START: usize = 1_000_000;
 
+/// A sound cue raised by ground loot when it lands or is picked up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BoneyardLootSound {
@@ -63,6 +65,8 @@ impl BoneyardLootSound {
     }
 }
 
+/// What a loot event reports: a Goodie that needs a key, a Goodie phase change, a drop
+/// sound, or a pickup.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BoneyardLootEventType {
@@ -72,6 +76,7 @@ pub enum BoneyardLootEventType {
     LootPickup,
 }
 
+/// A Goodie chest's visible state: intact, opening or broken.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BoneyardGoodiePhase {
@@ -115,6 +120,8 @@ pub struct BoneyardLootActor {
     pub tier: u32,
 }
 
+/// A Goodie placed by the scene, before the loot store assigns its ID; a missing reward
+/// seed is drawn from the shared loot stream.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardGoodieInput {
     pub eid: String,
@@ -124,6 +131,8 @@ pub struct BoneyardGoodieInput {
     pub subtype: Option<u32>,
 }
 
+/// A Goodie chest in a running Boneyard: its position, phase and opening timer, the player
+/// opening it, its reward seed and its scenery painter ordinal.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardGoodieState {
@@ -140,6 +149,8 @@ pub struct BoneyardGoodieState {
     pub timer: u64,
 }
 
+/// All loot in a Boneyard: ground loot actors, Goodies, their effects, ID counters, the key
+/// drop schedule and the shared loot RNG.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardLootStore {
@@ -158,6 +169,8 @@ pub struct BoneyardLootStore {
     pub shared_rng: Rng,
 }
 
+/// The player values a loot step reads: who can collect loot, where they stand and face,
+/// and the level, modifiers, unlocks and recipes that shape their rewards.
 #[derive(Clone, Copy, Debug)]
 pub struct BoneyardLootParticipant<'a> {
     pub advanced_unlocks: &'a [bool; 8],
@@ -171,6 +184,7 @@ pub struct BoneyardLootParticipant<'a> {
     pub position: Vec2,
 }
 
+/// A ground loot actor a player picked up, with the reward it grants.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardLootPickup {
     pub actor_id: usize,
@@ -185,6 +199,8 @@ pub struct BoneyardLootPickup {
     pub tick: u64,
 }
 
+/// A loot event for audio and presentation: its type, sound and pitch or message text,
+/// the player and Goodie involved, and where and when it happened.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardLootEvent {
@@ -201,12 +217,15 @@ pub struct BoneyardLootEvent {
     pub event_type: BoneyardLootEventType,
 }
 
+/// The events and pickups produced by one loot store step.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BoneyardLootStep {
     pub events: Vec<BoneyardLootEvent>,
     pub pickups: Vec<BoneyardLootPickup>,
 }
 
+/// The ground gold and item carriers that Hagatha's Last Word collects: their actor IDs,
+/// total gold and items.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HagathaLastWordLoot {
     pub actor_ids: Vec<usize>,
@@ -214,12 +233,14 @@ pub struct HagathaLastWordLoot {
     pub items: Vec<HubInventoryItem>,
 }
 
+/// An extra loot script an enemy runs on death; `MinibossDie` adds a random gold or item drop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BoneyardLootDeathProgram {
     MinibossDie,
 }
 
+/// The result of a player's attempt to open a Goodie.
 #[derive(Clone, Debug, PartialEq)]
 pub enum BoneyardGoodieInteraction {
     Opened { goodie_id: usize },
@@ -270,7 +291,8 @@ impl BoneyardLootStore {
         }
     }
 
-    /// The actual enemy producer callback draws from this stream, rather than actor entropy.
+    /// Draws an enemy's loot seed from the shared loot stream rather than from the enemy's
+    /// own randomness.
     pub fn roll_loot_seed(&mut self, bound: u32) -> u32 {
         assert!(
             matches!(bound, 1_000_000 | 10_000_000),
@@ -325,8 +347,9 @@ impl BoneyardLootStore {
         }
     }
 
-    /// `boneyard-goodie-interaction.ts`: strict radius 50 around a facing probe 25 ahead.
-    /// Equal-distance targets retain their source order. Active/opened Goodies cannot target.
+    /// The Goodie a wizard can open: strictly within 50 units of a probe 25 units ahead of
+    /// its facing. On equal distances the earlier Goodie wins. Active/opened Goodies cannot
+    /// be targeted.
     #[must_use]
     pub fn nearest_goodie(
         &self,
@@ -355,8 +378,8 @@ impl BoneyardLootStore {
         nearest
     }
 
-    /// `game-simulation.ts::interactWithBoneyardGoodie`, after session admission checks
-    /// active run, living player and level-up barrier. Key consumption uses the canonical
+    /// Opens the targeted Goodie with a Wizard Key, after the session has checked for an
+    /// active run, a living player and no level-up barrier. Key consumption uses the canonical
     /// recursive inventory transaction; a failed attempt only advances key-feedback state.
     pub fn interact_goodie(
         &mut self,
@@ -471,8 +494,9 @@ impl BoneyardLootStore {
         self.spawn_specs(specs, tick, painter_order)
     }
 
-    /// Arena last-drop level, key schedule and remaining chests are store-owned source fields.
-    /// The borrowed selection supplies actual player, enemy and geometry values.
+    /// Rolls and spawns an enemy's loot. The store supplies the arena's last successful item
+    /// level, the key drop schedule and the count of unopened Goodies; the borrowed selection
+    /// supplies the player, enemy and geometry values.
     pub fn materialize_enemy_loot(
         &mut self,
         input: LootSelectionInput<'_>,
@@ -512,8 +536,8 @@ impl BoneyardLootStore {
         rejected
     }
 
-    /// `groundRecipeIndexes` examines only the direct item of retained type-2013
-    /// carriers. Inventory Sack contents and other actor types do not exclude recipes.
+    /// Recipes already on the ground, read only from the direct item of each type-2013
+    /// carrier. Inventory Sack contents and other actor types do not exclude recipes.
     fn ground_recipe_indexes(&self) -> Vec<usize> {
         let mut recipes = Vec::new();
         for actor in self.actors.iter() {
@@ -547,7 +571,8 @@ impl BoneyardLootStore {
         input
     }
 
-    /// Catches up missing source ticks with the supplied participant snapshot, just like the host.
+    /// Steps every tick after the last step through `tick`, reusing the supplied participant
+    /// snapshot for any missed ticks.
     pub fn step(
         &mut self,
         participants: &[BoneyardLootParticipant<'_>],

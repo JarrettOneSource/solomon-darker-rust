@@ -74,7 +74,7 @@ pub(super) fn reduce_pio2(value: f64) -> (i32, [f64; 2]) {
 
 fn reduce_medium(value: f64, high: u32) -> (i32, [f64; 2]) {
     let magnitude = value.abs();
-    // The pinned reducer uses fmadd at 0x10169c364 and 0x10169c380.
+    // These multiply-adds are fused, as in the build that produced the recorded results.
     let count = magnitude.mul_add(INVERSE_PIO2, 0.5) as i32;
     let multiple = f64::from(count);
     let mut remainder = multiple.mul_add(-PIO2_1, magnitude);
@@ -103,8 +103,8 @@ fn reduce_medium(value: f64, high: u32) -> (i32, [f64; 2]) {
     if value.is_sign_negative() { (-count, [-head, -tail]) } else { (count, [head, tail]) }
 }
 
-/// Source `__kernel_rem_pio2` with prec=2. Each limb contains 24 significant bits.
-/// The fixed arrays are the source's workspace, bounded for IEEE binary64 inputs.
+/// fdlibm's `__kernel_rem_pio2` with prec=2. Each limb contains 24 significant bits.
+/// The fixed arrays are fdlibm's workspace, bounded for IEEE binary64 inputs.
 fn reduce_large(chunks: &[f64], exponent: i32) -> (i32, [f64; 2]) {
     const INITIAL_TERMS: usize = 4;
     let last_chunk = chunks.len() - 1;

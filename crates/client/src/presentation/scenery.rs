@@ -1,5 +1,6 @@
-//! Pure delivered actor roots from `boneyard-presentation-timeline.ts`.
-//! This path borrows endpoint metadata; it never samples spell/enemy display owners.
+//! Player, enemy and Maggot positions for Boneyard scenery (Tree) queries, sampled from
+//! delivered snapshots only. This path borrows endpoint metadata; it never samples
+//! spell/enemy display owners.
 
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::scenery::{
@@ -85,8 +86,8 @@ pub(super) fn player_position(
     id: &str,
 ) -> Option<Vec2> {
     if let Some(first) = older.participants.get(id) {
-        // Source deliberately holds a departed player's root even at this
-        // bracket's endpoint. Enemy list membership has a different rule below.
+        // A departed player's root is deliberately held even at this bracket's
+        // endpoint. Enemy list membership has a different rule below.
         return Some(newer.participants.get(id).map_or(first.wizard.position, |next| {
             lerp_vec(first.wizard.position, next.wizard.position, blend)
         }));

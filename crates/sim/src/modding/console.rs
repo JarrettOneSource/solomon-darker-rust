@@ -1,4 +1,5 @@
-//! Enabled game Lua API values from `host/lua/web-lua-contract.ts`.
+//! The game Lua API: its version, events and capabilities, the frame state scripts read and
+//! the commands they queue.
 //! The native VM owns callbacks/timers; frame rows borrow actual Session state.
 
 mod catalog;
@@ -49,6 +50,8 @@ pub const WEB_LUA_CAPABILITIES: [&str; 17] = [
     "world.read",
 ];
 
+/// One player as the game Lua API sees it: identity, class, vitals, progress, gold and
+/// position.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -70,6 +73,7 @@ pub struct WebLuaPlayerState {
     pub position: Vec2,
 }
 
+/// One enemy as the game Lua API sees it: its ID, token, health, life state and position.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -82,6 +86,8 @@ pub struct WebLuaEnemyState {
     pub token: String,
 }
 
+/// The game state Lua reads each frame: the world and scene, the run, players, enemies and
+/// waves.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -100,6 +106,8 @@ pub struct WebLuaFrameState {
     pub world: String,
 }
 
+/// A command Lua queues for the session: a grant, a resource change, the next run seed, the
+/// next wave or an enemy spawn.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -184,7 +192,8 @@ impl WebLuaCommand {
     }
 }
 
-/// `createWebLuaFrameState`: Source identity/actor order, with no simulation step.
+/// The frame state Lua reads, in participant and enemy actor order, without stepping the
+/// simulation.
 #[must_use]
 pub fn create_web_lua_frame_state(
     game: &GameSession,

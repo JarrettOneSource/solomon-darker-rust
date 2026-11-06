@@ -19,6 +19,7 @@ pub(super) fn layer_id() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("sack-rename"))
 }
 
+/// The rename dialog for one owned Sack: the draft, any name awaiting a receipt, and any error.
 pub(super) struct SackRenameDialog {
     pub item_id: u64,
     draft: String,

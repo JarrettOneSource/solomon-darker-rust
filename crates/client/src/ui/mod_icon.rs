@@ -1,5 +1,6 @@
-//! GPU custom Pixi-style trimmed icons from `renderer/mod-presentation-assets.ts`.
-//! The session owns verified image URLs, dimensions and authored tint layers.
+//! GPU mod item icons: each layer draws its sprite frame around the item's center,
+//! offset by the frame's center offset and optionally mirrored. The session owns
+//! verified image URLs, dimensions and authored tint layers.
 
 use egui::{Color32, Painter, Pos2, Rect, pos2, vec2};
 use solomon_sim::economy::HubInventoryItem;
@@ -9,6 +10,8 @@ use solomon_sim::modding::inventory::ModWearableSlot;
 use crate::gpu_ui::UiFrame;
 use crate::mod_presentation_assets::ModPresentationAssets;
 
+/// One tinted layer of a mod item icon: its verified image URL and size, sprite frame and
+/// tint.
 #[derive(Clone, PartialEq)]
 pub(crate) struct ModIconLayer {
     image_url: String,
@@ -17,6 +20,7 @@ pub(crate) struct ModIconLayer {
     tint: Color32,
 }
 
+/// Where an icon layer lands on screen and which part of its image it samples.
 pub(crate) struct ModIconGeometry {
     pub destination: Rect,
     pub uv: Rect,

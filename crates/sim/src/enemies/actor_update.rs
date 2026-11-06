@@ -1,4 +1,5 @@
-//! Shared hit, head-facing and light writers from `enemies/actor-update.ts`.
+//! One living enemy's tick: ability time scaling, targeting and the family controller, plus
+//! the shared hit-timer, head-facing and lighting updates.
 use super::EnemyToken;
 use super::config::{ArrowType, EnemyFamilyConfig};
 use super::mage::apply_mage_provider_gate_after_action;
@@ -7,7 +8,7 @@ use super::skeleton::step_skeleton_recoil;
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::painter::WorldPainterOrder;
 
-/// Runs the source actor epoch. Status scalars are a current-tick config view;
+/// Advances one living enemy by a tick. Status scalars are a current-tick config view;
 /// the world restores the authored config after its post-action effect producers.
 pub fn step_living_actor(
     world: &mut EnemyWorld,

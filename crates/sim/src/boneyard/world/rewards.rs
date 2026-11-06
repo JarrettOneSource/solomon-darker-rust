@@ -1,4 +1,5 @@
-//! Ordered terminal loot composition from `boneyard-world.ts:539–621`.
+//! Loot for enemies that died this tick, in reward order: each reward's stock loot, then
+//! any Tutorial drop, then mod loot.
 
 use crate::Vec2;
 use crate::boneyard::waves::programs::BossKind;
@@ -16,8 +17,8 @@ use super::super::collision::can_place_boneyard_body;
 use super::super::tutorial::{tutorial_amulet_item, tutorial_health_potion_item};
 use super::{BoneyardPlayerCombatStatus, BoneyardWorld};
 
-/// The source uses retained pre-death rows, including dying enemies and Maggots, for these
-/// two loot queries. Capture only the fields they read before the live store advances.
+/// Two loot queries read the enemies as they were before this tick's deaths, including
+/// dying enemies and Maggots. Capture only the fields they read before the live store advances.
 pub(super) struct LootEnemySnapshot {
     badguy_count: usize,
     positions: Vec<(usize, Vec2)>,
@@ -88,8 +89,8 @@ impl BoneyardWorld {
                 .iter()
                 .filter(|goodie| !goodie.active && !goodie.exhausted)
                 .count();
-            // Source obtains this identity from the retained Faculty encounter.
-            // Its authored programs share that exact source SHA with the director.
+            // Only a retained Faculty encounter supplies this identity: the `source_sha256`
+            // of the director's authored programs, which selects the Dire Faculty item pool.
             let faculty_source = self.waves.as_ref().and_then(|waves| {
                 if !waves.state.boss_encounters.iter().any(|boss| boss.kind == BossKind::Faculty) {
                     return None;

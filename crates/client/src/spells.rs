@@ -42,17 +42,20 @@ use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
 use air::append_air_body;
 use split::append_split_bands;
 
+/// A primary spell's painter entry: its layer, region light point, the player it is
+/// promoted above, and its view identity and creation order.
 pub struct SpellPainter {
     pub layer: PainterLayer,
     pub region_light_point: Option<Vec2>,
-    /// Source promoteOwnerOverlays keeps these roots above their actual player.
+    /// The owning player; these overlay roots are promoted to draw above that player.
     pub overlay_owner_id: Option<String>,
-    /// Retained view identity and insertion order in PrimarySpellWorldView.
-    /// Equal promoted depths keep the previous frame's container order.
+    /// Retained view identity and creation order. Equal promoted depths keep the
+    /// previous frame's order.
     pub view_id: u64,
     pub view_creation_order: u64,
 }
 
+/// A stock sprite atlas: its bundle records and uploaded texture.
 #[derive(Clone)]
 pub struct StockAtlas {
     pub records: Vec<SpriteRecord>,
@@ -86,6 +89,8 @@ struct SpellRoot {
     draws: Vec<SpellDraw>,
 }
 
+/// GPU state for drawing primary spells: shared stock atlases, the frame's painter roots
+/// and pre/post-world draws, and each retained view's creation order.
 pub struct SpellView {
     bad_guys: StockAtlas,
     dead_hawg: StockAtlas,
@@ -120,8 +125,8 @@ impl SpellView {
         })
     }
 
-    /// Source FireExplosionSpellView captures this scalar at view creation;
-    /// its geometry and logical light keep the same gain while the camera moves.
+    /// The gain captured when a Fire explosion first appears; its geometry and
+    /// logical light keep that gain while the camera moves.
     #[must_use]
     pub fn fire_explosion_point_gain(&self, id: u64) -> Option<f64> {
         self.fire_explosion_point_gains.get(&id).copied()
@@ -137,7 +142,7 @@ impl SpellView {
         self.next_view_creation_order = 0;
     }
 
-    #[allow(clippy::too_many_arguments)] // One Source world draw with its actual clocks, quality and Region mask.
+    #[allow(clippy::too_many_arguments)] // One world draw with its actual clocks, quality and Region mask.
     pub fn prepare(
         &mut self,
         spells: &SpellState,
@@ -182,7 +187,7 @@ impl SpellView {
             self.admit_view(common.id);
             let plan = match spell {
                 PrimarySpellProjectile::Earth(spell) => {
-                    // EarthBoulderView uses actor age for its cosmetic program too.
+                    // The Earth Boulder's cosmetic program also runs on actor age.
                     earth_boulder_sprite_plan_at_age(spell, age, age)
                 }
                 PrimarySpellProjectile::Ether(spell) => {
@@ -294,9 +299,9 @@ impl SpellView {
                 PrimarySpellTransient::Weld(spell) => {
                     let target_id = format!("primary:{}", common.id);
                     let puppet_hit = puppet_hits.iter().any(|hit| hit.target_id == target_id);
-                    // The pinned JS split spreads the parent's painter list onto
-                    // every Boulder piece, which its strict planner rejects.
-                    // Each piece already has its own actual Actor registration.
+                    // Copying the parent's painter list onto every Boulder piece would
+                    // be rejected by the strict planner; each piece already has its own
+                    // Actor registration.
                     let registration = match spell {
                         WeldWorldActor::Persistent(WeldPersistentActorState::EtherealBoulder(
                             _,
@@ -486,8 +491,8 @@ impl SpellView {
         if self.view_creation_orders.contains_key(&id) {
             return;
         }
-        // Source views are retained, and new containers are appended in the
-        // projectile-then-transient traversal, independently of their actor IDs.
+        // Views are retained, and new views are appended in projectile-then-transient
+        // traversal order, independently of their actor IDs.
         self.view_creation_orders.insert(id, self.next_view_creation_order);
         self.next_view_creation_order += 1;
     }
@@ -582,7 +587,7 @@ impl SpellView {
                 SpellDrawQueue::PostWorld => self.post_world.push(operation),
             }
         }
-        // A source pre/post-world queue root never occupies an ordinary world row.
+        // A root drawn only in the pre/post-world queues never occupies a world row.
         // Explicitly empty owner plans retain their painter, including hidden Air owners.
         if queue_only {
             return;
@@ -599,7 +604,7 @@ impl SpellView {
         });
     }
 
-    #[allow(clippy::too_many_arguments)] // Retained state plus the live Source compositor inputs.
+    #[allow(clippy::too_many_arguments)] // Retained state plus the live compositor inputs.
     fn append_weld(
         &mut self,
         state: WeldPresentationState<'_>,
@@ -749,7 +754,7 @@ impl SpellView {
         } else {
             SpellDrawQueue::World
         };
-        // Pixi's child insertion order is normal core, additive core, glint.
+        // Frost jet passes draw in this order: normal core, additive core, glint.
         for pass in
             [WaterFrostJetPass::Core, WaterFrostJetPass::AdditiveCore, WaterFrostJetPass::Glint]
         {
@@ -1004,8 +1009,8 @@ fn rgba(tint: u32, alpha: f64, light: [f32; 3]) -> [f32; 4] {
         ((tint >> 16) & 255) as f32 / 255.0,
         ((tint >> 8) & 255) as f32 / 255.0,
         (tint & 255) as f32 / 255.0,
-        // Pixi packs group alpha into one byte, including source plans such
-        // as Hail's birth fade whose authored alpha temporarily exceeds one.
+        // Group alpha is clamped and packed into one byte, including plans such as
+        // Hail's birth fade whose authored alpha temporarily exceeds one.
         (alpha.clamp(0.0, 1.0) * 255.0).trunc() as f32 / 255.0,
     ]
 }

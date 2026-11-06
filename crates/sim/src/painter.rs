@@ -1,6 +1,6 @@
-//! World-manager registration order from `core-kernels/native-world-manager-order.ts`.
+//! World-manager registration order for painters.
 //!
-//! The native world has separate actor and transient counters. Registration order survives
+//! The world manager has separate actor and transient counters. Registration order survives
 //! movement and drawing; region rows only decide when a registered root paints.
 
 use crate::hub::painter::{PainterLane, PainterLayer};
@@ -14,6 +14,7 @@ pub const fn zanim_split_band_height(enhanced_effects: bool) -> f64 {
     if enhanced_effects { 25.0 } else { 50.0 }
 }
 
+/// The world-manager counter a painter registers on: actors or transients.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorldManagerLane {
@@ -21,6 +22,7 @@ pub enum WorldManagerLane {
     Transient,
 }
 
+/// A painter's lane and its stable registration ordinal within that lane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PainterRegistration {
@@ -46,6 +48,7 @@ impl PainterRegistration {
     }
 }
 
+/// The next registration ordinal on each world-manager lane.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldPainterOrder {

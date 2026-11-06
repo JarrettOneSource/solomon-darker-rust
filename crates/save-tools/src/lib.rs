@@ -1,6 +1,6 @@
-//! Browser account save tools from Website `save/game-save-files.ts` and
-//! `save/game-save-portability.ts`. The canonical asset readers own validation and
-//! conversion; this module owns browser Files and JavaScript result objects.
+//! Save import and export for the Website's Account page, built as WebAssembly. The
+//! canonical asset readers own validation and conversion; this module owns browser Files
+//! and JavaScript result objects.
 //!
 //! Importing this independent module has no game startup hook. Account controls
 //! explicitly call the two asynchronous operations after initializing the WASM module.
@@ -66,8 +66,8 @@ pub async fn read_game_save_file_selection(selection: JsValue) -> Result<JsValue
             .map_err(|_| save_error("Save selection must contain browser Files.".into()))?;
         files.push(file);
     }
-    // Source checks a JSON File's size before reading its ArrayBuffer. The asset
-    // reader repeats the byte-length check once the browser has supplied its bytes.
+    // Check a single JSON File's size before reading its bytes. The asset reader
+    // repeats the byte-length check once the browser has supplied them.
     if files.len() == 1
         && files[0].name().to_lowercase().ends_with(".json")
         && files[0].size() > solomon_assets::website_save::MAX_SAVE_BYTES as f64
@@ -100,7 +100,8 @@ pub async fn read_game_save_file_selection(selection: JsValue) -> Result<JsValue
     browser_preview(&preview)
 }
 
-/// Export archive bytes and Source warnings; the Account owns confirmation and download.
+/// Export the desktop archive bytes, the portable profile and any export warnings; the
+/// Account owns confirmation and download.
 #[wasm_bindgen(js_name = exportWebGameSaveToNativeArchive)]
 pub async fn export_web_game_save_to_native_archive(document: String) -> Result<JsValue, JsValue> {
     let exported = solomon_assets::native_save::export_web_game_save_to_native_archive(&document)

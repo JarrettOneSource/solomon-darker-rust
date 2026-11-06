@@ -1,5 +1,6 @@
-//! Source-compatible hosted process configuration. Secret values are read from the
-//! existing supervisor environment; command output contains only the bound address.
+//! The `--supervisor` hosted process. Configuration, including secrets, comes from the
+//! `SDR_*` environment and the command line; standard output carries only the ready line
+//! with the bound address.
 
 use std::env;
 use std::ffi::OsString;
@@ -60,7 +61,7 @@ pub fn run(arguments: Vec<OsString>) -> Result<(), String> {
         return Err("SDR_GAME_ALLOWED_ORIGINS must contain at least one browser origin".into());
     }
     let mut config = HostedSupervisorConfig::new(assets, secret, revision);
-    // Source `run-game-session-supervisor.ts:48` requires this same durable path.
+    // Hosted play requires a durable Memorial file; run archives are kept beside it.
     config.memorial_path = Some(PathBuf::from(required("SDR_GAME_MEMORIAL_PATH")?));
     let event_endpoint = env::var("SDR_RUNTIME_EVENT_ENDPOINT").unwrap_or_default();
     let event_secret = env::var("SDR_RUNTIME_EVENT_SECRET").unwrap_or_default();

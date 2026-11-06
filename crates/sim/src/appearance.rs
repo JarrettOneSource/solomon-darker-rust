@@ -1,8 +1,7 @@
 //! Native starter equipment colours (`Skills_Wizard` starter roll).
 //!
 //! A fresh wizard's hat and robe take a primary tint rolled from the owner's base colour with
-//! three jitter draws, mixed toward its luminance. Reference:
-//! `Website/frontend/src/game/core-kernels/native-starter-equipment.ts`.
+//! three jitter draws, mixed toward its luminance.
 
 use crate::float::fround;
 use crate::rng::Rng;
@@ -44,8 +43,8 @@ pub struct StarterEquipmentAppearance {
 pub const TUTORIAL_EQUIPMENT_APPEARANCE: StarterEquipmentAppearance =
     StarterEquipmentAppearance { primary_tint: 0xc4_91_5e, secondary_tint: 0xff_ff_ff };
 
-// The Website mixes these as `Math.fround` singles, so the constants carry f32 rounding;
-// the channel mix is the single-precision remainder of the luminance mix.
+// The mix runs in single precision, so the constants carry f32 rounding; the channel
+// mix is the single-precision remainder of the luminance mix.
 const JITTER_MAXIMUM: f64 = 0.1_f32 as f64;
 const LUMINANCE_MIX: f64 = 0.8_f32 as f64;
 const CHANNEL_MIX: f64 = (1.0_f32 - 0.8_f32) as f64;

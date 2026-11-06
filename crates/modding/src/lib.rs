@@ -1,7 +1,8 @@
-//! Native authored-content authority from the pinned Website's `game/modding/`.
+//! The authority for mod content: package admission, definition compilation, the Lua VMs
+//! and the engines that run authored content.
 //!
 //! The same canonical Rust Session owns stock and custom effects. This crate
-//! compiles accepted packages and owns their actual Lua VMs; shared plain values
+//! compiles accepted packages and owns their Lua VMs; shared plain values
 //! remain in `solomon_sim::modding` for persistence and client presentation.
 
 #![forbid(unsafe_code)]

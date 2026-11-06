@@ -1,4 +1,5 @@
-//! Reuse the source's authored sockets and check actual glow/ordering boundaries.
+//! Attachment banks reuse the authored sockets; glow and ordering boundaries are checked
+//! against recordings from the Website client.
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::player_presentation::*;

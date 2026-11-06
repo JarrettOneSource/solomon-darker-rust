@@ -16,6 +16,7 @@ use solomon_sim::modding::presentation::ModWorldLocation;
 use solomon_sim::modding::skill_quickbar::ModSkillQuickbarPlayer;
 use solomon_sim::modding::ui::{ModMinimapEnemy, ModMinimapPlayer, ModMinimapSnapshot};
 
+/// Verified mod images and audio loaded for a hosted session, ready to upload.
 pub(super) struct PreparedHostedPresentation {
     images: PreparedModPresentationAssets,
     audio: ModAudioSources,
@@ -214,7 +215,7 @@ impl Game {
             .boneyard
             .iter()
             .flat_map(|world| world.enemies.actors.iter())
-            // Source projectBoneyardEnemies omits the captured spider from snapshots.
+            // Leave a captured spider off the mod minimap.
             .filter(|actor| {
                 !matches!(&actor.brain, EnemyBrain::Spider(brain)
                 if brain.phase == SpiderPhase::Captured)

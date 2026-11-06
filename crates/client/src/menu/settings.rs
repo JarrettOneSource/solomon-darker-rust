@@ -1,4 +1,4 @@
-//! GPU `GameSettingsDialog` pages. Draft preferences leave through MenuUi;
+//! The Settings dialog's GPU pages. Draft preferences leave through `MenuUi`;
 //! storage, account admission and simulation authority retain their existing owners.
 mod fullscreen;
 mod mobile;
@@ -19,6 +19,7 @@ use solomon_sim::mobile_ui::{MobileUiLayout, MobileUiLayoutState};
 use solomon_sim::settings::{GameControlAction, GameSettings, game_binding_label};
 use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec};
 use std::rc::Rc;
+/// Where Settings was opened from: the title screen, gameplay or Dark Cloud.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingsContext {
     Title,
@@ -240,6 +241,8 @@ impl ToggleSetting {
     }
 }
 
+/// The Settings dialog's state: current page, draft settings, a pending key binding,
+/// and the fullscreen, mobile layout and save transfer sections.
 pub(super) struct SettingsView {
     page: Page,
     context: SettingsContext,
@@ -1214,7 +1217,8 @@ fn binding_alpha(ui: &Ui, id: egui::Id, listening: bool) -> f32 {
     }
     let now = ui.input(|input| input.time);
     let started = ui.data_mut(|data| *data.get_temp_mut_or_insert_with(animation, || now));
-    // Source's .8s steps(2,end) cycle has 0/50/100% keyframes at 1/.45/1.
+    // A listening binding blinks on a 0.8 s cycle of four 0.2 s steps: opacity 1,
+    // 0.725, 0.45, then 0.725.
     let step = ((now - started).rem_euclid(0.8) / 0.2).floor() as usize;
     [1.0, 0.725, 0.45, 0.725][step.min(3)]
 }

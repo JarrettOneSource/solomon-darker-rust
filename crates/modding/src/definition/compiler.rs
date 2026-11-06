@@ -1,4 +1,5 @@
-//! Immutable graph compilation from `web-lua-definition-compiler.ts`.
+//! Compiles a mod definition into its immutable content graph: validation against schemas,
+//! references and budgets, content identities, and the graph digest.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
@@ -13,6 +14,7 @@ use super::suggestions::did_you_mean;
 use crate::assets::sha256;
 use crate::json::{SourceCollator, canonical_graph, lua_value, stringify};
 
+/// A content entry from another mod or from stock content that a definition may reference.
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebLuaDefinitionDependencyContent {
@@ -21,12 +23,15 @@ pub struct WebLuaDefinitionDependencyContent {
     pub key: String,
 }
 
+/// Another mod's ID and content entries, which the compiled definition may reference.
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct WebLuaDefinitionDependency {
     pub content: Vec<WebLuaDefinitionDependencyContent>,
     pub id: String,
 }
 
+/// Compilation inputs besides the definition: dependency mods, budget limits and the stock
+/// content that references may name.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompileWebLuaDefinitionOptions {
@@ -439,8 +444,8 @@ fn validate_budgets(definition: &WebLuaModDefinition, context: &mut CompileConte
 }
 
 fn ordered_node<T: serde::Serialize>(value: &T, keys: &[&str]) -> LuaValue {
-    // Serde emits an internally tagged enum's discriminant first. The source
-    // walks its constructor's field order when reporting budget violations.
+    // Serde emits an internally tagged enum's discriminant first. Budget violations
+    // are reported in the node's declared field order (`keys`) instead.
     let mut unordered = match typed_value(value) {
         LuaValue::Object(value) => value,
         _ => unreachable!("a definition node serializes as an object"),

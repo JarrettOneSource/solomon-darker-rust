@@ -1,4 +1,5 @@
-//! Source developer acquisitions from `player-entity-store.ts`1700–1773.
+//! Developer console grants of skill ranks and Weld builds. Each grant applies its
+//! acquisition offer seeds, refreshes derived stats and rebuilds any pending skill offer.
 
 use super::*;
 

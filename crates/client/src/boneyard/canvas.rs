@@ -1,4 +1,4 @@
-//! The generated scenery consumers from `editor/render.ts`:
+//! Scenery rasterized at load time:
 //! post-road Terrain tiles and the generated three-stroke Wall image.
 
 use super::{BoundsDocument, PreparedImage};
@@ -8,6 +8,7 @@ use solomon_sim::Vec2;
 use solomon_sim::boneyard::{BoneyardBounds, BoneyardFence, BoneyardScene};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// A rasterized scenery image and the bounds it covers.
 pub(super) struct PaintedCanvas {
     pub bounds: BoundsDocument,
     pub image: PreparedImage,
@@ -133,7 +134,7 @@ fn consume(
     y: f64,
 ) -> Result<Option<PaintedCanvas>, String> {
     let pixels = raster.into_rgba()?;
-    // Source crops only nonzero alpha; transparent RGB stays untouched inside
+    // Crop to nonzero alpha only; transparent RGB stays untouched inside
     // the retained rectangle, and the scratch canvas is released immediately.
     let mut left = width;
     let mut top = height;

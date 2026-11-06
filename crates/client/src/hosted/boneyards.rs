@@ -1,9 +1,10 @@
-//! Owner-authenticated editor draft operations from Website `lib/api.ts`.
+//! Owner-authenticated Boneyard draft operations of the Website API (`/api/boneyards`).
 //! The same WebsiteApi transport owns mount, token, status and response handling.
 use super::{ApiError, WebsiteApi};
 use serde::Deserialize;
 use serde_json::Value;
 
+/// A cloud Boneyard draft's listing: ID, name, update time and sizes.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoneyardDraftSummary {
@@ -13,6 +14,8 @@ pub struct BoneyardDraftSummary {
     pub document_size: u64,
     pub compiled_size: Option<u64>,
 }
+/// A complete cloud Boneyard draft: its summary, editor document, compiled Boneyard and
+/// creation time.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoneyardDraft {

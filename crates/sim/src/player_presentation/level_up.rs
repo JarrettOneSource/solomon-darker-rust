@@ -1,4 +1,5 @@
-//! The bounded sparkle program in `renderer/level-up-presentation.ts`.
+//! The level-up sparkle burst around the local wizard: when it plays, its bounded
+//! particle program and its light pulse.
 
 use crate::float;
 use std::f64::consts::PI;
@@ -8,6 +9,8 @@ use crate::player::PlayerState;
 
 pub const LEVEL_UP_PRESENTATION_DURATION_MS: f64 = 2390.0;
 
+/// One level-up sparkle in a display frame: alpha, offset from the wizard, rotation and
+/// scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LevelUpParticle {
     pub alpha: f64,
@@ -17,6 +20,8 @@ pub struct LevelUpParticle {
     pub scale: f64,
 }
 
+/// The level-up burst in one display frame: its sparkles, light radius and whether it
+/// still emits.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LevelUpPresentationFrame {
     pub emitting: bool,
@@ -25,9 +30,9 @@ pub struct LevelUpPresentationFrame {
     pub tick: u64,
 }
 
-/// MainMenuScene's pending-offer/barrier admission plus the retained renderer's
-/// setLevelUpPresentation/frame clock. A null offer stops admission, not a burst
-/// that already started. The wall-clock sample keeps running through the barrier.
+/// Decides when the level-up burst plays: a new barrier with a pending skill offer starts
+/// it, and a wall-clock timer runs it to completion. A missing offer stops admission, not
+/// a burst that already started. The wall-clock sample keeps running through the barrier.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LevelUpPresentationTracker {
     world_key: Option<String>,
@@ -46,8 +51,8 @@ impl LevelUpPresentationTracker {
         self.armed_id
     }
 
-    /// Keep the Hub key stable across its private rooms; replace it when the
-    /// source renderer would be replaced (a new run/world or local participant).
+    /// Keep the Hub key stable across its private rooms; change it for a new run, world
+    /// or local participant, which resets the tracker.
     pub fn sample(
         &mut self,
         world_key: &str,
@@ -78,8 +83,8 @@ impl LevelUpPresentationTracker {
     }
 }
 
-/// BoneyardSceneLights only widens an admitted local-player light while the
-/// emitter is active. The additive offset uses the source's double 2.6 literal.
+/// Widens the local player's light only while the emitter is active. The additive offset
+/// uses 2.6 as a double, not a single-precision value.
 #[must_use]
 pub fn level_up_player_light_radius(
     overlay_effect_phase: f64,
@@ -159,7 +164,7 @@ fn random_float(id: u64, tick: u64, lane: u32, magnitude: f64) -> f64 {
 }
 
 fn random_word(id: u64, tick: u64, lane: u32) -> u32 {
-    // JavaScript imul/bitwise operands intentionally wrap to their low 32 bits.
+    // The ID and tick are intentionally truncated to their low 32 bits; every multiply wraps.
     let mut value = (id as u32).wrapping_mul(0x9e37_79b1)
         ^ (tick as u32).wrapping_mul(0x85eb_ca77)
         ^ lane.wrapping_mul(0xc2b2_ae3d);

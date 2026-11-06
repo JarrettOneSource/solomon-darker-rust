@@ -1,4 +1,5 @@
-//! Source JSON spelling shared by native profiles, source saves and content digests.
+//! JSON text as `JSON.stringify` writes it, with ECMAScript number spelling and preserved
+//! field order. Native profiles, save documents and content digests share this spelling.
 
 use std::io;
 
@@ -6,7 +7,7 @@ use serde::Serialize;
 use serde_json::ser::Formatter;
 use solomon_sim::modding::LuaValue;
 
-/// JSON.stringify for the source's finite, JSON-compatible Lua value domain.
+/// `JSON.stringify` output for a Lua value; rejects non-finite numbers.
 pub fn stringify(value: &LuaValue) -> Result<String, String> {
     validate_finite(value)?;
     stringify_serializable(value)
@@ -20,7 +21,7 @@ pub fn stringify_serializable<T: Serialize + ?Sized>(value: &T) -> Result<String
     Ok(String::from_utf8(bytes).expect("the JSON serializer writes valid UTF-8"))
 }
 
-/// The Console uses JSON.stringify(value, null, 2), including source number
+/// The Console's `JSON.stringify(value, null, 2)` layout, including ECMAScript number
 /// spelling and Lua object insertion order. It needs no JavaScript evaluator.
 pub fn stringify_pretty<T: Serialize + ?Sized>(value: &T) -> Result<String, String> {
     let mut bytes = Vec::new();
@@ -85,7 +86,7 @@ struct SourceFormatter;
 
 impl Formatter for SourceFormatter {
     fn write_f32<W: io::Write + ?Sized>(&mut self, writer: &mut W, value: f32) -> io::Result<()> {
-        // A native f32 becomes a JS Number before JSON.stringify sees it.
+        // Widen an f32 to f64 first, so it prints as that double, not its shortest f32 spelling.
         self.write_f64(writer, f64::from(value))
     }
 

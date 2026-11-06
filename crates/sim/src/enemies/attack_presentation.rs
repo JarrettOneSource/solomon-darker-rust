@@ -1,4 +1,5 @@
-//! Imp landing/contact and Demon muzzle flashes from `renderer/native-enemy-attack-effect.ts`.
+//! Enemy attack flashes: the Imp landing flare, the Imp contact burst and the Demon bomb's
+//! muzzle flash.
 //! Their visual samples are private to the retained view and never consume world entropy.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
@@ -6,18 +7,21 @@ use crate::Vec2;
 use crate::float;
 use crate::float::fround;
 
+/// Which attack makes a fire burst: a Demon bomb's muzzle or an Imp's contact.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyRawFireBurstKind {
     DemonBombMuzzle,
     ImpContact,
 }
 
+/// An enemy attack flash: a fire burst or an Imp landing flare.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyAttackEffectKind {
     FireBurst(EnemyRawFireBurstKind),
     ImpLandingFlare,
 }
 
+/// One frame of a fire burst: atlas frame and rotation, glow alpha, scale and vertical offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyRawFireBurstSample {
     pub frame_entry: usize,
@@ -27,6 +31,7 @@ pub struct EnemyRawFireBurstSample {
     pub vertical_offset: f64,
 }
 
+/// One frame of an Imp landing flare: alpha, green channel and horizontal and vertical scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ImpLandingFlareSample {
     pub alpha: f64,
@@ -35,6 +40,7 @@ pub struct ImpLandingFlareSample {
     pub scale_y: f64,
 }
 
+/// The sprite layers of an attack flash and their vertical offset.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyAttackEffectPlan {
     pub offset_y: f64,

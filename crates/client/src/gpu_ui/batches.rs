@@ -2,6 +2,8 @@
 
 use super::KeyStroke;
 
+/// Where one native input dispatch ends: cumulative counts of events, key codes and edits,
+/// its click count and whether a controller sent it.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct DispatchEnd {
     pub events: usize,
@@ -17,6 +19,8 @@ impl DispatchEnd {
     }
 }
 
+/// The input for one egui pass: one dispatch's events, key codes and edits, or an empty
+/// pass that materializes the previous dispatch's widgets.
 pub(super) struct InputPass {
     pub raw: egui::RawInput,
     pub codes: Vec<KeyStroke>,

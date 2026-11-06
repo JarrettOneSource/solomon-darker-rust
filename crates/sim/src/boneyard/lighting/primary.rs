@@ -1,5 +1,5 @@
-//! `core-kernels/native-primary-light-sources.ts`. Light providers receive the
-//! authoritative actor values; presentation draws never advance combat randomness.
+//! Light sources for fire and ether primary spells and for boss spells. Light providers
+//! receive the authoritative actor values; presentation draws never advance combat randomness.
 
 use super::BoneyardLightSource;
 use crate::enemies::boss_spell::{BossSpell, BossSpellKind};
@@ -84,8 +84,9 @@ pub fn ether_primary_impact_light_source(origin: Vec2, age_ticks: u64) -> Boneya
     BoneyardLightSource::new(origin, ETHER_PRIMARY_IMPACT_LIGHT_RADIUS, intensity.min(1.0), false)
 }
 
-/// `core-kernels/native-boss-spell-light.ts`. The source restarts this private
-/// presentation generator for each spell and frame; it never consumes combat RNG.
+/// The light a boss spell gives off, if any. Its private presentation generator restarts
+/// for each spell and frame, seeded by the owner's ID plus the frame; it never consumes
+/// combat RNG.
 #[must_use]
 pub fn boss_spell_light(
     spell: &BossSpell,

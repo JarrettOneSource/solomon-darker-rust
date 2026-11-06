@@ -1,6 +1,8 @@
-//! Source `hub-inventory-notices.ts` variants. One notice owns its content and
-//! presentation branch; result tint/summary do not live in a separate sidecar.
+//! Inventory notices: standard messages, the unforge confirmation and unforge results. One
+//! notice owns its content and presentation branch; result tint/summary do not live in a
+//! separate sidecar.
 
+/// A modal notice over the panels: a standard message, the unforge confirmation or its result.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PlayerPanelNotice {
     Standard { title: String, body: String },
@@ -49,8 +51,8 @@ impl PlayerPanels {
                     }
                     lines.push(data_line(paragraph));
                 }
-                // The source's four standard notice factories retain these authored
-                // anchors and trailing blank DataLines; they are not CSS margins.
+                // Standard notices keep their authored anchors and trailing blank data
+                // lines, which belong to the message layout rather than outer spacing.
                 let clothing = title == "A WIZARD WOULD NEVER REMOVE HIS HAT!"
                     || title == "A WIZARD WOULD NEVER REMOVE HIS ROBE!";
                 if clothing || title == "NOT ENOUGH GOLD!" {

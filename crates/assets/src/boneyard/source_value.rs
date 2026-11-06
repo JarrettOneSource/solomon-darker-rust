@@ -1,11 +1,11 @@
-//! Ordered `project-boneyard.ts` values used by the source geometry digest.
+//! A scene's geometry as an ordered Lua value: the input to the Boneyard geometry digest.
 
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::{BoneyardObject, BoneyardScene};
 use solomon_sim::modding::{LuaObject, LuaValue};
 
 fn number(value: f64) -> LuaValue {
-    // JSON.stringify maps nonfinite numeric fields to null, including raw f32s
+    // The digest writes nonfinite numeric fields as null, including raw f32s
     // retained by the editor. Admission validates playable geometry separately.
     if value.is_finite() { LuaValue::Number(value) } else { LuaValue::Null }
 }
@@ -64,8 +64,8 @@ fn placed_object(value: &BoneyardObject) -> LuaValue {
 }
 
 /// Preserve compact field insertion order and omit absent optional fields.
-/// Serializing this value with `json_value::stringify` matches the geometry
-/// bytes consumed by `boneyardGeometrySha256`, rather than a sorted JSON map.
+/// Serializing this value with `json_value::stringify` gives the exact bytes
+/// hashed into `geometry_sha256`, rather than a sorted JSON map.
 pub fn boneyard_scene_source_value(scene: &BoneyardScene) -> LuaValue {
     let sprites = scene
         .sprites

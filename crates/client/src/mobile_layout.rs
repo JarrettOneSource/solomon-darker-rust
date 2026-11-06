@@ -1,5 +1,6 @@
-//! Website `mobile-ui-layout.ts` / `mobile-ui-sharing.ts` storage edge.
-//! The complete validated document is shared by the editor and live controls.
+//! The saved touch-control layout: reading, saving, resetting and installing shared layouts,
+//! with change notification. The complete validated document is shared by the editor and live
+//! controls.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -21,6 +22,7 @@ pub const MOBILE_UI_LAYOUT_STORAGE_KEY: &str = "solomon-dark-mobile-ui-layout-v1
 #[cfg(target_arch = "wasm32")]
 pub const MOBILE_UI_LAYOUT_CHANGED_EVENT: &str = "solomon-dark-mobile-ui-layout-changed";
 
+/// Reads and writes the saved touch-control layout and reports when it has changed.
 pub struct MobileUiLayoutStore {
     #[cfg(target_arch = "wasm32")]
     window: Window,
@@ -184,8 +186,8 @@ impl Drop for MobileUiLayoutStore {
 }
 
 fn parse_document(serialized: &str) -> Option<MobileUiLayoutDocument> {
-    // JSON.parse keeps the last duplicate object key. Deserialize through Value
-    // before the closed schema so legacy browser storage has the same semantics.
+    // A repeated object key keeps its last value, including in layouts already saved in
+    // browser storage. Deserialize through `Value` first; the closed schema rejects repeats.
     let value: serde_json::Value = serde_json::from_str(serialized).ok()?;
     serde_json::from_value(value).ok()
 }

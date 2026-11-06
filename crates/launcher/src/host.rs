@@ -28,8 +28,8 @@ pub mod supervisor;
 pub use authority::{NativeAuthority, NativeHostConfig};
 pub use content::HostContent;
 
-/// Source `Date.toISOString` includes exactly three millisecond digits, including
-/// whole seconds. Both signed receipts and runtime events use this wire spelling.
+/// UTC time spelled `YYYY-MM-DDTHH:MM:SS.mmmZ`, always with three millisecond digits,
+/// even on whole seconds. Both signed receipts and runtime events use this wire spelling.
 fn source_utc_timestamp(now: time::OffsetDateTime) -> Result<String, String> {
     let format = time::format_description::parse_borrowed::<1>(
         "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]Z",

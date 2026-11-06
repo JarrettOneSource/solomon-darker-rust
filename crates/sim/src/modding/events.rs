@@ -1,4 +1,4 @@
-//! Semantic events from `host/lua/web-lua-game-api.ts::deriveWebLuaEvents`.
+//! Semantic Lua events, derived by comparing two small session snapshots.
 //! The host retains these small facts across an epoch, never a cloned Session.
 
 use crate::Vec2;
@@ -9,6 +9,7 @@ use crate::session::GameSession;
 
 use super::{LuaObject, LuaValue};
 
+/// One derived Lua event: its name and payload.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WebLuaDerivedEvent {
@@ -16,6 +17,8 @@ pub struct WebLuaDerivedEvent {
     pub payload: LuaValue,
 }
 
+/// The session facts events are derived from: the run, phase and tick, the players and the
+/// Boneyard.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameSimulationEventSnapshot {
@@ -26,6 +29,7 @@ pub struct GameSimulationEventSnapshot {
     pub players: Vec<PlayerEventSnapshot>,
 }
 
+/// A player's gold, level and experience at one tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerEventSnapshot {
@@ -35,6 +39,7 @@ pub struct PlayerEventSnapshot {
     pub experience: f64,
 }
 
+/// A Boneyard's wave state, enemy events and enemy actors at one tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardEventSnapshot {
@@ -44,6 +49,7 @@ pub struct BoneyardEventSnapshot {
     pub actors: Vec<EnemyActorEventSnapshot>,
 }
 
+/// The current wave's event ID, ordinal and phase.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WaveEventSnapshot {
@@ -52,6 +58,8 @@ pub struct WaveEventSnapshot {
     pub phase: WavePhase,
 }
 
+/// One enemy spawn or death: the actor, event ID, kind, tick, target player and source
+/// position.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyEventSnapshot {
@@ -63,6 +71,7 @@ pub struct EnemyEventSnapshot {
     pub source_position: Option<Vec2>,
 }
 
+/// The enemy events Lua sees: spawn and death.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemySemanticEventKind {
@@ -70,6 +79,7 @@ pub enum EnemySemanticEventKind {
     Death,
 }
 
+/// An enemy actor's ID, type and position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyActorEventSnapshot {
@@ -138,8 +148,9 @@ impl GameSimulationEventSnapshot {
     }
 }
 
-/// Event and participant order are the source traversal order. `includes` lets the
-/// Console omit events it does not subscribe to; prepared content requests all events.
+/// The Lua events between two snapshots, in a fixed event and participant order. `includes`
+/// lets the Console omit events it does not subscribe to; prepared content requests all
+/// events.
 #[must_use]
 pub fn derive_web_lua_events(
     previous: &GameSimulationEventSnapshot,

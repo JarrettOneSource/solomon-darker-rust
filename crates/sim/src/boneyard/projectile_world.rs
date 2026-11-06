@@ -1,4 +1,5 @@
-//! Projectile world queries from `core-server/boneyard-projectile-world.ts`.
+//! World queries for enemy projectiles: line and body collision, arena and view bounds, and
+//! the camera-distance gain of an explosion.
 
 use crate::Vec2;
 use crate::enemies::world::EnemyProjectileWorldQuery;
@@ -9,6 +10,8 @@ use super::collision::{
 };
 use super::world_light::{primary_view_bounds, region_point_gain};
 
+/// One participant's camera for projectile queries: the wizard's position, the viewport
+/// size, and whether point gain uses the reduced alternate-player scale.
 #[derive(Clone, Copy, Debug)]
 pub struct BoneyardProjectileViewport {
     pub position: Vec2,
@@ -16,6 +19,8 @@ pub struct BoneyardProjectileViewport {
     pub alternate_player: bool,
 }
 
+/// The Boneyard as enemy projectiles query it: arena bounds, collision and every
+/// participant's view rectangle.
 pub struct BoneyardProjectileWorld<'a> {
     bounds: BoneyardBounds,
     collision: &'a BoneyardCollisionWorld,

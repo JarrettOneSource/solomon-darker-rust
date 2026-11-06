@@ -1,11 +1,12 @@
-//! Fixed Hub drawing bands from `hub-depth.ts` and `renderer/hub-render-contract.ts`.
+//! The College's fixed depth bands and the initial depth of a world actor.
 //!
 //! `hub-depth-goldens.json` pins every band and the reference-relative actor depth function.
-//! The renderer places the sorted world queue consecutively after `TeacherPreWorld`, as
-//! `NativeHubPainterPlanner` does; rows decide order, never a band's numeric position.
+//! The renderer places the sorted world queue consecutively after `TeacherPreWorld`; painter
+//! rows decide its order, never a band's numeric position.
 
 use super::painter::painter_row;
 
+/// A depth band: a fixed College drawing layer outside the sorted actor queue.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubDepth {
     Courtyard,
@@ -89,7 +90,8 @@ impl HubDepth {
     }
 }
 
-/// Initial actor depth (`hubActorDepth`); the active painter queue later replaces it.
+/// Initial depth of an actor at `y`: 1000 plus its painter row relative to `reference_y`.
+/// The active painter queue later replaces it.
 #[must_use]
 pub fn hub_actor_depth(y: f64, reference_y: f64) -> f64 {
     1000.0 + painter_row(y, 0.0, reference_y) as f64

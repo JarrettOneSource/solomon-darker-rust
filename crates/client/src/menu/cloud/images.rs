@@ -9,6 +9,8 @@ enum Image {
     Ready(OwnedImageUrl),
     Failed,
 }
+/// Dark Cloud mod images by source URL: pending requests, ready URLs and the URLs
+/// retired after leaving the screen.
 #[derive(Default)]
 pub(super) struct CloudImages {
     entries: BTreeMap<String, Image>,

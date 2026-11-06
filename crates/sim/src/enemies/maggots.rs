@@ -1,4 +1,4 @@
-//! Coffin-owned Maggot admission, movement, bite and terminal effects from `maggots.ts`.
+//! Coffin-owned Maggot admission, movement, bite and terminal effects.
 //! Emerging rows are real bodies; the separate admission pass decides combat ownership.
 
 use super::EnemyToken;

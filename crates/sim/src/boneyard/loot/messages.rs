@@ -1,5 +1,6 @@
-//! Pickup message coalescing and single-precision clocks from
-//! `loot-message-presentation.ts`. The host admits only the local player's events.
+//! Floating pickup and world notification messages: consecutive gold pickups merge into one
+//! message, and earlier messages rise and fade on single-precision clocks. The host admits
+//! only the local player's events.
 
 use std::fmt;
 
@@ -16,7 +17,7 @@ pub const LOOT_MESSAGE_INSERT_SHIFT: f64 = 4.0;
 pub const LOOT_MESSAGE_INSERT_LIFETIME_LOSS: f64 = 0.1_f32 as f64;
 pub const LOOT_MESSAGE_SCALE_DENOMINATOR: f64 = 250.0;
 
-/// The four independent accepted event lanes in Website fa08 `WorldNotificationInput`.
+/// The lane a world notification came from; each lane numbers its events independently.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum WorldNotificationSource {
     Loot,
@@ -25,7 +26,8 @@ pub enum WorldNotificationSource {
     Secondary,
 }
 
-/// Book sequence numbers render as Source's negative book event ID; other lanes stay positive.
+/// A notification's lane and event ID. Its display form writes a Book event ID as negative;
+/// other lanes stay positive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WorldNotificationKey {
     pub source: WorldNotificationSource,
@@ -49,7 +51,8 @@ impl fmt::Display for WorldNotificationKey {
     }
 }
 
-/// A concrete source event; the caller supplies only its accepted local notification.
+/// One notification from a lane; the caller supplies only accepted notifications for the
+/// local player.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldNotificationInput<'a> {
     pub source: WorldNotificationSource,
@@ -68,6 +71,7 @@ pub const fn world_notifications_visible(
         && matches!(life_state, Some(PlayerLifeState::Alive | PlayerLifeState::LethalPending))
 }
 
+/// One floating message: its text, tint, lane-and-ID key, remaining lifetime and offset.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootMessageState {
     pub event_id: u64,
@@ -78,6 +82,7 @@ pub struct LootMessageState {
     pub tint: u32,
 }
 
+/// A message as sampled for drawing, with its alpha and scale.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootMessageVisual {
     pub message: LootMessageState,
@@ -85,9 +90,11 @@ pub struct LootMessageVisual {
     pub scale: f64,
 }
 
+/// The local player's stack of floating messages and the tick its clock has reached.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootMessagePresentation {
-    /// Numeric identity kept for the established loot-only API; selection uses the source key.
+    /// The active message's numeric event ID. Finding the active message compares the full
+    /// lane-and-ID key, because IDs from different lanes can coincide.
     pub active_event_id: Option<u64>,
     active_key: Option<WorldNotificationKey>,
     pub last_tick: u64,
@@ -118,7 +125,10 @@ impl LootMessagePresentation {
         })
     }
 
-    /// Current `consumeText`, with source identity independent of numeric event ID.
+    /// Adds a notification. Gold merges into the active gold message while that message's
+    /// lifetime is above 1. Otherwise, if a message is active, the stack shifts up until the
+    /// active message reaches offset zero, then the new message enters. Messages are matched
+    /// by lane and event ID together, not by the numeric ID alone.
     pub fn consume_text(&mut self, event: &WorldNotificationInput<'_>) -> bool {
         let text = event.text;
         self.advance(self.last_tick.max(event.tick.saturating_sub(1)));
@@ -129,7 +139,7 @@ impl LootMessagePresentation {
                 && active.lifetime > 1.0
             {
                 active.lifetime = LOOT_MESSAGE_INITIAL_LIFETIME;
-                // JavaScript adds Number values, including rounding a sum above 2^53.
+                // Amounts add as f64, so a sum above 2^53 rounds.
                 active.text = format!("{:.0} GOLD", active_gold + gold);
                 return true;
             }
@@ -157,8 +167,9 @@ impl LootMessagePresentation {
         true
     }
 
-    /// The established ed0a loot fixture's unrounded visual scale. Production world
-    /// notifications use `sample_world_notifications` on this same clock and state.
+    /// Advances to `tick` and returns each message with its unrounded alpha and scale, as
+    /// the recorded loot presentation fixture checks them. Production world notifications
+    /// use `sample_world_notifications` on this same clock and state.
     pub fn sample(&mut self, tick: u64) -> Vec<LootMessageVisual> {
         self.advance(tick);
         self.messages
@@ -172,12 +183,13 @@ impl LootMessagePresentation {
             .collect()
     }
 
-    /// Website fa08 rounds the already-f32 scale to two decimal places, then narrows again.
+    /// Like `sample`, but rounds each single-precision scale to two decimal places and
+    /// narrows the result to single precision again.
     pub fn sample_world_notifications(&mut self, tick: u64) -> Vec<LootMessageVisual> {
         let mut visuals = self.sample(tick);
         for visual in &mut visuals {
-            // An f32 value multiplied by integer 100 fits exactly in f64. Positive
-            // nearest-decimal rounding therefore matches Number(...toFixed(2)).
+            // An f32 value multiplied by integer 100 fits exactly in f64, so this rounds the
+            // exact scale to the nearest hundredth; ties round up for these non-negative values.
             visual.scale = fround((visual.scale * 100.0).round() / 100.0);
         }
         visuals

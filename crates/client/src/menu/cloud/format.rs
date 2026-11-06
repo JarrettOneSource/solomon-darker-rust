@@ -1,4 +1,5 @@
-//! Website `lib/format.ts`: shared units and relative time, platform locale for metadata.
+//! Dark Cloud counts, byte sizes and relative times. Dates, sorting and lowercasing
+//! use the platform's locale formatting.
 pub(super) use crate::platform::format::{compare, date, lowercase};
 
 pub(super) fn count(value: u64) -> Result<String, String> {

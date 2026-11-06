@@ -6,6 +6,8 @@ use web_sys::Window;
 
 use super::flush;
 
+/// Adds this page's elapsed time to the stored playtime total every 30 seconds, on
+/// `pagehide` and when dropped.
 pub struct PlaytimeRecorder {
     window: Window,
     marked_at: Rc<Cell<f64>>,

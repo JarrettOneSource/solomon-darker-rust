@@ -1,6 +1,6 @@
-//! Desktop authority child, replacing Source `host/run-game-host.ts` only.
-//! Electron owns the stable origin and source-save files; this process owns one
-//! ordinary hosted simulation and exits when its supervising pipe closes.
+//! The `--desktop` authority child process. Its parent supplies the allowed origins,
+//! credential and revision and keeps the save files; this process runs one standalone
+//! hosted simulation and exits when its stdin pipe from the parent closes.
 
 use std::env;
 use std::ffi::OsString;
@@ -75,8 +75,8 @@ pub fn run(arguments: Vec<OsString>) -> Result<(), String> {
     std::thread::Builder::new()
         .name("desktop-parent-lifetime".into())
         .spawn(move || {
-            // A native child has no Node IPC channel. EOF on the pipe provides
-            // the same parent-disconnect lifetime even after an abrupt app exit.
+            // Stdin reaches EOF when the parent exits, even abruptly, so this
+            // process stops with its parent.
             let _ = io::copy(&mut io::stdin().lock(), &mut io::sink());
             parent_closed.store(true, Ordering::Release);
         })

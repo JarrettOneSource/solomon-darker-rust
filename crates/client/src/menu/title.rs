@@ -1,4 +1,5 @@
-//! Stock title composition from Website `renderer/title-menu-renderer.ts`.
+//! The stock title screen: its scrolling cloud backdrop, moon and graves, the main
+//! menu buttons and the signed-in account name.
 
 use super::widgets::{self, Stage};
 use crate::gpu_ui::{StockAtlas, UiFrame};
@@ -8,6 +9,8 @@ use solomon_sim::{
     menu::{TitleState, title_backdrop_offsets_at},
 };
 
+/// The title screen's state: its atlas and grave frames, backdrop clock, and which main
+/// menu buttons are available.
 pub(super) struct TitleView {
     atlas: StockAtlas,
     state: TitleState,

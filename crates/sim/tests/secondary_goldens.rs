@@ -1,4 +1,5 @@
-//! Public secondary profiles, mana, reserve and action/recharge clocks from Website.
+//! Public secondary profiles, mana, reserve and action/recharge clocks, against recordings
+//! from the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::Rng;

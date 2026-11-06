@@ -1,5 +1,6 @@
-//! `renderer/mod-consumable-effect-view.ts`, using the shared stock flash atlas.
-//! Retained view order is birth order, even when accepted effect rows are reordered.
+//! The ring and flashes drawn around a player using a mod consumable, with the shared stock
+//! flash atlas. Retained view order is birth order, even when accepted effect rows are
+//! reordered.
 
 use std::collections::BTreeSet;
 
@@ -23,6 +24,7 @@ struct ModConsumableEffectView {
     world_tint: u32,
 }
 
+/// Retained ring-and-flash views of active mod consumable effects, one per effect ID.
 pub struct ModConsumableEffectsView {
     ring: Texture,
     views: Vec<ModConsumableEffectView>,
@@ -67,7 +69,7 @@ impl ModConsumableEffectsView {
         self.views.retain(|view| live.contains(&view.id));
     }
 
-    /// BoneyardDynamicScene places every carrier at foreground depth + 0.75.
+    /// Draws every effect above the world actors; the Boneyard calls this in its post-world pass.
     pub fn draw(&self, renderer: &mut Renderer, camera: &Camera, spells: &SpellView) {
         for view in &self.views {
             let plan = &view.plan;

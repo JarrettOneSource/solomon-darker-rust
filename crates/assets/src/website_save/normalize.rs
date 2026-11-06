@@ -1,7 +1,7 @@
-//! Versioned disk-state migrations from Website `save/game-save-document.ts`.
+//! Versioned migrations of a save document's simulation state.
 //!
 //! Normalization happens before deserializing canonical simulation owners. Constructors
-//! rebuild derived data; only source-persisted choices and clocks are restored over them.
+//! rebuild derived data; only persisted choices and clocks are restored over them.
 
 mod death;
 mod ether_drain;

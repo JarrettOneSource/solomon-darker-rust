@@ -1,4 +1,5 @@
-//! Authored binary geometry (`editor/format/boneyard.ts` → `host/project-boneyard.ts`).
+//! Decodes an authored Boneyard file into a `BoneyardScene`: world objects, static sprites,
+//! roads, fences, terrain and the player spawn.
 
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::{
@@ -67,7 +68,7 @@ pub fn decode_boneyard(bytes: &[u8]) -> Result<BoneyardScene, String> {
         });
     }
     // Recipe decoders preserve malformed/unknown records as opaque data. Their
-    // fields are not part of projectBoneyard; only manager membership can reject.
+    // fields are not part of the scene geometry; only manager membership can reject.
     for section in [3, 4, 7, 8, 9, 13] {
         let (ids, children) = manager(&layout.children[section])?;
         if ids.len() != children.len() {
@@ -125,7 +126,7 @@ fn read_envelope(bytes: &[u8]) -> Result<NativeChunkNode, String> {
 }
 
 // Save files and authored Boneyards share chunk storage, but their readers have
-// different source limits and name policies. Boneyard names may be duplicate or
+// different limits and name policies. Boneyard names may be duplicate or
 // non-UTF-8, so applying the stricter save decoder would reject accepted content.
 struct BoneyardReader<'a> {
     bytes: &'a [u8],
@@ -187,8 +188,8 @@ impl BoneyardReader<'_> {
             if name.is_empty() || name.last() != Some(&0) || name[..name.len() - 1].contains(&0) {
                 return Err("Boneyard: invalid named buffer".into());
             }
-            // Named payloads are parsed for framing/limits, then omitted by the
-            // source geometry projection. They do not alter the top-level Arena.
+            // Named payloads are parsed for framing/limits, then omitted from the
+            // scene geometry. They do not alter the top-level Arena.
             self.buffer(depth + 1)?;
         }
         Ok(root)
@@ -235,7 +236,7 @@ fn header(bytes: &[u8]) -> Result<(String, u32, BoneyardBounds), String> {
     }
     let end = 4 + size;
     let text = &bytes[4..end - 1];
-    // The editor's nonfatal TextDecoder replaces malformed UTF-8 and strips BOM.
+    // Like the editor, strip a UTF-8 BOM and replace malformed UTF-8 instead of failing.
     let text = text.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(text);
     let name = String::from_utf8_lossy(text).into_owned();
     if bytes.len() - end < 535 {
@@ -448,8 +449,8 @@ fn decode_terrain(chunk: &NativeChunkNode, index: usize) -> BoneyardTerrain {
     item
 }
 
-/// Current `project-boneyard.ts::materializeNativeBoneyardScenery` retires
-/// stored Tree15..18, then appends freshly constructed Scrubs in source order.
+/// Retires stored Tree variants 15..18 (type 2001) and appends a freshly constructed
+/// Scrub (type 2062) for each, in their stored order.
 fn materialize_scenery(scene: &mut BoneyardScene) {
     let mut replacements = Vec::new();
     scene.objects.retain(|object| {

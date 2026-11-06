@@ -1,4 +1,4 @@
-//! The Source host's `boneyard-entrance-navigation.ts` controller.
+//! The bot's scripted Boneyard entrance: a walk through the entry gate to the digging Solomon.
 //!
 //! This grid walk precedes policy inference. It borrows the real world's static
 //! collision; moving gates are crossed by the explicit approach/crossing phase.
@@ -25,6 +25,7 @@ const GATE_CROSSED_MARGIN: f64 = PLAYER_CHARACTER_RADIUS + 35.0;
 const DIRECTIONS: [(i32, i32); 8] =
     [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
 
+/// Why the entrance walk failed: the bot's player is missing, or no route reaches the target.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MlBotEntranceNavigationError {
     NoPlayer(String),
@@ -36,6 +37,7 @@ pub enum MlBotEntranceNavigationError {
     },
 }
 
+/// The entrance walk's planned route, the key of its target and the tick it was planned.
 #[derive(Clone, Debug, Default)]
 pub struct BoneyardEntranceNavigator {
     planned_at_tick: Option<u64>,
@@ -192,7 +194,7 @@ fn plan_route(
         }
         let (grid_x, grid_y) = queue[cursor].grid;
         let mut directions = DIRECTIONS;
-        // Slice sort is stable, preserving the Source direction order on ties.
+        // Slice sort is stable, so ties keep the `DIRECTIONS` order.
         directions.sort_by(|left, right| {
             let left = Vec2::new(
                 start.x + f64::from(grid_x + left.0) * GRID_STEP,
@@ -225,7 +227,7 @@ fn plan_route(
 }
 
 fn entry_gate(world: &BoneyardWorld) -> Option<(&str, Vec2)> {
-    // A Vec preserves the first encounter of each fence ID, as Source's Map does.
+    // A Vec keeps fence IDs in the order each is first encountered.
     let mut groups: Vec<(&str, Vec<Vec2>)> = Vec::new();
     for leaf in &world.gate_leaves {
         if let Some((_, hinges)) = groups.iter_mut().find(|(id, _)| *id == leaf.fence_eid) {

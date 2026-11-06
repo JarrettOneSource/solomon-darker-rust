@@ -1,5 +1,5 @@
-//! Blizzard source/contact glows, native contact polygon and textured beam quads
-//! from `native-weld-blizzard.ts`, plus the chain constructor in the Weld runtime.
+//! The Blizzard Weld's beam: source and contact glows, the native contact polygon, the
+//! textured beam quads and the frost effects its chain hops spawn.
 
 use super::meteor::draw_unit_vector;
 use super::model::{WeldActorBase, WeldActorBirth};
@@ -10,6 +10,8 @@ use crate::float::{atan2, fround, hypot};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::{Rng, Vec2};
 
+/// A glow at the Blizzard beam's source or contact point: sprite variant, rotation and
+/// scale.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldBlizzardGlowState {
@@ -19,12 +21,14 @@ pub struct WeldBlizzardGlowState {
     pub variant: u32,
 }
 
+/// One textured quad of the Blizzard beam: its atlas record and four corners.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldBlizzardQuad {
     pub record: usize,
     pub vertices: [f64; 8],
 }
 
+/// How to draw the Blizzard beam: its cap and strip quads, tint, width and jitter.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldBlizzardBeamPlan {
     pub jitter: Vec2,
@@ -33,6 +37,7 @@ pub struct WeldBlizzardBeamPlan {
     pub width: f64,
 }
 
+/// The four-point area the Blizzard beam hits, with its half-width and beam width.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldBlizzardContactPolygon {
     pub beam_width: f64,
@@ -169,18 +174,21 @@ pub fn weld_blizzard_beam_plan(
     WeldBlizzardBeamPlan {
         jitter,
         quads: [cap, strip],
-        // The source packRgb truncates .5435550212860107*255 to red byte138.
+        // Packing truncates .5435550212860107*255 to the red byte 138.
         tint: if underpowered { 0x80_bfff } else { 0x8a_ffff },
         width,
     }
 }
 
+/// A drifting frost effect that a Blizzard chain hop sometimes spawns.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldBlizzardChainFrostState {
     pub common: WeldActorBase,
 }
 
+/// The effects of one Blizzard chain hop: a frost fade, an optional chain frost and the
+/// next free ID.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldBlizzardChainEffects {
     pub fade: WeldFrostFadeActorState,

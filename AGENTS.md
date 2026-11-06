@@ -51,6 +51,7 @@ The full game gate is:
 
 ```sh
 python3 scripts/verify-client-assets.py
+python3 scripts/check-port-references.py
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo clippy -p solomon-client --target wasm32-unknown-unknown -- -D warnings

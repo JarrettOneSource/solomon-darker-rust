@@ -1,5 +1,5 @@
-//! Bounded local Hub movement from `client/game-client-session.ts` and
-//! `client/hub-prediction.ts`. This private character never steps the session.
+//! Hub prediction: bounded local movement of the player's own wizard between snapshots,
+//! with a timed correction on receipt. This private character never steps the session.
 
 use solomon_sim::Vec2;
 use solomon_sim::actor_physics::{ActorPhysicsBody, ActorPhysicsWorld, resolve_actor_motion};
@@ -15,6 +15,8 @@ use solomon_sim::hub::{
 };
 use solomon_sim::session::{GameSession, GameSessionInput, SessionParticipant};
 
+/// The local wizard's predicted Hub character: a copied participant, its collision RNG,
+/// the display correction and the ticks predicted since the last snapshot.
 pub(super) struct LocalHubPrediction {
     pub id: String,
     participant: SessionParticipant,
@@ -116,8 +118,8 @@ impl LocalHubPrediction {
 
     pub fn apply(&self, output: &mut GameSession, now_ms: f64) {
         let Some(participant) = output.participants.get_mut(&self.id) else { return };
-        // Source keeps the timeline's Hub participant/transition while replacing
-        // only the local character with its predicted pose and correction.
+        // Keep the timeline's Hub participant/transition and replace only the local
+        // character with its predicted pose and correction.
         let character = &self.participant.wizard;
         participant.wizard.position = self.displayed_position(now_ms);
         participant.wizard.velocity = character.velocity;

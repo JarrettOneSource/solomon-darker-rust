@@ -1,4 +1,5 @@
-//! Faculty actor epochs from `core-server/enemies/faculty.ts`.
+//! The Faculty boss's per-tick update: orbit and movement, its action controller, lightning
+//! aim, living smoke and camera shake, and the spell each action releases.
 
 use super::boss_spells::spawn_faculty_spell;
 use super::config::EnemyFamilyConfig;

@@ -1,4 +1,4 @@
-//! Renderer-owned ambient Arena rain from `native-boneyard-weather.ts`.
+//! Renderer-owned ambient Arena rain: falling streaks and their ground splashes.
 //! Its tick-seeded stream is separate from gameplay RNG. Lighting is captured
 //! when a drop first paints, rather than when an interpolated camera spawns it.
 
@@ -11,6 +11,8 @@ pub const BONEYARD_WEATHER_SPLASH_ENTRY: usize = 24;
 pub const BONEYARD_WEATHER_COLLISION_RADIUS: f64 = 4.0;
 pub const BONEYARD_WEATHER_STREAK_RAMP_HEIGHT: usize = 256;
 
+/// One rain streak to draw: where it lands, its height above that point, its endpoints,
+/// and its lit color and alpha at each end.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardWeatherDropPlan {
     pub end: Vec2,
@@ -26,6 +28,7 @@ pub struct BoneyardWeatherDropPlan {
     pub width: f64,
 }
 
+/// One rain splash to draw: its age, fading alpha, position and growing scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardWeatherSplashPlan {
     pub age_ticks: u64,
@@ -35,6 +38,8 @@ pub struct BoneyardWeatherSplashPlan {
     pub scale: f64,
 }
 
+/// The rain to draw at one tick: drops, splashes, the weather mode and its per-tick spawn
+/// count.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardWeatherPlan {
     pub drops: Vec<BoneyardWeatherDropPlan>,
@@ -62,6 +67,8 @@ struct WeatherSplash {
     scale: f64,
 }
 
+/// A renderer's rain for one Arena: its live drops and splashes, the weather mode and the
+/// last tick it reached.
 pub struct BoneyardWeather {
     arena_age: u64,
     enhanced_effects: bool,
@@ -225,7 +232,8 @@ pub const fn boneyard_weather_tick_seed(tick: u64) -> u32 {
     (tick as u32).wrapping_mul(0x0ef3) & 0x3fff_ffff
 }
 
-/// Exact source one-pixel white ramp; alpha is rounded to bytes before filtering.
+/// The streak texture: a one-pixel-wide white ramp whose alpha rises from zero to half
+/// opacity. Alpha is rounded to bytes before filtering.
 #[must_use]
 pub fn boneyard_weather_streak_ramp() -> [u8; 4 * BONEYARD_WEATHER_STREAK_RAMP_HEIGHT] {
     let mut pixels = [255; 4 * BONEYARD_WEATHER_STREAK_RAMP_HEIGHT];

@@ -1,4 +1,5 @@
-//! Discorporeal terminal spell lifetimes from `enemies/ultra-banish.ts`.
+//! The Discorporeal's terminal spells: the Ultra Banish its death leaves behind and the Unholy
+//! Souls that circle it, each stepped once per tick until its lifetime ends.
 
 use super::boss_spell::{BossSpell, BossSpellKind};
 use super::demon_skull_effects::UNHOLY_GREEN;
@@ -114,7 +115,7 @@ pub fn step_ultra_banish_spell(
                     },
                     order,
                 );
-                // The random gate runs before the mega-death check in the source.
+                // The random gate draws before the mega-death check, even without a mega death.
                 if *remaining_ticks > 100 && world.steering_rng.draw_integer(2) == 1 && *mega_death
                 {
                     let angle_deg = world.steering_rng.draw_scaled_float(360.0, false);

@@ -1,6 +1,6 @@
 //! Durable native roster slots composed with canonical participant import/retirement.
-//! Source counterpart: `game-host.ts::detachPartyRejoinClient` and
-//! `synchronizePartyRejoinMilestones`; the host never rebuilds a player's skill/economy state.
+//! A disconnected wizard is detached into its resume slot and catches up on run milestones
+//! while away; the host never rebuilds a player's skill/economy state.
 
 use std::collections::BTreeSet;
 
@@ -91,7 +91,7 @@ impl NativeAuthority {
         let Some(session) = &self.session else { return Ok(()) };
         let ids = session.participant_order.clone();
         // A restarted process has lost every old socket. Apply the same canonical
-        // disconnect/removal transaction once, then let actual credentials re-admit it.
+        // disconnect/removal transaction once, then let resume credentials re-admit it.
         for id in ids {
             self.capture_offline_participant(&id)?;
         }
@@ -203,8 +203,8 @@ impl NativeAuthority {
 
     pub(super) fn synchronize_offline_milestones(&mut self) -> Result<(), String> {
         let Some(session) = &mut self.session else { return Ok(()) };
-        // BTreeMap preserves the source's player-ID-sorted transaction order. These
-        // offline offer draws occur now, in the shared RNG stream, rather than on rejoin.
+        // The BTreeMap applies these transactions in player-ID order. Their offline offer
+        // draws happen now, in the shared RNG stream, rather than on rejoin.
         for slot in self.metadata.resume_slots.values_mut() {
             let Some(SavedParticipant::Run { detached }) = &mut slot.saved else { continue };
             if let Some(milestone) = session.rejoin_milestone(detached) {

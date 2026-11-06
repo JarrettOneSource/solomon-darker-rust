@@ -1,8 +1,8 @@
-//! Navigation identity for retained source catalog entries.
+//! Navigation graphs retained per Boneyard catalog entry.
 //!
-//! Website `host/boneyard-catalog.ts` returns the same template/Mod entry scene object
-//! across materializations. `boneyard-collision.ts` uses that object as the WeakMap key
-//! in `boneyard-enemy-navigation.ts`, so a later run retains its first lazy mesh.
+//! Every run of the same catalog scene reuses the first prepared `NavigationSet`, so a later
+//! run keeps the meshes an earlier run built lazily. Stock scenes are keyed by their hashes;
+//! a Mod scene is keyed by its catalog entry's identity and is dropped with that entry.
 //! Decoded saves have a fresh scene identity and must use the ordinary fresh loader.
 
 use std::collections::BTreeMap;
@@ -64,7 +64,7 @@ impl CatalogNavigation {
         if let Some(retained) = self.navigation_for(&owner) {
             return Ok(retained);
         }
-        // Source WeakMap entries disappear with their scene objects. Active worlds
+        // Forget graphs whose Mod catalog entry is gone. Active worlds
         // retain their own NavigationSet handles after a catalog entry is replaced.
         self.mods.retain(|entry| entry.owner.strong_count() > 0);
         match owner {

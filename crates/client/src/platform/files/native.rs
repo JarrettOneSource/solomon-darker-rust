@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use crate::platform::Surface;
 
+/// A file the player chose in the system file dialog.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectedFile(PathBuf);
 
@@ -35,6 +36,7 @@ impl SelectedFile {
     }
 }
 
+/// Opens the system file dialog for the given extensions; each selection is queued until taken.
 pub struct FilePicker {
     surface: Surface,
     extensions: Vec<String>,

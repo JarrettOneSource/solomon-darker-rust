@@ -4,6 +4,7 @@ use solomon_sim::Vec2;
 use solomon_sim::spells::air::AirMesh;
 use solomon_sim::spells::weld::FlameLashBounds;
 
+/// One beam mesh vertex: world position, atlas UV and straight color.
 #[derive(Clone, Copy)]
 pub(crate) struct MeshVertex {
     pub position: Vec2,
@@ -70,7 +71,7 @@ fn clip_mesh(
                     uv: mesh.uvs[index],
                     color: colors.map_or([1.0; 4], |values| {
                         let value = values[index];
-                        // Pixi's aColor is unorm8x4 in packed native byte order.
+                        // A packed color holds four 8-bit channels, the first in the low byte.
                         [value & 255, (value >> 8) & 255, (value >> 16) & 255, value >> 24]
                             .map(|channel| f64::from(channel) / 255.0)
                     }),
@@ -134,8 +135,8 @@ fn clip_edge(
     result
 }
 
-/// `native-sprite-record-texture.ts::nativeSpriteRecordUvs`: native samples
-/// start half a texel into the record and end a quarter texel beyond its edge.
+/// Native sampling starts half a texel into the record and ends a quarter texel
+/// beyond its edge.
 pub(crate) fn sprite_texel_rect(record: &solomon_assets::SpriteRecord) -> [f32; 4] {
     sprite_frame_texel_rect([
         f64::from(record.x),

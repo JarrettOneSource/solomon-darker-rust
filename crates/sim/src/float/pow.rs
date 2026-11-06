@@ -1,11 +1,11 @@
-//! V8's fdlibm power function, used by the native Fire presentation envelope.
+//! The game's deterministic power function, used for the shrinking scale of Fire particles.
 //!
-//! Source: Node v22.17.0 `deps/v8/src/base/ieee754.cc:2645–2903`. The native
-//! platform power differs from the JavaScript witness `0.95 ** 10` by one bit.
-//! Keep the source's split logarithm and exponential evaluation order on both
-//! native and WASM targets. Explicit fused operations reproduce the ARM64 V8
-//! build used by the oracle: compiling the retained source with contraction on
-//! matches all 17,431 cases; contraction off differs in four cases.
+//! This reproduces fdlibm's `pow` as V8 ships it in `src/base/ieee754.cc`. Platform
+//! libm's `pow(0.95, 10)` differs from the recorded result by one bit, so keep fdlibm's
+//! split logarithm and exponential evaluation order on both native and WebAssembly.
+//! Explicit fused operations reproduce the rounding of the build behind the recordings:
+//! compiling `ieee754.cc` with contraction on matches all 17,431 recorded cases;
+//! contraction off differs in four cases.
 //! Constants retain their published IEEE words.
 //!
 //! Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
@@ -36,7 +36,7 @@ const IVLN2: f64 = f64::from_bits(0x3ff7_1547_652b_82fe);
 const IVLN2_H: f64 = f64::from_bits(0x3ff7_1547_6000_0000);
 const IVLN2_L: f64 = f64::from_bits(0x3e54_ae0b_f85d_df44);
 
-/// JavaScript's `Math.pow` / exponentiation primitive, including signed zero.
+/// `x` raised to the power `y`, with fdlibm's special cases, including signed zero.
 #[must_use]
 pub fn pow(x: f64, y: f64) -> f64 {
     let hx = high(x);

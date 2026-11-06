@@ -1,4 +1,5 @@
-//! Bomb fire handoff, poison bubbles and retained knockback from `projectile-hazards.ts`.
+//! Hazards left by enemy projectiles and burning skeletons: Demon bomb fires and explosions,
+//! poison pool bubbles, and retained knockbacks that keep pushing a player for several ticks.
 use super::config::EnemyFamilyConfig;
 use super::effects::radial_vector;
 use super::model::*;

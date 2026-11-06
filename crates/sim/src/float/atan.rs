@@ -1,11 +1,11 @@
-//! V8's fdlibm `atan2` and its private `atan` reduction.
+//! The game's deterministic `atan2` and the private `atan` it reduces to.
 //!
-//! Source: Node v22.17.0, `deps/v8/src/base/ieee754.cc:1069–1267`.
+//! This reproduces fdlibm's `atan2` and `atan` as V8 ships them in `src/base/ieee754.cc`.
 //! Identical route-goal operands at Solomon tick 940 produce a different last bit with
 //! macOS libm; that heading difference later changes the independently evolved path.
-//! The pinned ARM64 Node binary fuses the polynomial's multiply-adds and final subtraction.
-//! Explicit `mul_add` calls preserve those witnessed instructions on native and WASM;
-//! the source expression alone, evaluated without fusion, differs by one ulp as well.
+//! The build that produced the recorded results fuses the polynomial's multiply-adds and
+//! final subtraction. Explicit `mul_add` calls reproduce that rounding on native and
+//! WebAssembly; the same expression evaluated without fusion differs by one ulp.
 //! `float_atan2_goldens` covers the exact argument and signed boundary cases.
 //!
 //! Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
@@ -46,7 +46,7 @@ const HALF_PI: f64 = f64::from_bits(0x3ff9_21fb_5444_2d18);
 const QUARTER_PI: f64 = f64::from_bits(0x3fe9_21fb_5444_2d18);
 const TINY: f64 = 1.0e-300;
 
-/// JavaScript `Math.atan2(y, x)`, with the pinned V8 argument reduction and polynomial.
+/// The angle in radians, within `[-π, π]`, from the positive x axis to the point `(x, y)`.
 #[must_use]
 pub fn atan2(y: f64, x: f64) -> f64 {
     if x.is_nan() || y.is_nan() {
@@ -119,7 +119,7 @@ fn atan(mut value: f64) -> f64 {
     }
     let reduction = if high < 0x3fdc_0000 {
         if high < 0x3e40_0000 {
-            // V8 also raises the floating-point inexact flag here; JS cannot observe it.
+            // fdlibm also raises the floating-point inexact flag here; the game never reads it.
             return value;
         }
         None
@@ -143,9 +143,9 @@ fn atan(mut value: f64) -> f64 {
     };
     let square = value * value;
     let fourth = square * square;
-    // These are the two independent fdlibm polynomial chains. The ARM64 oracle
-    // uses fmadd for each inner stage and ordinary multiplication for the outer
-    // square/fourth factors (atan instructions 0x10169b8ac..0x10169b984).
+    // These are the two independent fdlibm polynomial chains. Each inner stage is a
+    // fused multiply-add and the outer square/fourth factors are ordinary products,
+    // matching the rounding of the recorded results.
     let mut odd = fourth.mul_add(COEFFICIENTS[10], COEFFICIENTS[8]);
     odd = fourth.mul_add(odd, COEFFICIENTS[6]);
     odd = fourth.mul_add(odd, COEFFICIENTS[4]);
@@ -158,11 +158,11 @@ fn atan(mut value: f64) -> f64 {
     even = fourth.mul_add(even, COEFFICIENTS[1]);
     even *= fourth;
     let Some(index) = reduction else {
-        // fmsub at 0x10169b994 rounds the product and subtraction only once.
+        // One fused multiply-subtract rounds the product and subtraction only once.
         return (-value).mul_add(odd + even, value);
     };
-    // fnmsub at 0x10169b9bc fuses only the product minus the low part; both
-    // following subtractions remain separate operations in the oracle.
+    // Only the product minus the low part is fused; both following subtractions
+    // remain separately rounded operations.
     let low_difference = value.mul_add(odd + even, -ATAN_LOW[index]);
     let angle = ATAN_HIGH[index] - (low_difference - value);
     if negative { -angle } else { angle }

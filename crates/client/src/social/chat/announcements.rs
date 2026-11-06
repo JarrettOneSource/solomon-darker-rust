@@ -1,7 +1,10 @@
-//! Source `GameChat.tsx`'s accepted additions to its polite, non-atomic live list.
+//! Which chat messages a screen reader announces: messages accepted while chat is
+//! visible, as a polite live list. History present when a session starts stays quiet.
 
 use std::collections::BTreeSet;
 
+/// Chat message sequences waiting to be announced, the newest sequence seen, and the
+/// epoch that renames the live list after a reset.
 #[derive(Default)]
 pub(in crate::social) struct ChatAnnouncements {
     epoch: u64,

@@ -1,6 +1,6 @@
-//! Current Website game-settings.ts browser document. The platform owner chooses
-//! the storage key and performs I/O; this codec preserves Source's strict document
-//! admission, historical migrations and normalized camelCase serialization.
+//! The stored game settings document. The platform owner chooses the storage key
+//! and performs I/O; this codec preserves strict document admission, historical
+//! migrations and normalized camelCase serialization.
 
 use serde::Serialize;
 use serde::ser::SerializeMap;
@@ -41,7 +41,7 @@ const ONLINE_KEYS: [&str; 5] = [
     "submitRunsToServer",
 ];
 
-/// Source rejects the whole malformed document rather than applying a partial
+/// A malformed document yields the defaults as a whole rather than a partial
 /// settings record. Missing storage is handled by the caller as the same default.
 #[must_use]
 pub fn parse(serialized: &str) -> GameSettings {
@@ -161,8 +161,8 @@ fn parse_controls(value: &Value) -> Option<GameControlBindings> {
     controls.migrate_missing_bindings().then_some(controls)
 }
 
-/// Source setGameSettings writes all current fields in this declaration order.
-/// Numeric values are integers in the Rust model, so normalization only clamps;
+/// Writes all current fields in this declaration order.
+/// Numeric values are integers in the settings model, so normalization only clamps;
 /// captured binding strings still use the canonical UTF-16 admission check.
 pub fn serialize(settings: &GameSettings) -> Result<String, String> {
     let normalized = NormalizedSettings {
@@ -223,8 +223,8 @@ impl Serialize for NormalizedControls<'_> {
         let mut map = serializer.serialize_map(Some(GameControlAction::ALL.len()))?;
         for action in GameControlAction::ALL {
             let code = self.0.code(action);
-            // Source normalizes each captured string here without swapping or
-            // deduplicating it. The stricter read path owns document admission.
+            // An invalid captured string falls back to its default, without swapping
+            // or deduplicating bindings. The stricter read path owns document admission.
             let normalized =
                 if valid_game_binding_code(code) { code } else { defaults.code(action) };
             map.serialize_entry(action.as_str(), normalized)?;

@@ -1,4 +1,5 @@
-//! Pinned Website `game-asset-readiness.ts`: insertion-ordered unfinished work.
+//! Startup loading progress: unfinished work in insertion order, from the runtime
+//! through account or desktop admission to the first game frame.
 
 use std::collections::BTreeSet;
 
@@ -7,6 +8,7 @@ pub const DESKTOP: &str = "Desktop launch settings";
 pub const ACCOUNT: &str = "Account and saved game";
 pub const FIRST_FRAME: &str = "First game frame";
 
+/// One piece of startup work: the stage it belongs to and the source that names it.
 #[derive(Clone)]
 pub struct StartupResource {
     stage: &'static str,
@@ -19,12 +21,16 @@ impl StartupResource {
     }
 }
 
+/// Startup work still pending, in insertion order, with the total count and current
+/// stage.
 pub(super) struct StartupProgress {
     pending: Vec<StartupResource>,
     total: u32,
     stage: &'static str,
 }
 
+/// Startup progress for display: the stage and source of the next unfinished resource,
+/// with completed and total counts.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Snapshot {
     pub stage: &'static str,

@@ -1,4 +1,5 @@
-//! Game preferences from Website `game-settings.ts`. Storage belongs to the host.
+//! Game preferences: camera, interface, audio, lighting, effects and online settings, and
+//! control bindings. Storage belongs to the host.
 
 #[must_use]
 pub fn camera_zoom_for_fov(native_zoom: f64, fov_percent: u16) -> f64 {
@@ -49,6 +50,7 @@ pub fn game_binding_label(code: &str) -> String {
     label
 }
 
+/// A player action that can be bound to a key or mouse button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameControlAction {
     MoveUp,
@@ -106,6 +108,7 @@ impl GameControlAction {
     }
 }
 
+/// The key or mouse code bound to each control action.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameControlBindings {
@@ -118,8 +121,8 @@ pub struct GameControlBindings {
     pub open_skills: String,
     #[cfg_attr(feature = "persistence", serde(default = "default_open_chat_binding"))]
     pub open_chat: String,
-    // Empty marks an older stored controls object; the browser edge runs the
-    // source migration below before applying it, so occupied keys are preserved.
+    // Empty marks an older stored controls object; the loading edge runs
+    // `migrate_missing_bindings` before applying it, so occupied keys are preserved.
     #[cfg_attr(
         feature = "persistence",
         serde(default, deserialize_with = "deserialize_migrated_binding")
@@ -186,7 +189,8 @@ impl GameControlBindings {
         }
     }
 
-    /// `rebindGameControl` swaps an occupied key into this action's old binding.
+    /// Binds `code` to `action`. An action that already used `code` takes this action's old
+    /// binding.
     pub fn rebind(&mut self, action: GameControlAction, code: &str) -> bool {
         if !valid_game_binding_code(code) || self.code(action) == code {
             return false;
@@ -201,8 +205,8 @@ impl GameControlBindings {
         true
     }
 
-    /// Current `migrateGameControls`: preserve all occupied keys, then add missing
-    /// console/hotbar bindings in source order. Other invalid controls reject the document.
+    /// Preserves all occupied keys, then gives missing console/hotbar bindings the first
+    /// free key from their candidate lists. Other invalid controls reject the document.
     pub fn migrate_missing_bindings(&mut self) -> bool {
         let mut used = std::collections::BTreeSet::new();
         for action in GameControlAction::ALL {
@@ -254,6 +258,8 @@ impl GameControlBindings {
     }
 }
 
+/// The player's game preferences: camera, interface, audio, lighting and effects, online
+/// features and controls.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameSettings {

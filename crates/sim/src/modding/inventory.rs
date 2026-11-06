@@ -1,4 +1,4 @@
-//! Authored inventory metadata from `core-kernels/hub-economy.ts`.
+//! Authored inventory metadata for mod items and consumables.
 //! These fields travel with the canonical inventory item; views never own a copy
 //! of item admission, stack limits or the package's content identity.
 
@@ -7,6 +7,7 @@ use crate::economy::{EquipmentType, HubInventoryItem, HubItemKind, base_item};
 
 pub const MOD_ITEM_TYPE_ID: u32 = 7013;
 
+/// A mod item's icon: an atlas frame and the image it comes from.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -17,6 +18,7 @@ pub struct ModItemIcon {
     pub image_path: String,
 }
 
+/// Where a mod wearable is worn: as a hat, robe or staff.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -26,6 +28,8 @@ pub enum ModWearableSlot {
     Staff,
 }
 
+/// How a mod wearable looks when worn: its slot, worn and trim images, death shape and whether
+/// it can be dyed.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -38,6 +42,8 @@ pub struct ModWearableContent {
     pub worn_trim_image_path: Option<String>,
 }
 
+/// The package metadata a mod item carries in the inventory: identity, description, icon,
+/// stack limit and any wearable look.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -54,6 +60,8 @@ pub struct ModItemContent {
     pub wearable: Option<ModWearableContent>,
 }
 
+/// The package metadata a mod consumable carries in the inventory: identity, description,
+/// icon, effect duration and use effect.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -71,6 +79,7 @@ pub struct ModConsumableContent {
     pub duration_ms: f64,
 }
 
+/// A consumable's use effect: a spell glow in one RGBA color.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename = "spell_glow"))]
@@ -78,6 +87,7 @@ pub struct ModConsumableVfx {
     pub color: [f64; 4],
 }
 
+/// A mod consumable as the catalog lists it: its content, name and potion subtype.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -88,6 +98,7 @@ pub struct ModConsumableCatalogEntry {
     pub subtype: u32,
 }
 
+/// A mod item as the catalog lists it: its content, name and icon tints.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -98,6 +109,7 @@ pub struct ModItemCatalogEntry {
     pub name: String,
 }
 
+/// How a mod equipment modifier combines with a stat: add, multiply or set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -107,6 +119,7 @@ pub enum ModModifierOperation {
     Set,
 }
 
+/// One mod equipment modifier: the stat key, the operation and its value.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModEquipmentModifier {
@@ -115,6 +128,7 @@ pub struct ModEquipmentModifier {
     pub value: f64,
 }
 
+/// A mod affix on a piece of equipment: its identity, name and modifiers.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -125,6 +139,8 @@ pub struct ModEquipmentAffix {
     pub name: String,
 }
 
+/// An active mod consumable effect on a player: its content, use ID, color and the ticks it
+/// starts and expires.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -138,7 +154,7 @@ pub struct GameSimulationModEffect {
 }
 
 /// Accepted inventory consumption returned to the prepared host after the
-/// canonical Session transaction (`game-simulation.ts::GameSimulationModConsumption`).
+/// canonical Session transaction.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -149,7 +165,7 @@ pub struct GameSimulationModConsumption {
     pub use_id: u64,
 }
 
-/// `modConsumableInventoryItem`: address assignment belongs to the inventory
+/// A mod consumable as an inventory item; address assignment belongs to the inventory
 /// transaction. Custom potion subtypes begin at six in the prepared catalog.
 #[must_use]
 pub fn mod_consumable_inventory_item(catalog: &ModConsumableCatalogEntry) -> HubInventoryItem {
@@ -159,7 +175,7 @@ pub fn mod_consumable_inventory_item(catalog: &ModConsumableCatalogEntry) -> Hub
     item
 }
 
-/// `modItemInventoryItem`: wearables and stackable items retain the same source
+/// A mod item as an inventory item. Wearables and stackable items use the same inventory
 /// item model, with actual package metadata attached to the inventory tree.
 pub fn mod_item_inventory_item(
     catalog: &ModItemCatalogEntry,
@@ -188,7 +204,7 @@ pub fn mod_item_inventory_item(
     Ok(item)
 }
 
-/// These are the source economy's identity invariants, independent of whether
+/// These are the economy's identity invariants for mod items, independent of whether
 /// the owning package is currently installed (reconciliation is a separate step).
 #[must_use]
 pub fn mod_item_inventory_identity_is_valid(item: &HubInventoryItem) -> bool {

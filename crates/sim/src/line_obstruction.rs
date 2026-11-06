@@ -1,9 +1,11 @@
-//! Segment, circle, capsule and bounds queries from `core-kernels/line-obstruction.ts`.
+//! Line obstruction queries against segments, circles, capsules and the Boneyard bounds, and
+//! clipping a line to those bounds.
 
 use crate::Vec2;
 use crate::boneyard::BoneyardBounds;
 use crate::float::{fround, hypot};
 
+/// Where a line is obstructed: the hit point and its fraction `t` along the line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LineObstruction {
     pub point: Vec2,

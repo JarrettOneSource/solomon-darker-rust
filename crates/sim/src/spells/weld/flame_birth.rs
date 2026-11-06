@@ -1,5 +1,6 @@
-//! Current Source `native-weld-flame-birth.ts`: the factory owns constructor
-//! words and registrations. Path lights reuse these samples without RNG draws.
+//! The Flame Lash factory, which creates a lash's channel actor and source fade. The
+//! factory owns constructor words and registrations. Path lights reuse these samples
+//! without RNG draws.
 
 use super::effects::{
     WeldChannelActorState, WeldChannelInput, WeldFlameLashFadeInput, WeldFlameLashFadeState,
@@ -19,6 +20,8 @@ use crate::float::fround;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::{Rng, Vec2};
 
+/// Inputs for the Flame Lash factory: the channel, geometry, role, width, camera
+/// displacement and painter details.
 pub struct FlameLashFactoryBirthInput<'a> {
     pub channel: WeldChannelInput<'a>,
     pub source_fade_id: u64,
@@ -30,12 +33,14 @@ pub struct FlameLashFactoryBirthInput<'a> {
     pub misc_append_ordinal: usize,
 }
 
+/// What the Flame Lash factory creates: the channel actor and its source fade.
 pub struct FlameLashFactoryBirth {
     pub channel: WeldChannelActorState,
     pub source: WeldFlameLashFadeState,
 }
 
-/// Source flare first, short-only width, path intensity, then each ordered radius.
+/// Draws the source flare first, then the short-only width, path intensity and each
+/// ordered radius.
 pub fn create_flame_lash_factory(
     input: FlameLashFactoryBirthInput<'_>,
     rng: &mut Rng,

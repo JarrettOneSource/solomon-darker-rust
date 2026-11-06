@@ -1,5 +1,5 @@
-//! The two source College ownership models. Every actor epoch still belongs to the
-//! existing `GameSession`; this module selects which actual session owns a participant.
+//! The two ways a hosted College holds its sessions. Every simulation step still belongs to a
+//! `GameSession`; this module selects the session that owns a participant.
 
 use solomon_sim::boneyard::LoadedBoneyard;
 use solomon_sim::game_run::GameRunPhase;
@@ -8,6 +8,8 @@ use solomon_sim::session::{GameSession, GameSessionOptions};
 use solomon_sim::shared_worlds::SharedGameWorlds;
 use solomon_sim::social::{GameSessionKind, PartyIdentity, PartySystem};
 
+/// A College's sessions: the Global Hub's shared Hub and per-party runs, or one private
+/// session with its parties.
 pub enum HostedWorlds {
     Global(SharedGameWorlds),
     Private { state: GameSession, parties: PartySystem },

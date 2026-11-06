@@ -1,5 +1,5 @@
-//! Per-listener combat one-shots over the accepted session. Camera attenuation follows
-//! `BoneyardScene.tsx`; clients retain snapshot-owned loops and narration mixes.
+//! Per-listener combat one-shots over the accepted session, attenuated by distance from
+//! each listener's camera. Clients play looping sounds and narration mixes from snapshots.
 
 use solomon_protocol::ServerMessage;
 use solomon_sim::Vec2;
@@ -15,6 +15,7 @@ use solomon_sim::spells::staff::PlayerStaffTransient;
 use super::authority::{NativeAuthority, send_control};
 use super::connection::HostConnection;
 
+/// A listener's camera for audio: its world-space center and visible world width.
 #[derive(Clone, Copy)]
 pub struct ListenerView {
     pub center: Vec2,
@@ -145,7 +146,7 @@ pub(super) fn project_listener_audio(
     };
     let cursor = connection.combat_audio.get_or_insert_with(|| CombatAudioCursor::new(&frame));
     if !attach_only {
-        // The canonical cursor owns cue counters; the browser projects its loops and
+        // The canonical cursor owns cue counters; the client projects its loops and
         // narration mix from snapshots and must not replay these reliable one-shots.
         events.extend(cursor.update(&frame).events);
     }

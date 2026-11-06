@@ -1,4 +1,5 @@
-//! The ten native welded-primary vectors from `native-weld-primary-profile.ts`.
+//! The ten welded-primary vectors: each Weld build's payload values, computed from its
+//! component skill ranks.
 //!
 //! `PlayerWizardSkills::RebuildWeldedSpell` (`0x00666020`) narrows every catalog read
 //! and vector write. Intermediate narrowing is retained in the formula order below.
@@ -7,6 +8,7 @@ use crate::float::fround;
 
 use super::{PlayerStatBookComponent, SKILL_ROW_COUNT, SkillBookState, weld_build};
 
+/// How a welded primary fires: once per cast, as a channel, or as a persistent effect.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WeldCastKind {
     Channel,
@@ -25,6 +27,7 @@ impl WeldCastKind {
     }
 }
 
+/// A Weld build's computed payload values and cast kind.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldPrimaryVector {
     pub build_id: u32,
@@ -42,7 +45,7 @@ pub fn weld_primary_cast_mode(build_id: u32) -> WeldCastKind {
     }
 }
 
-// These are the reference's already-rounded native constants, widened to JavaScript doubles.
+// Float32 constants, widened to f64 so each formula uses the rounded value.
 const F32_001: f64 = 0.01_f32 as f64;
 const F32_002: f64 = 0.02_f32 as f64;
 const F32_08: f64 = 0.8_f32 as f64;
@@ -58,7 +61,8 @@ const F32_125: f64 = 1.25;
 const F32_13: f64 = 1.3_f32 as f64;
 const F32_29: f64 = 2.9_f32 as f64;
 
-/// Freezes component ranks at the same seam as `nativeWeldPrimaryVector`.
+/// Uses the component ranks frozen when the book's active Weld was built; any other build
+/// reads current effective ranks.
 #[must_use]
 pub fn weld_primary_vector(
     book: &SkillBookState,

@@ -1,5 +1,5 @@
-//! Per-party holds and actual world epochs. Socket readiness never changes a Session's
-//! gameplay counters; it only selects which source world may step at this wall-clock epoch.
+//! Per-party holds, match starts, shutdown and the hosted tick. Socket readiness never changes
+//! a Session's gameplay counters; it only selects which worlds step on this wall-clock tick.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,15 +12,16 @@ use super::{HostedGameHost, HostedWorlds};
 use crate::host::authority::{ControlFacts, random_bytes, random_hex};
 use crate::host::control::GameplayControl;
 
+/// The result of stepping one world on this tick: the persistent College or a party's run.
 pub struct HostedWorldTick {
-    /// None is the persistent College; Some is the actual party's run.
+    /// `None` is the persistent College; `Some` names the party whose run stepped.
     pub party_id: Option<String>,
     pub result: GameSessionTickResult,
 }
 
 impl HostedGameHost {
-    /// Source `GameHost.close`: retained diagnostics precede bot/VM retirement,
-    /// then actual close callbacks release the remaining player identities.
+    /// Retained diagnostics close before bots and Lua VMs retire; then each connection
+    /// closes, and its close handling releases the remaining player identities.
     pub(in crate::host) fn begin_shutdown(&mut self, failed: bool) -> Result<(), String> {
         let _ = self.poll_reconnects(f64::INFINITY, true)?;
         self.close_run_archives(super::super::run_archive::RunArchiveEndReason::HostClosed);
@@ -108,8 +109,8 @@ impl HostedGameHost {
         }
     }
 
-    /// `client-start-match` / `client-start-tutorial`: geometry and navigation prepare
-    /// before the party is partitioned. Failed content admission cannot move its actors.
+    /// Starts a party's match or the Tutorial. Geometry and navigation are prepared before
+    /// the party is partitioned, so failed content admission cannot move its actors.
     pub fn start_match(
         &mut self,
         id: &str,
@@ -177,7 +178,7 @@ impl HostedGameHost {
         let activity_before = super::activity::project_game_activity(state);
         let seed = match self.next_lua_run_seed.take() {
             Some(seed) => {
-                // Source writes this word big-endian into a zeroed 16-byte seed.
+                // The Console's seed word is written big-endian into a zeroed 16-byte seed.
                 let mut bytes = [0; 16];
                 bytes[..4].copy_from_slice(&seed.to_be_bytes());
                 bytes
@@ -230,8 +231,8 @@ impl HostedGameHost {
                 }
             }
         }
-        // Source boneyard-entry schedules every client on this host, including Hub
-        // visitors. Unchanged documents retain their previous per-player sequence.
+        // Entering a Boneyard schedules a save for every player on this host, including
+        // Hub visitors. Unchanged documents retain their previous per-player sequence.
         self.pending_player_saves.extend(self.players.iter().map(|player| player.id.clone()));
         self.publish_dirty = true;
         self.social_dirty = true;
@@ -250,13 +251,13 @@ impl HostedGameHost {
         Ok(true)
     }
 
-    /// A single source epoch, College first and then retained runs in creation order.
-    /// No checkpoint/world clone is constructed for either ticking or publication.
+    /// One hosted tick: the College first, then retained runs in creation order.
+    /// No checkpoint or world clone is constructed for either ticking or publication.
     pub fn step(&mut self, now_ms: f64) -> Result<Vec<HostedWorldTick>, String> {
         self.leaderboard_previous_runs.clear();
         self.maintain_controls(now_ms);
-        // The private source host returns before draining inputs during a wall-clock
-        // hold. Shared worlds deliberately drain first, then hold only that party run.
+        // A private College returns before draining inputs during a wall-clock hold.
+        // Shared worlds deliberately drain first, then hold only that party's run.
         if matches!(self.worlds, HostedWorlds::Private { .. }) && !self.reconnects.is_empty() {
             return Ok(Vec::new());
         }

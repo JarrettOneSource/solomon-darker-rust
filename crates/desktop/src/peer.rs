@@ -24,6 +24,8 @@ enum Mode {
     Join(Invite),
 }
 
+/// A running peer tunnel. Hosting accepts friends over TLS and relays them to the local
+/// authority; joining relays a loopback port to the host over TLS.
 pub struct Peer {
     port: u16,
     stop: watch::Sender<bool>,

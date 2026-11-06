@@ -1,4 +1,4 @@
-//! Frost jet emission, native f32 motion and draw plans from `primary-spell-water.ts`.
+//! The Water primary's Frost jet: particle emission, native f32 motion and draw plans.
 //!
 //! Noise is derived from the particle id, never from gameplay RNG. The normal jet clips and
 //! splays at terrain; its overlaid sibling follows the post-world painter lane.
@@ -14,47 +14,57 @@ const LIFETIME_STEP: f64 = 0.04_f32 as f64;
 const CORE_GROWTH: f64 = 0.01_f32 as f64;
 const GLINT_SHRINK: f64 = 0.95_f32 as f64;
 
+/// Whether a Frost jet particle is a normal one or an overlay drawn after the world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaterFrostJetKind {
     Normal,
     Over,
 }
+/// How a Frost jet sprite blends: normally or additively.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaterFrostJetBlend {
     Normal,
     Add,
 }
+/// The Frost jet sprite drawn: the core or the glint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaterFrostJetSprite {
     Core,
     Glint,
 }
+/// A Frost jet draw pass: the additive core, the core or the glint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaterFrostJetPass {
     AdditiveCore,
     Core,
     Glint,
 }
+/// Where a Frost jet particle is painted: sorted among world painters, or in the queue
+/// drawn after the world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WaterFrostJetPainterLane {
     WorldSorted,
     PostWorldQueue,
 }
 
+/// One Frost jet sprite draw: pass, sprite, position, rotation, scale, color, alpha and
+/// blend.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaterFrostJetDraw {
     pub alpha: f64,
     pub blend: WaterFrostJetBlend,
-    /// RGB, in the source color's channel order.
+    /// Red, green and blue channels, each from 0 to 1.
     pub color: [f64; 3],
     pub pass: WaterFrostJetPass,
     pub position: Vec2,
-    /// Radians, as in the Website's Pixi sprite rotation.
+    /// Sprite rotation in radians.
     pub rotation: f64,
     pub scale: f64,
     pub sprite: WaterFrostJetSprite,
 }
 
+/// A Frost jet particle's drawing this frame: its draws, motion, scales, lifetime, kind
+/// and painter Y.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WaterFrostJetPlan {
     pub core_scale: f64,
@@ -68,6 +78,8 @@ pub struct WaterFrostJetPlan {
     pub world_y: f64,
 }
 
+/// Where a Frost jet particle starts and how it moves: origin, direction, speed and
+/// jitter radius.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaterFrostJetEmission {
     pub direction: Vec2,
@@ -76,6 +88,8 @@ pub struct WaterFrostJetEmission {
     pub speed: f64,
 }
 
+/// Inputs for emitting one Frost jet particle: emitter, aim, tick, ordinal in the burst,
+/// ID, burst size, speed and widening.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaterFrostJetEmissionInput {
     pub emitter: Vec2,
@@ -88,6 +102,7 @@ pub struct WaterFrostJetEmissionInput {
     pub widen_half_degrees: f64,
 }
 
+/// Where terrain stops a Frost jet particle, and how far along its path that is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaterFrostJetObstruction {
     pub distance: f64,

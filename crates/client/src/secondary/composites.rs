@@ -1,4 +1,4 @@
-//! The source's 256-square Storm and Leviathan render-target passes.
+//! The 256-square render-target passes for Storm and Leviathan composites.
 
 use std::collections::BTreeMap;
 
@@ -65,8 +65,8 @@ impl SecondaryView {
         }
     }
 
-    /// Current Source uses a geometric rectangle mask, so this multiply draw
-    /// runs on the appendage target itself. It is not the old filtered Sprite mask.
+    /// The mask is a geometric rectangle clip, so this multiply draw runs on the
+    /// appendage target itself rather than through a filtered sprite mask.
     pub(super) fn draw_leviathan_mask(
         &self,
         renderer: &mut Renderer,
@@ -92,8 +92,8 @@ impl SecondaryView {
         let (record, vertices) = self.sprite_vertices(camera, root, &draw, [1.0; 3]);
         let triangles =
             [[vertices[0], vertices[1], vertices[2]], [vertices[0], vertices[2], vertices[3]]];
-        // The target is 256 square. GL scissor starts at its bottom-left;
-        // Source's geometric clip starts at (0, clipTop) from the top-left.
+        // The target is 256 square. GL scissor starts at its bottom-left; the
+        // authored clip starts at (0, clip_top) from the top-left.
         let clip = [
             0,
             (LEVIATHAN_RENDER_TARGET_SIZE - mask.clip_top - mask.clip_size) as i32,
@@ -127,7 +127,8 @@ impl SecondaryView {
                 camera,
                 texture,
                 TargetDraw {
-                    // Source's output Sprite anchor is .5 + .5 / targetSize.
+                    // The output is anchored half a texel past the target's center, so
+                    // that center lands half a unit before the root on each axis.
                     center: Vec2::new(actor.plan.root.x - 0.5, actor.plan.root.y - 0.5),
                     scale: 1.0,
                     alpha: output.alpha,

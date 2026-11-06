@@ -1,4 +1,5 @@
-//! Source previous release `92e3fe4c:desktop/peer-network.mjs`: TLS 1.3, AES-128-GCM and HKDF-SHA256 PSK.
+//! The published v1 peer TLS profile: TLS 1.3 only, AES-128-GCM, and a pre-shared key that
+//! HKDF-SHA256 derives from the invite secret.
 //! OpenSSL's supported PSK callback also serves TLS 1.3 with its SHA256 digest.
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};

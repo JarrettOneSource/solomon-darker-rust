@@ -1,6 +1,7 @@
-//! Source `deployment-revision.ts` and `GameDeploymentUpdate.tsx`.
-//! The page owner survives transport retirement. A publication identity gates the
-//! reload independently of the game revision bound into signed recovery claims.
+//! The server update overlay: when an update is announced, save the game, then reload the
+//! page once the Website publishes it. The page owner survives transport retirement. A
+//! publication identity gates the reload independently of the game revision bound into
+//! signed recovery claims.
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -20,6 +21,7 @@ use crate::gpu_ui::UiFrame;
 use crate::hosted::WebsiteMount;
 use egui::{Color32, FontFamily, FontId, Id, RichText, Stroke, vec2};
 
+/// The server update overlay and its reload barrier for one page.
 pub struct DeploymentUpdate {
     message: Option<&'static str>,
     target_revision: Option<String>,

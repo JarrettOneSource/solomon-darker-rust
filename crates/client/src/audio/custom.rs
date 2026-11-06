@@ -1,5 +1,5 @@
-//! Source GameAudioDirector `playAsset`, `startAssetLoop` and `startAssetMusic`.
-//! This borrowed browser handle retains the existing context, not another audio engine.
+//! Custom content audio: one-shot sounds, owned loops and music from content assets.
+//! This borrowed handle shares the existing audio context, not another audio engine.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -10,21 +10,23 @@ use std::sync::Arc;
 
 use super::{AudioBus, AudioState, Music, make_buffer_voice, play_music, validate_options};
 
+/// One custom music track: its media and the content's own volume.
 pub(super) struct AssetMusicChannel {
     pub media: Music,
     volume: f64,
 }
 
+/// Audio for custom content, sharing the game's audio context, mixer and buffer cache.
 #[derive(Clone)]
 pub struct GameAssetAudio {
     pub(super) state: Rc<RefCell<AudioState>>,
 }
 
 impl GameAssetAudio {
-    /// Source caches both fulfilled and rejected decode promises by immutable content URL.
-    /// Decode the verified content bytes directly: fetching a Blob URL would add a
-    /// connection outside the Website's `connect-src 'self'` policy. The stable SHA
-    /// key still shares one fulfilled or rejected promise across session changes.
+    /// Decodes are cached by content key, including failed ones. Decode the verified
+    /// content bytes directly: fetching a Blob URL would add a connection outside the
+    /// Website's `connect-src 'self'` policy. The stable SHA key shares one fulfilled or
+    /// rejected decode across session changes.
     pub async fn load_asset(&self, key: &str, bytes: &[u8]) -> Result<(), String> {
         let existing = self.state.borrow().asset_loads.get(key).cloned();
         let decode = if let Some(existing) = existing {

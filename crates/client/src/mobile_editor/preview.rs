@@ -1,4 +1,5 @@
-//! GPU source MobileUiElementPreview/MobileUiBeltPreview over actual player fields.
+//! GPU previews of the touch controls in the layout editor. Belt and potion controls show
+//! the local player's own skills, items and potions.
 
 use super::MobileUiEditor;
 use crate::gpu_ui::{StockAtlas, UiFrame};
@@ -37,6 +38,7 @@ enum BeltIcon {
     },
 }
 
+/// The player's first eight belt slots and two potion counters, as the editor previews them.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MobileEditorPlayerPreview {
     slots: [Option<BeltIcon>; 8],
@@ -50,9 +52,9 @@ impl MobileEditorPlayerPreview {
         let factors = player.derived_stats().offensive_factors(&player.skill_runtime);
         let mut slots = std::array::from_fn(|_| None);
         let mut aliases = [None; 8];
-        // Source MobileUiElementPreview renders the eight named editor controls
-        // from bank zero. The live HUD selects its own bank before projecting it;
-        // the editor must never enumerate the other sixteen persisted entries.
+        // The editor previews the eight named belt controls from bank zero. The live HUD
+        // selects its own bank before projecting it; the editor must never enumerate the
+        // other sixteen persisted entries.
         for (slot, entry) in player.belt.entries.iter().take(BELT_SLOT_COUNT).enumerate() {
             let id = mobile_ui_belt_element_id(&player.belt, slot);
             if id != MobileUiElementId::SLOTS[slot] {
@@ -128,6 +130,7 @@ fn item_icon(item: &HubInventoryItem, quantity: u64, player: &PlayerState) -> It
     }
 }
 
+/// Places a control's natural coordinates on the editor canvas by center, scale and rotation.
 #[derive(Clone, Copy)]
 pub(super) struct ElementPaint {
     pub center: Pos2,
@@ -211,7 +214,7 @@ impl ElementPaint {
         painter
             .add(egui::epaint::TextShape::new(rect.min, galley, color).with_angle(self.rotation));
     }
-    // Registered sprites retain independent Source center, per-axis scale, rotation, and tint.
+    // Registered sprites take their own center, per-axis scale, rotation and tint.
     #[allow(clippy::too_many_arguments)]
     fn art(
         self,

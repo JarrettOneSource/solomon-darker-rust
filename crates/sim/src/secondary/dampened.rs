@@ -4,6 +4,8 @@ use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::{Rng, Vec2};
 
+/// A dampened enemy spell flying away from Dampen's origin: heading, phase, position and
+/// velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DampenedSpellState {
     pub heading_degrees: f64,
@@ -11,6 +13,8 @@ pub struct DampenedSpellState {
     pub position: Vec2,
     pub velocity: Vec2,
 }
+/// One smoke puff a dampened spell leaves each step: sprite entry, rotation, scale, tint
+/// and fade.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NativeDampenedSmoke {
     pub alpha_loss: f64,

@@ -1,16 +1,18 @@
-//! Checkpoint inference from `ml-bot-policy/runtime.ts`; no training or platform runtime.
+//! Checkpoint inference for the bot policy; no training or platform runtime.
 
 use super::{
     MlBotPolicyActionIndices, MlBotPolicyActionMaskPlan, MlBotPolicyActionMasks,
     MlBotPolicyChoiceMode, MlBotPolicyTensors, OBSERVATION_WIDTH, OPTION_DESCRIPTOR_WIDTH,
 };
 
+/// How a head picks among legal options: the highest logit, or a sample from its probabilities.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MlBotPolicySelectionMode {
     Argmax,
     Sample,
 }
 
+/// How inference selects options: argmax or sampling, and an optional softmax temperature.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotPolicySelectionOptions {
     pub mode: MlBotPolicySelectionMode,
@@ -23,6 +25,7 @@ impl Default for MlBotPolicySelectionOptions {
     }
 }
 
+/// Each action head's probabilities over its options.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyProbabilities {
     pub ability: Vec<f32>,
@@ -31,6 +34,8 @@ pub struct MlBotPolicyProbabilities {
     pub target: Vec<f32>,
 }
 
+/// One action inference: the chosen indices, their joint log probability, each head's
+/// probabilities, the value estimate and the trunk's latent vector.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyHeadResult {
     pub actions: MlBotPolicyActionIndices,
@@ -40,12 +45,16 @@ pub struct MlBotPolicyHeadResult {
     pub value: f64,
 }
 
+/// An action inference whose ability and aim masks followed its earlier choices, with the
+/// masks it used.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyAutoregressiveResult {
     pub head: MlBotPolicyHeadResult,
     pub masks: MlBotPolicyActionMasks,
 }
 
+/// One offer choice: the selected option, its log probability, every option's probability,
+/// the value estimate and the trunk's latent vector.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyChoiceResult {
     pub latent: Vec<f32>,
@@ -313,8 +322,8 @@ fn scalar(input: &[f32], weights: &[f32], bias: &[f32]) -> Result<f64, String> {
 }
 
 fn fused(sum: f32, weight: f32, value: f32) -> f32 {
-    // The Source helper's name is historical: fround(sum + fround(weight * value))
-    // requires two separate Float32 roundings. A hardware FMA would change the policy.
+    // Despite the name, this is not a fused multiply-add: the product and the sum are
+    // rounded to f32 separately. A hardware FMA would change the policy.
     let product = weight * value;
     sum + product
 }
@@ -349,7 +358,7 @@ fn head(
         if mask[index] == 1 {
             let value = (f64::from(*logit) / temperature - maximum).exp();
             probabilities[index] = value as f32;
-            // Source sums the unrounded double exponential, not the Float32 store.
+            // The total sums the unrounded double exponential, not the f32 store.
             total += value;
         }
     }

@@ -14,11 +14,13 @@ use super::audio::ListenerView;
 use super::input::InputQueue;
 use crate::transport::PeerSender;
 
-// Source `host/game-host.ts:73,7674`: suspend at eight pending frames and recover
-// at two. These render ACKs are independent of the socket's ordered compaction baseline.
+// Suspend snapshots at eight unacknowledged frames and resume at two. These render ACKs
+// are independent of the socket's ordered compaction baseline.
 const SNAPSHOT_HIGH_WATER_MARK: usize = 8;
 const SNAPSHOT_LOW_WATER_MARK: usize = 2;
 
+/// The host's state for one connection: its participant, input queue, command and request
+/// cursors, snapshot acknowledgements and per-listener audio.
 pub struct HostConnection {
     pub peer: PeerSender,
     pub player_id: Option<String>,
@@ -30,8 +32,8 @@ pub struct HostConnection {
     pub input: InputQueue,
     pub last_command_sequence: u64,
     pub last_command_receipt: Option<Arc<str>>,
-    /// Source shares this monotonic lane between authored actions and casts.
-    /// Console request IDs remain independent.
+    /// Authored mod actions and casts share this monotonic request-ID lane; a repeated or
+    /// older ID is ignored. Console request IDs are tracked separately.
     pub last_mod_request_id: u64,
     pub pending_lua_request_ids: std::collections::BTreeSet<u64>,
     pub listener_view: Option<ListenerView>,
@@ -48,8 +50,8 @@ pub struct HostConnection {
 }
 
 impl HostConnection {
-    /// Source handles transfer ACKs before ordinary/player/observer dispatch. No
-    /// command can interleave the ordered Welcome prefix except explicit disconnect.
+    /// Handles Welcome transfer ACKs before any other dispatch and returns whether the
+    /// message was consumed. Only a disconnect may interleave a pending Welcome transfer.
     pub fn handle_transfer_message(
         &self,
         message: &solomon_protocol::ClientMessage,
@@ -102,7 +104,7 @@ impl HostConnection {
         self.initial_save_pending = true;
         self.player_id = Some(player_id);
         self.welcome_revision = None;
-        // The source welcome initializes its acknowledged baseline to this full frame.
+        // The Welcome carries a full frame, so it becomes the acknowledged baseline.
         self.last_sent_snapshot = sequence;
         self.acknowledged_snapshot = sequence;
         self.pending_snapshots.clear();
@@ -110,8 +112,8 @@ impl HostConnection {
         self.snapshot_backpressure = false;
     }
 
-    /// `ensureBoneyardLoaded`: one reliable geometry publication per actual run.
-    /// Snapshot frequency never causes another scene clone/serialization.
+    /// Sends the Boneyard geometry reliably once per run. Snapshot frequency never causes
+    /// another scene clone or serialization.
     pub fn ensure_boneyard_loaded(
         &mut self,
         loaded: Option<&solomon_sim::boneyard::LoadedBoneyard>,
@@ -155,8 +157,9 @@ impl HostConnection {
     pub fn record_flame_baseline(&mut self, sequence: u64, baseline: FlamePresentationBaseline) {
         self.sent_flame_baselines.insert(sequence, baseline);
         self.sent_flame_baselines.retain(|sent, _| *sent >= self.acknowledged_snapshot);
-        // Same retained sent-baseline window as Source. Native high water limits
-        // ordinarily keep this much smaller, but ACK never creates a second cursor.
+        // Keep at most 64 sent baselines, never evicting the acknowledged one. The snapshot
+        // high-water mark ordinarily keeps this much smaller, and an ACK never creates a
+        // second cursor.
         while self.sent_flame_baselines.len() > 64 {
             let oldest = self
                 .sent_flame_baselines

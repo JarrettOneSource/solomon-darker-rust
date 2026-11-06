@@ -1,4 +1,5 @@
-//! Flock flight from Website `core-kernels/native-crow.ts`.
+//! Flight of the crows a Heartmonger summons: orbiting their parent, diving at players, and
+//! flying away once their parent is gone.
 //!
 //! Parent-owned birds update in flock order. A bird may enter and finish a dive in the
 //! same update; the two phase branches deliberately remain independent.
@@ -10,12 +11,15 @@ use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::heading_turn_direction;
 use crate::{Rng, Vec2};
 
+/// A player a crow may dive at: its ID and position.
 #[derive(Clone, Copy, Debug)]
 pub struct CrowTarget<'a> {
     pub id: &'a str,
     pub position: Vec2,
 }
 
+/// The outcome of one crow update: whether the crow survives, its parent's new dive cooldown,
+/// the pitch of its returning wing sound and the player its dive struck.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CrowStep {
     pub retained: bool,

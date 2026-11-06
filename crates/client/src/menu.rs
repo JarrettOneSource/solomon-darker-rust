@@ -40,6 +40,8 @@ use solomon_sim::profile::create::{
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::settings::GameSettings;
 use title::TitleView;
+/// A menu choice for the game to carry out: starting, continuing or leaving a game, the
+/// Tutorial, cheats and settings changes.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MenuAction {
     Start(NewGameSelection),
@@ -90,6 +92,7 @@ pub enum HostedMenuAction {
     SignOut,
 }
 
+/// A change to the player's subscription to a published mod.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModSubscriptionAction {
     Subscribe,
@@ -138,6 +141,8 @@ enum UiEvent {
     Key(String, bool),
     Pointer(i16),
 }
+/// The menu system: every menu screen and dialog, the current screen, draft settings,
+/// and the actions waiting for the game.
 pub struct MenuUi {
     title: TitleView,
     hall: HallView,
@@ -196,7 +201,7 @@ pub(crate) fn library_layer() -> egui::LayerId {
 }
 
 impl MenuUi {
-    /// Source sibling stacking levels within the shared main-menu stage.
+    /// Stacking levels of the menu scenes that share the main-menu stage.
     pub(crate) fn scene_stack_level(&self) -> i32 {
         match self.screen {
             Screen::Create => 30,
@@ -223,7 +228,8 @@ impl MenuUi {
     pub(crate) fn orientation_visible(&self) -> bool {
         self.orientation_blocked
     }
-    /// The Source NativeUiDialog is a browser top-layer owner while mounted.
+    /// An open Dark Cloud dialog sits in the top dialog layer, above every other menu
+    /// layer.
     pub(crate) fn cloud_dialog_visible(&self) -> bool {
         !self.orientation_blocked && self.cloud_visible(self.screen) && self.cloud.modal_open()
     }
@@ -593,8 +599,8 @@ impl MenuUi {
         actions
     }
 
-    /// The Website mount enables this source route by default; packaged play has
-    /// no account/content backend to advertise.
+    /// The Website mount enables Dark Cloud by default; packaged play has no
+    /// account/content backend to advertise.
     pub fn set_dark_cloud_available(&mut self, available: bool) -> Result<(), String> {
         self.title.set_dark_cloud_available(available);
         if matches!(self.screen, Screen::Title | Screen::Play) {
@@ -754,7 +760,7 @@ impl MenuUi {
         request_id: u64,
         mismatch: solomon_sim::menu::save_mods::GameSaveModMismatch,
     ) -> Result<(), String> {
-        // Source requestResumeLastGame retains Play beneath its cancellable dialog.
+        // Resuming the last game keeps Play beneath its cancellable dialog.
         if self.screen == Screen::Hidden {
             self.title.show_controls(true, self.can_resume)?;
             self.set_screen(Screen::Play)?;
@@ -814,8 +820,8 @@ impl MenuUi {
         }
     }
 
-    /// Root calls this before consuming a resolved admission. False means the
-    /// source surface unmounted or a newer request superseded this callback.
+    /// The hosted game calls this before consuming a resolved admission. False means
+    /// the requesting view closed or a newer request superseded this callback.
     pub fn complete_party_join(
         &mut self,
         request_id: u64,
@@ -868,8 +874,8 @@ impl MenuUi {
         self.set_screen(Screen::Pause)
     }
 
-    /// Source requestGameSettingsUpdate rejects enabling cheats in the global Hub
-    /// until this explicit choice. The coordinator retains the accepted settings.
+    /// Settings cannot enable cheats in the global Hub until the player makes this
+    /// explicit choice. The coordinator retains the accepted settings.
     pub fn show_cheat_college_prompt(&mut self) -> Result<(), String> {
         self.routing.show_cheats()
     }
@@ -1002,9 +1008,9 @@ impl MenuUi {
         self.settings_view.complete_save_replacement(request_id, result)
     }
 
-    /// Source `initialCreateWizardNameForSession`: guests roll a stock name;
-    /// account names pass through the same glyph/width admission as Create.
-    /// The coordinator stores its party requester name once at MainMenu mount.
+    /// Guests roll a stock name; account names pass through the same glyph/width
+    /// admission as Create. Hosted play stores its party requester name once, when
+    /// it loads.
     #[must_use]
     pub fn initial_wizard_name(&self, account_username: Option<&str>) -> String {
         if let Some(name) = account_username.filter(|name| !name.is_empty()) {
@@ -1030,7 +1036,7 @@ impl MenuUi {
         ) || (self.screen == Screen::Settings
             && matches!(self.settings_back, Screen::Title | Screen::Play))
     }
-    /// Source edge controls follow the scene beneath the Settings overlay.
+    /// The fullscreen edge control follows the scene beneath the Settings overlay.
     pub fn fullscreen_placement(&self) -> crate::fullscreen::FullscreenPlacement {
         use crate::fullscreen::FullscreenPlacement;
         if self.cloud_visible(self.screen) {
@@ -1040,7 +1046,7 @@ impl MenuUi {
         match screen {
             Screen::Title | Screen::Play | Screen::Hall => FullscreenPlacement::Title,
             Screen::Create => FullscreenPlacement::Create {
-                // `main-menu.css`: min(0.625cqw, 1.111111cqh) is ten scaled stage pixels.
+                // Create scales its edge control with the 1600 × 900 stage fit.
                 frame_scale: (f64::from(self.viewport.0) / 1600.0)
                     .min(f64::from(self.viewport.1) / 900.0),
             },
@@ -1212,8 +1218,8 @@ impl MenuUi {
             if let UiEvent::Action(action) = event {
                 self.routing.activate(&action)?;
             }
-            // The pinned routing dialogs provide buttons/controller Back; they
-            // do not add an Escape listener to the scene underneath them.
+            // The routing dialogs provide buttons/controller Back; they do not add
+            // an Escape listener to the scene underneath them.
             return Ok(());
         }
         match event {
@@ -1227,7 +1233,7 @@ impl MenuUi {
                 if self.screen == Screen::Pause && self.pause_back == Screen::Cloud {
                     return Ok(());
                 }
-                // JoinPartyScene provides footer/controller Back, not a keyboard shortcut.
+                // Join Party provides footer/controller Back, not a keyboard shortcut.
                 if self.screen == Screen::Join {
                     return Ok(());
                 }
@@ -1428,7 +1434,7 @@ impl MenuUi {
     }
 
     fn begin_new_game(&mut self) -> Result<(), String> {
-        // MainMenuScene starts College admission before asking for the final loadout.
+        // A new game starts College admission before asking for the final loadout.
         // The generated name is presentation randomness, independent of the run RNG.
         let name = self.initial_wizard_name(self.account_username.as_deref());
         self.actions.push(MenuAction::Start(NewGameSelection {
@@ -1464,8 +1470,8 @@ impl MenuUi {
         self.settings_view.set_enhanced_effects_authority(authority)
     }
 
-    /// Source `startCreateLoadoutFinalization` waits for admission. A failed
-    /// submission releases this draft and its native RNG for a real retry.
+    /// Finishing the Create loadout waits for admission. A failed submission returns
+    /// to Create with this draft released and its random stream kept for a real retry.
     pub fn complete_create_loadout(&mut self, started: bool) -> Result<(), String> {
         let Some(pending) = self.pending_start.take() else { return Ok(()) };
         if started {

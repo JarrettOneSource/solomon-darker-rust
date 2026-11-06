@@ -1,4 +1,5 @@
-//! Current `game-host.ts` Enhanced Effects admission and leader-owned changes.
+//! The Enhanced Effects setting: its value at admission and later changes, which only the
+//! party leader can make.
 
 use super::{HostedGameHost, HostedWorlds};
 

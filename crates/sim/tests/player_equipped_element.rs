@@ -1,4 +1,4 @@
-//! Hand-derived controls for the recovered equipped helper in Website ledger010.
+//! Hand-derived controls for the recovered equipped-element helper.
 use solomon_sim::Vec2;
 use solomon_sim::player_presentation::{
     PlayerAttachmentPoses, PlayerSecondaryCastPresentation, player_equipped_element_plan,

@@ -1,4 +1,5 @@
-//! Native elemental projectile births and motion from `primary-spells.ts`.
+//! One-shot projectile births (fireballs, Ether missiles and one-shot Welds) and the
+//! per-tick flight of every primary projectile.
 
 use super::casting::{PlayerWeaponKind, primary_spell_emitter_offset};
 use super::earth::earth_boulder_flight_orientation_step;
@@ -28,6 +29,8 @@ pub(super) fn emitter(
     Vec2::new(wizard.position.x + offset.x, wizard.position.y + offset.y)
 }
 
+/// Inputs for a one-shot cast's projectiles: caster, weapon, profile, targets and the
+/// first spell ID.
 pub(super) struct OneShotBirth<'a> {
     pub first_id: u64,
     pub owner_id: &'a str,
@@ -214,7 +217,7 @@ pub(super) fn advance_projectile(
             spell.common.position = position;
         }
         PrimarySpellProjectile::Fire(spell) => {
-            // Unlike Earth and Ether, the Website keeps this position in doubles.
+            // Unlike Earth and Ether, a fireball keeps its position in doubles.
             spell.common.position.x += spell.common.velocity.x;
             spell.common.position.y += spell.common.velocity.y;
         }

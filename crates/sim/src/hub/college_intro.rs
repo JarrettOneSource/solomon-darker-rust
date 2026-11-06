@@ -1,7 +1,8 @@
-//! College admission from `native-college-intro.ts`, `hub-participant-movement.ts`
-//! and `college-admission-lifecycle.ts`. The session owns this optional state alongside
-//! its existing wizard; no second position, character or participant is retained here.
-//! `college_intro_goldens.rs` replays the complete admission and source arm operations.
+//! College admission: the intro walk through the courtyard and office to the
+//! Arch-Chancellor, its title card, and hub participant movement. The session owns this
+//! optional state alongside its existing wizard; no second position, character or
+//! participant is retained here. `college_intro_goldens.rs` replays the complete admission
+//! and its arm operations.
 
 use std::sync::LazyLock;
 
@@ -53,6 +54,8 @@ static TITLE_SPLINE: LazyLock<NaturalSpline> = LazyLock::new(|| {
     ])
 });
 
+/// The stage of the College intro: the courtyard walk, the office walk, or the dialogue
+/// with the Arch-Chancellor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum CollegeIntroPhase {
@@ -72,6 +75,8 @@ impl CollegeIntroPhase {
     }
 }
 
+/// A participant's progress through the College intro: phase, path and title cursors,
+/// cover fade, office walking speed, arch contact counter and dialogue sequence.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CollegeIntroState {
@@ -105,6 +110,7 @@ impl CollegeIntroState {
     }
 }
 
+/// The point on the intro path the wizard walks toward next, and the advanced path cursor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CollegePathTarget {
     pub path_cursor: f64,
@@ -154,6 +160,7 @@ pub fn step_college_title(state: &mut CollegeIntroState) {
     state.title_cursor = (state.title_cursor + 0.005200000014156103).min(TITLE_SPLINE.extent);
 }
 
+/// The intro's title card: which `Title` bundle record to draw, its alpha and its y position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CollegeTitlePresentation {
     pub alpha: f64,
@@ -180,13 +187,14 @@ pub fn college_office_speed(path_cursor: f64, current_speed: f64) -> f64 {
     if path_cursor <= 4.0 {
         return 1.0;
     }
-    // The source stops decaying after crossing the threshold; it does not clamp back to it.
+    // Decay stops once the speed crosses the threshold; it does not clamp back to it.
     if current_speed <= fround(0.5) {
         return current_speed;
     }
     fround(current_speed * fround(0.99000001))
 }
 
+/// One tick of the arch contact counter: its new count and whether the dialogue starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CollegeContactStep {
     pub activate: bool,
@@ -252,6 +260,7 @@ pub fn hub_participant_onboarding_collision_bypass_active(
                 .is_some_and(|transition| transition.phase == HubTransitionPhase::CollegeLoadout))
 }
 
+/// Where a wizard starting the College intro appears, and which way it faces.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubCollegeIntroSpawn {
     pub position: Vec2,
@@ -259,8 +268,9 @@ pub struct HubCollegeIntroSpawn {
     pub heading_index: usize,
 }
 
-/// An arm operation never advances gameplay RNG. The session commits the source starter
-/// appearance, optional fresh character/participant and idle primary cast atomically.
+/// What arming the College intro changes. An arm operation never advances gameplay RNG:
+/// the starter appearance is rolled from the offer seed. The session commits that
+/// appearance, the optional fresh wizard and the idle primary cast atomically.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubCollegeIntroArmPlan {
     pub appearance: StarterEquipmentAppearance,
@@ -304,6 +314,8 @@ pub fn plan_hub_college_intro_arm(
     })
 }
 
+/// A hub participant's movement this tick, before collision: the intro path target while
+/// walking the College intro, and any scripted plan.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubParticipantMovementPlan {
     pub college_target: Option<CollegePathTarget>,
@@ -311,12 +323,15 @@ pub struct HubParticipantMovementPlan {
     pub plan: Option<HubWizardPlan>,
 }
 
+/// Whether a hub participant's College admission is pending and its renderer is ready.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HubParticipantStepOptions {
     pub college_intro_pending: bool,
     pub renderer_ready: bool,
 }
 
+/// What a hub participant's step reports: whether its pending College admission has
+/// finished.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HubParticipantStepResult {
     pub clear_college_intro_pending: bool,

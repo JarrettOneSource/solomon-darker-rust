@@ -3,6 +3,8 @@ use std::time::{Duration, Instant};
 
 use super::{FLUSH_INTERVAL_MS, flush};
 
+/// Adds the app's elapsed time to the stored playtime total every 30 seconds, from
+/// `tick`, and when dropped.
 pub struct PlaytimeRecorder {
     marked_at: Cell<f64>,
     next_flush: Instant,

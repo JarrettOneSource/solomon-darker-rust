@@ -29,6 +29,8 @@ use crate::gpu_ui::{StockAtlas, UiFrame};
 use crate::ui::portraits::StockPortraits;
 pub use hosted::HostedSocialAction;
 
+/// Per-frame social interface inputs: visibility, chat availability, suspended input,
+/// player card feedback, and the left offset chat keeps clear of the gold readout.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SocialUiContext {
     pub visible: bool,
@@ -61,6 +63,8 @@ enum Intent {
     PartyCopied { code: String, copied: bool },
 }
 
+/// The social interface: chat, Party controls, player cards and ally rows, drawn from
+/// the host's social snapshot.
 pub struct SocialUi {
     ui: StockAtlas,
     bonedit: StockAtlas,
@@ -215,8 +219,8 @@ impl SocialUi {
         self.mark_activity();
     }
 
-    /// `GameChat.tsx` recreates its live-list ownership for a new session, even for
-    /// the same player when an intermediate empty snapshot was never painted.
+    /// A new session restarts chat announcements, even for the same player when an
+    /// intermediate empty snapshot was never painted.
     pub fn reset_chat_announcements(&mut self) {
         self.chat_announcements.reset();
         self.chat_status = None;
@@ -270,8 +274,8 @@ impl SocialUi {
         Ok(())
     }
 
-    /// Actual Source Social context, from auto children through local z52000.
-    /// Both chat Orders are genuine variants of the same source child.
+    /// Every social layer in drawing order, from the party panel up to the College
+    /// invitation. The two chat layers are the same chat surface, closed and open.
     pub fn fixed_layers() -> [egui::LayerId; 9] {
         [
             Self::party_layer(),

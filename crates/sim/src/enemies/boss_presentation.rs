@@ -1,5 +1,5 @@
-//! Boss sprite stacks and Ultra Banish gradients from `native-boss-spell-presentation.ts`
-//! and `native-ultra-banish-presentation.ts`. Mesh-only spells retain their own view paths.
+//! Draw plans for boss spells: their sprite stacks and the Ultra Banish gradients.
+//! Mesh-only spells retain their own view paths.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
 use super::boss_spell::{BossSpell, BossSpellKind};
@@ -8,6 +8,7 @@ use super::presentation::death_magic_layers;
 use crate::float;
 use crate::{Rng, Vec2};
 
+/// What a boss spell draws this frame: sprite layers and Ultra Banish gradients.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EnemyBossSpellPlan {
     pub gradients: Vec<EnemyBanishGradient>,

@@ -1,4 +1,5 @@
-//! Per-mod save rows from Website `host/prepared-mod-save.ts`.
+//! Per-mod save rows: each prepared mod's state cells, timers, effects and cooldowns,
+//! keyed by mod ID.
 //!
 //! These functions project the canonical ten-domain host checkpoint. Decoding
 //! follows this boundary's validation; engine restoration subsequently validates
@@ -14,7 +15,7 @@ pub use decode::decode_prepared_mod_save_state;
 pub use encode::encode_prepared_mod_save_state;
 
 fn content_owner<'a>(mods: &'a [CompiledWebLuaMod], content_id: &str) -> Option<&'a str> {
-    // Source constructs a Map in mod/content order. A later duplicate identity
+    // Content maps to its owner in mod/content order, so a later duplicate identity
     // owns the entry at this codec boundary, independently of catalog admission.
     for module in mods.iter().rev() {
         if module.content.iter().any(|content| content.content_id == content_id) {

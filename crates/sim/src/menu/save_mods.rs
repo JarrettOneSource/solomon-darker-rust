@@ -1,16 +1,18 @@
-//! Website `save/game-save-mods.ts`: compare the actual saved and enabled
-//! content identities before the host admits a changed-content continuation.
+//! Compares a save's recorded content identities with the enabled ones before the host
+//! admits a continuation with changed content.
 
 use std::collections::BTreeMap;
 
 use crate::modding::identity::GameContentIdentity;
 
+/// A mod whose saved and active versions or content hashes differ.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChangedSaveMod {
     pub active: GameContentIdentity,
     pub saved: GameContentIdentity,
 }
 
+/// How a save's mods differ from the enabled mods: added, changed and removed identities.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameSaveModMismatch {
     pub added: Vec<GameContentIdentity>,
@@ -23,8 +25,8 @@ pub fn game_save_mod_mismatch(
     saved: &[GameContentIdentity],
     active: &[GameContentIdentity],
 ) -> Option<GameSaveModMismatch> {
-    // JavaScript Map keeps the final duplicate identity. Output still follows
-    // the original arrays' insertion order, including retained duplicate rows.
+    // Each lookup keeps the last entry for a duplicated ID. Output still follows
+    // the input order, including duplicate rows.
     let saved_by_id: BTreeMap<_, _> =
         saved.iter().map(|entry| (entry.id.to_lowercase(), entry)).collect();
     let active_by_id: BTreeMap<_, _> =

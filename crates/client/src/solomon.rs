@@ -1,4 +1,5 @@
-//! Thin GPU view of the retained opening encounter (`renderer/boneyard-solomon-view.ts`).
+//! Thin GPU view of Solomon's opening encounter: his dig, body, lantern, grave mark
+//! and thrown dirt.
 
 use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
@@ -16,6 +17,8 @@ use crate::courtyard::Camera;
 use solomon_graphics::assets::load_image;
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
+/// One frame's inputs for drawing Solomon: the tick, lantern position, painter
+/// registrations and set-piece lighting.
 pub struct SolomonViewFrame {
     pub tick: u64,
     pub lantern_position: Option<Vec2>,
@@ -36,6 +39,8 @@ struct PreparedSolomon {
     lighting: SolomonSetPieceLighting,
 }
 
+/// Solomon's encounter textures and sprites, the dirt paint state, and the visual state
+/// and painters prepared for the current frame.
 pub struct SolomonView {
     dig: Texture,
     encounter: Texture,
@@ -165,7 +170,7 @@ impl SolomonView {
             );
         }
         // The mask belongs to body and mouth only. The planted grave and thrown dirt are
-        // later actor children and remain outside it, preserving the source's child order.
+        // later children of the actor and remain outside it, keeping their draw order.
         if visual.grave_mark_visible {
             draw_registered(
                 renderer,
@@ -250,7 +255,7 @@ fn draw_clipped_cell(
     let width = right - left;
     let height = bottom - top;
     // The sprites are unrotated 200-unit cells, so intersecting the world mask and shifting
-    // its UV rectangle is exactly the source Graphics mask without another render target.
+    // its UV rectangle is exactly a rectangular mask without another render target.
     renderer.draw(
         texture,
         Quad {

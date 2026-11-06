@@ -11,6 +11,7 @@ use solomon_sim::modding::ui::{
     ModMinimapMarkerId, ModMinimapMarkerKind, ModMinimapSnapshot, project_mod_minimap,
 };
 
+/// A clicked minimap action: its authored name, the minimap's content ID and displayed center.
 pub struct ModMinimapAction {
     pub content_id: String,
     pub action: String,
@@ -32,6 +33,7 @@ struct Minimap {
     binding: Option<String>,
     actions: Vec<String>,
 }
+/// The mod-authored minimap overlay and the action buttons clicked on it.
 pub struct ModMinimapView {
     model: Option<Minimap>,
     actions: Vec<ModMinimapAction>,
@@ -183,7 +185,7 @@ impl ModMinimapView {
                         Color32::from_rgb(238, 227, 196),
                     )?;
                 }
-                // Source overlays each declared action at the same anchor, preserving order.
+                // Every declared action button is drawn at the same anchor, in declared order.
                 for action in &model.actions {
                     let font = FontId::new(10.0, FontFamily::Name("Alegreya".into()));
                     let label = crate::gpu_ui::font_run(

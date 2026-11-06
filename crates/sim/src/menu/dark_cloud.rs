@@ -1,11 +1,12 @@
-//! NativeDarkCloudPresentation.tsx and native-dark-cloud-contract.ts: the five
-//! authored tab bands and their bounded, horizontally scrollable view scale.
+//! The Dark Cloud menu's tab strip: the five authored tab bands and their bounded,
+//! horizontally scrollable view scale.
 
 use crate::hud::HudRect;
 
 pub const DARK_CLOUD_TAB_STRIP_WIDTH: f64 = 1122.0;
 pub const DARK_CLOUD_TAB_STRIP_HEIGHT: f64 = 69.0;
 
+/// A Dark Cloud tab: mods, subscribed mods, parties, layouts or Boneyards.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DarkCloudTab {
     Mods,
@@ -57,6 +58,7 @@ impl DarkCloudTab {
     }
 }
 
+/// The laid-out tab strip: its width, height and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DarkCloudTabStrip {
     pub width: f64,
@@ -77,8 +79,8 @@ impl DarkCloudTabStrip {
     }
 }
 
-/// Below0.4 the Source labels stop reading; preserve a wider scrollable strip
-/// instead of shrinking the fifth route out of view.
+/// Below a scale of 0.4 the labels stop being readable, so the strip stays wider and
+/// scrolls instead of shrinking the fifth tab out of view.
 #[must_use]
 pub fn dark_cloud_tab_strip(width: f64, height: f64) -> DarkCloudTabStrip {
     let scale = 1.0_f64

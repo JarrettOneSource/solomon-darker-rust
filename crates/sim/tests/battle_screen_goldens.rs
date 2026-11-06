@@ -1,4 +1,5 @@
-//! Screen transforms preserve the source's local-player anchor and signed edge cover.
+//! Screen transforms reproduce the local-player anchor and signed edge cover recorded
+//! from the Website client.
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::presentation::{

@@ -1,8 +1,8 @@
 //! The teacher's cast cycle and the spell burst it releases.
 //!
 //! The teacher casts for 268 ticks, releases a burst that fades over the next 79, and idles
-//! until the 847-tick cycle wraps. The burst's members decay the way the native actors did,
-//! one single-precision subtraction per tick. Reference: `Website/frontend/src/game/hub-teacher.ts`.
+//! until the 847-tick cycle wraps. The burst's members decay the way the original game's actors
+//! do, one single-precision subtraction per tick.
 
 use super::painter::{PainterLane, PainterLayer};
 use crate::collision::Vec2;
@@ -14,7 +14,7 @@ pub const HUB_TEACHER_TICKS_PER_SECOND: u64 = 100;
 pub const HUB_TEACHER_CAST_TICKS: u64 = 268;
 pub const HUB_TEACHER_IDLE_START_TICK: u64 = 347;
 pub const HUB_TEACHER_CYCLE_TICKS: u64 = 847;
-/// `HubWorldScene` constructs the College teacher at this fixed actor root.
+/// The College teacher's fixed actor root.
 pub const HUB_TEACHER_POSITION: Vec2 = Vec2::new(576.5, 710.5);
 pub const HUB_TEACHER_PAINTER_ORDINAL: usize = 5;
 /// `Teacher::Cast` spawns its children at actor + (-38, 40 - 25).
@@ -26,6 +26,7 @@ pub const HUB_TEACHER_RUNE_ALPHA: f64 = 0.25;
 /// The burst's frame strip has eleven frames.
 pub const HUB_TEACHER_BURST_FRAME_COUNT: u32 = 11;
 
+/// The part of the teacher's cycle: casting, releasing the burst, or idle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubTeacherPhase {
     Cast,
@@ -86,7 +87,7 @@ pub struct HubTeacherBurstFrames {
     pub frame: u32,
 }
 
-/// Everything the burst draws at one tick (`hubTeacherBurstAt`).
+/// Everything the burst draws at one tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubTeacherBurst {
     /// Ticks since this release began; `None` while the teacher is still casting.
@@ -100,7 +101,7 @@ pub struct HubTeacherBurst {
     pub visible: bool,
 }
 
-/// The `HubTeacherView` presentation at one world tick. The rune and body use the teacher's
+/// The teacher's presentation at one world tick. The rune and body use the teacher's
 /// actor painter, the flare uses the pre-world band, and the core uses the post-world band.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubTeacherDrawPlan {
@@ -110,8 +111,7 @@ pub struct HubTeacherDrawPlan {
     pub world_painters: Option<[PainterLayer; 2]>,
 }
 
-/// The ambient owner retains these registrations for one release, exactly as
-/// `HubTeacherWorldReleaseState` in `core-server/hub-ambient.ts`.
+/// The two transient painter registrations the ambient owner retains for one release.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubTeacherWorldRelease {
@@ -143,7 +143,7 @@ pub fn hub_teacher_draw_plan(
     }
 }
 
-/// `stepHubAmbient` reserves both transient registrations when a release starts and retains
+/// The ambient step reserves both transient registrations when a release starts and retains
 /// them until both world members are hidden. With no manager attached, ordinals are derived
 /// from release order; keeping them derived avoids a second lifetime to synchronize.
 #[must_use]
@@ -162,9 +162,6 @@ pub fn hub_teacher_world_painters(burst: &HubTeacherBurst) -> Option<[PainterLay
 }
 
 /// The burst at `absolute_tick`.
-///
-/// The reference takes elapsed seconds and recovers the tick with a floor and a small
-/// epsilon; the port takes the tick itself, which is what the ambient clock holds.
 #[must_use]
 pub fn hub_teacher_burst_at(absolute_tick: u64, seed: u32) -> HubTeacherBurst {
     let cycle_tick = absolute_tick % HUB_TEACHER_CYCLE_TICKS;
@@ -219,9 +216,9 @@ pub fn hub_teacher_burst_at(absolute_tick: u64, seed: u32) -> HubTeacherBurst {
 
 impl HubTeacherBurst {
     /// Whether the burst still needs its two world painters. The column and the frame strip
-    /// sort among the actors (`stepHubAmbient` registers them in the transient lane while
+    /// sort among the actors (the ambient step registers them in the transient lane while
     /// either is visible). The flare belongs to the pre-world band and the core to the
-    /// post-world band (`renderer/hub-world-scene.ts`, `HubTeacherView`).
+    /// post-world band.
     #[must_use]
     pub fn needs_world_painters(&self) -> bool {
         self.column.visible || self.frames.member.visible
@@ -241,7 +238,7 @@ fn decay(initial: f64, loss: f64, age_ticks: u64) -> f64 {
     value
 }
 
-/// A stable 32-bit word for one (seed, tick, channel) triple: the reference's integer hash.
+/// A stable 32-bit word for one (seed, tick, channel) triple, from an integer hash.
 fn teacher_word(seed: u32, tick: u64, channel: u32) -> u32 {
     let tick = tick as u32;
     let mut value = seed

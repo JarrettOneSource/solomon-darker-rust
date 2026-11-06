@@ -1,7 +1,7 @@
 #![cfg(feature = "persistence")]
-//! Actual current Inventory skill commands are accepted transactions, not input ticks.
-//! Independent equipment/Sack cases retain the exact-UID ownership contract from
-//! Website native-parity ledger 255 without regenerating the recorded skill fixture.
+//! Inventory skill commands are accepted transactions, not input ticks. Independent
+//! equipment and Sack cases check the exact-UID ownership contract without regenerating
+//! the recorded skill fixture.
 
 #[path = "support/secondary.rs"]
 #[allow(dead_code)] // This Session fixture uses only the shared secondary row projection.

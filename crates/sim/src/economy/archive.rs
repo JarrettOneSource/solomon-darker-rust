@@ -1,4 +1,5 @@
-//! Completed-run and Last Word retention from Website `core-kernels/hub-economy.ts`.
+//! The economy side of a finished run: retained items are packed into a named Sack in storage
+//! and the wizard restarts from the starter loadout. Hagatha's Last Word stores its own Sack.
 //! The run owner supplies its carried-item policy; this module owns ids, packing and restock.
 
 use crate::appearance::roll_starter_equipment_appearance;
@@ -15,6 +16,9 @@ use super::{
 pub const RETAINED_SACK_SUFFIXES: [&str; 5] =
     ["Earthly Possessions", "Stuff", "Dead Stuff", "Bag", "Loot"];
 
+/// What a finished run hands to the economy: the name for the retained Sack, the Gold and
+/// items left on the ground, the element for the next starter outfit, and whether carried
+/// items are kept.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CompletedRunEconomyArchive<'a> {
     pub display_name: &'a str,
@@ -74,8 +78,8 @@ impl HubEconomyState {
                 self.next_item_id += 1;
             }
         }
-        // Website draws the appearance from this state without feeding its returned RNG into
-        // restock. Cloning preserves that separate draw lane instead of advancing shop draws.
+        // The starter appearance draws from a copy of the shop stream, so the restock below
+        // starts from the same state and appearance draws never advance shop draws.
         let mut appearance_rng = self.rng.clone();
         let appearance =
             roll_starter_equipment_appearance(&mut appearance_rng, archive.starter_element.into());
@@ -97,7 +101,7 @@ impl HubEconomyState {
     }
 
     /// Native Last Word has a distinct bounded continuation chain and never consolidates
-    /// full storage; failure leaves the source inventory and id counter unchanged.
+    /// full storage; failure leaves storage and the item id counter unchanged.
     pub fn archive_hagatha_last_word_items(
         &mut self,
         items: &[HubInventoryItem],

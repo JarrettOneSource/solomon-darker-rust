@@ -1,4 +1,4 @@
-//! Source `ml-bot-policy/enemy-extensions.ts`: family clocks, shields and statuses.
+//! The bot's per-enemy extension block: family clocks, shields and statuses.
 
 use crate::enemies::config::EnemyFamilyConfig;
 use crate::enemies::model::*;
@@ -36,8 +36,8 @@ pub fn observe_ml_bot_policy_enemy_extensions(
         if let Some(index) = species {
             block[start + index] = 1.0;
         } else if start > 0 {
-            // The deployed v7 Source uses indexOf on nine legacy species. Its -1
-            // typed-array write is ignored for slot zero, and lands in the prior
+            // The deployed v7 model receives this encoding: a species outside these
+            // nine legacy entries sets no flag in slot zero, and sets the prior
             // row's last field for later slots. Keep that actual model input.
             block[start - 1] = 1.0;
         }

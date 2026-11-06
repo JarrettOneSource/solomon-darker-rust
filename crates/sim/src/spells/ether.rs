@@ -1,6 +1,6 @@
-//! Ether Blast charge, health-scaled pulse and stock particle program from
-//! `core-kernels/native-ether-blast.ts`. The live actor saves its starting RNG;
-//! rendering can reconstruct the particles without consuming world randomness.
+//! Ether Blast: its charge, the health-scaled pulse and the stock particle program.
+//! The live actor saves its starting RNG, so rendering can reconstruct the particles
+//! without consuming world randomness.
 
 pub use super::casting::{ETHER_BLAST_WEAPON_PULSE, PLAYER_WEAPON_PULSE_DECAY};
 use super::targeting::direction_from_heading;
@@ -14,12 +14,15 @@ pub const ETHER_BLAST_PRESENTATION_RNG_WORDS: usize = 720;
 pub const ETHER_BLAST_SCREEN_FLASH_DECAY: f64 = 0.025_f32 as f64;
 pub const NATIVE_ETHER_BLAST_SCREEN_GREEN: f64 = 0.25;
 
+/// One tick of Ether Blast charging: the new charge and whether it crossed a whole charge.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EtherBlastChargeStep {
     pub charge: f64,
     pub crossed_integer: bool,
 }
 
+/// One Ether Blast particle as constructed: offset, velocity, damping, rotation, scale,
+/// color, alpha loss and sprite record.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EtherBlastParticle {
     pub alpha_loss: f64,
@@ -34,6 +37,7 @@ pub struct EtherBlastParticle {
     pub velocity: Vec2,
 }
 
+/// An Ether Blast particle's position and alpha at a given age.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EtherBlastParticleFrame {
     pub particle: EtherBlastParticle,

@@ -1,4 +1,4 @@
-//! `HubScene`'s actual first Party invitation and `NativeUiPartyInvitation.tsx`.
+//! The first pending Party invitation, shown in the Hub.
 //! The host retains invitation membership; this view only paints the borrowed row
 //! and sends its original ID back through the canonical accept/deny actions.
 

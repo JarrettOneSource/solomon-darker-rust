@@ -1,4 +1,4 @@
-//! The source developer Console's admission, lazy VM owner and world epochs.
+//! The developer Console: Lua execution admission, its lazily created VM and per-tick epochs.
 //! The VM is temporarily taken while its scoped native callbacks borrow this same
 //! authority. No player, Session or executable runtime is cloned for a callback.
 
@@ -21,12 +21,15 @@ use super::{HostedGameHost, HostedWorlds};
 use crate::host::authority::send_control;
 use crate::host::connection::HostConnection;
 
+/// The Console's Lua VM, the player who owns it and the events waiting for dispatch.
 pub(super) struct HostedConsole {
     pub owner_player_id: String,
     pub runtime: WebLuaRuntime,
     pub pending_events: Vec<WebLuaDerivedEvent>,
 }
 
+/// One tick of Console work: the owner's world before the tick, the owner's party and the
+/// enemy spawns its commands requested.
 pub(super) struct ConsoleWorldEpoch {
     before: GameSimulationEventSnapshot,
     owner_player_id: String,
@@ -64,9 +67,9 @@ impl WebLuaRuntimeBindings for ConsoleBindings<'_> {
 }
 
 impl HostedGameHost {
-    /// `client-lua-execute`: ordinary rejection is a LuaResult, while a duplicate
-    /// currently pending ID is a protocol error. Enabled Cheats is deliberately
-    /// absent here: Source separates UI visibility from this wire admission.
+    /// A `LuaExecute` command: ordinary rejection is a `LuaResult`, while a duplicate
+    /// pending request ID is a protocol error. Enabled Cheats is deliberately not checked:
+    /// it governs whether the Console is shown, not whether the host admits an execution.
     pub(in crate::host) fn enqueue_lua_execution(
         &mut self,
         connection: &mut HostConnection,
@@ -175,7 +178,7 @@ impl HostedGameHost {
                 ConsoleBindings { host: self, owner_player_id: &console.owner_player_id };
             console.runtime.begin_tick(next_tick, &mut bindings)
         };
-        // Restore the actual owner before propagating an execution failure so the
+        // Put the Console back before propagating an execution failure so the
         // fatal host boundary can close that same VM and its pending requests.
         self.console = Some(console);
         operation?;

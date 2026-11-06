@@ -86,6 +86,8 @@ struct AudioState {
     music_paused: bool,
 }
 
+/// The game's audio director: cue playback, owned loops, narration mixing and music
+/// scenes over the platform audio engine.
 pub struct GameAudio {
     state: Rc<RefCell<AudioState>>,
     #[cfg(target_arch = "wasm32")]
@@ -204,7 +206,7 @@ impl GameAudio {
     }
 
     /// Boss speech ducks music and sound effects. Narration streams still use the
-    /// player's sound volume but bypass this mix, matching `setSoundMixVolume`.
+    /// player's sound volume but bypass this mix.
     pub fn set_narration_mix(&self, mix: f64) {
         let mut state = self.state.borrow_mut();
         state.narration_mix = solomon_sim::hud::clamp_unit(mix);

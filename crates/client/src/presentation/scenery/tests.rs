@@ -109,8 +109,8 @@ fn endpoint_poses(value: &Value) -> TreeActorPoses {
         enemy["animationState"] = enemy["animation"]["state"].clone();
         enemy["coffinState"] = enemy["animation"]["coffinState"].clone();
     }
-    // serde_json's object map is sorted; the Source endpoint's two explicit
-    // player keys have a different insertion order, which this fixture retains.
+    // serde_json's object map is sorted, but the recorded endpoint listed its two
+    // player keys in a different order; the sort below restores it.
     let mut result = poses(&projected);
     result.players.sort_by_key(|player| if player.id == "local" { 0 } else { 1 });
     result

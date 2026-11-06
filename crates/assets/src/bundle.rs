@@ -29,6 +29,7 @@ impl SpriteRecord {
     }
 }
 
+/// Why a stock bundle could not be read, naming the offending record.
 #[derive(Clone, Debug, PartialEq)]
 pub enum BundleError {
     Truncated { index: usize, offset: usize },

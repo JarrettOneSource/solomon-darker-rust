@@ -1,5 +1,5 @@
 //! Stock Inventory, learned Skillbook and College interactions. Accepted snapshots
-//! enter once; GPU views emit the same typed commands as the source controllers.
+//! enter once; GPU views emit typed `PlayerPanelAction` commands for the session.
 mod boasts;
 pub(crate) mod chrome;
 mod crafting;
@@ -89,10 +89,11 @@ pub struct InventoryPreviewUnderlay {
     pub alpha: f64,
 }
 
+/// The accepted player state the Inventory, Skills and service panels read each frame.
 pub struct PlayerPanelSnapshot<'a> {
     pub selection: &'a NewGameSelection,
     pub book: &'a SkillBookState,
-    /// Actual per-player authority, used by the source snapshot's primary summary.
+    /// The player's own stat book, used by the Inventory's primary spell summary.
     /// Stock Skills page text intentionally remains the immutable native catalog.
     pub stat_book: &'a PlayerStatBookComponent,
     pub economy: &'a HubEconomyState,
@@ -107,12 +108,14 @@ pub struct PlayerPanelSnapshot<'a> {
     pub attributes: InventoryAttributes,
     pub concentrations: &'a [Option<usize>; 2],
     pub mind_chug_active: bool,
-    /// Source Hub interactions permit charm removal; Boneyard surfaces only inspect them.
+    /// Charms can be removed in the Hub; Boneyard surfaces only inspect them.
     pub perk_removal_enabled: bool,
     pub kills: u64,
     pub awesomeness: u64,
 }
 
+/// A command from the player panels for the session to apply, such as opening a panel, an
+/// Inventory or belt action, or a spell selection.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlayerPanelAction {
     OpenInventory,
@@ -128,6 +131,7 @@ pub enum PlayerPanelAction {
     SelectConcentrationSlot { skill_id: usize, slot: usize },
 }
 
+/// Which player panel is open: Inventory, Skills, a skill selector, NPC dialogue or a service.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayerPanel {
     Inventory,
@@ -241,6 +245,8 @@ struct Press {
     dragging: bool,
 }
 
+/// The player's book panels (Inventory, Skills, selectors, dialogue and services): their state,
+/// input, animations and the commands they emit.
 pub struct PlayerPanels {
     inventory_flybys: Vec<flyby::InventoryFlyby>,
     model: Option<model::PanelModel>,
@@ -487,12 +493,12 @@ impl PlayerPanels {
     pub fn layer_ids(&self) -> Vec<egui::LayerId> {
         chrome::book_layers(self.layer_id(), self.compact)
     }
-    /// The restored Source NativeUiDialog occupies the native top-layer plane.
+    /// The skill book result dialog has its own modal layer above the book.
     /// Its receipt-scoped identity records each actual opening independently.
     pub fn skill_book_result_layer_id(&self) -> Option<egui::LayerId> {
         self.skill_book_feedback.layer_id()
     }
-    /// Source attaches the NPC notebox directly to the viewport, outside the book.
+    /// The NPC notebox has its own viewport layer, outside the book's layers.
     pub fn notebox_layer_id(&self) -> egui::LayerId {
         notebox::NpcNotebox::layer_id()
     }
@@ -729,8 +735,9 @@ impl PlayerPanels {
                     self.panel,
                     Some(PlayerPanel::Inventory | PlayerPanel::Skills | PlayerPanel::Service(_))
                 ) {
-                    // Report 22: Menu closes the whole optional book; the
-                    // Inventory binding and footer retain one-Sack Back.
+                    // Menu closes the whole optional book; the Inventory binding and
+                    // footer retain one-Sack Back ("Optional Inventory and Skills
+                    // navigation" in docs/DECISIONS.md).
                     self.close(now, None);
                 } else {
                     self.back(now)?;
@@ -1093,8 +1100,8 @@ impl PlayerPanels {
                                 ))
                             }
                             HubItemKind::Equipment => {
-                                // `equipmentSlotsForItem` excludes the third ring until
-                                // Disfiguring Curse unlocks it, even when that slot is empty.
+                                // The third ring slot is excluded until Disfiguring Curse
+                                // unlocks it, even when that slot is empty.
                                 let slots = belt_equipment_slots(
                                     item,
                                     snapshot.economy.owned_perk_selectors.contains(&19),
@@ -1219,8 +1226,8 @@ impl PlayerPanels {
                 || self.inventory_transition_locked(),
         )? {
             self.bursts.borrow_mut().clear();
-            // The source remounts belt pointer owners per bank, but retains the
-            // selected visible target slot in the surrounding Skillbook.
+            // A bank change drops belt presses and selection, but keeps the targeted
+            // visible slot in the surrounding Skillbook.
             if let Some(slot) = self.target_belt {
                 self.target_belt = Some(self.hotbar.slot(slot % BELT_SLOT_COUNT));
             }
@@ -1241,15 +1248,15 @@ impl PlayerPanels {
             && let Some(text) =
                 hub_boast_failure_text(&snapshot.economy.npc.boast, snapshot.mod_content)
         {
-            // A late metadata message can supply the name; Source consumes
-            // this sequence only once it can actually present the failure.
+            // A late metadata message can supply the name, so the sequence is consumed
+            // only once the failure can actually be presented.
             self.boast_failure_sequence = Some(sequence);
             self.sound(AudioCue::BoastFailure);
             self.npc_notebox.show(&self.ui, NoteboxKind::Failure, &text, now)?;
         } else if self.boast_failure_sequence.is_none() {
             self.boast_failure_sequence = Some(sequence);
         }
-        // A selected source keeps its ownership. Equipping or consuming an item must
+        // A selection keeps the container it came from. Equipping or consuming an item must
         // not reinterpret its old backpack id as a newly equipped item.
         let selection_exists = match self.selected {
             Some(Target::Item(id)) => find_inventory_item(&snapshot.economy.backpack, id).is_some(),
@@ -1648,9 +1655,9 @@ fn panel_keys(
             modified: key.alt || key.ctrl || key.meta,
         })
         .collect();
-    // Gamepad Back is a genuine egui Escape, without a browser KeyboardEvent.
-    // Preserve the old MenuNavigation back result through the same typed owner,
-    // while a physical Escape remains exactly one event.
+    // Gamepad Back arrives as an egui Escape with no platform key event. Add it as one
+    // Escape panel key so it takes the same Back path, while a physical Escape remains
+    // exactly one event.
     if open
         && ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
         && !keys.iter().any(|key| key.code == "Escape")

@@ -1,6 +1,6 @@
-//! Primary spell actors from `core-kernels/primary-spells.ts` and
-//! `primary-spell-fire-effects.ts`. Family modules own the rules; these rows retain
-//! identity, painter ownership and the fields shared with rendering and contacts.
+//! Primary spell projectiles and effects, and the per-tick results of casting them.
+//! Family modules own the rules; these rows retain identity, painter ownership and the
+//! fields shared with rendering and contacts.
 
 use super::earth_debris::WeldBoulderDebrisParticleState;
 use super::weld::{FlameLashFactoryInput, WeldProjectileState, WeldWorldActor};
@@ -14,6 +14,7 @@ pub use super::transient_storage::PrimaryTransients;
 
 pub type EarthBoulderOrientation = [f64; 9];
 
+/// Whether a projectile is still held by its caster or in flight.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PrimarySpellProjectilePhase {
@@ -89,6 +90,7 @@ pub struct PrimarySpellFireProjectile {
     pub underpowered: bool,
 }
 
+/// A primary spell projectile of any family.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PrimarySpellProjectile {
@@ -118,6 +120,7 @@ impl PrimarySpellProjectile {
     }
 }
 
+/// Identity, age, owner and painter registrations shared by every primary spell effect.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellTransientBase {
@@ -129,6 +132,8 @@ pub struct PrimarySpellTransientBase {
     pub world_key: String,
 }
 
+/// One Lightning strike from the Air primary: its path from origin through midpoint to
+/// endpoint, its target and whether it chained.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellAirTransient {
@@ -148,6 +153,8 @@ pub struct PrimarySpellAirTransient {
     pub variant: u32,
 }
 
+/// One Frost jet particle from the Water primary: origin, direction, speed and any
+/// terrain obstruction.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellWaterTransient {
@@ -161,6 +168,8 @@ pub struct PrimarySpellWaterTransient {
     pub variant: u32,
 }
 
+/// The rock burst where a boulder lands; its fragments replay from its charge and birth
+/// tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellEarthImpact {
@@ -178,6 +187,7 @@ const fn default_earth_impact_enhanced_effects() -> bool {
     true
 }
 
+/// One debris bit thrown off by a boulder contact.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellEarthBoulderBit {
@@ -188,6 +198,8 @@ pub struct PrimarySpellEarthBoulderBit {
     pub position: Vec2,
 }
 
+/// A rock that rises around a held boulder and spirals into it, then falls once the
+/// boulder is released.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellEarthCalledRock {
@@ -206,6 +218,7 @@ pub struct PrimarySpellEarthCalledRock {
     pub variant: u32,
 }
 
+/// A particle shed each tick by a fireball in flight.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellFireParticle {
@@ -217,6 +230,7 @@ pub struct PrimarySpellFireParticle {
     pub variant: u32,
 }
 
+/// The burst drawn where an Ether missile hits.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellEtherImpact {
@@ -226,6 +240,7 @@ pub struct PrimarySpellEtherImpact {
     pub visual_scale: f64,
 }
 
+/// The streak drawn where an Ether missile pierces a target.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellEtherPierceStreak {
@@ -235,6 +250,7 @@ pub struct PrimarySpellEtherPierceStreak {
     pub visual_scale: f64,
 }
 
+/// An Ether Blast pulse: its charges, origin and the saved RNG its particles replay from.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellEtherBlast {
@@ -245,6 +261,7 @@ pub struct PrimarySpellEtherBlast {
     pub presentation_rng: Rng,
 }
 
+/// The flash drawn where a fireball hits.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellFireImpact {
@@ -252,6 +269,8 @@ pub struct PrimarySpellFireImpact {
     pub origin: Vec2,
 }
 
+/// A bouncing ember scattered by a fireball's detonation: its damage, motion, life and
+/// what it becomes when spent.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellFireEmber {
@@ -269,6 +288,7 @@ pub struct PrimarySpellFireEmber {
     pub vertical_velocity: f64,
 }
 
+/// Whether an explosion is drawn as Fire or as Steam.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum FireExplosionPresentation {
@@ -276,6 +296,7 @@ pub enum FireExplosionPresentation {
     Steam,
 }
 
+/// A Fire or Steam explosion: its damage, burn, footprint, scale and sound pitch.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellFireExplosion {
@@ -289,6 +310,7 @@ pub struct PrimarySpellFireExplosion {
     pub visual_scale: f64,
 }
 
+/// A friendly Imp born from a spent ember, which hunts enemies until its time runs out.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellFireGoodImp {
@@ -322,6 +344,8 @@ pub struct PrimarySpellFireGoodImp {
     pub vertical_velocity: f64,
 }
 
+/// The native fire patch type. A Moving patch defaults to a higher draw alpha and a
+/// slower animation step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum FirePatchType {
@@ -330,6 +354,8 @@ pub enum FirePatchType {
     Moving,
 }
 
+/// A patch of fire on the ground that damages enemies within its radius until its life
+/// runs out.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellFirePatch {
@@ -366,6 +392,7 @@ pub struct PrimarySpellAirHurricane {
     pub position: Vec2,
 }
 
+/// A Cold Aura around a Water caster: its rotation, fade and duration.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellWaterAura {
@@ -378,6 +405,7 @@ pub struct PrimarySpellWaterAura {
     pub rotation_step_degrees: f64,
 }
 
+/// A Water Hail stone thrown from the Frost jet, bouncing until its life runs out.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimarySpellWaterHail {
@@ -398,6 +426,7 @@ pub struct PrimarySpellWaterHail {
     pub vertical_velocity: f64,
 }
 
+/// A primary spell effect of any kind, kept in the shared transient queue.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PrimarySpellTransient {
@@ -475,6 +504,7 @@ impl PrimarySpellTransient {
     }
 }
 
+/// The primaries that channel: Air, Water and the channel Welds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimarySpellChannelKind {
     Air,
@@ -482,6 +512,8 @@ pub enum PrimarySpellChannelKind {
     Weld,
 }
 
+/// What drawing a Flame Lash main ribbon needs: geometry, midpoint, target, unclipped
+/// endpoint, camera displacement and the creator's registration.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrimarySpellFlameLashPresentation {
     /// None is an older non-retained emission; Some(None) is a weak native birth.
@@ -493,6 +525,8 @@ pub struct PrimarySpellFlameLashPresentation {
     pub creator_registration: Option<PainterRegistration>,
 }
 
+/// One tick of a channeled primary: its origin, direction, endpoint, damage, mana cost
+/// and profile, read by the contact phase and the effects that follow.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrimarySpellChannelEmission {
     pub flame_lash_presentation: Option<PrimarySpellFlameLashPresentation>,
@@ -511,6 +545,7 @@ pub struct PrimarySpellChannelEmission {
     pub world_key: String,
 }
 
+/// A Fire contact that hits every enemy within a radius, as embers and patches do.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FireRadialContact {
     pub amount: f64,
@@ -522,6 +557,7 @@ pub struct FireRadialContact {
     pub world_key: String,
 }
 
+/// A Fire contact on one target, as a friendly Imp's attack.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FireTargetContact {
     pub amount: f64,
@@ -531,6 +567,7 @@ pub struct FireTargetContact {
     pub world_key: String,
 }
 
+/// A contact made by an ember, a friendly Imp or a fire patch.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FireActorContact {
     Ember(FireRadialContact),
@@ -538,6 +575,7 @@ pub enum FireActorContact {
     Patch(FireRadialContact),
 }
 
+/// Every live primary spell: projectiles, effects and the next spell ID.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpellState {
@@ -552,6 +590,8 @@ impl Default for SpellState {
     }
 }
 
+/// What one primary spell tick hands to the contact phase: channel emissions, Fire actor
+/// contacts and Frost Missile world contacts, plus the mana spent and any shortfall.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PrimarySpellTickResult {
     pub frost_missile_world_contacts: Vec<WeldProjectileState>,

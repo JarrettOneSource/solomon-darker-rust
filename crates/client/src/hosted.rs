@@ -1,4 +1,4 @@
-//! Account, content and admission I/O from Website `lib/api.ts` and `game-bootstrap.ts`.
+//! Account, content and admission requests to the Website's HTTP API.
 //! The Website remains the control plane; this adapter never manufactures a game ticket,
 //! score receipt or authoritative checkpoint.
 
@@ -79,6 +79,8 @@ impl WebsiteMount {
     }
 }
 
+/// A failed Website API request: its message and HTTP status. Status 0 marks a local or
+/// transport failure rather than an HTTP response.
 #[derive(Debug)]
 pub struct ApiError {
     pub status: u16,
@@ -110,6 +112,8 @@ impl From<crate::platform::http::ReadError> for ApiError {
     }
 }
 
+/// The Website HTTP API client for one deployment mount. Requests carry the stored
+/// account token when the player is signed in.
 #[derive(Clone)]
 pub struct WebsiteApi {
     client: Client,
@@ -126,6 +130,7 @@ impl OwnedImageUrl {
     }
 }
 
+/// Filters, sort order and page for a Website mod listing request.
 #[derive(Default)]
 pub struct ModQuery {
     pub mine: bool,
@@ -136,6 +141,8 @@ pub struct ModQuery {
     pub page_size: Option<u64>,
 }
 
+/// How the Website admits this player to a hosted session: the global Hub, a private
+/// College, an admitted Party join or a resumed save.
 pub enum BrowserAdmission<'a> {
     GlobalHub,
     PrivateCollege,
@@ -244,7 +251,7 @@ impl WebsiteApi {
         self.get(&format!("/api/mods/{}", component(slug))).await
     }
 
-    /// `AuthenticatedImage.tsx`: protected gallery images carry the account header.
+    /// Fetches a gallery image with the account header, which protected images require.
     pub async fn image(&self, source: &str) -> Result<OwnedImageUrl, ApiError> {
         let url = self.client.resolve(source)?;
         let mut path = url.path().to_owned();

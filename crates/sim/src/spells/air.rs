@@ -1,4 +1,4 @@
-//! Lightning ribbon geometry and corona factories from `core-kernels/native-air-presentation.ts`.
+//! Lightning ribbon geometry, coronas and lights for the Air spells.
 //! Cosmetic samples own a semantic stream; they never advance the world's native RNG.
 
 use super::presentation::{SpellBlend, SpellSprite};
@@ -7,6 +7,7 @@ use crate::float;
 use crate::float::{atan2, fround, hypot};
 use crate::random_domain::{random_float_from_word, random_int_from_word};
 
+/// A textured triangle mesh: vertices, their texture coordinates and triangle indices.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AirMesh {
     pub indices: Vec<u32>,
@@ -14,6 +15,8 @@ pub struct AirMesh {
     pub vertices: Vec<Vec2>,
 }
 
+/// A fork drawn off a lightning ribbon: its geometry and texture records, scale,
+/// mirroring and quad.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AirBranchPlan {
     pub geometry_record: usize,
@@ -23,6 +26,7 @@ pub struct AirBranchPlan {
     pub mesh: AirMesh,
 }
 
+/// One textured lightning ribbon with its optional fork, phase, tint, alpha and width.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AirRibbonLayer {
     pub alpha: f64,
@@ -36,6 +40,7 @@ pub struct AirRibbonLayer {
     pub width: f64,
 }
 
+/// A lightning corona: additive glow circles and two fork sprites around a center.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AirCoronaPlan {
     pub alpha: f64,
@@ -43,7 +48,7 @@ pub struct AirCoronaPlan {
     pub draws: Vec<SpellSprite>,
 }
 
-/// Source-shaped corona input shared by Lightning and the Weld compositors.
+/// Corona input shared by Lightning and the Weld compositors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AirCoronaInput {
     pub alpha: f64,
@@ -65,6 +70,8 @@ pub fn build_air_corona_plan(input: AirCoronaInput) -> AirCoronaPlan {
     )
 }
 
+/// A light added by lightning: its position, radius, intensity and whether it casts a
+/// directional shadow.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AirLightPlan {
     pub casts_directional_shadow: bool,
@@ -73,6 +80,8 @@ pub struct AirLightPlan {
     pub radius: f64,
 }
 
+/// Everything drawn for one Lightning strike: its ribbons, the coronas at its source and
+/// contact point, and the contact light.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AirLightningPlan {
     pub body: Option<Vec<AirRibbonLayer>>,
@@ -84,6 +93,7 @@ pub struct AirLightningPlan {
     pub source_corona: Option<AirCoronaPlan>,
 }
 
+/// The state of one Lightning strike that its drawing depends on.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AirLightningInput {
     pub chained: bool,
@@ -324,13 +334,15 @@ fn contact_alpha_levels(
     }
 }
 
+/// The spell a ribbon belongs to. With enhanced effects, Flame Lash ribbons are sampled
+/// more densely than Air ribbons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AirRibbonFamily {
     Air,
     FlameLash,
 }
 
-/// Source ribbon inputs shared by Lightning, Weld and Faculty Dark Lightning.
+/// Ribbon inputs shared by Lightning, Weld and Faculty Dark Lightning.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AirRibbonInput {
     pub points: [Vec2; 3],
@@ -639,6 +651,8 @@ fn contact_samples(id: u64) -> ContactSamples {
     }
 }
 
+/// A private xorshift stream for cosmetic lightning samples, seeded from an actor ID and
+/// a salt, so drawing never advances the gameplay RNG.
 pub struct AirPresentationRandom {
     value: u32,
 }

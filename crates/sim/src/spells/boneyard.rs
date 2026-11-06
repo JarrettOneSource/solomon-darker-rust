@@ -1,9 +1,9 @@
-//! Primary phases composed from `core-server/game-simulation.ts`.
+//! The Boneyard's primary spell phases: casting and flight, then contacts.
 //!
 //! The session steps world movement/enemies and secondary actors first. Cast then
 //! commits, secondary damage/knockback resolves, and primary contacts resolve last.
-//! This module assembles the source authority and callbacks around the canonical
-//! kernels for one local player; it never owns another copy of player or enemy state.
+//! This module assembles the cast authority and world callbacks around the canonical
+//! kernels; it never owns another copy of player or enemy state.
 
 use super::casting::PlayerWeaponKind;
 use super::contacts::{
@@ -64,6 +64,8 @@ pub struct BoneyardPrimaryFrame<'a> {
     pub light_at: &'a dyn Fn(Vec2) -> f64,
 }
 
+/// Inputs to one player's contact phase: the frame, this tick's cast result and the
+/// secondary special deaths whose effects join it.
 pub struct BoneyardPrimaryContactInput<'a> {
     pub frame: BoneyardPrimaryFrame<'a>,
     pub cast: &'a PrimarySpellTickResult,
@@ -80,8 +82,8 @@ pub struct BoneyardPrimaryContactEpoch<'a> {
     pub light_at: &'a dyn Fn(Vec2) -> f64,
 }
 
-/// Cast/flight phase. Source secondary damage and knockback belong between this
-/// call and `resolve_boneyard_primary_contacts`.
+/// Cast/flight phase. Secondary damage and knockback resolve between this call and
+/// `resolve_boneyard_primary_contacts`.
 #[allow(clippy::too_many_arguments)] // Participant movement and shared world have separate owners.
 pub fn step_boneyard_primary_cast(
     world: &BoneyardWorld,
@@ -233,6 +235,7 @@ pub fn resolve_boneyard_primary_contacts(
     )
 }
 
+/// One player in the shared contact phase: owner ID, player state and viewport size.
 pub struct BoneyardPrimaryContactPlayer<'a> {
     pub owner_id: &'a str,
     pub player: &'a PlayerState,
@@ -259,8 +262,8 @@ pub fn resolve_boneyard_primary_contacts_for_players(
         .iter()
         .map(|actor| (actor.id, u32::from(actor.config.type_id)))
         .collect();
-    // game-simulation.ts uses full Region bounds for contact LOS/pushback, while
-    // cast flight above uses the newly active Arena bounds. Preserve that split.
+    // Contacts use the full Region bounds for line of sight and pushback, while cast
+    // flight uses the active Arena bounds. Preserve that split.
     let bounds = world.loaded.scene.bounds;
     let collision = &world.dynamic_collision;
     let first_contact = |start, end, radius| {
@@ -360,8 +363,8 @@ pub fn resolve_boneyard_primary_contacts_for_players(
     result
 }
 
-/// `boneyardNativeSecondaryTarget`: only living, currently hostile bodies can
-/// receive burn ownership; the inherited actor light registration is retained.
+/// The secondary target for one enemy body. Only living, currently hostile bodies can
+/// receive burn ownership; the target keeps the actor's light registration.
 #[must_use]
 pub fn boneyard_secondary_target(
     enemies: &EnemyWorld,
@@ -374,7 +377,7 @@ pub fn boneyard_secondary_target(
     secondary_maggot_target(maggot)
 }
 
-/// `boneyardNativeSecondaryTargets`: the radial body gather is inclusive and
+/// Secondary targets around `center`. The radial body gather is inclusive and
 /// returns numeric actor order, independently of native primary cell ordering.
 #[must_use]
 pub fn boneyard_secondary_targets(
@@ -439,8 +442,8 @@ fn secondary_maggot_target(maggot: &EnemyMaggotActor) -> Option<SecondaryTarget>
     })
 }
 
-/// `createBoneyardSceneryTargets` and the Arena's source cleanup. Fencepost
-/// registration counts shared endpoints before any fence bodies.
+/// The scenery primary spells can hit, excluding objects outside the Arena's cleanup
+/// bounds. Fencepost registration counts shared endpoints before any fence bodies.
 #[must_use]
 pub fn boneyard_primary_scenery_targets(world: &BoneyardWorld) -> Vec<PrimarySpellTarget> {
     let scene = &world.loaded.scene;
@@ -519,6 +522,8 @@ fn inside_bounds(point: Vec2, bounds: BoneyardBounds) -> bool {
         && point.y <= bounds.y + bounds.height
 }
 
+/// The Boneyard bounds, collision and navigation that primary spells query for
+/// placement, line obstruction, traversal and routing.
 pub(crate) struct BoneyardPrimaryGeometry<'a> {
     pub bounds: BoneyardBounds,
     pub collision: &'a BoneyardCollisionWorld,

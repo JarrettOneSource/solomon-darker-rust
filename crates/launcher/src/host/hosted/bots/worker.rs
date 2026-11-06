@@ -1,5 +1,5 @@
-//! Source's single inference worker. Jobs contain only captured numeric policy
-//! inputs; the authority keeps every controller and the sole live Session.
+//! One background thread runs learned-bot policy inference. Jobs contain only captured
+//! numeric policy inputs; the authority keeps every controller and the sole live Session.
 
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -10,17 +10,20 @@ use solomon_sim::ml_bot::{
     MlBotPolicySelectionOptions,
 };
 
+/// A bot's policy inference request, sent to the worker thread.
 pub(super) struct InferenceJob {
     pub player_id: String,
     pub request: MlBotHostInferenceRequest,
 }
 
+/// The worker's answer to one inference request: the policy output or an error.
 pub(super) struct InferenceCompletion {
     pub player_id: String,
     pub request_id: u64,
     pub result: Result<MlBotHostInferenceResult, String>,
 }
 
+/// The policy inference thread and its request and completion channels.
 pub(super) struct BotInferenceWorker {
     pub choice_mode: MlBotPolicyChoiceMode,
     requests: Option<Sender<InferenceJob>>,

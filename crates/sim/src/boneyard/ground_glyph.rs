@@ -1,10 +1,12 @@
-//! Player +28 ground glyph from `core-kernels/native-ground-auxiliary.ts`.
+//! The player's +28 ground glyph, drawn a few units behind the wizard, opposite its facing.
+//! It disappears late in the death animation or once the corpse is consumed.
 
 use super::terrain_surface::GROUND_PI;
 use crate::Vec2;
 use crate::combat::PlayerLifeState;
 use crate::float::{cos, fround as f, sin};
 
+/// Where and how to draw a player's ground glyph: position, scale and alpha.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GroundGlyphPlan {
     pub position: Vec2,
@@ -13,6 +15,7 @@ pub struct GroundGlyphPlan {
     pub alpha: f64,
 }
 
+/// The player values a ground glyph depends on: position, facing, scale and death progress.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GroundPlayer {
     pub position: Vec2,

@@ -1,8 +1,7 @@
 //! The courtyard's stock art, placed the way the retail `Courtyard::Present` submits it.
 //!
 //! Every College record is registered inside a 2000×1000 logical frame, so drawing each one at
-//! its registered origin reproduces the native placement without a flattened atlas. The order
-//! and banks mirror the Website's `tools/hub_room_art.py` and `hub-world-scene.ts`.
+//! its registered origin reproduces the native placement without a flattened atlas.
 
 use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
@@ -22,6 +21,7 @@ use std::collections::BTreeMap;
 
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
+/// A view's camera: its world-space origin and its scale from world units to logical pixels.
 pub struct Camera {
     pub origin: Vec2,
     pub scale: f64,
@@ -95,6 +95,8 @@ enum CourtyardLayer {
     Actor(usize),
 }
 
+/// The courtyard's stock art: College sprite records, their atlas, the owner overlay
+/// order and the southern architecture bank.
 pub struct CourtyardScene {
     records: Vec<SpriteRecord>,
     atlas: Texture,
@@ -126,9 +128,9 @@ impl CourtyardScene {
         self.overlay_order.clear();
     }
 
-    /// Fixed bands and world actors share one submission order. Rows sort actors, and the
-    /// Website planner assigns them consecutive depths after 1000; a northern row therefore
-    /// cannot accidentally move an actor under the fountain's fixed depth 980.
+    /// Fixed bands and world actors share one submission order. Rows sort actors, which take
+    /// consecutive depths after 1000; a northern row therefore cannot accidentally move an
+    /// actor under the fountain's fixed depth 980.
     pub fn draw(
         &mut self,
         renderer: &mut Renderer,
@@ -279,7 +281,7 @@ impl CourtyardScene {
     }
 
     fn draw_statue(&self, renderer: &mut Renderer, camera: &Camera, statue: HubStatueOffsets) {
-        // The JS planner places the aura at body depth - 0.25, with no intervening actor.
+        // The aura draws immediately before the body, with no intervening actor.
         self.draw_registered_blended(
             renderer,
             camera,
@@ -375,8 +377,8 @@ impl CourtyardScene {
         );
     }
 
-    /// Draws a record at `scale` times its registered placement, the way the Website's
-    /// `build_scaled_registered_world_layer` composes it.
+    /// Draws a record additively at `scale` times its registered placement, rounding the
+    /// scaled origin and size half to even.
     fn draw_scaled_additive(
         &self,
         renderer: &mut Renderer,
@@ -404,8 +406,9 @@ impl CourtyardScene {
     }
 }
 
-/// `HubWorldScene::addSouthernArchitecture` and `hub-camera-presentation.ts`.
-/// This bank uses cropped College records in a separate 1.25 camera scope.
+/// The southern architecture bank: battlements, a central gate between two towers, and
+/// the west and east platforms. This bank uses cropped College records in a separate
+/// 1.25 camera scope.
 fn southern_architecture() -> Vec<(usize, Vec2)> {
     let extent = Vec2::new(
         1.25 * HUB_WORLD_SIZE.x - 0.25 * HUB_LOGICAL_VIEW.x / HUB_CAMERA_SCALE / 2.0,
@@ -446,14 +449,13 @@ fn southern_camera(camera: &Camera, logical_view: [f32; 2]) -> Camera {
     }
 }
 
-/// Top-left of a record's trimmed pixels inside its logical frame, rounded the way the
-/// Website's atlas tooling rounds it (half to even).
+/// Top-left of a record's trimmed pixels inside its logical frame, rounded half to even.
 pub fn registered_origin(record: &SpriteRecord) -> [f64; 2] {
     registered_origin_scaled(record, 1.0)
 }
 
-/// `registered_origin` for a record drawn at `scale` times its size: the tooling scales the
-/// exact origin, then rounds.
+/// `registered_origin` for a record drawn at `scale` times its size: the exact origin is
+/// scaled, then rounded.
 pub fn registered_origin_scaled(record: &SpriteRecord, scale: f64) -> [f64; 2] {
     let left = (f64::from(record.logical_width) - f64::from(record.width)) / 2.0
         + f64::from(record.center_x);
@@ -467,7 +469,7 @@ fn atlas_source(record: &SpriteRecord) -> [f32; 4] {
     [record.x as f32, record.y as f32, record.width as f32, record.height as f32]
 }
 
-/// Pixi quantises a sprite tint to eight bits per channel; the alpha stays a float.
+/// A sprite tint is quantised to eight bits per channel; the alpha stays a float.
 fn tint(color: HubColor) -> [f32; 4] {
     let channel = |value: f64| ((value * 255.0).round() / 255.0) as f32;
     [channel(color.red), channel(color.green), channel(color.blue), color.alpha as f32]

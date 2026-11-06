@@ -1,4 +1,5 @@
-//! Actual Tutorial player/world projection from `game-simulation.ts:1930–2082`.
+//! The world's Tutorial step: forced entrance movement, then one Tutorial tick fed with the
+//! player and world facts it reads.
 
 use crate::HubWizard;
 use crate::combat::PlayerCombatState;
@@ -13,6 +14,7 @@ use super::super::tutorial::{
 };
 use super::BoneyardWorld;
 
+/// The player's combat, economy, level and secondary-spell state that a Tutorial step reads.
 pub struct BoneyardTutorialPlayer<'a> {
     pub combat: &'a PlayerCombatState,
     pub economy: &'a HubEconomyState,

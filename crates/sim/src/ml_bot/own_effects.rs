@@ -1,4 +1,4 @@
-//! Source `ml-bot-policy/own-effects.ts`: admitted effect rows and belt activity.
+//! The bot's own-effect observation: admitted effect rows and belt activity.
 
 use crate::Vec2;
 use crate::float::hypot;
@@ -11,6 +11,8 @@ use crate::spells::weld::{WeldHailChildActorState, WeldPersistentActorState, Wel
 use super::numbers::{normalized, signed, unsigned, write};
 use super::spec::scales;
 
+/// An own-effect observation: the encoded block R, and whether the bot's primary and each
+/// quickbar slot have an active effect.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyOwnEffectObservation {
     pub block_r: Vec<f32>,
@@ -261,7 +263,7 @@ fn primary_transient_row(transient: &PrimarySpellTransient) -> Option<EffectRow>
                 _ => return None,
             }
         }
-        // The Source's explicit PRIMARY_EFFECT_KINDS set excludes these real
+        // The policy's explicit set of primary effect kinds excludes these real
         // presentation rows, including Water aura and the friendly Fire Imp.
         _ => return None,
     }
@@ -274,7 +276,7 @@ fn edge_distance(row: &EffectRow, observer: Vec2) -> f64 {
 
 fn secondary_effect(kind: SecondaryKind) -> bool {
     use SecondaryKind::*;
-    // Exhaustive classification from Source closed-unions.ts. Presentation,
+    // An exhaustive classification of every secondary actor kind. Presentation,
     // minion and status-carrier rows never activate a policy ability slot.
     match kind {
         AcidRain | Comet | DampenWave | Earthquake | EtherBolt | EtherDrain | FirePatch

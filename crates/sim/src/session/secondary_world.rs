@@ -1,4 +1,5 @@
-//! Actual geometry/target callbacks sampled for the source secondary ability epoch.
+//! The session's `SecondaryWorld`: actual geometry and target callbacks sampled for the
+//! secondary ability epoch.
 
 use crate::boneyard::collision::{
     can_place_boneyard_body, first_boneyard_line_obstruction, resolve_boneyard_movement,
@@ -18,6 +19,8 @@ use crate::secondary::*;
 use crate::spells::boneyard::{boneyard_secondary_target, boneyard_secondary_targets};
 use crate::{Rng, Vec2};
 
+/// The session world as secondary abilities see it: the Boneyard, player bodies, Ether
+/// Drain snapshot, regions, Teleport bodies and projectile viewports.
 pub(super) struct SessionSecondaryWorld<'a> {
     pub boneyard: Option<&'a mut BoneyardWorld>,
     pub players: Vec<crate::boneyard::world::BoneyardPlayerBody<'a>>,
@@ -295,7 +298,7 @@ impl SecondaryWorld for SessionSecondaryWorld<'_> {
         boneyard_secondary_targets(&self.boneyard.as_deref().unwrap().enemies, center, radius)
     }
     fn effect_visible(&self, key: &str, position: Vec2, margin: f64) -> bool {
-        // An immediate Inventory cast supplies no projectile-view sampler in Source.
+        // An immediate Inventory cast supplies no projectile-view sampler.
         if self.viewports.is_empty() {
             return false;
         }

@@ -1,4 +1,4 @@
-//! Source `renderer/hub-inventory/sack-name.ts` typography and Pixi wrapping.
+//! Sack name typography and word wrapping.
 //! Each platform shapes complete font runs; egui owns their GPU textures.
 use crate::gpu_ui::UiFrame;
 use solomon_sim::Vec2;
@@ -6,6 +6,8 @@ use solomon_sim::ui_text::{UiFontName, ui_font};
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
+/// A laid-out Sack name: its size, baseline offset, wrapped lines and the GPU texture it
+/// was drawn into.
 #[derive(Clone)]
 pub(crate) struct SackName {
     pub size: Vec2,
@@ -145,8 +147,9 @@ pub(crate) fn gpu_sack_name(
     });
     Ok(name)
 }
-/// Pixi wordWrap with the Sack's fixed whiteSpace=pre, breakWords=true and
-/// letterSpacing=0. Fitting sums advance widths; final ink is measured afterward.
+/// Wraps a Sack name to `max_width`. Newlines force breaks, spaces stay inside lines but
+/// are trimmed at line ends, a word wider than a line breaks between graphemes, and there
+/// is no letter spacing. Fitting sums advance widths; final ink is measured afterward.
 fn wrap_name<A, G>(
     text: &str,
     max_width: f64,

@@ -1,4 +1,4 @@
-//! Source world nameplates, accepted-chat speech and Hub activity badges.
+//! World nameplates, speech bubbles for accepted chat, and Hub activity badges.
 //! These screen-space layers follow the final world camera and precede screen feedback.
 
 mod graphics;
@@ -20,6 +20,7 @@ use graphics::{
 use solomon_graphics::assets;
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
+/// One player's nameplate, speech and activity badge inputs for a frame.
 pub struct WorldOverlayPlayer<'a> {
     pub id: &'a str,
     pub name: &'a str,
@@ -31,8 +32,9 @@ pub struct WorldOverlayPlayer<'a> {
     pub activity: Option<HubActivity>,
 }
 
+/// One frame's overlay inputs: the world, its visible players, the local player and the camera.
 pub struct WorldOverlayFrame<'a> {
-    /// Hub rooms share one source renderer; each Boneyard run owns another.
+    /// `"hub"` for every Hub room, otherwise the Boneyard run ID. A new key clears the views.
     pub world_key: &'a str,
     /// The caller applies current-world/materialization and Hub region visibility.
     pub players: &'a [WorldOverlayPlayer<'a>],
@@ -43,6 +45,8 @@ pub struct WorldOverlayFrame<'a> {
     pub renderable: bool,
 }
 
+/// The activity badges and speech bubbles a frame drew, reported in UI snapshots and as
+/// canvas attributes.
 #[derive(Default, serde::Serialize)]
 pub struct WorldOverlayDiagnostics {
     pub activity_player_ids: Vec<String>,
@@ -117,11 +121,13 @@ struct SpeechView {
     alpha: f64,
 }
 
+/// Draws nameplates, speech bubbles and activity badges, keeping each player's view between
+/// frames of the same world.
 pub struct WorldOverlaysView {
     font_atlas: Texture,
     world_key: Option<String>,
     speeches: Vec<GameWorldSpeech>,
-    // Source containers retain their insertion order when new IDs arrive later.
+    // Views keep first-seen order: a new ID is appended even if it sorts before existing IDs.
     nameplates: Vec<NameplateView>,
     activities: Vec<ActivityView>,
     speech_views: Vec<SpeechView>,
@@ -140,8 +146,8 @@ impl WorldOverlaysView {
         })
     }
 
-    /// MainMenuScene admits actual chat callbacks, excluding activity announcements.
-    /// Replayed Social history intentionally never calls this method.
+    /// Adds speech for a live chat message; activity announcements get no speech bubble.
+    /// Chat history replayed in a Social snapshot deliberately never reaches this method.
     pub fn consume_chat(&mut self, message: &GameChatMessage, received_at_ms: f64) {
         if message.activity.is_none() {
             let _ = append_game_world_speech(&mut self.speeches, message, received_at_ms);

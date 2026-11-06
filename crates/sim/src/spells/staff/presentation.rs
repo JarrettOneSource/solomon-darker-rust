@@ -1,5 +1,5 @@
-//! Exact stock draw values from `renderer/player-staff-vfx-presentation.ts`.
-//! Pike debris replays a private presentation snapshot; gameplay RNG is untouched.
+//! Stock draw values for staff contact particles and pike debris. Pike debris replays
+//! a private presentation snapshot; gameplay RNG is untouched.
 
 use super::{PlayerStaffPikeBreakVfx, PlayerStaffVfx};
 use crate::float;
@@ -7,6 +7,8 @@ use crate::float::fround;
 use crate::secondary::presentation::SecondaryBlend;
 use crate::{Rng, Vec2};
 
+/// How to draw one staff contact particle: atlas entry, position, rotation, scale, alpha,
+/// blend and tint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerStaffVfxRenderPlan {
     pub alpha: f64,
@@ -53,6 +55,7 @@ pub fn player_staff_vfx_render_plan(state: &PlayerStaffVfx) -> PlayerStaffVfxRen
     }
 }
 
+/// One sprite of a breaking pike's debris: its role, offset, transform, alpha and tint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffPikeBreakDraw {
     pub alpha: f64,
@@ -185,7 +188,7 @@ fn step_debris(debris: &mut [PikeBreakDebris], rng: &mut Rng, updates: u64) {
                 if particle.height > 0.0 {
                     let rotation = rng.draw_scaled_float(10.0, false);
                     if rng.draw_integer(3) == 1 {
-                        // Source sound selection shares this private debris stream.
+                        // Sound selection shares this private debris stream; keep its draws.
                         rng.draw_scaled_float(0.2, false);
                         rng.draw_integer(4);
                     }

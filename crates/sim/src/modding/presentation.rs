@@ -1,6 +1,6 @@
-//! Borrowed world models from Website `mod-ui/mod-{enemies,spell-effects,scene-model}.ts`
-//! and the Powerup/Shop component projections. These interpret the accepted Lua snapshot;
-//! they do not spawn, step, repair or retain a second set of mod actors.
+//! Borrowed world models of mod enemies, spell effects, powerups, shop NPCs and scenes.
+//! These interpret the accepted Lua snapshot; they do not spawn, step, repair or retain a
+//! second set of mod actors.
 
 mod scene;
 pub use scene::{
@@ -11,6 +11,7 @@ use super::assets::GameModAsset;
 use super::{LuaObject, LuaValue};
 use crate::Vec2;
 
+/// A frame's rectangle within a mod image.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModImageFrame {
     pub x: f64,
@@ -19,6 +20,7 @@ pub struct ModImageFrame {
     pub height: f64,
 }
 
+/// Whether a mod enemy is alive or dying.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModEnemyLifeState {
     Alive,
@@ -35,6 +37,7 @@ impl ModEnemyLifeState {
     }
 }
 
+/// A mod enemy to draw: its image frame, position, scale, health, light and sound.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModEnemyModel<'a> {
     pub current_health: f64,
@@ -54,6 +57,7 @@ pub struct ModEnemyModel<'a> {
     pub position: Vec2,
 }
 
+/// The shape of a mod spell effect: an area, a channel or a projectile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModSpellEffectKind {
     Area,
@@ -72,6 +76,7 @@ impl ModSpellEffectKind {
     }
 }
 
+/// A mod spell effect to draw: its kind, image frame, position, target, radius and sound.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModSpellEffectModel<'a> {
     pub frame: ModImageFrame,
@@ -87,6 +92,7 @@ pub struct ModSpellEffectModel<'a> {
     pub position: Vec2,
 }
 
+/// A mod powerup to draw: its image frame and position.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModPowerupModel<'a> {
     pub frame: ModImageFrame,
@@ -96,6 +102,7 @@ pub struct ModPowerupModel<'a> {
     pub position: Vec2,
 }
 
+/// A mod powerup event to play: its tick, position and sound.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModPowerupEventModel<'a> {
     pub id: i64,
@@ -105,6 +112,7 @@ pub struct ModPowerupEventModel<'a> {
     pub position: Vec2,
 }
 
+/// Where the local view is: the Hub courtyard, a private Hub room or a Boneyard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModWorldLocation {
     HubCourtyard,
@@ -112,6 +120,7 @@ pub enum ModWorldLocation {
     Boneyard,
 }
 
+/// A mod shop's NPC to draw: its name, image and position.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModShopNpcModel<'a> {
     pub image: Option<&'a GameModAsset>,

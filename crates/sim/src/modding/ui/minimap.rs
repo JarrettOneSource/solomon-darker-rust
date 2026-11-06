@@ -1,30 +1,35 @@
-//! `mod-ui/mod-minimap.ts`: the authored minimap projection. Native players and
-//! enemies enter as borrowed accepted positions, never as another stepped world.
+//! The authored minimap projection. Native players and enemies enter as borrowed
+//! accepted positions, never as another stepped world.
 
 use crate::Vec2;
 use crate::modding::definition::WebLuaContentKind;
 use crate::modding::projection::ModContentProjection;
 use crate::modding::{LuaObject, LuaValue};
 
+/// A player's ID and position for the minimap.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModMinimapPlayer<'a> {
     pub id: &'a str,
     pub position: Vec2,
 }
 
+/// A stock enemy's ID and position for the minimap.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModMinimapEnemy {
     pub id: f64,
     pub position: Vec2,
 }
 
+/// The accepted world positions the minimap reads: players, enemies and whether the view is
+/// in a Boneyard.
 pub struct ModMinimapSnapshot<'a> {
-    /// Preserves the actual snapshot's Object.entries order.
+    /// In the accepted snapshot's player order.
     pub players: &'a [ModMinimapPlayer<'a>],
     pub enemies: &'a [ModMinimapEnemy],
     pub in_boneyard: bool,
 }
 
+/// What a minimap marker shows: an enemy, a party member, a powerup or the local player.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModMinimapMarkerKind {
     Enemy,
@@ -45,8 +50,8 @@ impl ModMinimapMarkerKind {
     }
 }
 
-/// Keep Source Number IDs until the browser's native String conversion makes a
-/// DOM key. Authored IDs are not narrowed to an integer machine-word range.
+/// A minimap marker's identity. Numeric IDs stay `f64` until the view formats a marker
+/// key; authored IDs are not narrowed to an integer machine-word range.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ModMinimapMarkerId<'a> {
     Player(&'a str),
@@ -55,6 +60,7 @@ pub enum ModMinimapMarkerId<'a> {
     Powerup(f64),
 }
 
+/// One minimap marker: its identity, kind and world position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModMinimapMarker<'a> {
     pub id: ModMinimapMarkerId<'a>,
@@ -62,6 +68,8 @@ pub struct ModMinimapMarker<'a> {
     pub position: Vec2,
 }
 
+/// An authored minimap to draw: its mount, size, center, range, markers, actions and
+/// bindings.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModMinimapModel<'a> {
     pub accessible_name: &'a str,

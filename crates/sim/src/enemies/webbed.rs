@@ -1,4 +1,5 @@
-//! Native web status and Cocoon geometry from `core-kernels/native-webbed.ts`.
+//! Player web status and Cocoon geometry. Silk hits raise web severity until a Cocoon forms at
+//! three; partial webs slow the player and wear off while the player moves.
 use super::model::WebbedState;
 use crate::Vec2;
 use crate::float::fround;

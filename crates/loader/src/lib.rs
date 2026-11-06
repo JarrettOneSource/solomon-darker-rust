@@ -1,4 +1,4 @@
-//! Source `loader-render-contract.ts`, `loader-renderer.ts` and `NativeLoader.tsx`.
+//! The browser loading screen: progress, stage text, errors and screen-reader announcements.
 //! The stock four-image splash is decoded and drawn before main WASM is requested.
 
 #![cfg(target_arch = "wasm32")]

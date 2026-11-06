@@ -1,4 +1,4 @@
-//! `native-compact-mask-view.ts`: additive diffuse stamps, a radial Multiply
+//! Compact light masks: additive diffuse stamps, a radial Multiply
 //! pass and one retained 256² composite per actual participant.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,13 +19,14 @@ use crate::courtyard::Camera;
 use crate::spells::SpellView;
 use solomon_graphics::{BlendMode, Quad, RenderTarget, Renderer};
 
+/// A participant whose compact light mask is drawn: their ID and world position.
 #[derive(Clone, Copy)]
 pub struct CompactMaskPlayer<'a> {
     pub id: &'a str,
     pub position: Vec2,
 }
 
-/// `BoneyardEnvironmentLightView`: when scene environment mode is nonzero,
+/// Environment light: when scene environment mode is nonzero,
 /// draw this aperture immediately before the same participant's compact mask.
 pub fn draw_environment_aperture(
     renderer: &mut Renderer,
@@ -54,6 +55,8 @@ pub fn draw_environment_aperture(
     );
 }
 
+/// The Boneyard's compact light masks: mask state, ground surface, the frame's plan and
+/// one retained render target per participant.
 pub struct CompactMaskView {
     masks: CompactMasks,
     surface: CompactGroundSurface,
@@ -121,7 +124,7 @@ impl CompactMaskView {
         for (player, plan) in players.iter().zip(&self.plan.players) {
             if plan.mask_indices.is_empty() {
                 if let Some(target) = self.targets.get_mut(player.id) {
-                    // Source retains a hidden player's target for later reuse.
+                    // Keep a hidden player's target for later reuse.
                     target.visible = false;
                 }
                 continue;
@@ -154,7 +157,7 @@ impl CompactMaskView {
         Ok(())
     }
 
-    /// Dynamic Spider stains enter the source pre-world group at depth -0.5.
+    /// Dynamic Spider stains draw first in the pre-world pass.
     /// Authored ground stamps already belong to the static scenery renderer.
     pub fn draw_ground(&self, renderer: &mut Renderer, camera: &Camera, spells: &SpellView) {
         for id in &self.ground_order {
@@ -163,8 +166,8 @@ impl CompactMaskView {
         }
     }
 
-    /// Interleave with environment apertures in participant order: aperture at
-    /// slot*2, then this composite at slot*2+1, in the source ground-light group.
+    /// Interleave with environment apertures in participant order: each participant's
+    /// aperture, then this composite, in the pre-world pass.
     pub fn draw_player(&self, renderer: &mut Renderer, camera: &Camera, player_id: &str) {
         let Some(target) = self.targets.get(player_id).filter(|target| target.visible) else {
             return;

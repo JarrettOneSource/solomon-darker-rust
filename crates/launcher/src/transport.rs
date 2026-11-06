@@ -1,9 +1,8 @@
 //! Native text WebSocket delivery beside the packaged asset server.
 //!
-//! `host/game-host.ts`, `client/game-transport.ts` and `websocket-heartbeat.ts` own the
-//! reference transport contracts. Gameplay admission and the one authoritative session
-//! remain with the caller. The socket writer compacts selected snapshots without
-//! interpreting gameplay state or stepping a game.
+//! This module owns sockets, heartbeats, per-peer outboxes and supervisor HTTP framing.
+//! Gameplay admission and the one authoritative session remain with the caller. The socket
+//! writer compacts selected snapshots without interpreting gameplay state or stepping a game.
 
 mod http;
 mod socket;
@@ -33,6 +32,7 @@ const HTTP_QUEUE_CAPACITY: usize = 64;
 /// never reused. The authority assigns stable player identities separately.
 pub type PeerId = u64;
 
+/// Connection limits, queue bounds, deadlines and allowed origins for a `NativeServer`.
 #[derive(Clone, Debug)]
 pub struct TransportConfig {
     /// Empty means the browser Origin must match the request's HTTP Host exactly.
@@ -52,8 +52,8 @@ pub struct TransportConfig {
 
 impl Default for TransportConfig {
     fn default() -> Self {
-        // The source permits an escaped 96 MiB save document in client-hello. The caller
-        // still validates each JSON message's own contract after transport decoding.
+        // The payload bound fits a client hello carrying a JSON-escaped 96 MiB save. The
+        // caller still validates each JSON message's own contract after transport decoding.
         let max_message_bytes = solomon_protocol::GAME_WEBSOCKET_MAX_PAYLOAD_BYTES;
         Self {
             allowed_origins: Vec::new(),
@@ -93,6 +93,7 @@ impl TransportConfig {
     }
 }
 
+/// A WebSocket close: its code, if any, and reason.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransportClose {
     /// No close code means TCP ended without an accepted WebSocket close frame.
@@ -101,6 +102,8 @@ pub struct TransportClose {
     pub reason: String,
 }
 
+/// A transport event for the authority: a new connection, a supervisor HTTP request, a
+/// message, a disconnect or a listener failure.
 pub enum TransportEvent {
     Connected {
         peer: PeerSender,
@@ -127,6 +130,7 @@ pub enum TransportEvent {
     },
 }
 
+/// Why a send or close request for a peer was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PeerSendError {
     Closed,
@@ -335,8 +339,8 @@ impl NativeServer {
         Self::start_front_door(listener, Some(assets), config)
     }
 
-    /// The Website's existing TLS/backend edge owns static files and account APIs.
-    /// This listener serves only supervisor HTTP and admitted game WebSockets.
+    /// Serves only supervisor HTTP and admitted game WebSockets, with no static files. In
+    /// hosted play the Website's TLS/backend edge serves static files and account APIs.
     pub fn start_hosted(listener: TcpListener, config: TransportConfig) -> io::Result<Self> {
         Self::start_front_door(listener, None, config)
     }
@@ -457,14 +461,15 @@ impl NativeServer {
         self.address
     }
 
-    /// The source supervisor rejects new HTTP upgrades before checking their route or
-    /// origin once deployment begins. Existing sockets still complete their save handshake.
+    /// Once a deployment begins, new HTTP upgrades are rejected before their route or
+    /// origin is checked. Existing sockets still complete their save handshake.
     pub fn begin_hosted_deployment(&self) {
         self.state.hosted_draining.store(true, Ordering::Release);
     }
 
-    /// Install the exact source supervisor path. Replacing a live route is rejected;
-    /// the owning supervisor must close it before provisioning another room identity.
+    /// Registers a College's WebSocket path: the Hub, `/game` or a session path. Replacing
+    /// a live route is rejected; the owning supervisor must close it before provisioning
+    /// another room identity.
     pub fn register_hosted_route(&self, path: String, maximum: usize) -> io::Result<()> {
         if !self.state.hosted || !http::hosted_websocket_path(&path) || maximum == 0 {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid hosted game route"));

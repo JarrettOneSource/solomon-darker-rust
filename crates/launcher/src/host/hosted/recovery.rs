@@ -1,5 +1,5 @@
-//! Signed recovery Hello admission from `host/game-host.ts:1051..1708`. A portable
-//! seed restores one real world; later members import only their retained participant.
+//! Signed party recovery Hello admission. A portable seed restores one real world;
+//! later members import only their retained participant.
 
 use solomon_assets::website_save::{self, SaveIntegrity};
 use solomon_protocol::hosted::{GameSaveIntent, HostedHello};

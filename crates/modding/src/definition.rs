@@ -1,5 +1,5 @@
-//! Real Lua definition execution and immutable graph preparation.
-//! Source: Website `modding/definition/`.
+//! Mod definitions: running a package's Lua definition scripts and compiling the result
+//! into an immutable content graph.
 
 pub mod assembly;
 pub mod compiler;

@@ -1,4 +1,4 @@
-//! Source `game-host.ts` authored cast/action admission. Rejected requests consume
+//! Admission of mod-authored casts and actions. Rejected requests consume
 //! only their shared authored request cursor and log a warning; they never use the
 //! independent Console result lane or invent a successful authored receipt.
 
@@ -19,6 +19,7 @@ struct PreparedPlayerWorld<'a> {
     state: &'a mut GameSession,
 }
 
+/// A player's `ModAction` request: the action, its target and arguments, and its request ID.
 pub(in crate::host) struct HostedModActionRequest<'a> {
     pub action: ModAction,
     pub arguments: LuaObject,

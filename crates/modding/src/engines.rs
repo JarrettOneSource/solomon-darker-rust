@@ -1,4 +1,5 @@
-//! Mutable prepared owners from `modding/content/*-engine.ts`.
+//! The mod content engines, one per feature (affixes, spell effects, enemies, powerups, scenes,
+//! stored values, shops, skills, spells and statuses), and the limits they share.
 
 pub mod affix;
 pub mod effects;

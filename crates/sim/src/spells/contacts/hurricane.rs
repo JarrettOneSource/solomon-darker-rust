@@ -1,4 +1,5 @@
-//! Hurricane's early orbit/contact phase from `spell-combat/forces.ts`.
+//! Hurricane contacts, the first phase of the contact transaction: orbit forces move
+//! nearby enemies, and each enemy's contact cooldown limits how often it is damaged.
 use crate::spells::model::PrimarySpellTransient;
 
 use super::*;

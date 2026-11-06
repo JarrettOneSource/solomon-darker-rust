@@ -1,7 +1,8 @@
-//! The College teacher and its four release painters from `renderer/hub-world-scene.ts`.
+//! The College teacher and the four painters of its release burst.
 //!
-//! Images are the Website's stock-derived registered frames. Keeping those logical frames
-//! preserves their centered anchors without copying the full enemy atlas into the browser.
+//! Images are stock-derived registered frames copied from a Website checkout by
+//! `scripts/sync-stock-assets.sh`. Keeping those logical frames preserves their centered
+//! anchors without copying the full enemy atlas into the browser.
 
 use solomon_sim::Vec2;
 use solomon_sim::hub::painter::{PainterLane, PainterLayer};
@@ -14,6 +15,8 @@ use crate::courtyard::Camera;
 use solomon_graphics::assets;
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
+/// Which teacher painter to draw: the actor, or its release burst's column, frames,
+/// flare or core.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TeacherPass {
     Actor,
@@ -23,6 +26,7 @@ pub enum TeacherPass {
     Core,
 }
 
+/// The teacher's actor, rune, shadow and release burst textures.
 pub struct TeacherView {
     actor: Texture,
     rune: Texture,
@@ -163,7 +167,7 @@ fn draw_centered(
     member: HubTeacherBurstMember,
     blend: BlendMode,
 ) {
-    // A signed width mirrors the frame strip around its center, like Pixi scale.x < 0.
+    // A negative scale gives a signed width, which mirrors the frame strip around its center.
     let width = f64::from(source[2]) * member.scale_x;
     let height = f64::from(source[3]) * member.scale_y;
     renderer.draw(

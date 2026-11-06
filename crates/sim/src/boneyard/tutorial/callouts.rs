@@ -1,8 +1,9 @@
-//! Authored Tutorial frames from `tutorial-modal-callouts.ts::tutorialCalloutGeometry`.
+//! Layout of Tutorial callouts: framed boxes of authored text centered on a stage point.
 
 use crate::hud::HudRect;
 use crate::ui_text::{UiFontName, measure_ui_text, ui_font};
 
+/// One line of a Tutorial callout: its text, measured width and truncated pen position.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TutorialCalloutLine {
     pub text: String,
@@ -11,6 +12,8 @@ pub struct TutorialCalloutLine {
     pub y: f64,
 }
 
+/// A Tutorial callout's layout: its center, the frame around its text, each line and the
+/// size of the text block.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TutorialCalloutGeometry {
     pub center_x: f64,
@@ -21,8 +24,8 @@ pub struct TutorialCalloutGeometry {
     pub text_width: f64,
 }
 
-/// Pens truncate toward zero before the native stage is scaled to the viewport.
-/// A callout has explicit authored newlines; it does not wrap through browser metrics.
+/// Pen positions truncate toward zero before the stage is scaled to the viewport.
+/// A callout breaks lines only at its authored newlines; it never wraps.
 pub fn tutorial_callout_geometry(
     text: &str,
     center_x: f64,

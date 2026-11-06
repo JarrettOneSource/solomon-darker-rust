@@ -1,4 +1,4 @@
-//! Prepared authored families from `modding/content/mod-content-catalog.ts`.
+//! Prepared mod content: one definition type per authored family, and their catalog.
 //! Definitions are immutable. The native catalog validates and indexes one
 //! `PreparedModContentDefinition`; clients borrow the same accepted values.
 
@@ -13,6 +13,7 @@ use super::definition::{
 use super::inventory::{ModConsumableCatalogEntry, ModItemCatalogEntry};
 use super::{LuaObject, LuaValue};
 
+/// What reapplying an active status does: ignore it, refresh it, replace it or stack it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -23,6 +24,7 @@ pub enum ModStatusStacking {
     Stack,
 }
 
+/// One named art binding of a content entry: the bound asset's ID, kind, key and path.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -47,6 +49,7 @@ pub struct PreparedModContentEntry {
     pub name: String,
 }
 
+/// An authored status effect: its duration, modifiers and stacking rule.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -58,6 +61,7 @@ pub struct PreparedModStatusDefinition {
     pub stacking: ModStatusStacking,
 }
 
+/// A mod potion's drop chance from ordinary enemies and from bosses.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModPotionLoot {
@@ -65,6 +69,7 @@ pub struct ModPotionLoot {
     pub ordinary: f64,
 }
 
+/// An authored potion: its catalog entry, loot chances, use rule and the status it applies.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -77,6 +82,7 @@ pub struct PreparedModPotionDefinition {
     pub status: Option<ResolvedWebLuaContentReference>,
 }
 
+/// An authored item: its catalog entry, stack limit and optional use rule.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -89,6 +95,7 @@ pub struct PreparedModItemDefinition {
     pub use_rule: Option<WebLuaRuleDefinition>,
 }
 
+/// An authored powerup: its pickup radius and effect rule.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -99,6 +106,7 @@ pub struct PreparedModPowerupDefinition {
     pub pickup_radius: f64,
 }
 
+/// An authored equipment affix: what it applies to and its modifiers.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -109,6 +117,7 @@ pub struct PreparedModAffixDefinition {
     pub modifiers: LuaObject,
 }
 
+/// One weighted affix in an affix pool.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreparedModAffixPoolEntry {
@@ -116,6 +125,8 @@ pub struct PreparedModAffixPoolEntry {
     pub weight: f64,
 }
 
+/// An authored affix pool: its weighted affixes, roll count, what it applies to and its RNG
+/// domain.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -128,6 +139,8 @@ pub struct PreparedModAffixPoolDefinition {
     pub rolls: u32,
 }
 
+/// An authored skill: its ranks and their grants, prerequisites, parent, minimum level and
+/// offer weight.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -144,6 +157,7 @@ pub struct PreparedModSkillDefinition {
     pub ranks: Vec<LuaObject>,
 }
 
+/// Whether an authored spell is a primary or a secondary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -152,6 +166,7 @@ pub enum ModSpellSlot {
     Secondary,
 }
 
+/// An authored spell: its slot, mana cost, cooldown and behavior rule.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -164,6 +179,7 @@ pub struct PreparedModSpellDefinition {
     pub slot: ModSpellSlot,
 }
 
+/// An authored enemy: its health, attack, speed, size, experience and gold drop.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -182,6 +198,7 @@ pub struct PreparedModEnemyDefinition {
     pub speed: f64,
 }
 
+/// An authored Boneyard: its source, environment, anchors, roster, waves and triggers.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -196,6 +213,7 @@ pub struct PreparedModBoneyardDefinition {
     pub waves: Vec<LuaObject>,
 }
 
+/// A boast's icon: a frame of a mod image, or a stock icon record and style.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -207,6 +225,7 @@ pub enum PreparedModBoastIcon {
     Stock { record: usize, style: usize },
 }
 
+/// The persisted identity of a selected mod boast: its content ID and owning mod.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename = "mod", rename_all = "camelCase"))]
@@ -216,7 +235,8 @@ pub struct ModBoastSelection {
 }
 
 impl ModBoastSelection {
-    /// `createModBoastSelection` validates the persisted authored identity.
+    /// Validates a persisted identity: a decimal content ID of at most 19 digits with no
+    /// leading zero, and a valid mod ID.
     pub fn new(content_id: String, mod_id: String) -> Result<Self, String> {
         if content_id.is_empty()
             || content_id.len() > 19
@@ -241,6 +261,7 @@ impl ModBoastSelection {
     }
 }
 
+/// An authored boast: its text, icon, failure producers, success wave and score multiplier.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -272,6 +293,7 @@ impl PreparedModBoastDefinition {
     }
 }
 
+/// Who shares a mod shop's stock: the party, each player or the whole session.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -281,6 +303,7 @@ pub enum ModShopStockScope {
     Session,
 }
 
+/// One stocked shop item: the item, its price and quantity.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreparedModShopStock {
@@ -289,6 +312,7 @@ pub struct PreparedModShopStock {
     pub quantity: u32,
 }
 
+/// A shop's reforge service: the affix pool it draws from and its price.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "type", rename = "reforge"))]
@@ -297,6 +321,7 @@ pub struct PreparedModShopService {
     pub price: u64,
 }
 
+/// An authored shop: its stock and stock scope, restock time, services, NPC and mount.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -311,6 +336,8 @@ pub struct PreparedModShopDefinition {
     pub stock_scope: ModShopStockScope,
 }
 
+/// An authored UI panel: its mount, accessible name, view rule, bindings, actions and
+/// visibility.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -325,6 +352,7 @@ pub struct PreparedModUiDefinition {
     pub view: WebLuaRuleDefinition,
 }
 
+/// An authored room and its geometry.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreparedModRoomDefinition {
@@ -333,6 +361,7 @@ pub struct PreparedModRoomDefinition {
     pub geometry: LuaObject,
 }
 
+/// An authored scene and the rooms it contains.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreparedModSceneDefinition {
@@ -341,6 +370,7 @@ pub struct PreparedModSceneDefinition {
     pub rooms: Vec<ResolvedWebLuaContentReference>,
 }
 
+/// Authored features added to an existing scene.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PreparedModSceneExtensionDefinition {
@@ -350,6 +380,7 @@ pub struct PreparedModSceneExtensionDefinition {
     pub scene: String,
 }
 
+/// One prepared mod content definition, by family.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "contentKind", rename_all = "kebab-case"))]
@@ -416,8 +447,8 @@ impl PreparedModContentDefinition {
     }
 }
 
-/// One accepted immutable catalog. The native compiler supplies source-sorted
-/// rows; this index keeps every family lookup on those same definitions.
+/// One accepted immutable catalog. The native compiler supplies sorted rows;
+/// this index keeps every family lookup on those same definitions.
 #[derive(Clone, Debug)]
 pub struct PreparedModContentCatalog {
     content: Vec<PreparedModContentDefinition>,
@@ -425,7 +456,7 @@ pub struct PreparedModContentCatalog {
 }
 
 impl PreparedModContentCatalog {
-    /// Source potion loot uses a content-addressed SplitMix64 sample and never
+    /// Mod potion loot uses a content-addressed SplitMix64 sample and never
     /// advances the world's gameplay or loot RNG streams.
     pub fn create_loot_items(
         &self,

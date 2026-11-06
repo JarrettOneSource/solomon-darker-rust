@@ -1,5 +1,5 @@
-//! Source `hub-npc-dialogue.ts` selectors with the accepted ModContent metadata.
-//! Stock rows and responses delegate to the same authored native tables.
+//! NPC list selector rows, actions and responses, including the mod boasts in the accepted
+//! `ModContentProjection`. Stock rows and responses delegate to the authored stock tables.
 
 use super::{
     BOAST_INSTRUCTION, BOASTS, HubNpcChatContent, HubNpcChatNext, HubNpcListSelector,
@@ -9,6 +9,7 @@ use crate::economy::{BoastSelection, BoastState, HubInventoryAction, NativeHubNp
 use crate::modding::content::{ModBoastSelection, PreparedModBoastIcon};
 use crate::modding::projection::ModContentProjection;
 
+/// Identifies a selector row: a stock row ID or a mod boast.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(untagged))]
@@ -17,6 +18,7 @@ pub enum HubNpcSelectorId {
     ModBoast(ModBoastSelection),
 }
 
+/// One row of an NPC list selector as displayed, for a stock row or a mod boast.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]

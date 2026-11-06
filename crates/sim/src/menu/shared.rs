@@ -1,6 +1,8 @@
-//! Source `gameplay-resume-grace.ts` and `pause-menu-contract.ts` presentation.
+//! Pause and resume-grace presentation.
 //! These projections explain an existing host hold; they never start or clear one.
 
+/// What the pause screen shows: the hold owner's own pause menu, or a message about whom the
+/// game is waiting for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GameplayPausePresentation {
     Owner,

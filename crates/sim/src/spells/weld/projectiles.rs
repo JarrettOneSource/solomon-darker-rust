@@ -1,5 +1,5 @@
-//! One-shot births, native tracking and private GroundSpark turns from
-//! `core-kernels/native-weld-primary-runtime.ts` and `native-weld-ground-spark.ts`.
+//! One-shot Weld projectiles: their births, native tracking and the private turns of
+//! Crawling Shock's ground spark.
 
 use crate::float::fround;
 use crate::heading::heading_degrees_from_vector;
@@ -14,6 +14,7 @@ use crate::spells::targeting::{
 };
 use crate::{Rng, Vec2};
 
+/// One of a Frost Missile's two drawn lanes: rotation, scale and aspect.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldFrostPresentationLane {
@@ -54,6 +55,8 @@ pub struct WeldProjectileState {
     pub vector: Vec<f64>,
 }
 
+/// Inputs for firing a one-shot Weld: aim, origin, profile, targets, power and the first
+/// spell ID.
 pub struct SpawnWeldOneShotInput<'a> {
     pub aim_direction: Vec2,
     pub first_id: u64,

@@ -1,4 +1,5 @@
-//! Offline Boneyard geometry and movement against the pinned Website narrow phase.
+//! Offline Boneyard geometry and movement against frozen narrow-phase recordings from the
+//! Website client.
 
 use serde_json::Value;
 use solomon_assets::boneyard::{BoneyardCatalog, decode_scene};

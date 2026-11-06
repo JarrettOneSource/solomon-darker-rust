@@ -3,6 +3,8 @@
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Document, HtmlElement};
 
+/// Sends screen-reader announcements through `ariaNotify` or a shared hidden live region.
+/// While a loader owner is attached, only loaders announce.
 pub struct ScreenReader {
     document: Document,
     native: Option<js_sys::Function>,

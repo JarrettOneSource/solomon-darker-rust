@@ -1,5 +1,5 @@
-//! Terminal-run presentation from `game-over-presentation.ts` and `game-over-audio.ts`.
-//! The run owns the clock; rendering and audio never advance it.
+//! What the Game Over screen shows and plays: its fades, title and prompt, Solomon's riff,
+//! and the laugh and guitar cues. The run owns the clock; rendering and audio never advance it.
 
 use crate::Vec2;
 use crate::audio::AudioCue;
@@ -12,6 +12,8 @@ use super::{
 
 pub const SOLOMON_RIFF_GUITAR_TICK: u64 = 550;
 
+/// The Game Over screen at one tick: its entry and exit fades, title and prompt alphas, and
+/// whether it accepts input yet.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameOverPresentation {
     pub accepts_input: bool,
@@ -21,6 +23,8 @@ pub struct GameOverPresentation {
     pub title_alpha: f64,
 }
 
+/// Solomon's riff animation on the Game Over screen: its 1-based frame once it has entered,
+/// and its offset from the wizard's final position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolomonRiffPresentation {
     pub frame_record: Option<usize>,

@@ -1,4 +1,5 @@
-//! Discorporeal ActionManager ordering from `enemies/demon-skull-actions.ts`.
+//! The Discorporeal's action list: starting an action and stepping every live action in list
+//! order. Its actions are the scream, bite, eye shots, mouth beam, spit and flair.
 
 use super::demon_skull_controller::{
     DEMON_SKULL_SCREAM_TICKS, DemonSkullActionKind, create_demon_skull_action,

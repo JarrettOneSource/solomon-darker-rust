@@ -1,5 +1,6 @@
-//! Live scenery presentation from `boneyard-tree-occlusion.ts`, `native-fence-geometry.ts`
-//! and `region-painter-order.ts`. Art is retained data; these rules remain live Rust state.
+//! Boneyard view rules: the enemy-feedback zoom and its light-field edge cover, Tree canopy
+//! fading, gate leaf geometry, and painter order with Tree and roof proxies. Art is retained
+//! data; these rules remain live Rust state.
 
 use crate::Vec2;
 use crate::float::fround;
@@ -8,14 +9,16 @@ use crate::hub::painter::{PainterLayer, hub_painter_order};
 use super::BoneyardBounds;
 use super::lighting::stable_string_hash;
 
+/// The screen position and scale of the Boneyard world layer, including the
+/// enemy-feedback zoom pulse.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardWorldTransform {
     pub position: Vec2,
     pub scale: f64,
 }
 
-/// `nativeEnemyWorldFeedbackTransform`: zoom around the local wizard's screen
-/// position, preserving its anchor while the surrounding world pulses.
+/// Zooms around the local wizard's screen position, preserving its anchor while the
+/// surrounding world pulses by `magnitude`.
 #[must_use]
 pub fn enemy_world_feedback_transform(
     camera_center: Vec2,
@@ -39,6 +42,8 @@ pub fn enemy_world_feedback_transform(
     }
 }
 
+/// The shake offset of the light field and the two screen strips that cover the edges
+/// it exposes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArenaDisplacementCover {
     pub position: Vec2,
@@ -46,7 +51,8 @@ pub struct ArenaDisplacementCover {
 }
 
 /// Stock screen strips cover the exposed edge of the displaced light field.
-/// Signed rectangle dimensions preserve the source's asymmetric edge behavior.
+/// Strip dimensions stay signed: a negative displacement gives a negative width or
+/// height rather than a strip along the opposite edge.
 #[must_use]
 pub fn arena_displacement_cover(
     displacement: Vec2,
@@ -68,6 +74,8 @@ pub fn arena_displacement_cover(
     })
 }
 
+/// A Tree canopy's outline and fade: its alpha steps toward 0.4 while a scanned actor stands
+/// inside the outline and back toward 1 otherwise, with scans every 25 ticks staggered by ID.
 #[derive(Clone, Debug)]
 pub struct TreeOcclusion {
     pub position: Vec2,
@@ -93,7 +101,7 @@ impl TreeOcclusion {
     }
 
     /// Approach the old target before scanning. None represents an unobserved
-    /// or off-camera scan and preserves the previous target, as in current Source.
+    /// or off-camera scan and preserves the previous target.
     pub fn step(&mut self, actor_inside: Option<bool>) {
         let step = 0.015_f32 as f64;
         if self.current_alpha < self.target_alpha {
@@ -178,6 +186,8 @@ impl TreeOcclusion {
     }
 }
 
+/// Drawing geometry for one swinging gate leaf: its textured quad, hinge sprite position,
+/// two dark lines and painter row.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GateArt {
     /// Native order: upper hinge, upper tip, lower hinge, lower tip.
@@ -215,6 +225,7 @@ pub struct BoneyardPainterProxy {
     pub sort_bias: f64,
 }
 
+/// A drawable in the Boneyard painter queue, with the proxy it enqueues when it paints.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardPainterEntry {
     pub draw_id: usize,
@@ -222,8 +233,9 @@ pub struct BoneyardPainterEntry {
     pub proxy: Option<BoneyardPainterProxy>,
 }
 
-/// Source manager lanes enter the row buckets first. A proxy joins its future row at the
-/// tail when its parent paints, rather than sorting as an independently registered actor.
+/// Registered painters enter the row buckets in manager-lane and registration order. A proxy
+/// joins its future row at the tail when its parent paints, rather than sorting as an
+/// independently registered actor.
 #[must_use]
 pub fn boneyard_painter_order(entries: &[BoneyardPainterEntry], reference_y: f64) -> Vec<usize> {
     let mut layers = Vec::with_capacity(entries.len() * 2);

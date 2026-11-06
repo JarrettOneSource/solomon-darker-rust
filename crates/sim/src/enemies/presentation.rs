@@ -1,5 +1,4 @@
-//! Shared compositors from `renderer/native-enemy-projectile-presentation.ts`
-//! and `renderer/native-death-magic-presentation.ts`. Secondary Dampen reuses
+//! Draw plans for enemy projectiles and the shared DeathMagic layers. Secondary Dampen reuses
 //! these stock layers; `tests/secondary_presentation_goldens.rs` replays both.
 
 use crate::float;
@@ -14,6 +13,7 @@ pub struct EnemyEffectPresentationInput {
     pub rotation_radians: f64,
 }
 
+/// Which enemy projectile art a draw plan renders.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeEnemyProjectileKind {
     Arrow,
@@ -22,6 +22,7 @@ pub enum NativeEnemyProjectileKind {
     DemonBomb,
     PoisonPool,
 }
+/// Which payload variant of the projectile art to draw: normal, fire, poison, cold or none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NativeEnemyProjectilePayload {
     Normal,
@@ -30,6 +31,8 @@ pub enum NativeEnemyProjectilePayload {
     Cold,
     None,
 }
+/// The projectile state a draw plan needs: kind, payload, position, heading, age, lifetime, speed,
+/// and visual phase and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyProjectileVisual {
     pub age_ticks: u64,
@@ -44,6 +47,7 @@ pub struct EnemyProjectileVisual {
     pub visual_phase_degrees: f64,
     pub visual_scale: f64,
 }
+/// One spell-atlas sprite of an enemy projectile or DeathMagic draw.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyProjectileLayer {
     pub alpha: f64,
@@ -74,6 +78,7 @@ impl EnemyProjectileLayer {
         }
     }
 }
+/// A motion streak drawn behind an arrow in flight.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyProjectileStreak {
     pub alpha: f64,
@@ -81,6 +86,8 @@ pub struct EnemyProjectileStreak {
     pub start: Vec2,
     pub width: f64,
 }
+/// What an enemy projectile draws this frame: its layers, underlays such as shadows and glows,
+/// position and an optional streak.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyProjectilePlan {
     pub layers: Vec<EnemyProjectileLayer>,

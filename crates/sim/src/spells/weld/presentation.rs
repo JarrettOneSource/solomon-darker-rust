@@ -1,6 +1,5 @@
-//! Stock Weld compositors from `renderer/primary-spell-weld-native.ts`.
-//! Draw order, affine overlays and textured ribbons are retained; developer-only
-//! Pixi labels do not enter the native GPU plan.
+//! Stock Weld compositors: the sprites, meshes and lines that draw each Weld projectile
+//! and world actor, in draw order, including affine overlays and textured ribbons.
 
 use super::*;
 use crate::Vec2;
@@ -21,6 +20,7 @@ use crate::spells::water::{
 
 const DEG: f64 = std::f64::consts::PI / 180.0;
 
+/// A 2D affine transform applied to a Weld sprite.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldAffineMatrix {
     pub a: f64,
@@ -31,6 +31,8 @@ pub struct WeldAffineMatrix {
     pub ty: f64,
 }
 
+/// One Weld sprite draw with an optional affine transform. A diffuse draw uses the sprite
+/// only as an alpha mask, as a hit flash does.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldSpriteDraw {
     pub sprite: SpellSprite,
@@ -50,12 +52,16 @@ impl From<SpellSprite> for WeldSpriteDraw {
     }
 }
 
+/// Whether a Weld mesh's UVs are relative to its sprite record or absolute on the
+/// BadGuys atlas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WeldMeshUvSpace {
     Record,
     BadGuysAtlas,
 }
 
+/// A textured Weld mesh draw, such as a ribbon: mesh, record, UV space, vertex colors,
+/// tint, alpha and blend.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldMeshDraw {
     pub alpha: f64,
@@ -67,6 +73,7 @@ pub struct WeldMeshDraw {
     pub uv_space: WeldMeshUvSpace,
 }
 
+/// A straight line in a Weld drawing: endpoints, width, color and alpha.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldLineDraw {
     pub alpha: f64,
@@ -76,6 +83,8 @@ pub struct WeldLineDraw {
     pub width: f64,
 }
 
+/// Everything drawn for one Weld actor: sprites, ground underlays, meshes and lines, with
+/// its painter Y, sort bias, split bounds and light sample point.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldVisualPlan {
     pub lines: Vec<WeldLineDraw>,
@@ -105,6 +114,7 @@ impl WeldVisualPlan {
     }
 }
 
+/// The Weld state being drawn: a projectile or a world actor.
 #[derive(Clone, Copy, Debug)]
 pub enum WeldPresentationState<'a> {
     Projectile(&'a WeldProjectileState),
@@ -711,7 +721,7 @@ fn ethereal_boulder_held_centers(state: &WeldEtherealBoulderState) -> Vec<Vec2> 
         _ => vec![along(30.0), across(30.0), across(-30.0), along(-15.0)],
     };
     let mut ordered: Vec<_> = centers.into_iter().enumerate().collect();
-    // Native compares numeric Y then source order, treating -0 and +0 as ties.
+    // Native compares numeric Y, then list order, treating -0 and +0 as ties.
     ordered.sort_by(|(left_index, left), (right_index, right)| {
         left.y.partial_cmp(&right.y).unwrap().then(left_index.cmp(right_index))
     });

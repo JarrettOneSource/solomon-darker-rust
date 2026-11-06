@@ -1,6 +1,6 @@
-//! Current Website `native-weld-flame-ribbon.ts` (fa08ae24): retained record-25
-//! Flame factory and ribbon. Every named native float store remains explicit.
-//! This spline has its own stored tangents; the general natural spline does not.
+//! The Flame Lash factory geometry and ribbon mesh. Every named native float store
+//! remains explicit. This spline has its own stored tangents; the general natural
+//! spline does not.
 
 use crate::Vec2;
 use crate::float::{fround, sin};
@@ -8,10 +8,11 @@ use crate::float::{fround, sin};
 pub const FLAME_MAXIMUM_PATH_POINTS: usize = 1_024;
 pub const FLAME_MAXIMUM_RIBBON_PAIRS: usize = 4_096;
 
-// Recovered Math+4 bytes da 0f 49 40, rather than fround(Math.PI).
+// Recovered Math+4 bytes da 0f 49 40, rather than fround(PI).
 const PI_F32: f64 = 3.141592502593994;
 const NORMAL_DELTA: f64 = 0.001_f32 as f64;
 
+/// The points a Flame Lash is built from: start, control point, end and body offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameLashFactoryInput {
     pub start: Vec2,
@@ -20,12 +21,14 @@ pub struct FlameLashFactoryInput {
     pub offset: Vec2,
 }
 
+/// Whether a Flame Lash spans under 75 units (short) or at least 75 (long).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FlameLashGeometryKind {
     Short,
     Long,
 }
 
+/// An axis-aligned rectangle for Flame Lash split bounds and clipping.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameLashBounds {
     pub x: f64,
@@ -34,6 +37,8 @@ pub struct FlameLashBounds {
     pub height: f64,
 }
 
+/// A Flame Lash's stored geometry: kind, start, control, extended and body ends, span
+/// and padded split bounds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameLashFactoryGeometry {
     pub kind: FlameLashGeometryKind,
@@ -45,6 +50,8 @@ pub struct FlameLashFactoryGeometry {
     pub split_bounds: FlameLashBounds,
 }
 
+/// Inputs for building a Flame Lash ribbon mesh: geometry, width, power, effects setting
+/// and birth samples.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameLashRibbonInput {
     pub geometry: FlameLashFactoryInput,
@@ -55,6 +62,7 @@ pub struct FlameLashRibbonInput {
     pub short_width_factor: Option<f64>,
 }
 
+/// A Flame Lash ribbon mesh: vertices, indices, atlas UVs, colors and spline parameters.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlameLashRibbon {
     pub kind: FlameLashGeometryKind,
@@ -106,7 +114,7 @@ pub fn flame_lash_factory_geometry(
 }
 
 /// Birth-only membership. Each admitted point consumes its own radius word.
-/// The control point can occur twice; Source deliberately does not deduplicate it.
+/// The control point can occur twice; it is deliberately not deduplicated.
 pub fn flame_lash_path_points(
     geometry: &FlameLashFactoryGeometry,
     maximum_points: usize,
@@ -179,6 +187,8 @@ pub fn flame_lash_spline_normal(points: [Vec2; 3], parameter: f64) -> Vec2 {
     spline_normal(&spline_axes(points), fround(parameter))
 }
 
+/// One draw from the ribbon builder's private stream: an angle, a radius and the next
+/// state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameLashPrivateSample {
     pub angle_degrees: f64,
@@ -244,7 +254,7 @@ pub fn build_flame_lash_ribbon(input: FlameLashRibbonInput) -> Result<FlameLashR
     } else {
         let axes = spline_axes([geometry.start, geometry.control, geometry.body_end]);
         let phase = fround(input.phase_degrees);
-        // Source trunc(phase)|0 wraps; f32 rounding can reach +2^31.
+        // The truncated phase wraps to a signed 32-bit integer; f32 rounding can reach +2^31.
         let mut private_state = phase.trunc().rem_euclid(4_294_967_296.0) as u32 as i32;
         let base_half_width = fround(fround(width * 100.0) * 0.5);
         let amplitude =

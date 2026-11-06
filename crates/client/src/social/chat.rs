@@ -12,6 +12,8 @@ use super::{Intent, SocialUi, channel_id, channel_index, gpu};
 use crate::gpu_ui::{GroupEffect, UiFrame};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Chat panel animation: the panel's eased opacity, visibility, the reduced-motion
+/// preference and each message's appearance time.
 pub(super) struct ChatMotion {
     panel: super::motion::EaseTransition,
     visible: bool,

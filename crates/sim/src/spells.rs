@@ -1,4 +1,5 @@
-//! Primary spell kernels from the pinned Website's `core-kernels/primary-spells.ts`.
+//! Primary spells: casting, projectiles, effects, contacts and presentation for the five
+//! elements, the Welds and the staff.
 
 pub mod air;
 pub mod air_water;

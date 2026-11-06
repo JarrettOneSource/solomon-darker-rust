@@ -1,4 +1,5 @@
-//! Real Lua executes the source's constructors, includes and retained callbacks.
+//! Real Lua runs recorded mods' `sd.mod` constructors, included scripts and retained
+//! callbacks; definitions, issues, results, logs and memory must match the recording.
 
 mod common;
 
@@ -83,9 +84,9 @@ fn actual_lua_definitions_includes_reducers_and_sandbox_match_the_source() {
                 }
                 _ => panic!("{} changed graph admission", case.name),
             }
-            // The Source sd.mod assets map crosses Lua's private hash order.
-            // Independent Source VMs return both [worn,icon] and [icon,worn];
-            // the verified compiler consumes their same canonical graph above.
+            // The sd.mod assets map follows Lua's private hash order, so independent
+            // VMs return both [worn,icon] and [icon,worn]. The compiler builds the same
+            // canonical graph from either (checked above), so sort before comparing.
             actual.assets.sort_by_key(|asset| asset.source.node);
             expected.assets.sort_by_key(|asset| asset.source.node);
             common::assert_json_values(

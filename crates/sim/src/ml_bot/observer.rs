@@ -1,4 +1,5 @@
-//! The stateful v7 observation transaction from Source `ml-bot-policy/observer.ts`.
+//! The stateful v7 observation transaction: one frame of every observation block, and the
+//! histories it commits.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -25,12 +26,15 @@ use super::world_state::{
     observe_ml_bot_policy_world_state,
 };
 
+/// Whether a participant is controlled by a bot or a human.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MlBotPolicyControllerKind {
     Bot,
     Human,
 }
 
+/// Host-supplied observation context: active inputs, who controls each participant, the mod
+/// consumable check and player ID ordering.
 pub struct MlBotPolicyObservationContext<'a> {
     pub active_inputs: &'a BTreeMap<String, GameSessionInput>,
     pub controllers: &'a BTreeMap<String, MlBotPolicyControllerKind>,
@@ -41,12 +45,15 @@ pub struct MlBotPolicyObservationContext<'a> {
     pub compare_player_ids: &'a dyn Fn(&str, &str) -> Ordering,
 }
 
+/// One observation block: its key letter and encoded values.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyObservedBlock {
     pub key: char,
     pub values: Vec<f32>,
 }
 
+/// One complete observation: the flat values and blocks, plus the rows and sub-observations
+/// that action masks and decisions read.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyFrame {
     pub blocks: Vec<MlBotPolicyObservedBlock>,
@@ -60,6 +67,8 @@ pub struct MlBotPolicyFrame {
     pub values: Vec<f32>,
 }
 
+/// A bot's observer: its player ID and the enemy, world and previous-action history it keeps
+/// between frames.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyObserver {
     enemy_memory: MlBotPolicyEnemyMemory,
@@ -92,8 +101,8 @@ impl MlBotPolicyObserver {
             .ok_or_else(|| format!("ML bot policy has no player {}", self.player_id))?;
         let position = participant.wizard.position;
         let quickbar = participant.player.belt.skill_projection();
-        // The pinned observer passes raw runId, although live spell ownership uses
-        // boneyard:<runId>. Preserve that deployed policy admission exactly.
+        // The deployed observer passes the raw run ID, although live spell ownership uses
+        // `boneyard:<run ID>`. Preserve that deployed policy admission exactly.
         let world_key = &world.loaded.run_id;
         let minions = observe_ml_bot_policy_minions(
             &session.secondary,
@@ -203,7 +212,7 @@ impl MlBotPolicyObserver {
                 ));
             }
         }
-        // Source commits both histories only after the complete row passes its
+        // Both histories are committed only after the complete row passes its
         // finite/schema checks; rejected observations leave future history intact.
         self.enemy_memory = enemies.next_memory;
         self.world_memory = world_observation.next_memory;

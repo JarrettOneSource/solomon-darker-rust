@@ -1,10 +1,11 @@
-//! Archived run records and stable ranking from `core-kernels/hall-of-fame.ts`.
+//! Hall of Fame records of completed runs and their stable ranking on each board.
 //! The session supplies completed score/profile data; this module never awards score.
 
 pub mod presentation;
 
 use crate::profile::{WizardDiscipline, WizardElement};
 
+/// One of a record's highest skills: the skill and its permanent rank.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFameSkill {
@@ -12,8 +13,9 @@ pub struct HallOfFameSkill {
     pub skill_id: u64,
 }
 
-/// Archived browser rows admit every Source safe integer. These widths do not
-/// change the gameplay owners; stock art converts IDs only at its lookup boundary.
+/// One completed run in the Hall of Fame. Its integers are `u64` because archived browser
+/// rows admit every integer up to 2^53 - 1. These widths do not change the gameplay owners;
+/// stock art converts IDs only at its lookup boundary.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFameEntry {
@@ -35,8 +37,8 @@ pub struct HallOfFameEntry {
     pub wizard_name: String,
 }
 
-/// `hall-of-fame-entry.ts`: only the archived death portrait completes a record.
-/// Permanent ranks retain learned order as their tie-break, without equipment ranks.
+/// The Hall of Fame record of a run in Game Over, or `None` until its death portrait is
+/// archived. Permanent ranks retain learned order as their tie-break, without equipment ranks.
 #[must_use]
 pub fn completed_hall_of_fame_entry(
     run_id: &str,
@@ -87,6 +89,7 @@ pub fn completed_hall_of_fame_entry(
     })
 }
 
+/// A Hall of Fame leaderboard, ranking records by one statistic.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum HallOfFameBoard {
     #[default]
@@ -119,7 +122,8 @@ impl HallOfFameBoard {
     }
 }
 
-/// Stable source order breaks equal scores. Other boards use Awesomeness first as a tie-break.
+/// Ranks entries highest first on `board`, keeping at most `limit`. Boards other than
+/// Awesomeness break ties by Awesomeness; entries that still tie keep their order in `entries`.
 #[must_use]
 pub fn rank_hall_of_fame_entries(
     entries: &[HallOfFameEntry],

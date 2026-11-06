@@ -1,4 +1,4 @@
-//! PC24 light queries from current `core-kernels/native-boneyard-lighting.ts`.
+//! PC24 light queries: the radial and elevated light a point receives from the field.
 //! Camera-relative stores are observable at large/fractional world positions.
 //! Puppet callbacks keep radial/elevated lanes separate; surface callbacks multiply.
 
@@ -6,6 +6,7 @@ use super::{BoneyardLightSource, LIGHT_VERTICAL_SCALE};
 use crate::Vec2;
 use crate::float::fround as f;
 
+/// The camera origin that light positions are measured from, and the ambient light level.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardLightQuery {
     pub camera_origin: Vec2,
@@ -18,6 +19,8 @@ impl Default for BoneyardLightQuery {
     }
 }
 
+/// The light at a point: the radial factor, and the elevated factor, which also fades for
+/// points below a source.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardLightFactors {
     pub radial: f64,
@@ -80,6 +83,7 @@ pub(super) fn surface(
 }
 
 fn maximum(left: f64, right: f64) -> f64 {
-    // Math.max propagates a nonfinite source division; Rust's max discards NaN.
+    // NaN from a degenerate division, such as by a zero light radius, propagates here;
+    // `f64::max` would discard it.
     if left.is_nan() || right.is_nan() { f64::NAN } else { left.max(right) }
 }

@@ -1,5 +1,5 @@
-//! Heartmonger activation, summons and flock ownership from `native-heartmonger.ts`
-//! and `enemies/heartmonger.ts`.
+//! The Heartmonger: activation by light, timed summons, its crow flock, movement and body
+//! animation, and the departure effects and loose crows its death leaves.
 
 use super::config::EnemyFamilyConfig;
 use super::crow::{CrowTarget, create_crow, step_crow};
@@ -18,6 +18,7 @@ use crate::{Rng, Vec2};
 pub const HEARTMONGER_SUMMON_INTERVALS: [u64; 5] = [0, 350, 250, 150, 75];
 pub const HEARTMONGER_BLIND_CHANCES: [f64; 5] = [0.0, 5.0, 10.0, 30.0, 100.0];
 
+/// A crow from a dead Heartmonger's flock that flies on alone, with its owner and spawn tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DetachedCrow {
@@ -26,6 +27,7 @@ pub struct DetachedCrow {
     pub spawn_tick: u64,
 }
 
+/// One group a Heartmonger summons: the enemy kind, how many and their flags.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HeartmongerSummon {
     pub count: usize,
@@ -33,6 +35,7 @@ pub struct HeartmongerSummon {
     pub flags: Vec<EnemyFlag>,
 }
 
+/// A sound from a Heartmonger or one of its crows: which sound, its pitch and where it plays.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HeartmongerSound {
     pub pitch: f64,
@@ -40,6 +43,8 @@ pub struct HeartmongerSound {
     pub sound: EnemySound,
 }
 
+/// What one Heartmonger tick reads from the Boneyard: whether it is on screen within a light's
+/// reach, the light intensity there, its position, a visibility test and the crows' targets.
 pub struct HeartmongerContext<'a> {
     pub admitted: bool,
     pub is_visible: &'a dyn Fn(Vec2) -> bool,
@@ -48,6 +53,7 @@ pub struct HeartmongerContext<'a> {
     pub targets: &'a [CrowTarget<'a>],
 }
 
+/// What one Heartmonger tick produced: sounds, the players its crows struck and the summons.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HeartmongerStep {
     pub sounds: Vec<HeartmongerSound>,
@@ -65,8 +71,8 @@ pub fn step_native_heartmonger(
     let mut step = HeartmongerStep::default();
     let interval = HEARTMONGER_SUMMON_INTERVALS[summon_mode as usize];
     if brain.activated && interval > 0 {
-        // Source decrements to -1 before summoning. The retained state never stores
-        // that intermediate negative counter, so zero is the birth boundary here.
+        // The countdown summons when it would drop to -1. The retained state never stores
+        // that intermediate negative counter, so zero is the summon boundary here.
         if brain.summon_ticks_remaining == 0 {
             summon_friends(rng, &mut step.summons);
             brain.summon_ticks_remaining = interval;

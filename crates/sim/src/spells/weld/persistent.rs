@@ -1,5 +1,5 @@
-//! Held growth, native split/release and flight of the three persistent builds
-//! from `core-kernels/native-weld-primary-runtime.ts`.
+//! The three persistent Weld builds (Ethereal Boulder, Hailstones and Meteor Swarm):
+//! their held growth, native split and release, and flight.
 
 use super::model::{WeldActorBase, WeldActorBirth};
 use crate::float::{fround, hypot, hypot3};
@@ -23,6 +23,8 @@ pub const WELD_HAIL_FLIGHT_SUBSTEPS: usize = 3;
 pub const WELD_HAIL_SUBSTEP_DISTANCE: f64 = 10.0;
 pub const WELD_HAIL_LOOKAHEAD_DISTANCE: f64 = 30.0;
 
+/// An Ethereal Boulder, held while it grows and then released as homing pieces: its
+/// scale, damage pool, orientation, guidance and flight.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldEtherealBoulderState {
@@ -78,6 +80,7 @@ impl WeldEtherealBoulderState {
     }
 }
 
+/// A Hailstones rock's three-dimensional position within its cluster.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailstoneLocalPosition {
@@ -86,6 +89,8 @@ pub struct WeldHailstoneLocalPosition {
     pub z: f64,
 }
 
+/// One rock of a Hailstones cluster: its local position, damage left, decay, phase and
+/// sprite.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailstoneRockState {
@@ -100,6 +105,8 @@ pub struct WeldHailstoneRockState {
     pub visual_scale: f64,
 }
 
+/// A Hailstones cluster, held while it grows and then thrown: its rocks, scale, damage,
+/// pushback and widening.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailstonesState {
@@ -118,6 +125,8 @@ pub struct WeldHailstonesState {
     pub widen: f64,
 }
 
+/// A held Meteor Swarm that follows its caster while Meteors fall on a cadence; it
+/// leaves nothing behind when released.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldMeteorFieldState {
@@ -125,6 +134,7 @@ pub struct WeldMeteorFieldState {
     pub pulse_sequence: u64,
 }
 
+/// One of the three persistent Weld builds, held or released.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WeldPersistentActorState {
@@ -161,12 +171,15 @@ impl WeldPersistentActorState {
     }
 }
 
+/// Where a rock fade shed by a growing Hailstones cluster appears, and its rotation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldHailRockFadeSeed {
     pub position: Vec2,
     pub rotation_degrees: f64,
 }
 
+/// What a held persistent build produced this tick: debris, rock fades and whether it
+/// asked to be released.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WeldPersistentUpdate {
     pub debris: Vec<WeldMeteorDebrisSeed>,
@@ -174,6 +187,7 @@ pub struct WeldPersistentUpdate {
     pub release_requested: bool,
 }
 
+/// Per-tick options for a held persistent build: cast speed, effects setting and power.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldPersistentUpdateOptions {
     pub cast_progress_factor: f64,
@@ -337,6 +351,7 @@ pub fn update_weld_persistent_actor(
     update
 }
 
+/// A frost fade sprite from a Hailstones release or a Blizzard chain hop.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldFrostFadeActorState {
@@ -344,6 +359,8 @@ pub struct WeldFrostFadeActorState {
     pub scale: f64,
 }
 
+/// What releasing a persistent build creates: the released actors, an optional frost
+/// fade and the next free ID.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldPersistentRelease {
     pub actors: Vec<WeldPersistentActorState>,
@@ -405,7 +422,7 @@ pub fn release_weld_persistent_actor(
                 released.common.origin = piece.origin;
                 if index > 0 {
                     released.common.owner.id = first_child_id + index as u64 - 1;
-                    // Source drops the copied roots so final enrollment uses this
+                    // Drop the copied registrations so final enrollment uses this
                     // child's newly allocated light, rather than its parent's row.
                     released.common.owner.painter_registrations.clear();
                     released.common.owner.light_registration =
@@ -448,7 +465,8 @@ pub fn release_weld_persistent_actor(
     }
 }
 
-/// Preserves the source pool and scale written by actual contact acceptance.
+/// Keeps the damage pool and scale written by accepted contacts. Returns false, leaving
+/// the actor unchanged, once the pool is spent.
 pub fn retain_weld_persistent_actor_contacts(
     actor: &mut WeldEtherealBoulderState,
     hit_target_ids: Vec<String>,
@@ -548,6 +566,8 @@ pub fn weld_hailstone_draw_offset(rock: &WeldHailstoneRockState) -> Vec2 {
     Vec2::new(position.x, fround(position.y + fround(falling_height - position.y) * rock.decay))
 }
 
+/// One contact substep of a thrown Hailstones cluster: its origin and each rock's
+/// collision offset.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldHailstoneFlightContactSubstep {
     pub origin: Vec2,

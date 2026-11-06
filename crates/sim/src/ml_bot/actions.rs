@@ -1,4 +1,4 @@
-//! Legal mask plans and interpreted intents from Source `ml-bot-policy/actions.ts`.
+//! The bot's legal action masks, and how chosen action indices become session input.
 
 use crate::Vec2;
 use crate::economy::HubInventoryAction;
@@ -15,8 +15,8 @@ use super::spec::scales;
 use super::world_state::MlBotPolicyCommittedAction;
 use super::{MlBotPolicyActionIndices, MlBotPolicyActionMaskPlan, MlBotPolicyActionMasks};
 
-/// Only the fields read by Source actions.ts. The asynchronous host retains this
-/// request-time context, instead of cloning an entire Session or substituting the
+/// Only the player fields that action masks and decisions read. The asynchronous host retains
+/// this request-time context, instead of cloning an entire Session or substituting the
 /// completion-time player's position, book or life state.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotPolicyActionContext {
@@ -27,6 +27,8 @@ pub struct MlBotPolicyActionContext {
     accepts_input: bool,
 }
 
+/// A resolved bot decision: the session input or Hub action to apply, the action recorded in
+/// history, its target and the masks it used.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyDecision {
     pub committed_action: MlBotPolicyCommittedAction,

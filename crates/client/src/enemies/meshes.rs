@@ -66,7 +66,7 @@ impl EnemyView {
                 ];
                 let vertices = [0, 1, 2, 3].map(|index| {
                     let alpha = if index < 2 { *start_alpha } else { *end_alpha };
-                    // The source stores these channels through nativePackedColor.
+                    // These channels are stored as packed bytes, so truncate to 1/255 steps.
                     let alpha = (alpha.clamp(0.0, 1.0) * 255.0).trunc() / 255.0;
                     Vertex {
                         position: project(camera, Vec2::ZERO, vertices[index]),

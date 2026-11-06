@@ -1,4 +1,4 @@
-//! Queued command application from `host/lua/web-lua-game-api.ts`.
+//! Applies the game Lua API's queued commands to the session.
 
 use crate::enemies::EnemySpawnIntent;
 use crate::modding::extensions::GameSimulationExtensions;
@@ -6,6 +6,8 @@ use crate::session::GameSession;
 
 use super::*;
 
+/// What applying a command batch leaves for the host: enemy spawn intents and a new run
+/// seed.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AppliedWebLuaCommands {
     pub enemy_spawn_intents: Vec<EnemySpawnIntent>,

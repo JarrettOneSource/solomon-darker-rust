@@ -1,4 +1,5 @@
-//! Native trader clocks from Website `hub-presentation.ts` and `core-server/hub-skorcha.ts`.
+//! College trader animation clocks (idle gestures, PotionGuy's balloons and Hagatha's
+//! crossfade) and Skorcha's appearance schedule.
 
 use crate::float;
 use crate::float::fround;
@@ -15,7 +16,7 @@ const HAGATHA_ANCHORS: [Vec2; 8] = [
     Vec2::new(104.5, 75.5),
     Vec2::new(84.5, 84.5),
 ];
-/// Authored `NATIVE_HUB_NPC_CATALOG.skorcha.placements`, also checked on save admission.
+/// Skorcha's three authored placements, indexed by variant; save admission also checks them.
 pub const HUB_SKORCHA_PLACEMENTS: [Vec2; 3] =
     [Vec2::new(1437.5, 732.5), Vec2::new(1637.0, 403.5), Vec2::new(669.0, 705.5)];
 
@@ -304,7 +305,8 @@ pub struct HubSkorchaSchedule {
 }
 
 impl HubSkorchaSchedule {
-    /// Fixed host/test windows survive the source's empty shared-College reset.
+    /// Hidden and visible windows fixed by a host or test; they survive the reset of an empty
+    /// shared College.
     #[must_use]
     pub const fn fixed_windows(&self) -> (Option<u64>, Option<u64>) {
         (self.hidden_ticks, self.visible_ticks)

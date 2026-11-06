@@ -1,14 +1,17 @@
-//! Native belt pull-off threshold and smoke/move-fade members from current
-//! Website `skill-book-model.ts`. Random values are cosmetic caller inputs.
+//! Pulling an entry off the belt: the drag distance that starts it and the smoke and
+//! move-fade burst that follows. Random values are cosmetic caller inputs.
 
 use crate::Vec2;
 
+/// The spacing of the burst's move-fade spokes: four at 90 degrees or three at 120.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BeltPullOffStep {
     Degrees90,
     Degrees120,
 }
 
+/// One sprite of the pull-off burst: its record, start and end offsets, scale, rotation,
+/// brightness and duration.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BeltPullOffBurstMember {
     pub brightness: f64,
@@ -27,8 +30,8 @@ pub fn belt_pull_off_started(origin: Vec2, current: Vec2) -> bool {
     dx * dx + dy * dy > 50.0 * 50.0
 }
 
-/// All 24 smoke puffs and the source's three/four move-fade spokes. The view
-/// chooses the 90/120-degree branch separately, exactly as the React component.
+/// All 24 smoke puffs and the three or four move-fade spokes. The view chooses the
+/// 90- or 120-degree branch separately.
 #[must_use]
 pub fn belt_pull_off_burst_members(
     step: BeltPullOffStep,

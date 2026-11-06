@@ -1,9 +1,8 @@
 //! Native random reductions applied to a caller-supplied word.
 //!
 //! Stock draws these values from its one shared generator. Replicated presentation cannot
-//! share that draw stream, so the reference hashes a stable semantic word instead and keeps
-//! the native integer reduction, endpoint domain, and 32-bit float stores exact. Reference:
-//! `Website/frontend/src/game/core-kernels/native-random-domain.ts`.
+//! share that draw stream, so callers hash a stable semantic word instead; these functions
+//! keep the native integer reduction, endpoint domain, and 32-bit float stores exact.
 
 use crate::float::fround;
 use crate::rng::MASK;
@@ -37,7 +36,7 @@ pub fn random_float_from_word(word: u32, maximum: f64) -> f64 {
     fround(unit_sample * fround(maximum))
 }
 
-/// `nativeSignedRandomFloatFromSemanticWords`: magnitude and sign own separate semantic words.
+/// A float in `[-maximum, maximum]`; magnitude and sign own separate semantic words.
 #[must_use]
 pub fn signed_random_float_from_words(magnitude_word: u32, sign_word: u32, maximum: f64) -> f64 {
     let magnitude = random_float_from_word(magnitude_word, maximum);

@@ -1,4 +1,4 @@
-//! Complete loot construction against the unmodified Website kernels.
+//! Complete loot construction, against unmodified recordings from the Website client.
 
 #![recursion_limit = "256"]
 

@@ -5,12 +5,14 @@ use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
 use callouts::{TutorialTargets, modal_plans};
 use solomon_sim::ui_text::{UiFontName, UiTextSpec};
 use solomon_sim::{Vec2, hud::HudRect};
+/// The Tutorial intro overlay's current blend and fade.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TutorialPreludeView {
     pub blend: f64,
     pub fade: f64,
 }
 
+/// A Tutorial pointer arrow from an origin toward a target, with its scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TutorialPointerView {
     pub origin: Vec2,
@@ -18,6 +20,7 @@ pub struct TutorialPointerView {
     pub scale: f64,
 }
 
+/// The current narration cue: its event ID, speaker and text.
 #[derive(Clone, Copy, Debug)]
 pub struct TutorialNarrationView<'a> {
     pub event_id: u64,
@@ -123,6 +126,8 @@ impl TutorialModel {
         }
     }
 }
+/// The Tutorial overlay: its stock UI atlas, the current Tutorial model, viewport and
+/// clock.
 pub struct TutorialUi {
     atlas: StockAtlas,
     model: Option<TutorialModel>,
@@ -131,7 +136,7 @@ pub struct TutorialUi {
 }
 impl TutorialUi {
     pub fn layer_id(&self) -> egui::LayerId {
-        // Existing application body z40; all native Tutorial descendants stay here.
+        // Every Tutorial overlay element draws in this one layer.
         egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("tutorial-overlay"))
     }
 

@@ -1,4 +1,5 @@
-//! Field selection from `client/primary-spell-transient-interpolation.ts`.
+//! Which fields of a primary spell transient, Harden effect or staff action blend between
+//! two snapshots. A transient that changes kind is copied from the selected snapshot.
 
 use solomon_sim::harden_effects::HardenEffect;
 use solomon_sim::spells::model::PrimarySpellTransient;

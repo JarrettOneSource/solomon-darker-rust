@@ -11,8 +11,8 @@ use solomon_sim::menu::party_directory::{
 };
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
 use solomon_sim::ui_text::{UiFontName, UiTextAlign};
-// NativeDarkCloudText keeps stock glyphs, with the Source display family for external Unicode.
-// Bitmap font, placement and tint are the authored drawing contract.
+// Text the stock bitmap font can draw uses its glyphs; other Unicode falls back to the
+// Cinzel display font. Bitmap font, placement and tint are the authored drawing contract.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn ink(
     frame: &UiFrame<'_>,
@@ -61,7 +61,7 @@ pub(super) fn ink(
     Ok(())
 }
 
-/// `NativeUiControlPanelAction` is an unskinned action inside the shared bevel.
+/// An unskinned text action inside the shared control-panel bevel.
 pub(super) fn control_action(
     frame: &UiFrame<'_>,
     ui: &Ui,

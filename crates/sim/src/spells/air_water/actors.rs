@@ -1,4 +1,4 @@
-//! Cold Aura birth and Water Hail bounce epochs from `air-water-spell-actors.ts`.
+//! Cold Aura construction and Water Hail's bouncing flight.
 use crate::float;
 use crate::float::fround;
 use crate::spells::model::{
@@ -8,8 +8,8 @@ use crate::{Rng, Vec2};
 
 pub const HAIL_LIFETIME_TICKS: u64 = 134;
 
-/// Retained snapshot Hail omits its life; `nativeWaterHailLifeAtAge` reconstructs
-/// the native single-precision losses before endpoint interpolation.
+/// A retained Hail snapshot omits its life, so this rebuilds it from the age with
+/// the native single-precision losses, before endpoint interpolation.
 #[must_use]
 pub fn water_hail_life_at_age(age_ticks: u64) -> f64 {
     assert!(age_ticks < HAIL_LIFETIME_TICKS, "Hail age is within its native lifecycle");
@@ -57,7 +57,7 @@ pub fn create_water_hail_actor(
     let heading = rng.draw_integer(100_001);
     let speed = rng.draw_scaled_float(2.0, false);
     let degrees = fround(fround(f64::from(heading) / 100_000.0) * 360.0);
-    // The native placement uses GMath's authored float PI, not the host's double PI.
+    // The native placement uses GMath's authored float PI, not double-precision PI.
     let radians = fround(degrees * 3.141592502593994 / 180.0);
     let radial = Vec2::new(
         fround(fround(float::sin(radians)) * distance),
@@ -98,7 +98,7 @@ pub fn step_water_hail_actor(actor: &mut PrimarySpellWaterHail, rng: &mut Rng) -
     let mut vertical = fround(fround(actor.vertical_velocity + acceleration) + acceleration);
     let mut height =
         fround(fround(actor.height + actor.vertical_velocity) + actor.vertical_velocity);
-    // The source moves with the incoming velocity, even on a bounce that damps it.
+    // Hail moves with its incoming velocity, even on a bounce that damps it.
     let incoming_velocity = actor.horizontal_velocity;
     if height > 0.0 {
         actor.rotation_step_degrees = fround(1.0 + rng.draw_scaled_float(10.0, false));

@@ -1,5 +1,6 @@
 //! A rejoining wizard with pending offers stays detached until those choices finish.
-//! Source: `host/game-host.ts` staged-party-rejoin select/level-up branches.
+//! Its skill choices, rerolls and deferrals apply to the detached copy; it rejoins the
+//! retained run once no offer is pending.
 
 use solomon_protocol::GameCommand;
 use solomon_sim::session::DetachedSessionParticipant;

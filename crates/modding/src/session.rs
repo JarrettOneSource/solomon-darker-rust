@@ -1,4 +1,6 @@
-//! Verified live mod VMs and atomic event batches from `prepared-mod-session.ts`.
+//! A prepared mod session. Each mod's entry script runs in its own Lua VM and must compile to
+//! the graph digest its package declares; due timers and events then run as all-or-nothing
+//! intent batches.
 
 use solomon_sim::modding::definition::{CompiledWebLuaMod, WebLuaContentKind, WebLuaModIdentity};
 use solomon_sim::modding::runtime::*;
@@ -12,6 +14,7 @@ use crate::definition::runtime::{WebLuaDefinitionRuntime, WebLuaDefinitionRuntim
 use crate::intents::{ModIntentAdapter, ModIntentExecutionContext, execute_mod_intents};
 use crate::rules::{ModRuleEngine, ModRuleEngineOptions};
 
+/// One mod as the session prepares it: its compiled graph, entry script and identity.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreparedModSource {
@@ -21,6 +24,7 @@ pub struct PreparedModSource {
     pub identity: WebLuaModIdentity,
 }
 
+/// The verified mods of one game and the rule engine that runs their Lua VMs.
 pub struct PreparedModSession {
     rules: ModRuleEngine,
     verified: Vec<CompiledWebLuaMod>,
@@ -144,7 +148,8 @@ impl PreparedModSession {
             result.invocations += dispatched.invocations;
             result.budget_exceeded |= dispatched.budget_exceeded;
         }
-        // Source checks common scope after dispatch, even for an empty batch.
+        // The events must share one scope. This is checked after dispatch, and also when
+        // there are no events, which use the session scope.
         let scope = common_scope(&input.events)?;
         let error = if result.budget_exceeded && !input.events.is_empty() {
             Some("mod event budget exceeded".into())
@@ -211,7 +216,7 @@ impl PreparedModSession {
 
     pub fn project(&self, viewer_id: &str) -> Result<PreparedModProjection, String> {
         self.require_open()?;
-        // Source exposes all reducer cells here; semantic/private content is a
+        // Every reducer cell is exposed here; semantic and private content is a
         // separate projection with its own viewer filtering.
         Ok(PreparedModProjection {
             catalog: self.verified.clone(),

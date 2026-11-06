@@ -1,9 +1,8 @@
 //! Hosted admission and control-plane messages.
 //!
-//! Source contracts: Website `protocol/game-client-messages.ts`,
-//! `protocol/game-server-messages.ts` and `host/game-session-supervisor.ts`.
-//! The paired Rust endpoints retain this crate's wire spelling while preserving the
-//! source fields. Account privileges and content always come from a claimed host ticket.
+//! A hosted session uses Website accounts and services. Its commands and replies travel
+//! inside the direct-join envelope as `ClientMessage::Hosted` and `ServerMessage::Hosted`.
+//! Account privileges and content always come from a claimed host ticket.
 
 use serde::{Deserialize, Serialize};
 use solomon_sim::boneyard::BoneyardChoice;
@@ -26,6 +25,7 @@ pub const GAME_SESSION_PATH_PREFIX: &str = "/game-sessions/";
 /// Publication identities are independent of the signed game recovery revision.
 pub const DEPLOYMENT_PROTOCOL_VERSION: u32 = 2;
 
+/// How a hosted hello uses its save: start a new game from its profile, or resume it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GameSaveIntent {
@@ -33,6 +33,8 @@ pub enum GameSaveIntent {
     Resume,
 }
 
+/// A hosted player's first message: the control-plane ticket, wizard selection, social
+/// profile, optional cloud save and session options.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostedHello {
@@ -42,7 +44,7 @@ pub struct HostedHello {
     pub profile: PlayerSocialProfile,
     pub online_preferences: GameOnlinePreferences,
     pub resume_token: Option<String>,
-    /// The actual Website schema-37 document, including its profile and content metadata.
+    /// The player's Website save document, including its profile and content metadata.
     pub save: Option<String>,
     pub save_intent: Option<GameSaveIntent>,
     pub begin_college_intro: bool,
@@ -52,6 +54,8 @@ pub struct HostedHello {
     pub allow_mod_mismatch: bool,
 }
 
+/// The host's reply to an admitted hosted player: session kind, granted access, active
+/// content and mod assets, and the Boneyards that can be started.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostedWelcome {
@@ -65,6 +69,7 @@ pub struct HostedWelcome {
     pub boneyards: Vec<BoneyardChoice>,
 }
 
+/// A request from a hosted client, carried in `ClientMessage::Hosted`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HostedCommand {
@@ -83,8 +88,8 @@ pub enum HostedCommand {
     ModCast { content_id: String, request_id: u64, target_x: f64, target_y: f64 },
 }
 
-/// Source `MOD_ACTIONS`: payload admission and capabilities remain with the host and
-/// prepared content owner; renderers only submit these exact authored intents.
+/// A mod-authored intent that a renderer may submit. Payload admission and capabilities
+/// remain with the host and the prepared content owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ModAction {
@@ -98,6 +103,7 @@ pub enum ModAction {
     UiAction,
 }
 
+/// Why the host published a save checkpoint: a game over or ordinary progress.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SaveCheckpointReason {
@@ -105,6 +111,8 @@ pub enum SaveCheckpointReason {
     Progress,
 }
 
+/// A party management action; the host reports each outcome in
+/// `HostedServerMessage::PartyAction`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PartyAction {
@@ -120,6 +128,7 @@ pub enum PartyAction {
     Settings,
 }
 
+/// A message from the host to a hosted client, carried in `ServerMessage::Hosted`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum HostedServerMessage {
@@ -173,8 +182,8 @@ pub enum HostedServerMessage {
     ModCatalog {
         items: Vec<ModConsumableCatalogEntry>,
     },
-    /// Source `server-mod-content`: the prepared owner's accepted content graph.
-    /// Runtime actor/state rows remain in the separate `ModRuntime` projection.
+    /// The prepared owner's accepted content graph. Runtime actor and state rows
+    /// travel separately in the `ModRuntime` projection.
     ModContent {
         projection: LuaObject,
     },
@@ -184,7 +193,8 @@ pub enum HostedServerMessage {
     },
 }
 
-/// Source `MainMenuScene` settings projection. Only the accepted host owner may
+/// The enhanced-effects setting shown in the settings menu: its value, whether this
+/// player may change it, and what a change affects. Only the accepted host owner may
 /// change this value; local renderer quality settings have separate ownership.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnhancedEffectsAuthority {
@@ -193,6 +203,8 @@ pub struct EnhancedEffectsAuthority {
     pub scope: EnhancedEffectsScope,
 }
 
+/// What an enhanced-effects change affects: the current game, or the party's next run
+/// when changed from the public College.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum EnhancedEffectsScope {

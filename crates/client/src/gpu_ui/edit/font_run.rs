@@ -19,6 +19,7 @@ use native as platform;
 pub(in crate::gpu_ui) use native::shape as native_shape;
 use unicode_segmentation::UnicodeSegmentation;
 
+/// An outline stroke drawn around text: its width and color.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NativeFontStroke {
     pub width: f32,
@@ -28,6 +29,7 @@ pub struct NativeFontStroke {
 const TILE_WIDTH: u32 = 2048;
 const TILE_CONTENT: f32 = (TILE_WIDTH - 2) as f32;
 
+/// How a word wider than its line wraps.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum OverflowWrap {
     /// CSS normal wrapping permits an unbreakable word to overflow its line box.
@@ -37,6 +39,8 @@ pub enum OverflowWrap {
     BreakWord,
 }
 
+/// Layout options for a font run: wrap width and mode, line height, tabs, letter spacing and
+/// stroke.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FontRunOptions {
     pub wrap_width: Option<f32>,
@@ -250,6 +254,7 @@ struct RunCache {
     units: usize,
 }
 
+/// A shaped, wrapped text run: its line geometry and lazily rasterized GPU tiles.
 pub struct NativeFontRun {
     font: FontId,
     color: Color32,
@@ -570,8 +575,8 @@ mod tests {
 
     #[test]
     fn centered_rows_follow_native_inline_overflow_and_fit_alignment() {
-        // Native pinned Cloud h2: at701px, a445.375px inline row starts at148
-        // inside its405px clip. A fitting169.09375px phone row starts110.453125.
+        // The Cloud heading at 701px: a 445.375px inline row starts at 148 inside
+        // its 405px clip. A fitting 169.09375px phone row starts at 110.453125.
         let mut line = empty_line(0, 0.0, Rect::from_min_size(Pos2::ZERO, vec2(0.0, 37.8)));
         line.width = 445.375;
         let bounds = Rect::from_min_size(pos2(148.0, 36.0), vec2(405.0, 37.8));

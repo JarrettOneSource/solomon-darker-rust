@@ -1,4 +1,5 @@
-//! Incoming damage, admitted Flash and complete Harden shard lifetimes against Website.
+//! Incoming damage, admitted Flash and complete Harden shard lifetimes, against recordings
+//! from the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::economy::HubEconomyState;

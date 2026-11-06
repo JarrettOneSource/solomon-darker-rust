@@ -1,11 +1,13 @@
-//! Source controller focus over egui's actual registered widgets.
+//! Controller focus over egui's actual registered widgets.
 //!
-//! c140 `menu/navigation.rs` searches spatially inside the active root, then
-//! wraps in registration order. Physical keyboard traversal stays with egui.
+//! Controller movement searches spatially inside the active layer, then wraps in
+//! registration order. Physical keyboard traversal stays with egui.
 
 use egui::{Context, FocusDirection, Id, LayerId};
 use solomon_sim::input::{MenuDirection, choose_spatial_menu_target};
 
+/// One frame's controller navigation: the focus direction, whether A confirmed, and the
+/// widget focused beforehand.
 #[derive(Clone, Copy)]
 pub(crate) struct ControllerInput {
     direction: FocusDirection,
@@ -40,7 +42,7 @@ struct PreferredFocus {
     widget: Option<Id>,
 }
 
-/// Existing navigation owners supply their Source default without moving focus.
+/// Navigation owners declare their default widget without moving focus.
 /// Only the final highest scope can use it, and only during this actual paint.
 pub(crate) fn preferred(ctx: &Context, scope: &str, widget: Option<Id>) {
     let key = Id::unique("source-controller-preferred").with(scope);
@@ -54,7 +56,7 @@ pub(crate) fn finish(ctx: &Context, input: ControllerInput, scope: Option<(Layer
     }
     let Some((layer, scope)) = scope else { return };
     let widgets = ctx.focusable_widgets_in_layer(layer);
-    // Discovery can request a new default while widgets paint. Source movement
+    // Discovery can request a new default while widgets paint. Movement
     // still uses the active element captured before confirm/default admission.
     let active = widgets.iter().position(|widget| Some(widget.id) == input.focused);
     let initial = active.map(|index| widgets[index].id).or_else(|| {
@@ -72,7 +74,7 @@ pub(crate) fn finish(ctx: &Context, input: ControllerInput, scope: Option<(Layer
     if input.confirm
         && let Some(initial) = initial
     {
-        // Source A clicks the pre-move target. The existing empty commit delivers
+        // The controller's A clicks the pre-move target. The existing empty commit delivers
         // its ordinary response, independently of focus and without replaying Enter.
         if ctx.request_activation_next_frame(initial) {
             ctx.request_repaint();

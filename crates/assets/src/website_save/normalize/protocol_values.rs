@@ -1,4 +1,5 @@
-//! Source protocol/codecs/values.ts validation shared by persisted protocol records.
+//! Field validation shared by persisted protocol records: objects with known keys, bounded
+//! arrays and numbers, player IDs, painter registrations and vectors.
 
 use serde_json::{Map, Value};
 

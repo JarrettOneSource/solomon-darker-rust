@@ -1,8 +1,8 @@
-//! Runtime NavMesh queries from `core-server/boneyard-enemy-navigation.ts`.
+//! Enemy navigation: NavMesh preparation and caching, and route queries over the mesh.
 //!
-//! A geometry-owned cache retains source eager preparations and first-query runtime meshes.
-//! Endpoint attachment, A*, inset portal crossings and three-point route reduction consume
-//! that same ordered graph. Geometry checks keep their ordered all-pairs oracle.
+//! A geometry-owned cache keeps the meshes a scene prepares eagerly and those built on first
+//! query. Endpoint attachment, A*, inset portal crossings and three-point route reduction
+//! consume that same ordered graph. Geometry checks test every primitive in order.
 
 mod build;
 
@@ -24,6 +24,7 @@ const PORTAL_INSET: f64 = 1.0;
 const HEURISTIC_CELL: f64 = 200.0;
 const SIMPLIFICATION_CLEARANCE_FACTOR: f64 = 1.200_000_047_683_715_8;
 
+/// One NavMesh triangle: its three point indices, its center and its neighbors' IDs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NavigationTriangle {
     pub center: Vec2,
@@ -32,12 +33,14 @@ pub struct NavigationTriangle {
     pub vertices: [usize; 3],
 }
 
+/// A NavMesh: its points and the triangles built over them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NavigationMesh {
     pub points: Vec<Vec2>,
     pub triangles: Vec<NavigationTriangle>,
 }
 
+/// A NavMesh built for one pair of bounds and clearance radius.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreparedNavigationMesh {
     pub bounds: BoneyardBounds,
@@ -45,8 +48,8 @@ pub struct PreparedNavigationMesh {
     pub mesh: NavigationMesh,
 }
 
-/// One source collision-geometry identity and its first-build mesh cache.
-/// Clones share that geometry service; a newly decoded scene owns a fresh cache.
+/// The NavMesh cache for one scene, identified by its source and collision-geometry hashes.
+/// Clones share the cache; a newly decoded scene owns a fresh one.
 #[derive(Clone, Debug)]
 pub struct NavigationSet {
     pub source_sha256: String,
@@ -67,6 +70,8 @@ impl PartialEq for NavigationSet {
     }
 }
 
+/// An enemy route query: start and end points, body radii, clearance, the bounds to stay
+/// inside, and the collision sources to ignore.
 #[derive(Clone, Copy, Debug)]
 pub struct RouteRequest<'a> {
     pub body_radius: f64,
@@ -92,7 +97,7 @@ impl NavigationSet {
         }
     }
 
-    /// `prepareBoneyardWorldNavigation`: build the actual accepted scene's eager domains.
+    /// Builds the meshes this scene prepares eagerly, from its own collision geometry.
     #[must_use]
     pub fn for_scene(loaded: &LoadedBoneyard) -> Self {
         let collision = BoneyardCollisionWorld::from_scene(&loaded.scene);
@@ -121,7 +126,8 @@ impl NavigationSet {
             .cloned()
     }
 
-    /// Explicit source prewarming, using the current geometry rather than a substitute map.
+    /// Builds and caches one mesh ahead of its first query, using the current geometry
+    /// rather than a substitute map.
     pub fn prepare(&self, bounds: BoneyardBounds, world: &BoneyardCollisionWorld, clearance: f64) {
         self.nav_mesh(bounds, world, clearance);
     }
@@ -141,7 +147,7 @@ impl NavigationSet {
             request.clearance,
             request.ignored_source_ids,
         ) {
-            // A clear source route does not initialize the lazy cache.
+            // A clear direct route does not build or cache a mesh.
             return Some(vec![request.start, request.end]);
         }
         let prepared = self.nav_mesh(request.bounds, world, request.clearance);
@@ -170,7 +176,8 @@ impl NavigationSet {
     }
 }
 
-/// The exact eager domain inventory from `boneyard-world-construction.ts`.
+/// The bounds and clearances a scene prepares eagerly: the hostile area at clearances 25
+/// and 50, plus Solomon's escape traversal bounds at 25 when the scene owns his encounter.
 #[must_use]
 pub fn boneyard_world_navigation_preparations(
     loaded: &LoadedBoneyard,
@@ -417,8 +424,8 @@ fn resolve_endpoint_triangle(
     })
 }
 
-// BinaryHeap is a max heap. Reversing the two source key fields reproduces TriangleMinHeap:
-// the lowest f wins, with insertion order as the only tie break.
+// BinaryHeap is a max heap. Reversing both key fields makes it a min heap: the lowest f
+// wins, with insertion order as the only tie break.
 #[derive(Clone, Copy, Debug)]
 struct OpenTriangle {
     f: f64,

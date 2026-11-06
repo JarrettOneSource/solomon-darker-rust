@@ -1,8 +1,9 @@
-//! Ordered secondary target modifiers from native-secondary-abilities.ts.
+//! Secondary status effects on targets: slows, freezes, stuns, dazzle and burns.
 //! Movement factors are composed in application order, with a float32 store at each link.
 
 use crate::float::fround;
 
+/// A status effect that changes a target's movement, recorded in application order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SecondaryMovementModifierKind {
@@ -13,6 +14,8 @@ pub enum SecondaryMovementModifierKind {
     Dazzle,
 }
 
+/// An Electric Burn on a target: damage per tick, stun factor, remaining ticks, arc count
+/// and source.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryElectricBurnEffectState {
@@ -24,6 +27,8 @@ pub struct SecondaryElectricBurnEffectState {
     pub ticks: u64,
 }
 
+/// A Steamed effect on a target: damage per tick, ember and explosion payload, remaining
+/// ticks and source.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondarySteamedEffectState {
@@ -37,6 +42,8 @@ pub struct SecondarySteamedEffectState {
     pub ticks: u64,
 }
 
+/// Every secondary status effect on one target: slows, freeze, stun, dazzle, flee, burns,
+/// weaken and the order of its movement modifiers.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryTargetEffectState {
@@ -68,6 +75,7 @@ pub struct SecondaryTargetEffectState {
     pub world_key: String,
 }
 
+/// A change to a target's status effects; `None` fields stay unchanged.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SecondaryTargetEffectPatch {
     pub circle_slow_factor: Option<f64>,

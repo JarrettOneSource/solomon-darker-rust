@@ -2,9 +2,7 @@
 //!
 //! The courtyard opens onto four private rooms. Touching a doorway's trigger starts a scripted
 //! walk toward its target while the view fades out; the wizard then appears in the destination
-//! and walks in while the view fades back. Reference:
-//! `Website/frontend/src/game/core-kernels/hub-regions.ts`, with room sizes from
-//! `hub-private-room-layout.ts`.
+//! and walks in while the view fades back.
 //!
 //! [`HubRegion::segments`] supplies the courtyard and private-room collision tables.
 
@@ -30,13 +28,13 @@ impl HubRegion {
     pub const ALL: [Self; 5] =
         [Self::Courtyard, Self::Mortuary, Self::Library, Self::Storeroom, Self::Office];
 
-    /// The stock region index (`nativeId`).
+    /// The stock region index.
     #[must_use]
     pub const fn native_id(self) -> u8 {
         self as u8
     }
 
-    /// The Website's region id, as the protocol and fixtures spell it.
+    /// The region's string ID, as the protocol and fixtures spell it.
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
@@ -117,8 +115,8 @@ const fn private_return(region: HubRegion) -> HubPortal {
     }
 }
 
-/// Every doorway, courtyard exits first, in the reference's order; [`hub_portal_at`] takes
-/// the first whose trigger the wizard touches.
+/// Every doorway, courtyard exits first; [`hub_portal_at`] takes the first whose trigger the
+/// wizard touches.
 pub const HUB_PORTALS: [HubPortal; 8] = [
     courtyard_exit(
         HubRegion::Mortuary,
@@ -164,6 +162,8 @@ pub const fn hub_incoming_fade_rate(region: HubRegion) -> f64 {
     }
 }
 
+/// The stage of a region transition: the College intro fade-in, the hold behind full cover for
+/// the College loadout, or a doorway's outgoing or incoming fade.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HubTransitionPhase {
@@ -173,7 +173,7 @@ pub enum HubTransitionPhase {
     Incoming,
 }
 
-/// A wizard part-way between regions (`HubParticipantTransition`).
+/// A wizard part-way between regions: the fade alpha, phase and scripted walk.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubTransition {
@@ -194,7 +194,7 @@ pub fn hub_portal_at(region: HubRegion, position: Vec2, radius: f64) -> Option<&
 }
 
 /// The outgoing transition `portal` starts for a wizard that touched its trigger at
-/// `contact` (`beginHubTransition`).
+/// `contact`.
 #[must_use]
 pub fn begin_hub_transition(portal: &HubPortal, contact: Vec2) -> HubTransition {
     let scripted_target = if portal.preserve_contact_x {
@@ -232,8 +232,8 @@ const fn courtyard_reentry(source: HubRegion) -> HubIncomingPlacement {
     HubIncomingPlacement { position, scripted_speed: 1.0, scripted_target }
 }
 
-/// `hubIncomingPlacement`: a private room is entered at the bottom centre, walking up; the
-/// courtyard is re-entered beside the doorway that leads back to `source`.
+/// Where a wizard arrives in `destination`: a private room is entered at the bottom centre,
+/// walking up; the courtyard is re-entered beside the doorway that leads back to `source`.
 ///
 /// # Panics
 ///
@@ -269,8 +269,8 @@ pub fn hub_scripted_delta(position: Vec2, target: Vec2, speed: f64) -> Vec2 {
     Vec2::new(dx / distance * step, dy / distance * step)
 }
 
-/// A movement plan that walks the wizard toward `target` without input
-/// (`planHubScriptedMovement`). Nothing is retained between ticks, so the walk stops dead.
+/// A movement plan that walks the wizard toward `target` without input. Nothing is
+/// retained between ticks, so the walk stops dead.
 #[must_use]
 pub fn plan_hub_scripted_movement(position: Vec2, target: Vec2, speed: f64) -> HubWizardPlan {
     let delta = hub_scripted_delta(position, target, speed);

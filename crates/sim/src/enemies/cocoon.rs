@@ -1,5 +1,5 @@
-//! Contact-owned Cocoon construction and removal from `enemies/construction.ts` and
-//! `enemies/cocoon.ts`. Contact births intentionally use the enemy's standalone entropy.
+//! Cocoon construction and removal. A Cocoon is born from a contact with a player, who owns
+//! it; contact births intentionally use the enemy's standalone entropy.
 use super::config::EnemyArenaScalars;
 use super::model::*;
 use super::path::EnemyNavigation;
@@ -11,8 +11,8 @@ use crate::Vec2;
 use crate::painter::WorldPainterOrder;
 
 impl EnemyWorld {
-    /// The source contact caller ignores these returned spawn events. Keep its current
-    /// tick queues intact while retaining the actor, RNG draws and consumed event IDs.
+    /// The contact caller ignores the returned spawn events. Keep its current tick queues
+    /// intact while retaining the actor, RNG draws and consumed event IDs.
     pub fn add_cocoon(
         &mut self,
         owner: &str,
@@ -61,7 +61,7 @@ impl EnemyWorld {
     }
 }
 
-/// `addNativeCocoon` supplies only a root-preserving movement callback. Other geometry
+/// A Cocoon birth supplies only a root-preserving movement callback. Other geometry
 /// callbacks do not belong to this birth path and must never silently become world rules.
 struct CocoonBirth;
 impl EnemyNavigation for CocoonBirth {

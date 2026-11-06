@@ -1,4 +1,4 @@
-//! Zombie beat timing and the separately seeded body articulation from `enemies/zombie.ts`.
+//! Zombie beat timing, the separately seeded body articulation and rotten Zombie particles.
 use super::combat::{attack_marker, direct_contact_player_damage};
 use super::config::{EnemyFamilyConfig, desaturate_color};
 use super::effects::{

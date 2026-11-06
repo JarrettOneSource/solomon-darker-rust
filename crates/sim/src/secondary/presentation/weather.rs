@@ -1,5 +1,5 @@
-//! Source storm composites, rain gradients and deterministic Freeze snow.
-//! Freeze children follow `renderer/native-freeze-wave-presentation.ts`.
+//! Storm cloud and weather composites, rain gradients, and Freeze wave visuals with
+//! deterministic snow.
 
 use super::draws::*;
 use super::types::*;
@@ -264,8 +264,8 @@ pub fn raindrop_gradient(actor: &SecondaryActorState, acid: bool) -> SecondaryGr
     }
 }
 
-// This renderer helper uses different endpoint equations than the gameplay
-// natural spline. Preserve its source coefficients for the storm arc.
+// This presentation spline uses different endpoint equations than the gameplay
+// natural spline. Preserve its coefficients for the storm arc.
 struct ThreePointSpline {
     points: [Vec2; 3],
     x: [f64; 3],

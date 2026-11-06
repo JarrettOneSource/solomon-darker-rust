@@ -1,5 +1,5 @@
-//! InventoryScreen page motion from renderer/hub-inventory-render-contract.ts.
-//! The clip stays in the native stage while incoming and outgoing pages move.
+//! Inventory page motion when a Sack opens or closes. The clip stays fixed in the stage
+//! while incoming and outgoing pages move.
 
 use crate::hud::HudRect;
 
@@ -8,12 +8,14 @@ pub const SACK_PAGE_TICKS: u32 = 37;
 pub const SACK_PAGE_DURATION_MS: f64 = 370.0;
 pub const SACK_PAGE_CLIP: HudRect = HudRect::new(0.0, 492.0, 1600.0, 305.0);
 
+/// Whether the page motion opens a Sack or goes back to its parent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SackPageDirection {
     Open,
     Back,
 }
 
+/// The incoming and outgoing page offsets at one moment of a Sack page transition.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SackPageOffsets {
     pub incoming_y: f64,
@@ -35,8 +37,8 @@ pub fn inventory_sack_page_height(screen_height: f64) -> f64 {
     }
 }
 
-/// hubSackPageOffsets: ten pixels per native tick, with a final five-pixel
-/// snap to settle the 365px incoming page on tick37.
+/// Pages move ten pixels per tick, with a final five-pixel snap to settle the 365px
+/// incoming page on tick 37.
 #[must_use]
 pub fn hub_sack_page_offsets(
     direction: SackPageDirection,

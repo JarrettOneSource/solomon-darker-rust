@@ -1,7 +1,7 @@
 //! One native OpenGL and WebGL2 batcher: textured triangles with vertex tints, drawn in submission
-//! order. Normal/add emit premultiplied RGB; multiply retains straight RGB, with
-//! the Website's native per-channel blend equations. Destinations are
-//! logical pixels of the 1600×900 view, which `begin_frame` letterboxes into the canvas.
+//! order. Normal/add emit premultiplied RGB; multiply retains straight RGB. Each mode sets
+//! separate RGB and alpha blend factors. Destinations are logical pixels of the 1600×900 view,
+//! which `begin_frame` letterboxes into the canvas.
 
 #[cfg(target_arch = "wasm32")]
 pub mod announcements;
@@ -155,6 +155,7 @@ void main() {
 
 const FLOATS_PER_VERTEX: usize = 8;
 
+/// A GPU texture and its size in texels.
 #[derive(Clone)]
 pub struct Texture {
     id: u32,
@@ -170,13 +171,13 @@ pub struct RenderTarget {
     framebuffer: glow::Framebuffer,
 }
 
-/// How a quad combines with what is already drawn, matching Pixi's blend modes.
+/// How a quad combines with what is already drawn.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BlendMode {
     #[default]
     Normal,
     Multiply,
-    /// Light added onto what is below: Pixi's `add` for the seals and the fountain spray.
+    /// Light added onto what is below, as for the seals and the fountain spray.
     Add,
 }
 
@@ -193,14 +194,15 @@ impl BlendMode {
     }
 }
 
+/// How a draw interprets the sampled texture colour before tinting and blending.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TextureColorMode {
     #[default]
     Texture,
     /// Native diffuse RGB with the sampled texture alpha (white-alpha sprite filters).
     AlphaMask,
-    /// Storm's white ColorMatrixFilter: native capture squares texture/vertex
-    /// alpha, then the filter replaces RGB with white and premultiplies again.
+    /// Storm's white filter: native capture squares texture/vertex alpha, then the
+    /// filter replaces RGB with white and premultiplies again.
     WhiteAlphaFilter,
     Premultiplied,
 }
@@ -213,7 +215,7 @@ pub enum TextureSampling {
     Nearest,
 }
 
-/// Source CSS `saturate(...) brightness(...)` in sRGB, with alpha preserved.
+/// A CSS `saturate(...) brightness(...)` filter in sRGB, with alpha preserved.
 /// Filter Effects 1 requires non-premultiplied colour and clamps each operation:
 /// https://drafts.csswg.org/filter-effects/#ShorthandEquivalents
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -229,7 +231,7 @@ impl Default for ColorFilter {
 }
 
 impl ColorFilter {
-    /// The same Source filter for solid/text colours that do not sample an image.
+    /// The same filter for solid and text colours that do not sample an image.
     pub fn rgb(self, rgb: [f32; 3]) -> [f32; 3] {
         let grey = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;
         rgb.map(|channel| {
@@ -240,6 +242,8 @@ impl ColorFilter {
     }
 }
 
+/// What a shadow pass draws: the image over its shadow (`Source`), the shadow alone, or a
+/// CSS outer or inset box shadow.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ShadowOutput {
     #[default]
@@ -301,6 +305,8 @@ fn quad_vertices(
     })
 }
 
+/// The batching renderer: its GL context, shader programs, pending vertex batch and current
+/// draw state.
 pub struct Renderer {
     gl: GraphicsContext,
     sprite_program: sprite_program::SpriteProgram,
@@ -639,7 +645,8 @@ impl Renderer {
         }
     }
 
-    /// Upload a source-authored RGBA ramp without passing through a browser canvas.
+    /// Uploads RGBA pixels built in code, such as a colour ramp, as a linearly filtered,
+    /// edge-clamped texture without passing through a browser canvas.
     pub fn upload_rgba(&self, width: u32, height: u32, pixels: &[u8]) -> Result<Texture, String> {
         // SAFETY: the renderer owns these handles in the live current context;
         // uploads borrow initialized slices only for the duration of each driver call.
@@ -806,8 +813,8 @@ impl Renderer {
         }
     }
 
-    /// `NativePlayerDiffuseCapture`: preserve the articulated pose's diffuse
-    /// colours and sampled alpha while suppressing every source texture's RGB.
+    /// Draws into a diffuse capture: the articulated pose keeps its vertex colours and
+    /// sampled alpha while every texture's RGB is suppressed.
     pub fn render_diffuse_to(
         &mut self,
         target: &RenderTarget,
@@ -1000,7 +1007,8 @@ impl Renderer {
         self.bind_projection(self.logical_size, [self.viewport[2] as f32, self.viewport[3] as f32]);
     }
 
-    /// Remove the actual source alpha from a premultiplied GPU composition.
+    /// Erases part of a premultiplied GPU composition: the destination is scaled by one
+    /// minus each drawn pixel's alpha.
     pub fn draw_erased<R>(&mut self, draw: impl FnOnce(&mut Self) -> R) -> R {
         self.flush();
         let previous = self.erasing;
@@ -1243,8 +1251,8 @@ impl Renderer {
         }
     }
 
-    /// Source `installNativePixelCenterProjection` changes subsequent projection
-    /// binds, including offscreen targets. Enable only on its Hub/Boneyard scopes.
+    /// Makes subsequent projection binds, including offscreen targets, use D3D9 integer
+    /// pixel centers. Enable it only while drawing the Hub or Boneyard world.
     pub fn set_world_pixel_centers(&mut self, enabled: bool) {
         self.world_pixel_centers = enabled;
     }
@@ -1255,8 +1263,8 @@ impl Renderer {
         unsafe {
             self.bind_effect_program();
             self.gl.uniform_2_f32(Some(&self.u_logical_size), logical[0], logical[1]);
-            // Source adds projection.a/d * (0.5 / targetResolution). Express that
-            // same translation in this target's logical units before projection.
+            // Integer pixel centers shift the projection by half a physical pixel. Express
+            // that translation in this target's logical units before projection.
             let offset = if self.world_pixel_centers {
                 [
                     (0.5 * f64::from(logical[0]) / f64::from(physical[0])) as f32,
@@ -1440,7 +1448,6 @@ impl Renderer {
             if self.blend != blend {
                 self.flush();
                 self.bind_effect_program();
-                // `native-fixed-function-render-pipeline.ts::installNativeBlendModes`.
                 // Multiply preserves straight source RGB; normal/add use premultiplied RGB.
                 self.blend = blend;
                 self.bind_blend();

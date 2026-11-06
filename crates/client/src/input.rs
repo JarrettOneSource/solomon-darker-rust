@@ -89,6 +89,8 @@ struct GameplayInputState {
     mobile_layout: MobileUiLayoutState,
 }
 
+/// The gameplay input owner: platform event listeners, the visible Belt bank and the
+/// held input state sampled once per frame.
 pub struct MovementInput {
     transport: platform::InputTransport,
     hotbar: HotbarSelection,

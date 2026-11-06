@@ -1,6 +1,5 @@
-//! Stock draw plans from `renderer/native-secondary-presentation.ts` and its
-//! `native-secondary-{burst,field,weather,golem}-presentation.ts` families.
-//! `tests/secondary_presentation_goldens.rs` replays complete source plans.
+//! Stock draw plans for every secondary actor, grouped into burst, field, weather and
+//! Golem families. `tests/secondary_presentation_goldens.rs` replays complete recorded plans.
 //!
 //! These are pure values; the GPU view owns atlas uploads, render targets and
 //! painter submission. Presentation reconstructs children from captured RNG

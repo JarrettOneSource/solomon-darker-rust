@@ -1,5 +1,5 @@
-//! Actual accepted host rows from `prepared-mod-host.ts::project/runtimeProjection`.
-//! These functions only borrow content and live engines; no view owns authority.
+//! Read-only views of the prepared mod host: the content summary and each viewer's runtime
+//! projection. They borrow the content and engines and change nothing.
 
 use serde_json::{Value, json};
 use solomon_sim::modding::assets::{
@@ -12,6 +12,7 @@ use crate::json::{SourceCollator, lua_value};
 
 use super::*;
 
+/// The prepared mods' runtime state as one viewer sees it, with the revision it reflects.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct PreparedModRuntimeProjection {
     pub projection: LuaObject,
@@ -410,8 +411,8 @@ impl PreparedModHost {
                 .content
                 .scene(&scene.scene_content_id)
                 .expect("active scene references accepted content");
-            // Restored scene indexes retain Source's safe-integer width. Only
-            // an index admitted against this exact definition can be sampled.
+            // Restored room indexes are wide `u64` values. Only an index that names one of
+            // this scene definition's rooms is sampled.
             let reference = usize::try_from(scene.room_index)
                 .ok()
                 .and_then(|index| definition.rooms.get(index))

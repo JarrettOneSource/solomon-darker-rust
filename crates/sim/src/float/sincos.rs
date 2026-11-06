@@ -1,10 +1,11 @@
-//! Pinned V8 fdlibm sine/cosine kernels and argument reduction.
+//! The game's deterministic sine and cosine and their argument reduction.
 //!
-//! Source: Node v22.17.0 `deps/v8/src/base/ieee754.cc:113–710,1354–1383,2450–2478`.
-//! The ARM64 binary's polynomial chains, compensated tails and reduction products use
-//! fused instructions. Explicit `mul_add` preserves those witnessed rounding points on
-//! native and WASM rather than delegating to platform libm. The large reduction below is
-//! fdlibm's precision-two path, the sole path used by both scalar functions.
+//! This reproduces fdlibm's `sin`, `cos`, their polynomial kernels and argument reduction as
+//! V8 ships them in `src/base/ieee754.cc`. The build that produced the recorded results fuses
+//! the polynomial chains, compensated tails and reduction products. Explicit `mul_add`
+//! reproduces those rounding points on native and WebAssembly rather than delegating to
+//! platform libm. The large reduction in `reduction` is fdlibm's precision-two path, the
+//! sole path used by both scalar functions.
 //!
 //! Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
 //! Developed at SunSoft, a Sun Microsystems, Inc. business.
@@ -34,7 +35,7 @@ const COS_COEFFICIENTS: [f64; 6] = [
     f64::from_bits(0xbda8_fae9_be88_38d4),
 ];
 
-/// JavaScript `Math.sin`, retaining the pinned V8 reduction and fused polynomial.
+/// Sine of `value` in radians, with fdlibm's argument reduction and fused polynomial.
 #[must_use]
 pub fn sin(value: f64) -> f64 {
     let high = magnitude_high(value);
@@ -53,7 +54,7 @@ pub fn sin(value: f64) -> f64 {
     }
 }
 
-/// JavaScript `Math.cos`, sharing the exact same argument reduction as `sin`.
+/// Cosine of `value` in radians, sharing the exact same argument reduction as `sin`.
 #[must_use]
 pub fn cos(value: f64) -> f64 {
     let high = magnitude_high(value);
@@ -89,8 +90,8 @@ fn kernel_sin(value: f64, tail: f64, has_tail: bool) -> f64 {
     if !has_tail {
         return cube.mul_add(square.mul_add(polynomial, SIN_COEFFICIENTS[0]), value);
     }
-    // sin instructions 0x10169e1b4..0x10169e1dc: the cube*polynomial is
-    // rounded separately, then both compensated subtraction stages are fused.
+    // The cube*polynomial product is rounded separately, then both compensated
+    // subtraction stages are fused.
     let correction = tail.mul_add(0.5, -cube * polynomial);
     let correction = square.mul_add(correction, -tail);
     let correction = (-cube).mul_add(SIN_COEFFICIENTS[0], correction);

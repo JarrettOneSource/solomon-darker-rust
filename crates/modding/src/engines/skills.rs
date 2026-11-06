@@ -1,4 +1,5 @@
-//! Weighted offers, learned ranks and eight quickbar slots from `mod-skill-engine.ts`.
+//! Mod skills: weighted skill offers, the ranks each player has learned, and spells bound to
+//! eight quickbar slots.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use solomon_sim::modding::{LuaObject, LuaValue};
 use super::{MAXIMUM_SAFE_INTEGER, validate_player};
 use crate::json::SourceCollator;
 
+/// Each player's mod skill offer, learned skill ranks and quickbar spell bindings.
 pub struct ModSkillEngine {
     catalog: Arc<PreparedModContentCatalog>,
     bindings: Vec<(String, String)>,
@@ -377,7 +379,7 @@ fn unit_roll(seed: u64, ordinal: u32) -> f64 {
     value ^= value >> 16;
     value = value.wrapping_mul(0x7feb_352d);
     value ^= value >> 15;
-    // The final Source ^= has no trailing >>> 0: its bitwise result is signed,
-    // so this deliberately retains negative rolls rather than normalizing them.
+    // The final xor is read as a signed 32-bit value, so rolls fall in [-0.5, 0.5).
+    // Negative rolls are kept deliberately rather than normalized.
     f64::from(value as i32) / 4_294_967_296.0
 }

@@ -1,5 +1,6 @@
-//! Source audio names, spatial gain and presentation cues. Authoritative gameplay emits
-//! sound/pitch events; no audio adapter is allowed to advance a gameplay random stream.
+//! The stock audio cue catalog, music scenes, spatial gain and presentation cues.
+//! Authoritative gameplay emits sound/pitch events; no audio adapter is allowed to advance a
+//! gameplay random stream.
 
 mod catalog;
 pub mod combat;
@@ -8,6 +9,8 @@ pub use catalog::{AUDIO_CATALOG, AudioCue, AudioDefinition, AudioKind};
 use crate::hub::teacher::{HUB_TEACHER_CAST_TICKS, HUB_TEACHER_CYCLE_TICKS};
 use crate::profile::WizardElement;
 
+/// A scene with its own music: `cue` names its track and `transition_ticks` the crossfade
+/// into it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MusicScene {
     Title,
@@ -39,6 +42,7 @@ impl MusicScene {
     }
 }
 
+/// Playback settings for one cue: volume, playback rate and start offset in seconds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct AudioOptions {
@@ -52,6 +56,8 @@ impl Default for AudioOptions {
     }
 }
 
+/// A sound or stream change on the wizard creation screen, fired when its phase clock
+/// crosses a cue time.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreateAudioAction {
     PlaySound(AudioCue),

@@ -11,6 +11,8 @@ struct Pointers {
     touches: HashMap<u64, i32>,
 }
 
+/// Desktop pointer and touch tracking that feeds winit window events into the shared
+/// gameplay input state.
 pub(super) struct InputTransport {
     surface: crate::platform::Surface,
     state: Rc<RefCell<GameplayInputState>>,

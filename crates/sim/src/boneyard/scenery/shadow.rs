@@ -1,5 +1,6 @@
-//! Native class auxiliaries from `native-scenery-shadow.ts` and
-//! `native-scrub-shadow.ts`: actual glyph masks rather than guessed silhouettes.
+//! Shadow quads drawn with scenery: flat glyph shadows, Tree root masks, fence, wall and
+//! Goodie shadows, and Scrub's animated shadow. They use the actual glyph masks rather than
+//! guessed silhouettes.
 
 use crate::boneyard::{BoneyardScene, shadows::ShadowRecord, terrain_surface::GROUND_PI};
 use crate::float::{atan2, cos, fround as f, sin};
@@ -8,6 +9,7 @@ use crate::{Rng, Vec2};
 use super::fence::{stored_inset, stored_length, stored_unit};
 use super::{SceneryLayer, SceneryPlan, ScenerySource};
 
+/// A glyph record's size and registered origin, which place its shadow quad.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NativeSceneryShadowGlyph {
     pub width: f64,
@@ -16,6 +18,7 @@ pub struct NativeSceneryShadowGlyph {
     pub anchor_y: f64,
 }
 
+/// The texture a shadow quad samples: a scenery glyph, the fence grate or plain white.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SceneryShadowTexture {
     Glyph(usize),
@@ -23,6 +26,7 @@ pub enum SceneryShadowTexture {
     White,
 }
 
+/// What a shadow quad represents, with a stable string ID for each role.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SceneryShadowRole {
     TreeRootMask,
@@ -48,6 +52,7 @@ impl SceneryShadowRole {
     }
 }
 
+/// One shadow quad: per-corner alpha, role, texture, tint, UVs and world vertices.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SceneryShadowQuad {
     pub alphas: [f64; 4],
@@ -299,7 +304,7 @@ impl ScrubShadowState {
 }
 
 #[must_use]
-#[allow(clippy::too_many_arguments)] // Source inputs plus borrowed glyph records keep asset I/O outside the kernel.
+#[allow(clippy::too_many_arguments)] // Borrowed glyph records keep asset I/O outside the kernel.
 pub fn scrub_shadow_plan(
     entry: usize,
     glyph: NativeSceneryShadowGlyph,

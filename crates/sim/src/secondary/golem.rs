@@ -1,5 +1,5 @@
-//! Full Golem assembly, targeting, walking, articulation, attacks and damage from Website
-//! `core-kernels/native-secondary-golem.ts`. World placement stays with the world owner.
+//! The full Golem: assembly, targeting, walking, articulation, attacks and damage. World
+//! placement stays with the world owner.
 
 use crate::float;
 use crate::float::{atan2, fround, hypot};
@@ -10,6 +10,7 @@ pub const GOLEM_RADIUS: f64 = 30.0;
 pub const GOLEM_PLACEMENT_RADIUS: f64 = 25.0;
 pub const GOLEM_REFLECT_DISTANCE_SQUARED: f64 = 6400.0;
 
+/// What a Golem is doing: assembling, active, attacking or provoking.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GolemPhase {
@@ -19,6 +20,8 @@ pub enum GolemPhase {
     Provoke,
 }
 
+/// A Golem's retained state: health and damage, phase and action timing, orbit, and both
+/// legs' articulation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryGolemState {
@@ -56,6 +59,8 @@ pub struct SecondaryGolemState {
     pub target_poll_ticks_remaining: i32,
 }
 
+/// The ranked stats a new Golem starts with: health, maximum damage, Iron upgrade, reflect
+/// factor and pose variant.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GolemBirthStats {
     pub health: f64,
@@ -65,8 +70,8 @@ pub struct GolemBirthStats {
     pub pose_variant: u32,
 }
 
-/// The source allows foot targets to use an optional world resolver. Its absent resolver
-/// returns the requested position, so unobstructed worlds need only supply root movement.
+/// The world a Golem walks in. Foot targets use an optional resolver whose default returns
+/// the requested position, so unobstructed worlds need only supply root movement.
 pub trait NativeGolemWorld {
     fn resolve_movement(&mut self, requested_position: Vec2) -> Vec2;
     fn resolve_foot_target(&mut self, _current_position: Vec2, requested_position: Vec2) -> Vec2 {
@@ -123,6 +128,8 @@ impl SecondaryGolemState {
     }
 }
 
+/// A Golem actor as its kernel steps it: identity, owner, position, rotation, target and
+/// Golem state.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GolemKernelActor {
     pub age_ticks: u64,
@@ -135,6 +142,7 @@ pub struct GolemKernelActor {
     pub target_id: Option<usize>,
 }
 
+/// A target a Golem can pick: its ID, position, radius and registration order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GolemKernelTarget {
     pub id: usize,
@@ -143,6 +151,7 @@ pub struct GolemKernelTarget {
     pub registration_order: Option<usize>,
 }
 
+/// A Golem attack's contact: origin, heading, damage, movement budget and the targets hit.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GolemContact {
     pub damage: f64,
@@ -152,6 +161,8 @@ pub struct GolemContact {
     pub target_ids: Vec<usize>,
 }
 
+/// What one Golem step produced: any assembly milestone, attack contact, footstep or
+/// provoke start.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GolemKernelStepResult {
     pub assembly_milestone: Option<u64>,
@@ -314,6 +325,8 @@ pub fn step_secondary_golem(
     active_result(actor, None, provoked, world, rng)
 }
 
+/// Damage arriving at a Golem: primary and secondary amounts, and whether a reflectable
+/// physical source is in range.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GolemIncomingDamage {
     pub primary_damage: f64,
@@ -321,6 +334,8 @@ pub struct GolemIncomingDamage {
     pub secondary_damage: f64,
 }
 
+/// The outcome of damaging a Golem: the updated actor, whether the damage was ignored or
+/// killed it, and the damage reflected back.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GolemDamageResult {
     pub actor: Option<GolemKernelActor>,

@@ -1,4 +1,5 @@
-//! Source component and immutable-world JSON for Website save interchange.
+//! Projects one owner's session into save document JSON: simulation components, the
+//! world and the immutable loaded Boneyard scene.
 
 use serde_json::{Value, json};
 use solomon_sim::boneyard::waves::director::WaveDirector;

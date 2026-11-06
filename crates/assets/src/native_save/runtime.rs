@@ -1,4 +1,5 @@
-//! Native/Website save conversion over the public canonical save boundary.
+//! Conversion between native saves, portable profiles and web game save documents,
+//! through the public save document API.
 
 mod export;
 mod files;

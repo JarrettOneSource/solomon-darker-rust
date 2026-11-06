@@ -1,4 +1,5 @@
-//! Every stock College conversation, range, marker and selector against the Website.
+//! Every stock College conversation, range, marker and selector, against recordings from
+//! the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;

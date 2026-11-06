@@ -12,6 +12,7 @@ use winit::window::Window;
 use super::super::edit::model::EditGroup;
 use super::*;
 
+/// The native input transport: winit window events translated into the shared input queue.
 pub(in crate::gpu_ui) struct NativeInput {
     window: Arc<Window>,
     ctx: egui::Context,

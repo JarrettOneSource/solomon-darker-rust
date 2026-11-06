@@ -1,5 +1,6 @@
-//! Enemy and projectile providers from `core-kernels/native-boneyard-light-model.ts`.
-//! `entity-light-goldens.json` pins source admission and semantic presentation draws.
+//! Light providers for enemies, enemy projectiles and enemy projectile effects. The
+//! recorded `entity-light-goldens.json` fixture pins which lights each entity submits and
+//! their presentation random draws.
 
 use crate::Vec2;
 use crate::enemies::EnemyToken;
@@ -15,6 +16,7 @@ use super::{
     presentation_random_word, presentation_signed_random,
 };
 
+/// The enemy values its lights read, copied from an `EnemyActor`.
 #[derive(Clone, Copy, Debug)]
 pub struct EnemyLightOwner {
     pub burning: bool,
@@ -52,6 +54,7 @@ impl From<&EnemyActor> for EnemyLightOwner {
     }
 }
 
+/// A light source and the world-manager lane (actor or transient) that submits it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardLightProviderCandidate {
     pub lane: WorldManagerLane,
@@ -242,6 +245,7 @@ fn fire_projectile_light(id: usize, position: Vec2, frame: u64) -> BoneyardLight
     )
 }
 
+/// The light an enemy projectile effect gives off; `Unlit` effects give none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyProjectileEffectLightKind {
     DemonFire,

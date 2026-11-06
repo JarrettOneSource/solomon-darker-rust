@@ -1,4 +1,4 @@
-//! Cross-College broker delivery and source local party/chat commands.
+//! Cross-College broker delivery and each College's party, chat and player-card commands.
 
 use solomon_protocol::hosted::{HostedServerMessage, PartyAction};
 use solomon_protocol::{HostErrorCode, ServerMessage};
@@ -24,6 +24,8 @@ struct ChatRequest<'a> {
     recipient_reference: Option<&'a str>,
 }
 
+/// What the social broker can see while one College handles a message: that College,
+/// held apart from the list, and every other College.
 pub(super) struct BrokerWorlds<'a> {
     pub others: &'a [CollegeRecord],
     pub current: Option<&'a HostedGameHost>,
@@ -89,7 +91,7 @@ impl HostedSupervisor {
             &mut || invitation_id.clone(),
             &BrokerWorlds { others: &self.colleges, current: Some(host) },
         );
-        // The host exposes the source rejection rather than silently ignoring a stale reference.
+        // The sender sees the broker's rejection; a stale reference is never silently ignored.
         if let Err(reason) = result {
             return Err((HostErrorCode::CommandRejected, reason.text().into()));
         }

@@ -4,6 +4,8 @@
 use serde::Deserialize;
 use std::time::Duration;
 
+/// This build's revision and source timestamp, and the GitHub repository that publishes its
+/// releases.
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Build {
@@ -32,6 +34,7 @@ impl Build {
     }
 }
 
+/// A newer published desktop release: its revision and this platform's archive URL.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AvailableUpdate {
     pub revision: String,

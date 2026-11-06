@@ -1,5 +1,4 @@
-//! Late player/resource/death phases and the frozen Game Over branch of
-//! `core-server/game-simulation.ts`.
+//! The tick's late player, resource and death phases, and the frozen Game Over branch.
 
 use super::*;
 use crate::Vec2;

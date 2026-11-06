@@ -1,7 +1,7 @@
-//! Current Website Arena field and road geometry, built from the admitted scene.
+//! Arena ground geometry built from the admitted scene: the tiled field and the roads.
 //!
-//! `native-arena-field.ts` owns the retained field lattice; the separate road
-//! program is `renderer/native-boneyard-surface.ts`. Neither consumes game RNG.
+//! `field` owns the retained field lattice; `road` builds the separate road
+//! meshes. Neither consumes game RNG.
 
 mod field;
 mod road;
@@ -15,8 +15,8 @@ pub use field::{
 };
 pub use road::{road_endpoint_alphas, road_mesh_plan};
 
-/// World vertices and normalized texture coordinates. GPU stores already occur
-/// in the source plans, so each position/UV has been narrowed to f32 and widened.
+/// World vertices and normalized texture coordinates. The plans already apply the
+/// GPU's f32 stores, so each position/UV has been narrowed to f32 and widened.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BoneyardSurfaceMesh {
     pub positions: Vec<Vec2>,
@@ -25,6 +25,7 @@ pub struct BoneyardSurfaceMesh {
     pub indices: Vec<usize>,
 }
 
+/// A road's surface mesh and the index of the road style it was built with.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RoadMeshPlan {
     pub mesh: BoneyardSurfaceMesh,

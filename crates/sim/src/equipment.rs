@@ -1,4 +1,5 @@
-//! Native equipment stat lanes from Website `core-kernels/native-equipment-effects.ts`.
+//! Equipment effects: how equipped items and completed sets change a wizard's skill ranks and
+//! stat modifiers.
 
 mod catalog;
 pub mod random;
@@ -9,6 +10,8 @@ use crate::economy::{HubEquipmentState, HubInventoryItem};
 use crate::float::fround;
 use crate::profile::{SKILL_CATALOG, SKILL_ROW_COUNT, skill_root};
 
+/// One equipment effect: its `kind`, the skill, class or stat row it targets, and its
+/// `magnitude`. For most kinds, `operator` selects a flat, multiplier or percentage change.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EquipmentEffect {
@@ -18,6 +21,7 @@ pub struct EquipmentEffect {
     pub target: u32,
 }
 
+/// An accumulated stat transform, `value * scale + offset` with single-precision rounding.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EquipmentScalarTransform {
@@ -32,7 +36,7 @@ impl Default for EquipmentScalarTransform {
 }
 
 impl EquipmentScalarTransform {
-    /// `applyNativeEquipmentTransform`: the identity keeps its input bit for bit.
+    /// Applies the transform. The identity returns its input bit for bit, without rounding.
     #[must_use]
     pub fn apply(self, value: f64) -> f64 {
         assert!(value.is_finite(), "an equipment transform receives a finite stat");
@@ -118,6 +122,8 @@ impl Default for EquipmentModifiers {
     }
 }
 
+/// The authored name, description and effects of an equipment recipe, indexed like an item's
+/// `recipe_index`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NativeEquipmentRecipe {
     pub name: &'static str,
@@ -125,6 +131,8 @@ pub struct NativeEquipmentRecipe {
     pub effects: &'static [EquipmentEffect],
 }
 
+/// An authored equipment set: its member recipes and the bonus effects granted while all of
+/// them are equipped.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EquipmentSet {
     pub name: &'static str,
@@ -132,12 +140,16 @@ pub struct EquipmentSet {
     pub effects: &'static [EquipmentEffect],
 }
 
+/// The effects contributed by one equipped item (with its recipe index, if any) or by all
+/// completed sets together.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EquipmentEffectSource {
     pub effects: Vec<EquipmentEffect>,
     pub recipe_index: Option<usize>,
 }
 
+/// Resolved equipment: effective skill ranks, the skills equipment newly granted in grant
+/// order, and the stat modifiers.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EquipmentResolution {
     pub effective_ranks: [u32; SKILL_ROW_COUNT],
@@ -145,7 +157,7 @@ pub struct EquipmentResolution {
     pub modifiers: EquipmentModifiers,
 }
 
-/// `nativeEquipmentCompletedSets`: retain authored catalog order for completed sets.
+/// The sets whose member recipes are all equipped, in authored catalog order.
 #[must_use]
 pub fn equipment_completed_sets(equipped_recipe_indices: &[usize]) -> Vec<&'static EquipmentSet> {
     let mut completed = Vec::new();
@@ -174,7 +186,8 @@ pub fn resolve_equipped_effects(
     owned_hagatha_selectors: &[u32],
 ) -> EquipmentResolution {
     let mut sources = Vec::new();
-    // Native equipment iteration is hat, robe, rings, amulet, weapon; f32 stores make this order observable.
+    // Native equipment iteration is hat, robe, rings, amulet, weapon; f32 stores make this
+    // order observable.
     for item in [
         &equipment.hat,
         &equipment.robe,

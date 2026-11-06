@@ -1,5 +1,5 @@
-//! One 100 Hz native authority over the canonical shared `GameSession`.
-//! Reference timing, input and publication order: `host/game-host.ts:3484..3915`.
+//! One 100 Hz native authority over the canonical shared `GameSession`. Each loop admits
+//! queued messages, advances gameplay holds, steps due ticks and then publishes.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -33,6 +33,7 @@ const MAX_CONTROL_MESSAGE_BYTES: usize = 64 * 1024;
 const AUTOSAVE_INTERVAL_TICKS: u64 = 3_000;
 const TICKS_PER_SNAPSHOT: u64 = (GAME_TICK_RATE / SNAPSHOT_RATE) as u64;
 
+/// Where a native host finds its assets and checkpoint, and how many players it admits.
 pub struct NativeHostConfig {
     pub asset_directory: PathBuf,
     pub checkpoint_path: PathBuf,
@@ -46,6 +47,8 @@ impl NativeHostConfig {
     }
 }
 
+/// Session facts read by gameplay holds: an active run, a skill barrier, and which players
+/// are materialized and connected.
 pub(super) struct ControlFacts {
     pub(super) active_run: bool,
     pub(super) skill_barrier: bool,
@@ -64,11 +67,14 @@ impl ControlFacts {
     }
 }
 
+/// A save-before-leave request waiting for a checkpoint that covers its revision.
 pub(super) struct PendingSaveAck {
     pub(super) request_id: u64,
     pub(super) revision: u64,
 }
 
+/// The direct-play native authority: one `GameSession` with its connections, gameplay
+/// holds and checkpoint writer, stepped on one thread.
 pub struct NativeAuthority {
     pub(super) session: Option<GameSession>,
     pub(super) flame_histories: super::flame::HostFlameHistories,
@@ -113,8 +119,9 @@ impl NativeAuthority {
                 next_chat_sequence: 1,
                 chat_messages: Vec::new(),
             };
-            // The source host constructs and ticks an empty College before admission.
-            // One OS word seeds its gameplay and trader owners; combat keeps its default.
+            // A new host constructs and ticks an empty College before anyone joins.
+            // One OS word seeds the gameplay RNG and the Hub trader animation; combat keeps
+            // its default seed.
             let seed = u32::from_le_bytes(random_bytes::<4>()?);
             let session = GameSession::new_participants(
                 Vec::new(),
@@ -188,8 +195,8 @@ impl NativeAuthority {
                             break;
                         }
                     }
-                    // Source drops only excess wall time. It never advances simulation
-                    // ticks or RNG words to pretend the skipped interval was simulated.
+                    // After 25 catch-up steps the remaining wall time is dropped. Ticks and
+                    // RNG words never advance to pretend the skipped interval was simulated.
                     if steps == 25 && now >= next_tick {
                         next_tick = now + tick_duration;
                     }
@@ -392,8 +399,8 @@ impl NativeAuthority {
         }
         let sequence = self.next_snapshot_sequence;
         self.next_snapshot_sequence += 1;
-        // Peers sharing a stopped-world cursor share one borrowed serialization.
-        // A rejoin still projects only its actual detached participant.
+        // Peers with the same Flame baseline share one serialization. A staged rejoin
+        // gets its own frame, which projects its detached participant.
         let mut shared = BTreeMap::new();
         for (peer_id, staged_id, baseline) in recipients {
             let payload = if let Some(id) = staged_id {

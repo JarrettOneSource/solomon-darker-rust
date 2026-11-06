@@ -1,4 +1,5 @@
-//! Discorporeal outer actor epoch from `enemies/demon-skull.ts`.
+//! The Discorporeal (Demon Skull) boss's per-tick update: movement, its close-range bite,
+//! recoil, and the controller that starts its other actions.
 
 use super::demon_skull_actions::{begin_demon_skull_action, shake, step_demon_skull_actions};
 use super::demon_skull_controller::*;

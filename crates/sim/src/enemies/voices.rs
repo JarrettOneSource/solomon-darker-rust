@@ -1,10 +1,12 @@
-//! Boss stream timing and Faculty banter from Website `native-boss-audio.ts` and
-//! `native-faculty-voices.ts`. These pure clocks advance steering RNG even when no audio
+//! Boss voice streams: the narration queue, which plays one line at a time and ducks the music,
+//! and the Faculty's banter. These pure clocks advance steering RNG even when no audio
 //! device is attached, because the same stream also drives enemy decisions.
 
 use crate::Rng;
 use crate::float::fround;
 
+/// A boss voice stream, such as the Demon Skull's scream or a Faculty line, with its identifier and
+/// length in ticks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BossStreamCue {
@@ -69,6 +71,7 @@ impl BossStreamCue {
     }
 }
 
+/// The boss voice line now playing: its cue, event id and start tick.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BossNarrationLine {
@@ -77,6 +80,7 @@ pub struct BossNarrationLine {
     pub started_tick: u64,
 }
 
+/// The boss narration queue: it plays one cue at a time and ducks the music mix while lines play.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BossNarration {
@@ -140,6 +144,7 @@ impl BossNarration {
     }
 }
 
+/// The Faculty banter clock: the next line and the ticks until it plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FacultyVoiceController {
@@ -147,6 +152,8 @@ pub struct FacultyVoiceController {
     pub ticks_remaining: u64,
 }
 
+/// The result of one banter step: cues to queue and the next controller state, or `None` once no
+/// Faculty remains.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FacultyVoiceStep {
     pub cues: Vec<BossStreamCue>,
@@ -159,7 +166,7 @@ impl FacultyVoiceController {
         Self { line: 0, ticks_remaining: 200 + rng.draw_integer(500) as u64 }
     }
 
-    /// `stepNativeFacultyVoices`: members are the living Faculty in world order, with
+    /// Advances the banter clock. `members` are the living Faculty in world order, with
     /// `true` selecting the female bank. Membership ends on the first dying tick.
     #[must_use]
     pub fn step(mut self, rng: &mut Rng, members: &[bool], busy: bool) -> FacultyVoiceStep {

@@ -1,5 +1,6 @@
-//! Current Source welcome/save senders over the peer's existing ordered outbox.
-//! No message is reparsed and no transfer retains simulation state.
+//! Welcome and save-checkpoint senders over the peer's ordered outbox. Payloads above the
+//! stream threshold go out as acknowledged UTF-16 chunks. No message is reparsed and no
+//! transfer retains simulation state.
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use solomon_protocol::transfer::{
 
 use super::{PeerSendError, PeerSender};
 
+/// A peer's in-progress Welcome and save-checkpoint transfers.
 #[derive(Default)]
 pub(super) struct PeerTransfers {
     pub welcome: Option<WelcomeTransfer>,
@@ -22,6 +24,8 @@ pub(super) struct PeerTransfers {
     welcome_timed_out: bool,
 }
 
+/// A chunked Welcome awaiting acknowledgement, with its progress deadline and the reliable
+/// payloads deferred behind it.
 pub(super) struct WelcomeTransfer {
     sender: GameStringSender,
     total_length: usize,
@@ -42,7 +46,8 @@ impl WelcomeTransfer {
 }
 
 impl PeerSender {
-    /// The prefix owns all later reliable payloads until the complete welcome ACK.
+    /// Sends a Welcome. A large one is chunked, and later reliable payloads wait behind it
+    /// until the client acknowledges all of it.
     pub fn send_welcome(&self, payload: Arc<str>) -> Result<(), PeerSendError> {
         self.send_welcome_at(payload, Instant::now())
     }
@@ -110,8 +115,8 @@ impl PeerSender {
                 let welcome =
                     transfers.welcome.take().expect("the completed transfer remains retained");
                 transfers.completed_welcome_offset = Some(welcome.total_length);
-                // Source bounds the whole deferred prefix by bytes, independently of
-                // its message count. These already admitted payloads keep their order.
+                // The deferred payloads were bounded by total bytes, not message count,
+                // so they join the outbox whole and in order.
                 let mut outbox =
                     self.0.outbox.lock().expect("the peer outbox never panics while locked");
                 if self.is_closed() {
@@ -221,6 +226,7 @@ struct SendingCheckpoint {
     sequence: u64,
 }
 
+/// Streams one peer's save checkpoints one at a time, keeping only the newest waiting one.
 #[derive(Default)]
 pub(super) struct SaveCheckpointSender {
     sequence: u64,

@@ -1,4 +1,4 @@
-//! Shared College portraits from Website `core-kernels/hub-memorial.ts`.
+//! The College memorial: ten shared portrait slots, where each completed run replaces the oldest.
 //! The shared-world owner captures a completed run and supplies its one RNG draw.
 
 use crate::appearance::equipment::PlayerLivingEquipmentAppearance;
@@ -24,14 +24,15 @@ pub const HUB_MEMORIAL_INTERACTION_IDS: [&str; HUB_MEMORIAL_SLOT_COUNT] = [
     "painting-9",
 ];
 
+/// A completed run's portrait: the wizard's appearance and score, and the run and player it shows.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubMemorialPortrait {
     pub account_username: Option<String>,
     pub awesomeness: u64,
     pub awesomest_kill: Option<String>,
-    // Source persistence accepts any finite nonnegative integer Number here,
-    // including metadata beyond a native simulation clock's u64 range.
+    // The memorial document accepts any finite nonnegative integer here,
+    // including values beyond the simulation clock's u64 range.
     pub captured_at_tick: f64,
     pub config: NewGameSelection,
     pub elapsed_ticks: u64,
@@ -45,12 +46,14 @@ pub struct HubMemorialPortrait {
     pub wave: u64,
 }
 
+/// Host-supplied account details shown on a player's memorial portrait.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubMemorialPlayerProfile {
     pub account_username: Option<String>,
 }
 
+/// One memorial slot: its replacement age, marker flag, portrait ID and archived portrait, if any.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubMemorialSlot {
@@ -60,6 +63,7 @@ pub struct HubMemorialSlot {
     pub portrait_id: u32,
 }
 
+/// The ten memorial slots and the age and portrait ID the next archived portrait receives.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubMemorialState {

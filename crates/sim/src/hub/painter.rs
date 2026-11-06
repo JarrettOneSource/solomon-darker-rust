@@ -1,5 +1,4 @@
-//! The courtyard painter queue, ported from `region-painter-order.ts` and
-//! `hub-painter-order.ts`.
+//! The courtyard painter queue: fixed painter registrations and the row order actors draw in.
 //!
 //! The stock engine paints world actors by two-unit rows measured from the local player's
 //! feet, and within a row by the order the actors registered with the world manager. Fixed
@@ -20,10 +19,9 @@ pub const HUB_FIRST_PLAYER_PAINTER_ORDINAL: usize = HUB_FIXED_ACTOR_PAINTER_COUN
 /// Inside this rectangle the player sorts under the north arch when facing away from it.
 pub const HUB_NORTH_ARCH_BIAS_RECT: [f64; 4] = [874.0, 34.0, 1031.0, 181.0];
 
-/// Every fixed courtyard painter in registration order (`NATIVE_HUB_FIXED_ACTOR_PAINTER_IDS`):
-/// the five standing traders, the teacher, the eight obstacles, the statue, then the private
-/// rooms' painters, the librarian, Shlorio, the arch-chancellor and the polisher. The index is
-/// the registration ordinal.
+/// Every fixed courtyard painter in registration order: the five standing traders, the teacher,
+/// the eight obstacles, the statue, then the private rooms' painters, the librarian, Shlorio,
+/// the arch-chancellor and the polisher. The index is the registration ordinal.
 pub const HUB_FIXED_PAINTER_IDS: [&str; HUB_FIXED_ACTOR_PAINTER_COUNT] = [
     "hagatha",
     "fomentius",
@@ -90,8 +88,7 @@ impl HubFixedActor {
     }
 }
 
-/// The eight courtyard obstacles in painter order, `college-obstacle-0` first
-/// (`NATIVE_HUB_COURTYARD_OBSTACLES`).
+/// The eight courtyard obstacles in painter order, `college-obstacle-0` first.
 pub const HUB_COURTYARD_OBSTACLES: [HubFixedActor; 8] = [
     HubFixedActor::standing(1458.5, 320.5, 40.0),
     HubFixedActor::standing(955.5, 239.5, 40.0),
@@ -103,11 +100,10 @@ pub const HUB_COURTYARD_OBSTACLES: [HubFixedActor; 8] = [
     HubFixedActor::standing(956.0, 169.0, 40.0),
 ];
 
-/// The College statue, sorted by its root rather than its art (`NATIVE_HUB_COLLEGE_STATUE`,
-/// `HUB_STATUE_ROOT`).
+/// The College statue, sorted by its root rather than its art.
 pub const HUB_COLLEGE_STATUE: HubFixedActor = HubFixedActor::standing(961.0, 834.0, 50.0);
 
-/// The registration ordinal of a fixed painter, by its Website id.
+/// The registration ordinal of a fixed painter, by its ID.
 #[must_use]
 pub fn hub_fixed_painter_ordinal(id: &str) -> Option<usize> {
     HUB_FIXED_PAINTER_IDS.iter().position(|candidate| *candidate == id)
@@ -121,6 +117,8 @@ pub enum PainterLane {
     Transient,
 }
 
+/// One entry in the painter queue: its manager lane, registration ordinal, row inputs and
+/// visibility.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PainterLayer {
     pub visible: bool,
@@ -133,7 +131,7 @@ pub struct PainterLayer {
     pub sort_bias: f64,
 }
 
-/// `nativeCourtyardPlayerSortBias`: ±20 inside the north arch, 0 elsewhere.
+/// The player's sort bias: ±20 by facing inside the north arch rectangle, 0 elsewhere.
 #[must_use]
 pub fn courtyard_player_sort_bias(position: Vec2, heading_index: i64) -> f64 {
     let [left, top, right, bottom] = HUB_NORTH_ARCH_BIAS_RECT;
@@ -146,8 +144,7 @@ pub fn courtyard_player_sort_bias(position: Vec2, heading_index: i64) -> f64 {
     }
 }
 
-/// `nativeRegionPainterRow`: the two-unit row of an actor relative to the reference actor,
-/// truncated toward zero.
+/// The two-unit painter row of an actor relative to the reference actor, truncated toward zero.
 #[must_use]
 pub fn painter_row(world_y: f64, sort_bias: f64, reference_y: f64) -> i64 {
     let relative = world_y.trunc() + sort_bias.trunc() - reference_y.trunc();

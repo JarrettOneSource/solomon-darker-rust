@@ -1,4 +1,5 @@
-//! Native callbacks used by the unchanged Source Lua sandbox.
+//! Native callbacks behind the `sd` definition API, called from the Lua sandbox that
+//! `bootstrap.lua` sets up.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
@@ -162,8 +163,8 @@ pub(super) fn install(lua: &Lua, registry: Rc<RefCell<Registry>>) -> mlua::Resul
         })?,
     )?;
 
-    // Lua::new deliberately excludes the unsafe debug library. The Source
-    // bootstrap only needs this read-only stack location before hiding debug.
+    // Lua::new deliberately excludes the unsafe debug library. The bootstrap
+    // only needs this read-only stack location before hiding debug.
     let debug = lua.create_table()?;
     debug.set(
         "getinfo",

@@ -1,5 +1,5 @@
-//! Authored Hagatha tooltip rows from current hub-inventory-item-text.ts.
-// Recorded without modifying the source; item-text-goldens checks every row.
+//! Authored tooltip rows for Hagatha's 28 perks, indexed by perk selector.
+// Recorded verbatim; item-text-goldens checks every row.
 
 pub(super) const HAGATHA_TOOLTIP_LINES: [&[&str]; 28] = [
     &["Maximum life is always increased by 25%."],

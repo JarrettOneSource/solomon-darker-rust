@@ -1,8 +1,7 @@
 //! Actor heading quantization and the wizard walk cycle.
 //!
 //! Headings are 24 sprite facings 15° apart, index 0 pointing up the screen (north) and
-//! increasing clockwise. Ported from the Website `core-kernels/actor-heading.ts` and
-//! `player-character.ts`.
+//! increasing clockwise.
 
 use crate::collision::Vec2;
 use crate::float;

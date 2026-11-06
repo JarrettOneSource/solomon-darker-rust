@@ -1,6 +1,6 @@
-//! `player-enchant-staff-presentation.ts`. The socket endpoints come from the
-//! already-loaded Clothes hand record; the source extracted the same points into
-//! `player-staff-attachment-program.json`. No second socket table is needed.
+//! The Enchant Staff glow drawn along a wizard's staff: its tint, pulsing alpha and width.
+//! The socket endpoints come from the already-loaded Clothes hand record, so no second
+//! socket table is needed.
 
 use crate::float;
 use std::f64::consts::PI;
@@ -8,6 +8,8 @@ use std::f64::consts::PI;
 use crate::Vec2;
 use crate::float::{fround, hypot};
 
+/// The staff's start and end sockets in one frame, and whether it draws in front of the
+/// wizard.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StaffAttachmentFrame {
     pub start: Vec2,
@@ -15,6 +17,8 @@ pub struct StaffAttachmentFrame {
     pub front: bool,
 }
 
+/// What one Enchant Staff glow frame depends on: staff sockets, rank, facing, pose,
+/// selected primary and time.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnchantStaffDrawInput {
     pub attachment: StaffAttachmentFrame,
@@ -30,6 +34,8 @@ pub struct EnchantStaffDrawInput {
     pub width_sample: Option<f64>,
 }
 
+/// One frame of the Enchant Staff glow: sprite records, tint, alphas and the quad along
+/// the staff.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnchantStaffDrawPlan {
     pub aura_record: Option<usize>,
@@ -135,7 +141,7 @@ pub fn enchant_staff_draw_plan(input: EnchantStaffDrawInput) -> Option<EnchantSt
 }
 
 fn visual_width_sample(tick: f64, heading: usize, pose: usize, selector: usize) -> f64 {
-    // Source Math.trunc(tick) | 0 wraps before the cosmetic bit mixer.
+    // The truncated tick wraps to 32 bits before the cosmetic bit mixer.
     let mut mixed = tick.trunc().rem_euclid(4_294_967_296.0) as u32;
     mixed ^= (heading as u32 + 1).wrapping_mul(0x045d_9f3b);
     mixed ^= (pose as u32 + 1).wrapping_mul(0x119d_e1f3);

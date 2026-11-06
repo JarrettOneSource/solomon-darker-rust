@@ -1,4 +1,5 @@
-//! Indexed immutable rule evaluation from `mod-rule-engine.ts`.
+//! Evaluation of a mod's declarative rules (`rules.on`, `rules.when`, `rules.all` and so on).
+//! Each rule tree is indexed once into nodes; evaluation emits intents and schedules timers.
 
 use solomon_sim::modding::definition::{
     CompiledWebLuaMod, WebLuaContentKind, WebLuaDefinitionSource, WebLuaRuleDefinition,
@@ -11,14 +12,17 @@ use solomon_sim::modding::{LuaObject, LuaValue};
 use crate::definition::values::typed_value;
 use crate::duration::duration_ticks_value;
 
+/// A mod's rules flattened into indexed nodes, with the indexes of its top-level rules.
 pub(super) struct RuleProgram {
     pub nodes: Vec<IndexedRule>,
     pub roots: Vec<usize>,
 }
+/// One rule node and the child rules found in its fields, keyed by field path.
 pub(super) struct IndexedRule {
     pub rule: WebLuaRuleDefinition,
     pub children: Vec<(String, usize)>,
 }
+/// The counters and timer list that rule evaluation updates, borrowed from the rule engine.
 pub(super) struct EvaluationState<'a> {
     pub mod_id: &'a str,
     pub next_intent_sequence: &'a mut u64,

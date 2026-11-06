@@ -28,6 +28,8 @@ use super::{
 #[cfg(test)]
 mod tests;
 
+/// The desktop build's WebSocket connection: a worker thread that owns the socket, plus the
+/// command queue and the byte credit for sends.
 pub(super) struct NativeConnection {
     delivery: SharedDelivery,
     commands: mpsc::Sender<Command>,

@@ -1,4 +1,5 @@
-//! Coffin timed phases and pre-admission Maggot births from `enemies/coffin.ts`.
+//! Coffin timed phases, from hidden to open, and the Maggots it releases. Maggots are born
+//! emerging; the Maggot admission pass later decides whether they join combat.
 use super::config::EnemyFamilyConfig;
 use super::effects::radial_vector;
 use super::maggots::maggot_death_offsets;

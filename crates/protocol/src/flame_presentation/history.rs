@@ -1,8 +1,11 @@
-//! `protocol/flame-presentation-history.ts`, retaining Source Map insertion order.
+//! The host's history of Flame presentation births and the client's replay of them.
+//! Both keep births in admission order.
 use super::{
     FlamePresentationBaseline, FlamePresentationBirth, FlamePresentationFrame, require_tick,
 };
 
+/// Settings for a new `FlamePresentationHistory`: its world, starting tick, birth and
+/// byte limits, and first epoch.
 pub struct FlamePresentationHistoryOptions {
     pub world_key: String,
     pub tick: u64,
@@ -18,10 +21,12 @@ struct RetainedBirth {
     bytes: usize,
 }
 
-/// The native edge passes the existing ECMAScript JSON formatter and counts
+/// Measures a birth for the byte budget. The host passes its JSON formatter and counts
 /// UTF-16 bytes. Keeping that I/O dependency outside protocol avoids a new codec.
 pub type FlamePresentationBirthBytes = fn(&FlamePresentationBirth) -> Result<usize, String>;
 
+/// The host's record of recent Flame births in one world, from which it builds each
+/// connection's frame after that connection's acknowledged baseline.
 #[derive(Clone, Debug)]
 pub struct FlamePresentationHistory {
     world_key: String,
@@ -32,7 +37,7 @@ pub struct FlamePresentationHistory {
     maximum_bytes: Option<usize>,
     retained_bytes: usize,
     encoded_bytes: FlamePresentationBirthBytes,
-    // Source iteration order is admission order, including retirement rewrites.
+    // Admission order; retiring a known birth rewrites it in place.
     births: Vec<RetainedBirth>,
 }
 
@@ -211,7 +216,7 @@ impl FlamePresentationHistory {
             births,
         })
     }
-    /// Source host advance over compact before/after captures. A same-tick
+    /// Advances over compact before/after captures of the live births. A same-tick
     /// mutation cannot be acknowledged by the stopped-tick cursor, so it resets.
     pub fn advance(
         &mut self,
@@ -231,7 +236,7 @@ impl FlamePresentationHistory {
             current.iter().filter(|birth| birth.birth_tick == tick).cloned().collect();
         self.record_tick(tick, &incoming)?;
         for birth in previous {
-            // Source host removal membership is world+ID, independent of recipe.
+            // A birth is removed when no live birth has its world and ID, whatever its recipe.
             if !current.iter().any(|live| live.world_key == birth.world_key && live.id == birth.id)
             {
                 self.retire_birth(birth, tick)?;
@@ -271,6 +276,8 @@ impl FlamePresentationHistory {
 }
 
 pub type FlamePresentationRetainedEnd = fn(&FlamePresentationBirth) -> u64;
+/// A client's received Flame births for the current epoch and world, sampled at display
+/// ticks.
 #[derive(Clone, Debug)]
 pub struct FlamePresentationReplay {
     epoch: u64,

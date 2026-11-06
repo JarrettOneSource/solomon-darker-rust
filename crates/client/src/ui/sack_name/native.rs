@@ -3,6 +3,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::{Metrics, TextLayout};
 
+/// The Sack name font size, for shaping names with the native font system.
 pub(super) struct FontCanvas {
     size: f64,
 }

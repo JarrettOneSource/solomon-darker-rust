@@ -14,6 +14,7 @@ use crate::transport::PeerId;
 
 const HOST_DOCUMENT_VERSION: u32 = 1;
 
+/// An absent player's saved wizard: in the Hub, detached from an active run, or retired.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SavedParticipant {
@@ -23,7 +24,7 @@ pub enum SavedParticipant {
     Run {
         detached: Box<DetachedSessionParticipant>,
     },
-    /// The last actual actor remains the durable offline roster projection. A future
+    /// The last materialized actor remains the durable offline roster projection. A future
     /// admission creates its fresh book through the canonical retired-profile command.
     Retired {
         participant: Box<SessionParticipant>,
@@ -32,11 +33,13 @@ pub enum SavedParticipant {
     },
 }
 
+/// A player's durable resume credentials and saved wizard, plus the connection now using
+/// them.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResumeSlot {
     pub token: String,
-    /// Keep the credential actually presented until this generation ACKs admission.
+    /// Keep the credential the client presented until this generation ACKs admission.
     /// Both credentials must survive a host restart during the Welcome transfer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_token: Option<String>,
@@ -58,6 +61,7 @@ impl ResumeSlot {
     }
 }
 
+/// Host state saved beside the game checkpoint: revision, IDs, party, resume slots and chat.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostSaveMetadata {
@@ -88,6 +92,7 @@ pub fn decode_host_document(text: &str) -> Result<(HostSaveMetadata, GameCheckpo
     Ok((document.host, checkpoint))
 }
 
+/// The checkpoint writer's report for one save: its revision, tick and result.
 pub struct SaveCompletion {
     pub revision: u64,
     pub tick: u64,
@@ -99,6 +104,7 @@ struct SaveRequest {
     metadata: HostSaveMetadata,
 }
 
+/// A background thread that encodes and commits one host checkpoint at a time.
 pub struct CheckpointWriter {
     requests: Option<SyncSender<SaveRequest>>,
     completions: Receiver<SaveCompletion>,

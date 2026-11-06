@@ -1,4 +1,4 @@
-//! Effect sprites from `renderer/native-enemy-projectile-effect-presentation.ts`.
+//! Draw plans for enemy projectile effects: trails, impacts, bubbles and explosions.
 //! Primary Fire owns the shared explosion passes, patch transform and ground glow.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
@@ -14,6 +14,8 @@ use crate::spells::fire_presentation::{
 use crate::spells::model::FireExplosionPresentation;
 use crate::spells::presentation::{SpellAtlas, SpellBlend, SpellDrawQueue};
 
+/// What an enemy projectile effect draws this frame: sprite layers, position and an optional Fire
+/// ground glow.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyProjectileEffectPlan {
     pub ground_glow: Option<FireGroundGlowPlan>,
@@ -164,7 +166,7 @@ fn guided_impact_layers(
 ) -> Vec<EnemySpriteLayer> {
     let state = &effect.state;
     let rotation = sample.rotation_radians;
-    // The source converts its stored radians back to degrees before the pulse.
+    // The stored radians are converted back to degrees before the pulse.
     let phase = rotation * 180.0 / std::f64::consts::PI;
     let tick = (state.spawn_tick as f64 + sample.age_ticks).floor() as u64;
     let random =

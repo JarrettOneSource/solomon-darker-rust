@@ -1,4 +1,5 @@
-//! Discorporeal mouth targets and Puppet hit latches from `enemies/puppet-hits.ts`.
+//! Targets the Discorporeal's mouth beam can hit, and the hit feedback kept by struck Puppet
+//! targets: scenery, Goodies, Meteors, Leviathans and enemy projectiles.
 
 use super::boss_spell::BossSpellKind;
 use super::model::EnemyTarget;
@@ -9,6 +10,8 @@ use crate::Vec2;
 use crate::combat::PuppetHitState;
 use crate::spells::targeting::{PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind};
 
+/// A kind of Puppet target that keeps hit feedback when struck: scenery, a Goodie, an enemy
+/// Arrow or Firebolt, a Meteor or a Leviathan.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyPuppetHitKind {
@@ -33,12 +36,14 @@ impl EnemyPuppetHitKind {
     }
 }
 
+/// A spell target row the mouth beam can hit, with the hit-feedback kind it records, if any.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyPuppetTarget {
     pub target: PrimarySpellTarget,
     pub hit_kind: Option<EnemyPuppetHitKind>,
 }
 
+/// Hit feedback a struck Puppet target keeps: its kind, target id, hit tick and feedback state.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyPuppetHit {

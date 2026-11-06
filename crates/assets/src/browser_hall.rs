@@ -1,6 +1,6 @@
-//! Current Website hall-of-fame-store.ts browser documents. The browser owns
-//! storage I/O; these functions preserve independent v3/v2 admission, read-only
-//! legacy merging, run identity and the stable native top-100 ranking.
+//! The browser's local Hall of Fame documents. The browser owns storage I/O;
+//! these functions preserve independent v3/v2 admission, read-only legacy
+//! merging, run identity and the stable native top-100 ranking.
 
 use std::collections::BTreeSet;
 
@@ -30,8 +30,8 @@ pub fn read(current: Option<&str>, legacy: Option<&str>) -> Vec<HallOfFameEntry>
     ranked(&entries)
 }
 
-/// Source recordLocalHallOfFame replaces all rows with the same run ID and
-/// writes the returned list to v3. The caller leaves the legacy key untouched.
+/// Recording a run replaces all rows with the same run ID. The caller writes the
+/// returned list to v3 and leaves the legacy key untouched.
 #[must_use]
 pub fn record(
     entry: HallOfFameEntry,
@@ -47,7 +47,7 @@ pub fn record(
     ranked(&entries)
 }
 
-/// Source writes camelCase rows, without modifying or rewriting v2.
+/// Writes camelCase rows for the v3 key; the v2 document is never rewritten.
 pub fn serialize(entries: &[HallOfFameEntry]) -> Result<String, String> {
     let rows: Vec<_> = entries.iter().map(StoredEntry).collect();
     serde_json::to_string(&rows).map_err(|error| format!("Hall of Fame document: {error}"))

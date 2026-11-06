@@ -1,4 +1,4 @@
-//! Trusted custom frames from Website `renderer/mod-presentation-assets.ts`.
+//! Verified mod images and the icon, sprite and wearable frames cut from them.
 //! One session owns the verified image URLs and base textures. Derived icon, sprite and
 //! wearable records borrow those sources; they never own a second content catalog.
 
@@ -19,6 +19,7 @@ use solomon_graphics::{BlendMode, Renderer, Texture};
 const WEARABLE_CELL: f64 = 170.0;
 const WEARABLE_HEADINGS: usize = 24;
 
+/// A session's verified mod images, decoded but not yet uploaded as textures.
 pub struct PreparedModPresentationAssets {
     images: BTreeMap<String, ModPresentationImage>,
 }
@@ -96,12 +97,14 @@ pub struct ModPresentationAssets {
     destroyed: bool,
 }
 
+/// One authored frame of an uploaded mod image.
 #[derive(Clone)]
 pub struct ModSpriteTexture {
     pub texture: Texture,
     pub frame: ModSpriteFrame,
 }
 
+/// Where and how to draw a mod sprite frame: center, scale, anchor, rotation, tint and blend.
 pub struct ModSpriteDraw {
     pub center: Vec2,
     pub scale: Vec2,
@@ -112,8 +115,8 @@ pub struct ModSpriteDraw {
 }
 
 impl ModSpriteTexture {
-    /// Pixi uses orig/trim to place the content inside an authored logical frame.
-    /// Custom textures use plain frame UV edges, unlike native stock record registration.
+    /// The trimmed frame sits at its offset inside the authored logical frame, which the anchor
+    /// places. Custom textures use plain frame UV edges, unlike native stock record registration.
     pub fn draw(&self, renderer: &mut Renderer, draw: &ModSpriteDraw) {
         let corners = mod_sprite_corners(
             self.frame,
@@ -138,6 +141,7 @@ impl ModSpriteTexture {
     }
 }
 
+/// A mod wearable's frames for each of the 24 headings and every pose, with an optional trim.
 #[derive(Clone)]
 pub struct ModWearableTextureFrames {
     pub primary: Vec<Vec<ModSpriteTexture>>,
@@ -145,6 +149,7 @@ pub struct ModWearableTextureFrames {
     pub slot: ModWearableSlot,
 }
 
+/// Which mod wearable image to draw: the worn image or its trim.
 #[derive(Clone, Copy)]
 pub enum ModWearableLayer {
     Primary,
@@ -433,7 +438,8 @@ mod tests {
                 input["rotation"].as_f64().unwrap(),
             );
             for (actual, expected) in corners.iter().zip(case["corners"].as_array().unwrap()) {
-                // Pixi's transform uses platform trigonometry; frame/trim arithmetic is exact.
+                // The recording used its platform's trigonometry, so allow 1e-12; the
+                // frame/trim arithmetic itself is exact.
                 assert!((actual.x - expected["x"].as_f64().unwrap()).abs() < 1.0e-12);
                 assert!((actual.y - expected["y"].as_f64().unwrap()).abs() < 1.0e-12);
             }

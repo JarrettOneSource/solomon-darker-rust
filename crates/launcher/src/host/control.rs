@@ -1,8 +1,8 @@
-//! Wall-clock gameplay holds from Website `host/game-host.ts:6269..6838`.
+//! Wall-clock gameplay holds: pauses, renderer loading and resume readiness.
 //! The session owns skill barriers; this host owns renderer-ready and resume-ready ACKs,
 //! the pause owner and the two-second countdown while its authoritative clock is stopped.
-//! Website `e3f100ae` (Report 103) limits that optional countdown to multiplayer;
-//! solo play retains every loading, recovery and presentation-close readiness barrier.
+//! The countdown needs two or more connected, materialized humans (Report 103); solo play
+//! keeps every loading, recovery and presentation-close readiness barrier.
 
 use std::collections::BTreeSet;
 
@@ -43,6 +43,8 @@ impl ControlContext<'_> {
     }
 }
 
+/// The host's gameplay holds: the pause, a resume grace or countdown, renderer loading
+/// for a new run, and the players ready for the College intro.
 pub struct GameplayControl {
     pause: Option<GameplayPause>,
     grace: Option<ResumeGrace>,
@@ -119,8 +121,9 @@ impl GameplayControl {
         }
     }
 
-    /// A new run or rejoin invalidates previous resume-ready ACKs. Pending required
-    /// rejoin identities survive, exactly as the source's `pendingExisting` branch does.
+    /// A new run or rejoin invalidates previous resume-ready ACKs. A grace that has not
+    /// started counting down keeps its waiting and required rejoin identities, and a
+    /// party-rejoin wait keeps its reason.
     pub fn begin_loading_grace(
         &mut self,
         player_id: &str,
@@ -272,7 +275,7 @@ impl GameplayControl {
         self.advance(context, now_ms);
     }
 
-    /// Run before deciding whether to tick. Readiness is tested against actual current
+    /// Run before deciding whether to tick. Readiness is tested against current
     /// membership, and an expired countdown clears while the gameplay clock is frozen.
     pub fn advance(&mut self, context: &ControlContext<'_>, now_ms: f64) {
         if !context.active_run {

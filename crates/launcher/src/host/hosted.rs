@@ -1,6 +1,5 @@
-//! A hosted College above canonical simulation owners. The supervisor holds one of
-//! these per admitted College; the persistent Global College owns independent party runs.
-//! Source: Website `host/game-host.ts` and `host/shared-game-worlds.ts`.
+//! One hosted College, layered over the game sessions that simulate it. The supervisor holds
+//! one of these per admitted College; the persistent Global College owns independent party runs.
 
 mod access;
 mod activity;
@@ -73,18 +72,23 @@ pub struct HostedAdmission {
     pub observer: Option<HostedObserverTarget>,
 }
 
+/// A reconnect ticket for a live wizard: its player, the reconnect request and the connection
+/// being replaced.
 pub struct HostedReconnectAdmission {
     pub player_id: String,
     pub request_id: String,
     pub expected_peer_id: PeerId,
 }
 
+/// The match an observer ticket may watch and the developer account that requested it.
 pub struct HostedObserverTarget {
     pub run_id: String,
     pub user_id: u32,
     pub username: String,
 }
 
+/// A player admitted to this College: identity, connection, content, social profile, account
+/// permissions and save state.
 pub struct HostedPlayer {
     pub(super) reconnect_request_ids: BTreeSet<String>,
     pub id: String,
@@ -105,16 +109,19 @@ pub struct HostedPlayer {
     pub(super) last_save_document: Option<String>,
 }
 
+/// A party place held for a join or rejoin ticket until the ticket is claimed or expires.
 pub struct PartyReservation {
     pub party_id: String,
     pub reservation_id: String,
     pub expires_at_ms: f64,
 }
 
+/// One hosted College: its sessions, players and connections, with the mod runtimes, bots,
+/// Console, leaderboard runs and saves that serve them.
 pub struct HostedGameHost {
     pub id: String,
     pub kind: GameSessionKind,
-    /// Source editor previews own one disposable wizard and never enter hosted services.
+    /// A mod editor's Boneyard test owns one disposable wizard and never enters hosted services.
     pub(in crate::host) editor_test: bool,
     pub worlds: HostedWorlds,
     flame_histories: super::flame::HostFlameHistories,

@@ -1,11 +1,13 @@
-//! Website control-plane records from `frontend/src/lib/api.ts`. These are transport
-//! values; gameplay, membership and content decisions remain with the authority.
+//! Records of the Website control-plane API. These are transport values; gameplay,
+//! membership and content decisions remain with the authority.
 
 use serde::{Deserialize, Serialize};
 use solomon_sim::hall_of_fame::{HallOfFameEntry, HallOfFameSkill};
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 use solomon_sim::social::{GameSessionKind, PartyVisibility};
 
+/// A signed-in Website account: ID, username, email, school, developer access and creation
+/// time.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
@@ -18,17 +20,20 @@ pub struct Account {
     pub created_at_utc: String,
 }
 
+/// A sign-in response: the session token and the account.
 #[derive(Deserialize)]
 pub(super) struct AuthResponse {
     pub token: String,
     pub user: Account,
 }
 
+/// The current account response.
 #[derive(Deserialize)]
 pub(super) struct AccountResponse {
     pub user: Account,
 }
 
+/// A content author's public identity: ID, username and school.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Author {
     pub id: u64,
@@ -37,6 +42,7 @@ pub struct Author {
     pub school: Option<WizardElement>,
 }
 
+/// The order of a mod catalog listing.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModSort {
@@ -59,6 +65,7 @@ impl ModSort {
     }
 }
 
+/// Who can find a published mod.
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModVisibility {
@@ -67,6 +74,8 @@ pub enum ModVisibility {
     Private,
 }
 
+/// A published mod's catalog entry: identity, author, latest version, tags and download
+/// counts.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModSummary {
@@ -86,6 +95,8 @@ pub struct ModSummary {
     pub updated_at_utc: String,
 }
 
+/// One published version of a mod: its manifest and package hashes, changelog, size and
+/// downloads.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModVersion {
@@ -100,6 +111,7 @@ pub struct ModVersion {
     pub created_at_utc: String,
 }
 
+/// One screenshot on a mod's page.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModScreenshot {
@@ -108,6 +120,7 @@ pub struct ModScreenshot {
     pub sort_order: i64,
 }
 
+/// A mod's full page: its summary, description, screenshots and versions.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ModDetail {
     #[serde(flatten)]
@@ -117,6 +130,7 @@ pub struct ModDetail {
     pub versions: Vec<ModVersion>,
 }
 
+/// One comment on a mod's page.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModComment {
@@ -126,17 +140,20 @@ pub struct ModComment {
     pub author: Author,
 }
 
+/// A mod's comments and their total count.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ModComments {
     pub items: Vec<ModComment>,
     pub total: u64,
 }
 
+/// The author of a shared mobile control layout.
 #[derive(Clone, Debug, Deserialize)]
 pub struct LayoutAuthor {
     pub username: String,
 }
 
+/// A mobile control layout shared by code: the layout, its author and creation time.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedMobileUiLayout {
@@ -147,6 +164,7 @@ pub struct SharedMobileUiLayout {
     pub created_at_utc: String,
 }
 
+/// One page of a mod catalog listing.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModList {
@@ -156,6 +174,7 @@ pub struct ModList {
     pub page_size: u64,
 }
 
+/// The player's subscription to a mod and whether it is enabled.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModSubscription {
@@ -168,6 +187,8 @@ pub struct ModSubscription {
 
 pub use solomon_sim::modding::assets::GameModAsset as GameContentAsset;
 
+/// An enabled mod in the player's active set: identity, version, content hash, load
+/// priority and assets.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActiveWebMod {
@@ -182,6 +203,7 @@ pub struct ActiveWebMod {
     pub boneyard_count: u64,
 }
 
+/// A subscribed mod that was disabled automatically, with the reason.
 #[derive(Clone, Debug, Deserialize)]
 pub struct DisabledWebMod {
     pub error: String,
@@ -189,6 +211,8 @@ pub struct DisabledWebMod {
     pub slug: String,
 }
 
+/// The player's active mod set: the enabled mods, the manifest hash and any mods disabled
+/// automatically.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActiveWebModSet {
@@ -197,6 +221,8 @@ pub struct ActiveWebModSet {
     pub mods: Vec<ActiveWebMod>,
 }
 
+/// A party in the party directory: leader, members, session kind, visibility, mods and
+/// activity.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicGameParty {
@@ -215,6 +241,7 @@ pub struct PublicGameParty {
     pub activity: PartyActivity,
 }
 
+/// What a listed party is doing: in the Hub or playing a named Boneyard.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "status", rename_all = "lowercase")]
 pub enum PartyActivity {
@@ -225,6 +252,7 @@ pub enum PartyActivity {
     },
 }
 
+/// One mod a party runs, with the assets a joining player downloads.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyJoinMod {
@@ -236,6 +264,7 @@ pub struct PartyJoinMod {
     pub version: String,
 }
 
+/// The content a party runs: its manifest hash and mods.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyContent {
@@ -243,6 +272,7 @@ pub struct PartyContent {
     pub mods: Vec<PartyJoinMod>,
 }
 
+/// Whether a party is in the Hub or playing.
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PartyStatus {
@@ -250,6 +280,8 @@ pub enum PartyStatus {
     Playing,
 }
 
+/// The party a join resolves to: its content, session kind, leader, size, status and
+/// visibility.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyJoinTarget {
@@ -264,6 +296,7 @@ pub struct PartyJoinTarget {
     pub visibility: PartyVisibility,
 }
 
+/// A resolved party join: the join intent's ID and its target.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyJoinResolution {
@@ -271,6 +304,7 @@ pub struct PartyJoinResolution {
     pub target: PartyJoinTarget,
 }
 
+/// A player connected to a game: name, account, session, party and activity.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectedGamePlayer {
@@ -286,6 +320,7 @@ pub struct ConnectedGamePlayer {
     pub activity: ConnectedPlayerActivity,
 }
 
+/// What a connected player is doing: in the Hub, or in a named Boneyard at a wave.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "activity", rename_all = "lowercase")]
 pub enum ConnectedPlayerActivity {
@@ -298,6 +333,7 @@ pub enum ConnectedPlayerActivity {
     },
 }
 
+/// A running Boneyard match as listed for developers: players, session, visibility and wave.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeveloperGameMatch {
@@ -313,6 +349,7 @@ pub struct DeveloperGameMatch {
     pub wave_number: u64,
 }
 
+/// The state of a request to join a party: pending, denied, or accepted with its target.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "status", rename_all = "lowercase")]
 pub enum PartyJoinRequestStatus {
@@ -325,6 +362,7 @@ pub enum PartyJoinRequestStatus {
     },
 }
 
+/// A party join request's token and current status.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PartyJoinRequestReceipt {
@@ -333,6 +371,7 @@ pub struct PartyJoinRequestReceipt {
     pub status: PartyJoinRequestStatus,
 }
 
+/// The kind of a provisioned game endpoint; only remote servers exist.
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RemoteEndpointKind {
@@ -341,6 +380,8 @@ pub enum RemoteEndpointKind {
 
 // Credentials intentionally have no Debug implementation: endpoint values never belong
 // in diagnostics or browser evidence logs.
+/// A game server endpoint provisioned by the Website: URL, credential, session kind and
+/// whether it is for observing.
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProvisionedGameEndpoint {
@@ -353,6 +394,7 @@ pub struct ProvisionedGameEndpoint {
     pub observer: bool,
 }
 
+/// A cloud save slot: its revision and save document.
 #[derive(Clone, Deserialize)]
 pub struct WebGameSave {
     pub slot: u32,
@@ -360,6 +402,7 @@ pub struct WebGameSave {
     pub document: String,
 }
 
+/// One row of the global leaderboard: its rank and Hall of Fame entry.
 #[derive(Clone, Debug, Deserialize)]
 pub struct GlobalLeaderboardEntry {
     pub rank: Option<u64>,
@@ -367,6 +410,7 @@ pub struct GlobalLeaderboardEntry {
     pub entry: HallOfFameEntry,
 }
 
+/// A response that wraps its list in `items`.
 #[derive(Deserialize)]
 pub(super) struct Items<T> {
     pub items: Vec<T>,

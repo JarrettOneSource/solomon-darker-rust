@@ -1,5 +1,4 @@
-//! Corpse sprites and banishment columns from `native-enemy-death-effect-view.ts`
-//! and `native-enemy-death-effect-presentation.ts`.
+//! Draw plans for enemy death effects: corpse sprites and the Banish columns.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
 use super::model::{EnemyDeathEffect, EnemyDeathEffectKind};
@@ -20,6 +19,8 @@ pub struct EnemyBanishGradient {
     pub end_alpha: f64,
 }
 
+/// What one death effect draws this frame: sprite layers, Banish gradients and the draw queue
+/// family it joins.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EnemyDeathEffectPlan {
     pub gradients: Vec<EnemyBanishGradient>,
@@ -144,7 +145,7 @@ fn banish_plan(
             end_alpha: 1.0,
         });
     }
-    // The source submits all three upper rails before the three lower rails.
+    // All three upper rails are submitted before the three lower rails.
     gradients.extend(lower_gradients);
     let tint = if black {
         (((progress * f64::from(0.15_f32)).min(1.0) * 255.0).round() as u32) << 16

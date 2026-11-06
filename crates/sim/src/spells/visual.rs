@@ -1,4 +1,5 @@
-//! The identical id/salt hash used by `primary-spell-earth.ts` and `primary-spell-water.ts`.
+//! The ID and salt hash behind cosmetic Earth, Water and Ether randomness. Effects that
+//! sample it never advance gameplay RNG.
 
 pub fn visual_hash(id: u64, salt: u32) -> u32 {
     let mut value = id as u32 ^ salt.wrapping_add(1).wrapping_mul(0x9e37_79b1);

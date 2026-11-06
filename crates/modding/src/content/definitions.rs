@@ -1,4 +1,5 @@
-//! Status, skill, spell and enemy rows from `mod-content-catalog.ts`.
+//! Validation of status, power-up, affix, skill, spell and enemy definitions for the
+//! prepared mod catalog.
 
 use std::collections::BTreeSet;
 

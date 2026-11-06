@@ -1,5 +1,5 @@
-//! Per-player authored stat books from `core-kernels/player-progression.ts`.
-//! The stock catalog initializes a new player. Saved and Lua-authored overrides
+//! Per-player authored stat books: each skill's level caps, descriptions and numeric
+//! properties. The stock catalog initializes a new player. Saved and Lua-authored overrides
 //! belong to that player's component, independently of learned skill ranks.
 
 use std::collections::BTreeMap;
@@ -7,6 +7,8 @@ use std::sync::{Arc, OnceLock};
 
 use super::{SKILL_CATALOG, SkillValue};
 
+/// A numeric skill property: a single value, or one value per rank with higher ranks
+/// reusing the last.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(untagged))]
@@ -27,6 +29,7 @@ impl SkillStatBookValue {
     }
 }
 
+/// One skill's stat-book entry: level caps, descriptions and numeric properties.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -46,6 +49,7 @@ impl SkillStatBookEntry {
     }
 }
 
+/// A player's own stat book; new players start from the stock catalog.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerStatBookComponent {

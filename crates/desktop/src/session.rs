@@ -8,6 +8,8 @@ use crate::{
     peer::{Invite, Peer},
 };
 
+/// One desktop play session (solo, hosting or joining) with its endpoint, authority and peer
+/// tunnel.
 pub struct Session {
     endpoint: DesktopEndpoint,
     pub options: SessionOptions,

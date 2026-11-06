@@ -1,5 +1,5 @@
-//! Source EtherDrain world projections and accepted forces from
-//! `core-server/native-ether-drain-world.ts` and `boneyard-world-placement.ts`.
+//! Ether Drain's view of the session world and the accepted results of its pulls: forces
+//! on targets and animations, player contacts, corpse consumption and captures.
 
 use crate::spells::model::PrimarySpellTransient;
 use crate::spells::weld::{WeldHailChildActorState, WeldWorldActor};
@@ -15,7 +15,7 @@ use crate::secondary::ether_drain::*;
 use crate::secondary::{SecondaryActorKind as Kind, SecondarySimulationState};
 use crate::spells::boneyard::boneyard_secondary_targets;
 
-/// Source callbacks see the accepted pre-secondary store. This copied query
+/// Ether Drain queries see the accepted pre-secondary state. This copied query
 /// projection lets the single mutable secondary owner advance without aliasing it.
 pub(super) struct SessionEtherDrainSnapshot {
     pub targets: Vec<EtherDrainTarget>,
@@ -479,8 +479,8 @@ impl GameSession {
                 captures.push((field, image));
             }
         }
-        // Source resolves the complete ordered damage lane before captures
-        // flush their private managers and consume secondary random draws.
+        // Resolve the complete ordered damage lane before captures flush their private
+        // managers and consume secondary random draws.
         let first_birth = self.secondary.next_actor_id;
         for (field, image) in captures {
             self.secondary.capture_ether_drain_image(field, image, tick);

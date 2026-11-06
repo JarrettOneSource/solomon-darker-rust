@@ -1,5 +1,6 @@
-//! Website fa08 `NativeWorldNotifications` and its accepted snapshot consumers.
-//! One clock owns all source lanes. Loading/restoring seeds cursors without replay.
+//! Floating world notifications for the local player: loot messages, Skill Book ranks,
+//! mana overloads and charm events, read from accepted snapshots. One clock owns all
+//! notification lanes. Loading/restoring seeds cursors without replay.
 
 use std::collections::BTreeMap;
 
@@ -18,6 +19,7 @@ use solomon_sim::ui_text::{UiFontName, UiTextSpec, ui_glyph_ink_bounds};
 
 use crate::gpu_ui::{UiFrame, native_text};
 
+/// The local player's floating world notifications and the event cursors that feed them.
 #[derive(Default)]
 pub struct WorldNotifications {
     state: Option<NotificationState>,
@@ -38,7 +40,7 @@ struct NotificationState {
 }
 
 impl WorldNotifications {
-    /// Boneyard native-frame z45, then the separate Hub book-message stage z45/45.
+    /// The Boneyard notification layer, then the separate Hub layer for book messages.
     pub fn layer_ids(&self) -> [LayerId; 2] {
         [world_notification_layer_id(false), world_notification_layer_id(true)]
     }
@@ -48,7 +50,7 @@ impl WorldNotifications {
     }
 
     /// Call with the accepted authority session, once before composing its GPU frame.
-    /// Repeated snapshots do not replay events or advance the source clock twice.
+    /// Repeated snapshots do not replay events or advance the notification clock twice.
     pub fn update(
         &mut self,
         session: &GameSession,

@@ -1,6 +1,5 @@
 //! Authored-content values shared by the Rust authority and client.
 //!
-//! Source: Website `game/modding/` and `protocol/game-mod-contract.ts`.
 //! The native `solomon-modding` crate owns Lua VMs. These values contain no VM
 //! handles, platform I/O or second player/world state.
 

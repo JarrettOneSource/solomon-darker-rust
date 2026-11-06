@@ -1,4 +1,5 @@
-//! Enemy +0x28 draws from `renderer/native-enemy-underlay.ts`, before light-map multiply.
+//! Enemy underlays: the quads an enemy's +0x28 pass draws beneath it, such as shadows, before
+//! the light-map multiply.
 
 use super::EnemyToken;
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemyArtRecords};
@@ -9,6 +10,7 @@ use crate::enemies::model::EnemyActor;
 use crate::float;
 use crate::float::fround;
 
+/// One quad drawn beneath an enemy, such as its shadow, with per-corner alpha.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyUnderlayLayer {
     pub alphas: [f64; 4],
@@ -260,7 +262,7 @@ pub fn enemy_underlay_plan_with_input(
     layers
 }
 
-// The arguments are the source sprite command, including independent native scales.
+// The arguments form one sprite draw command, including independent native scales.
 #[allow(clippy::too_many_arguments)]
 fn sprite_quad(
     art: &(impl EnemyArtRecords + ?Sized),

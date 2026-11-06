@@ -8,6 +8,8 @@ use solomon_sim::modding::inventory::{ModItemContent, ModWearableSlot};
 use super::*;
 use crate::mod_presentation_assets::{ModPresentationAssets, ModWearableTextureFrames};
 
+/// A wizard's element and equipment appearance, with the textures of any mod hat, robe or
+/// staff.
 #[derive(Clone)]
 pub struct WizardEquipment {
     pub(super) element: WizardElement,

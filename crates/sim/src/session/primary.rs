@@ -1,4 +1,5 @@
-//! One shared cast/flight epoch, followed by the source's later contact epoch.
+//! Primary spells in the session: one shared cast/flight epoch, followed by a later
+//! contact epoch.
 
 use super::*;
 use crate::Vec2;
@@ -176,7 +177,7 @@ impl GameSession {
             targets.extend(world.enemies.spell_targets());
             targets
         });
-        // Source target order is authored scenery, live goodies, then native actor cells.
+        // Target order is authored scenery, live goodies, then native actor cells.
         let gravestone_ids = self
             .boneyard
             .as_ref()
@@ -302,7 +303,7 @@ impl GameSession {
             &mut self.combat_rng,
             Some(&mut self.painter_order),
         );
-        // Underflow boasts precede the mana transactions in the source host.
+        // Underflow boasts precede the mana transactions.
         for player in &result.players {
             if player.mana_underflow {
                 self.fail_boast_with_extensions(

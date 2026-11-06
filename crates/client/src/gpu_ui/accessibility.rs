@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, btree_map::Entry};
 
 use super::WidgetGeometry;
 
+/// One screen-reader announcement and the control or narration that owns it.
 pub(super) struct Announcement {
     pub owner: String,
     pub text: String,
@@ -76,6 +77,8 @@ impl AnnouncementState {
     }
 }
 
+/// Screen-reader output for the GPU UI, through the browser reader or the native
+/// accessibility tree, with the state already announced.
 pub(super) struct Accessibility {
     #[cfg(target_arch = "wasm32")]
     reader: ScreenReader,

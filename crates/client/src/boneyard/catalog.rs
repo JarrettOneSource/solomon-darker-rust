@@ -1,5 +1,5 @@
-//! Immutable original glyph records and recovered shape tables. Produced by
-//! `tools/export-boneyard-catalog.mjs`; no scene placements are baked here.
+//! Immutable original glyph records and recovered shape tables, loaded from the stock
+//! `catalog.json`; no scene placements are baked here.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -8,6 +8,7 @@ use super::{BoundsDocument, NativeBoundsDocument, PointDocument};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::scenery::scenery_art_corners;
 
+/// The stock scenery catalog: glyph records, complex-shadow outlines and Tree shapes.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SceneryCatalog {
@@ -17,6 +18,7 @@ pub(super) struct SceneryCatalog {
     pub tree_polygons: Vec<Vec<PointDocument>>,
 }
 
+/// One original scenery glyph: its image file, size and anchor.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct SceneryRecord {

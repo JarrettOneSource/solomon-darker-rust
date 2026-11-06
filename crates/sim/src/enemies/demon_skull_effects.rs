@@ -1,4 +1,5 @@
-//! Discorporeal warmups, trails and beam bands from `enemies/demon-skull-effects.ts`.
+//! The Discorporeal's spell effects: eye and mouth warmups, eye-laser and spit trails, impact
+//! ground bursts, and the mouth beam's segments.
 
 use super::boss_spell::BossSpellKind;
 use super::effects::{DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec};

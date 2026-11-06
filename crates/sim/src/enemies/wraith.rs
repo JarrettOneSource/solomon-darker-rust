@@ -1,4 +1,4 @@
-//! Wraith flyby clock, two-substep flight and contact from `native-wraith-flight.ts`.
+//! Wraith flyby clock, two-substep flight, contact and trailing soul wisps.
 //! Wraith roots move directly; they do not call the solid-world movement resolver.
 use super::combat::{attack_marker, direct_player_damage};
 use super::effects::{
@@ -14,7 +14,8 @@ use crate::float;
 use crate::float::{atan2, fround, hypot};
 use crate::painter::WorldPainterOrder;
 
-/// `createNativeWraithFlightState`: constructor samples are owned by the caller's stream.
+/// A new Wraith's flight state. The caller draws the resting and initial speed samples and the
+/// flyby offset from its own stream.
 #[must_use]
 pub fn create_wraith_flight_state(
     chase_speed: f64,

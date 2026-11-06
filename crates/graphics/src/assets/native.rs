@@ -54,6 +54,8 @@ fn resource_bytes(location: &str) -> Result<Option<Rc<[u8]>>, String> {
         .ok_or_else(|| "The native content owner has retired".into())
 }
 
+/// Desktop asset loading: packaged files under one root, `data:` URLs, HTTP downloads and
+/// in-memory resource URLs.
 #[derive(Clone)]
 pub struct NativeAssets {
     root: Arc<PathBuf>,
@@ -120,6 +122,7 @@ impl NativeAssets {
     }
 }
 
+/// A decoded RGBA image and the location it was loaded from.
 #[derive(Clone)]
 pub struct Image {
     source: String,

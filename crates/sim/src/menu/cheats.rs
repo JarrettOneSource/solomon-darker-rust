@@ -1,5 +1,5 @@
-//! Website `cheat-menu-contract.ts`: admitted availability, semantic Lua actions,
-//! actual VM catalog decoding and console history. This module never executes Lua.
+//! The cheat menu: who may open it, its actions compiled to Lua, catalogs decoded from the Lua
+//! VM, and console history. This module never executes Lua.
 
 use crate::modding::value::LuaValue;
 use crate::profile::{WizardDiscipline, WizardElement};
@@ -12,6 +12,7 @@ pub const CHEAT_MENU_CONSOLE_HISTORY_LIMIT: usize = 50;
 pub const MAX_LUA_CONSOLE_CODE_LENGTH: usize = 48 * 1024;
 pub const CHEAT_MENU_CATALOG_QUERY: &str = "local developer = type(sd.dev) == 'table'\nreturn sd.enemies.list(),\n  developer and sd.dev.list_items() or {},\n  developer and sd.dev.list_skills() or {},\n  developer and sd.dev.list_welds() or {}";
 
+/// An enemy the cheat menu can spawn: its key, base and type ID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheatMenuEnemyDescriptor {
     pub base: String,
@@ -19,6 +20,7 @@ pub struct CheatMenuEnemyDescriptor {
     pub type_id: i64,
 }
 
+/// An item the cheat menu can grant: its key, kind, name and type ID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheatMenuItemDescriptor {
     pub key: String,
@@ -27,6 +29,8 @@ pub struct CheatMenuItemDescriptor {
     pub type_id: i64,
 }
 
+/// A skill the cheat menu can grant: its ID, name, family, maximum rank and whether only a Weld
+/// provides it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CheatMenuSkillDescriptor {
     pub family: String,
@@ -36,14 +40,16 @@ pub struct CheatMenuSkillDescriptor {
     pub weld_only: bool,
 }
 
+/// A Weld the cheat menu can grant: its build ID, name and component skill IDs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CheatMenuWeldDescriptor {
-    // Source requires Number.isInteger here, rather than Number.isSafeInteger.
+    // Any finite integer is accepted here, not only safe integers, so the IDs stay `f64`.
     pub component_skill_ids: Vec<f64>,
     pub id: i64,
     pub name: String,
 }
 
+/// The enemy, item, skill and Weld catalogs the cheat menu offers, decoded from the Lua VM.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CheatMenuCatalogs {
     pub enemies: Vec<CheatMenuEnemyDescriptor>,
@@ -52,6 +58,7 @@ pub struct CheatMenuCatalogs {
     pub welds: Vec<CheatMenuWeldDescriptor>,
 }
 
+/// A cheat menu command; `compile_cheat_menu_action` turns it into a Lua chunk.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CheatMenuAction {
     RestoreHealth { player_id: String },
@@ -213,7 +220,7 @@ fn integer_within(value: f64, label: &str, minimum: f64, maximum: f64) -> Result
 }
 
 fn lua_string_literal(value: &str) -> Result<String, String> {
-    // JavaScript checks UTF-16 length, including both halves of an astral glyph.
+    // The limit counts UTF-16 code units, so an astral glyph counts as two.
     if value.is_empty() || value.encode_utf16().count() > 128 {
         return Err(
             "Lua action identity must be a nonempty string of at most 128 characters".to_owned()

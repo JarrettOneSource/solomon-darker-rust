@@ -1,9 +1,12 @@
-//! Silk's two QuickSplines and fixed-tick flight from `core-kernels/native-silk.ts`.
+//! Spider Silk: the two QuickSplines (centre line and side wave) built at birth, the fixed-tick
+//! flight along them, its sideways drift, and the fade after the strand ends.
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::spline::NaturalSpline;
 use crate::{Rng, Vec2};
 
+/// A strand of Spider Silk: its splines and progress along them, height, wave scale, drift and
+/// fade, the force it has absorbed and the Cocoon health it carries.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SilkState {
@@ -21,6 +24,7 @@ pub struct SilkState {
     pub drift_velocity: Vec2,
     pub cocoon_health: f64,
 }
+/// A newly spat Silk strand and its launch sound: which of three sounds, its pitch and position.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SilkCreation {
     pub state: SilkState,
@@ -28,6 +32,8 @@ pub struct SilkCreation {
     pub sound_pitch: f64,
     pub sound_position: Vec2,
 }
+/// A live Silk strand: its id, the Spider that spat it, spawn tick, flight state, painter
+/// registration and spell-query orders.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemySilkActor {

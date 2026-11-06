@@ -1,4 +1,4 @@
-//! Obstacle features and local placement probes from Source `ml-bot-policy/geometry.ts`.
+//! The bot's geometry observation: obstacle features and local placement probes.
 
 use crate::Vec2;
 use crate::boneyard::BoneyardBounds;
@@ -11,6 +11,7 @@ use crate::hub::PLAYER_CHARACTER_RADIUS;
 use super::numbers::directions;
 use super::spec::scales;
 
+/// The encoded ray clearances, the placement patch around the bot and the obstacle features.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyGeometryObservation {
     pub obstacles: Vec<f32>,
@@ -18,7 +19,7 @@ pub struct MlBotPolicyGeometryObservation {
 }
 
 /// The caller supplies the current gate-overlay collision and actual scenery target IDs.
-/// Entrance routing separately borrows static collision, as the Source controller does.
+/// Entrance routing separately borrows static collision.
 pub fn observe_ml_bot_policy_geometry(
     bounds: BoneyardBounds,
     collision: &BoneyardCollisionWorld,

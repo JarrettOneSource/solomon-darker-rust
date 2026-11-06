@@ -1,5 +1,5 @@
-//! Source Flash/Mindblast materialization and scripted fires. Pure harmful-hit
-//! decisions live in `harmful`; this module turns admitted responses into actors.
+//! Flash, Mindblast and rescue responses and scripted fires. Pure harmful-hit decisions
+//! live in `harmful`; this module turns admitted responses into actors.
 
 use super::program::*;
 use super::{
@@ -13,6 +13,7 @@ use crate::harmful::PlayerFlashResponse;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::profile::WizardElement;
 
+/// An admitted Flash response: the targets it dazzles and the burst to spawn at the player.
 pub struct PlayerFlashResponseInput<'a> {
     pub owner_id: &'a str,
     pub position: Vec2,
@@ -22,6 +23,8 @@ pub struct PlayerFlashResponseInput<'a> {
     pub world_key: &'a str,
 }
 
+/// A Mindblast to trigger at a player: element, level, direct damage and presentation
+/// scale.
 pub struct PlayerMindblastInput<'a> {
     pub direct_damage: Option<f64>,
     pub element: WizardElement,
@@ -33,6 +36,7 @@ pub struct PlayerMindblastInput<'a> {
     pub world_key: &'a str,
 }
 
+/// A rescue shockwave to spawn at a player, with its light registration.
 pub struct PlayerRescueInput<'a> {
     pub light_registration: PainterRegistration,
     pub owner_id: &'a str,
@@ -40,12 +44,14 @@ pub struct PlayerRescueInput<'a> {
     pub world_key: &'a str,
 }
 
+/// The direct damage and radius of a triggered Mindblast.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerMindblastTriggerResult {
     pub direct_damage: f64,
     pub direct_radius: f64,
 }
 
+/// A scripted fire patch: position, radius, damage and lifetime.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScriptFire {
     pub damage: f64,

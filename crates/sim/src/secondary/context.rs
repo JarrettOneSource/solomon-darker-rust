@@ -1,4 +1,4 @@
-//! The source secondary tick boundary: immutable player snapshots and actual world queries.
+//! The secondary tick boundary: immutable player snapshots and actual world queries.
 //! The world resolves geometry; the secondary kernel owns actor order, effects and RNG.
 
 use std::collections::BTreeMap;
@@ -15,6 +15,7 @@ use super::{
     SecondaryTargetHeadingChange,
 };
 
+/// A player's secondary input this tick: aim point, primary button and quickbar slot.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SecondaryInput {
     pub aim: Option<Vec2>,
@@ -22,6 +23,7 @@ pub struct SecondaryInput {
     pub quickbar: Option<usize>,
 }
 
+/// The player state a secondary tick reads: life, mana, belt, wizard, input and skill book.
 pub struct SecondaryPlayerSnapshot<'a> {
     pub alive: bool,
     pub action_time_factor: f64,
@@ -36,6 +38,8 @@ pub struct SecondaryPlayerSnapshot<'a> {
     pub world_key: &'a str,
 }
 
+/// A player's snapshot plus the derived values secondary abilities use: upgrade damage and
+/// costs, recharge, slowdown and maximum-effect equipment flags.
 pub struct SecondaryPlayerAuthority<'a> {
     pub alive: bool,
     pub action_time_factor: f64,
@@ -86,8 +90,8 @@ impl<'a> SecondaryPlayerAuthority<'a> {
         )
     }
 
-    /// Actual supplemental authority reads `playerEntities.statBooks[index]` in
-    /// `game-simulation.ts`. The ability's own base rank table remains shared.
+    /// Upgrade values come from the player's own stat book. The ability's own base rank
+    /// table remains shared.
     #[must_use]
     pub fn from_snapshot_with_stat_book(
         snapshot: SecondaryPlayerSnapshot<'a>,
@@ -147,6 +151,8 @@ impl<'a> SecondaryPlayerAuthority<'a> {
     }
 }
 
+/// The players and tick a secondary step runs against, with an optional Enhanced Effects
+/// override.
 pub struct SecondaryTickContext<'a> {
     pub enhanced_effects: Option<bool>,
     pub players: &'a BTreeMap<String, SecondaryPlayerAuthority<'a>>,
@@ -162,6 +168,7 @@ impl SecondaryTickContext<'_> {
     }
 }
 
+/// A scenery object a secondary ability can affect: its ID, position, type and variant.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondarySceneryTarget {
     pub id: usize,
@@ -170,6 +177,7 @@ pub struct SecondarySceneryTarget {
     pub secondary_variant: Option<u32>,
 }
 
+/// The enemy projectile kinds Dampen can turn into dampened spells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryDampenProjectileKind {
     Firebolt,
@@ -177,6 +185,7 @@ pub enum SecondaryDampenProjectileKind {
     SkullMissile,
     DarkFireball,
 }
+/// The element a dampened projectile carries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryDampenPayload {
     Cold,
@@ -184,6 +193,7 @@ pub enum SecondaryDampenPayload {
     Poison,
     Dark,
 }
+/// An enemy projectile within Dampen's reach.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryDampenProjectileCandidate {
     pub id: usize,
@@ -191,6 +201,7 @@ pub struct SecondaryDampenProjectileCandidate {
     pub payload: SecondaryDampenPayload,
     pub position: Vec2,
 }
+/// What a Dampen cast can affect: enemy casters, projectiles and shielded targets.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SecondaryDampenCandidates {
     pub caster_target_ids: Vec<usize>,
@@ -198,8 +209,10 @@ pub struct SecondaryDampenCandidates {
     pub shield_target_ids: Vec<usize>,
 }
 
+/// The world queries secondary abilities need: targets, movement, placement, visibility
+/// and obstruction.
 pub trait SecondaryWorld {
-    /// Source requires this callback only when an actual Golem area moves a target.
+    /// Required only when an actual Golem area moves a target.
     fn knockback_area_movement(
         &mut self,
         _world_key: &str,
@@ -233,8 +246,8 @@ pub trait SecondaryWorld {
     fn target(&self, world_key: &str, target_id: usize) -> Option<SecondaryTarget>;
     fn targets(&self, world_key: &str, center: Vec2, radius: f64) -> Vec<SecondaryTarget>;
 
-    // These callbacks are optional in the source contract. Their defaults preserve its
-    // absent-callback behavior; the live world supplies its actual bounds and visibility.
+    // These callbacks are optional. Their defaults behave as a world without them; the live
+    // world supplies its actual bounds and visibility.
     fn effect_visible(&self, _world_key: &str, _position: Vec2, _margin: f64) -> bool {
         true
     }
@@ -275,6 +288,8 @@ pub trait SecondaryWorld {
     }
 }
 
+/// Everything a secondary tick asks the world to apply: damage, knockbacks, heading
+/// changes, mana and health changes, relocations and removed projectiles.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SecondaryTickResult {
     pub dampened_caster_target_ids: Vec<usize>,

@@ -1,10 +1,11 @@
-//! Immutable authored definitions from `modding/definition/web-lua-definition-types.ts`.
-//! Reference identities use `web-lua-content-identity.ts`'s length-prefixed FNV-1a hash.
+//! Immutable authored mod definitions (assets, content, rules, schemas and reducers), as
+//! written and as compiled. Content identities use a length-prefixed FNV-1a hash.
 
 use super::{LuaObject, LuaValue};
 
 pub const WEB_LUA_DEFINITION_API_VERSION: &str = "1.0.0";
 
+/// The family of an authored content definition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -90,6 +91,7 @@ impl WebLuaContentKind {
     }
 }
 
+/// The kind of an authored asset: Boneyard, music, scene, sprite sheet, sound or sprite.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -124,6 +126,8 @@ impl WebLuaAssetKind {
     }
 }
 
+/// Where reducer state lives: per entity, participant profile or run, party run, scene or
+/// session.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -207,6 +211,7 @@ pub const WEB_LUA_PREDICATE_FIELDS: [&str; 11] = [
     "not_equals",
 ];
 
+/// A mod's ID, name and version.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WebLuaModIdentity {
@@ -215,6 +220,7 @@ pub struct WebLuaModIdentity {
     pub version: String,
 }
 
+/// An authored reference to content by key, optionally in another mod, and its expected kind.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -227,6 +233,7 @@ pub struct WebLuaContentReference {
     pub target_kind: WebLuaContentKind,
 }
 
+/// An authored reference to an asset by key.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename = "asset-reference"))]
@@ -234,6 +241,7 @@ pub struct WebLuaAssetReference {
     pub key: String,
 }
 
+/// Where a definition was written: its file, line and column, and its creation order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -246,6 +254,7 @@ pub struct WebLuaDefinitionSource {
     pub node: Option<u32>,
 }
 
+/// An authored asset definition: its kind, key, fields and source location.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -259,6 +268,7 @@ pub struct WebLuaAssetDefinition {
     pub source: WebLuaDefinitionSource,
 }
 
+/// An authored content definition: its kind, key, fields and source location.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -272,6 +282,7 @@ pub struct WebLuaContentDefinition {
     pub source: WebLuaDefinitionSource,
 }
 
+/// An authored rule: its operation, fields and source location.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename = "rule-definition"))]
@@ -281,6 +292,7 @@ pub struct WebLuaRuleDefinition {
     pub source: WebLuaDefinitionSource,
 }
 
+/// An authored state schema: its kind, fields and source location.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -293,6 +305,7 @@ pub struct WebLuaSchemaDefinition {
     pub source: WebLuaDefinitionSource,
 }
 
+/// An authored intent: its kind, fields and source location.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -319,6 +332,7 @@ pub struct WebLuaReducerDefinition {
     pub state: WebLuaSchemaDefinition,
 }
 
+/// Everything a mod's script defines: its API version, assets, content, reducers and rules.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WebLuaModDefinition {
@@ -329,6 +343,7 @@ pub struct WebLuaModDefinition {
     pub rules: Vec<WebLuaRuleDefinition>,
 }
 
+/// A content reference resolved to its content ID, owning mod, key and kind.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -342,6 +357,7 @@ pub struct ResolvedWebLuaContentReference {
     pub target_kind: WebLuaContentKind,
 }
 
+/// A compiled asset: its kind, key and fields.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -351,6 +367,7 @@ pub struct CompiledWebLuaAsset {
     pub key: String,
 }
 
+/// Compiled content: its content ID, kind, key and fields.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -361,6 +378,7 @@ pub struct CompiledWebLuaContent {
     pub key: String,
 }
 
+/// A compiled reducer: its key, events, scope, state schema and schema version.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -372,6 +390,8 @@ pub struct CompiledWebLuaReducer {
     pub state: WebLuaSchemaDefinition,
 }
 
+/// A compiled mod: its identity, API version, capabilities, assets, content, reducers and
+/// rules, with its canonical JSON and graph digest.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -387,6 +407,7 @@ pub struct CompiledWebLuaMod {
     pub rules: Vec<WebLuaRuleDefinition>,
 }
 
+/// The size limits a mod definition must stay within.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -414,7 +435,8 @@ impl Default for WebLuaDefinitionLimits {
     }
 }
 
-/// `WEB_LUA_CONTENT_KEY_PATTERN`: ASCII key, 1..128 bytes, no edge separator.
+/// Whether `value` is a valid content key: 1 to 128 bytes of lowercase ASCII letters, digits
+/// and `._-`, starting and ending with a letter or digit.
 #[must_use]
 pub fn valid_web_lua_content_key(value: &str) -> bool {
     let bytes = value.as_bytes();

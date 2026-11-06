@@ -9,6 +9,7 @@ use super::{
     ReceivedNativeSnapshot, ServerMessage, transfer,
 };
 
+/// What the socket has delivered for the renderer to collect, plus open state, ping and failure.
 #[derive(Default)]
 pub(super) struct Delivery {
     pub poll: NetworkPoll,
@@ -25,6 +26,8 @@ impl Delivery {
 
 pub(super) type SharedDelivery = Arc<Mutex<Delivery>>;
 
+/// Socket-side state shared by both platforms: message reassembly, snapshot decoding, the
+/// welcome deadline and pings.
 pub(super) struct ConnectionCore {
     pub delivery: SharedDelivery,
     failed: bool,

@@ -1,5 +1,5 @@
-//! Hub/player field projection from `client/hub-presentation-timeline.ts` and
-//! `client/boneyard-presentation-timeline.ts::interpolatePlayer`.
+//! Display sampling of players and Hub world fields between two accepted snapshots,
+//! and of the local Hub player from the newest one.
 
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::hub::college_intro::CollegeIntroPhase;
@@ -9,7 +9,7 @@ use solomon_sim::hub::regions::{
 use solomon_sim::profile::interpolate_harden_coating;
 use solomon_sim::session::{GameSession, SessionParticipant};
 
-// Source native-college-intro.ts exports these values; its sim tick stores the same literals.
+// Per-tick College intro rates; the simulation's intro step uses the same literals.
 const COLLEGE_COVER_FADE_RATE: f64 = 0.0005_f32 as f64;
 const COLLEGE_TITLE_CURSOR_STEP: f64 = 0.005200000014156103;
 
@@ -23,9 +23,8 @@ pub(super) fn project_players(
     blend: f64,
     clocks: &mut PresentationClocks,
 ) {
-    // Source player Records retain older entries through this bracket. Hub's
-    // separate participant Record retires them at its endpoint, so they are no
-    // longer visible there; Boneyard has no corresponding participant Record.
+    // Older players stay through this bracket. In the Hub, a player missing from the
+    // newer snapshot is dropped at the endpoint; the Boneyard keeps them.
     output.participant_order.clear();
     for id in &older.participant_order {
         let first = older.participants.get(id).expect("participant exists");
