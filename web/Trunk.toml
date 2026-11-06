@@ -1,6 +1,9 @@
 [build]
 target = "index.html"
 dist = "dist"
+# Relative URLs let one build serve at the site root or below any mount, such as
+# /game, /game-rust or /game-stg. The post-build hook requires this base.
+public_url = "./"
 
 [watch]
 watch = ["index.html", "bootstrap.mjs", "../scripts/trunk_bootstrap.py", "../scripts/prepare-trunk-client.py", "../crates"]

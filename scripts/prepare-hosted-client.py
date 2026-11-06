@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
-"""Externalize Trunk's generated bootstrap for the hosted site's script policy."""
+"""Add the hosted site's deployment metadata and editor-test entry to a Trunk distribution.
+
+The client's own URLs stay relative, so the result serves below any mount. The mounts
+given here are deployment settings, recorded only in the documents' metadata."""
 
 import argparse
 import json
 from pathlib import Path
 import re
 
-from trunk_bootstrap import prepare_trunk_bootstrap
+from trunk_bootstrap import BASE, CLIENT_ROOT, boot_script, prepare_trunk_bootstrap
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dist", type=Path, help="completed Trunk distribution")
-    parser.add_argument("--mount", default="/game-stg")
+    parser.add_argument("--mount", default="/game-stg", help="URL prefix the deployment serves the game at")
     parser.add_argument("--website-mount", help="Website API and account-storage prefix; defaults to the game mount")
     parser.add_argument("--revision", required=True, help="full source revision of this build")
     args = parser.parse_args()
@@ -25,12 +28,10 @@ def main():
     if not re.fullmatch(r"[0-9a-f]{40}", args.revision):
         parser.error("revision must be a full lowercase source commit")
     index = args.dist / "index.html"
-    document = index.read_text(encoding="utf-8")
     try:
-        document, name, bootstrap = prepare_trunk_bootstrap(args.dist, args.mount)
+        document, name, _ = prepare_trunk_bootstrap(args.dist)
     except ValueError as error:
         parser.error(str(error))
-    (args.dist / name).write_text(bootstrap, encoding="utf-8")
     if 'name="solomon-build-revision"' in document or document.count("</head>") != 1:
         parser.error("expected one document head without preexisting deployment metadata")
     document = document.replace("</head>", (
@@ -44,10 +45,13 @@ def main():
         (Path(__file__).resolve().parents[1] / "web" / editor_boot).read_text(encoding="utf-8"),
         encoding="utf-8",
     )
-    editor_document = document.replace(
-        f'<script type="module" src="{args.mount}/{name}"></script>',
-        f'<script type="module" src="{args.mount}/{editor_boot}" '
-        f'data-editor-test-boot data-game-boot="{args.mount}/{name}"></script>',
+    # The editor document sits one directory below the client root. Moving its base up
+    # to that root keeps every other reference identical to the game document's.
+    base = BASE.search(document)
+    editor_document = (document[:base.start("href")] + "../" + document[base.end("href"):]).replace(
+        boot_script(name),
+        f'<script type="module" src="{CLIENT_ROOT}{editor_boot}" '
+        f'data-editor-test-boot data-game-boot="{CLIENT_ROOT}{name}"></script>',
     ).replace("</head>", '<meta name="solomon-editor-test">\n</head>')
     editor = args.dist / "editor-test"
     editor.mkdir(exist_ok=True)

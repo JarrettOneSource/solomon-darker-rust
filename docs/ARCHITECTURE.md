@@ -277,13 +277,15 @@ nonblocking writes. Slow readers cannot occupy the request-framing pool.
 
 ## Website integration
 
-A verified game artifact supplies the native host, mounted WebAssembly client,
-editor entry, and independent save-tools module. The website validates the manifest,
-file membership, and hashes before installation.
+A verified game artifact supplies the native host, WebAssembly client, editor entry,
+and independent save-tools module. The website validates the manifest, file
+membership, and hashes before installation. The client's URLs are relative, so one
+artifact serves at any mount; page metadata names the game mount and, separately,
+the Website API and storage mount ([decision](DECISIONS.md#mount-independent-browser-build)).
 
 Website APIs own accounts, cloud documents, community content, party discovery,
-and editing. Game revision/assets and website API/storage mounts are independent.
-Direct standalone play retains local saves and peer transport without those services.
+and editing. Direct standalone play retains local saves and peer transport without
+those services.
 
 The website editor hands Test a disposable authority and restores the editor on
 Return. The Account initializes save tools without starting a game, renderer, or

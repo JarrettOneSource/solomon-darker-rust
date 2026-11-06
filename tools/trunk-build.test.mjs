@@ -10,9 +10,11 @@ import { repositoryRoot } from './desktop-build.mjs';
 
 // Both wasm-bindgen modules are built without auto-start; the shared bootstrap
 // is produced from their content-hashed resources by the ordinary Trunk hook.
-function trunkDocument(mount = '') {
+// Trunk writes the configured public URL, "./", as the document base.
+function trunkDocument(base = './') {
   return `<!doctype html><html><head><title>Solomon Darker</title>
-<meta name="solomon-bootstrap" content="gpu-loader-v1"><base href="${mount}/">
+<meta name="solomon-bootstrap" content="gpu-loader-v1"><base href="${base}">
+<link rel="icon" type="image/png" href="assets/stock/favicon.png">
 </head><body><canvas id="game"></canvas></body></html>`;
 }
 const generatedResources = [
@@ -20,12 +22,15 @@ const generatedResources = [
   'solomon-client-d693347574b3e849.js', 'solomon-client-852180e6d53c052b_bg.wasm',
 ];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex').slice(0, 16);
+const python = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
 
 async function distribution(context, document) {
   const root = await mkdtemp(join(tmpdir(), 'solomon-desktop-build-'));
   context.after(() => rm(root, {recursive: true, force: true}));
   await writeFile(join(root, 'index.html'), document);
   for (const name of generatedResources) await writeFile(join(root, name), 'fixture generated resource');
+  await mkdir(join(root, 'assets/stock'), {recursive: true});
+  await writeFile(join(root, 'assets/stock/favicon.png'), 'fixture icon');
   return root;
 }
 
@@ -39,7 +44,7 @@ test('the configured Trunk hook prepares a checkout whose path contains spaces',
     'scripts/prepare-trunk-client.py']) {
     await copyFile(join(repositoryRoot, name), join(checkout, name));
   }
-  execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'), ['-c', `
+  execFileSync(python, ['-c', `
 import os, subprocess, sys, tomllib
 from pathlib import Path
 hook = tomllib.loads(Path('Trunk.toml').read_text())['hooks'][0]
@@ -48,11 +53,11 @@ command = hook.get(platform, hook)
 subprocess.run([command['command'], *command['command_arguments']], check=True)
 `], {
     cwd: web,
-    env: {...process.env, PYTHONDONTWRITEBYTECODE: '1', TRUNK_PUBLIC_URL: '/',
+    env: {...process.env, PYTHONDONTWRITEBYTECODE: '1',
       TRUNK_SOURCE_DIR: toNamespacedPath(web), TRUNK_STAGING_DIR: toNamespacedPath(root)},
   });
   const document = await readFile(join(root, 'index.html'), 'utf8');
-  const initializer = /src="\/(solomon-boot-[a-f0-9]{16}\.mjs)"/.exec(document);
+  const initializer = /src="\.\/(solomon-boot-[a-f0-9]{16}\.mjs)"/.exec(document);
   assert.ok(initializer, 'the configured hook emits the external GPU loader');
   const bootstrap = await readFile(join(root, initializer[1]), 'utf8');
   assert.match(bootstrap, /"loaderModule": "solomon-loader-[a-f0-9]+\.js"/);
@@ -74,9 +79,8 @@ test('worker outputs hash WASM before rewriting and hashing the JavaScript bindi
     await writeFile(join(root, `${name}.js`), binding);
     expected.push(wasmName, moduleName);
   }
-  const prepare = () => execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'),
-    [join(repositoryRoot, 'scripts/prepare-trunk-client.py')],
-    {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1', TRUNK_PUBLIC_URL: '/', TRUNK_STAGING_DIR: root}});
+  const prepare = () => execFileSync(python, [join(repositoryRoot, 'scripts/prepare-trunk-client.py')],
+    {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1', TRUNK_STAGING_DIR: root}});
   prepare();
   const files = await readdir(root);
   for (const name of expected) assert.ok(files.includes(name), `missing content-hashed ${name}`);
@@ -90,23 +94,59 @@ test('worker outputs hash WASM before rewriting and hashing the JavaScript bindi
   assert.deepEqual((await readdir(root)).sort(), files.sort(), 'preparation is idempotent');
 });
 
-test('shared externalization preserves the separate Website mount and editor entry', async context => {
-  const root = await distribution(context, trunkDocument('/game-stg'));
+test('a document base that names a mount fails the build', async context => {
+  const root = await distribution(context, trunkDocument('/game/'));
+  assert.throws(() => execFileSync(python, [join(repositoryRoot, 'scripts/prepare-trunk-client.py')],
+    {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1', TRUNK_STAGING_DIR: root}, stdio: 'pipe'}),
+  error => /<base href="\.\/">/.test(error.stderr));
+});
+
+// Resolve a document's references as a browser does: against its base, which is itself
+// relative to the page. Returns the distribution files they name under the serving mount.
+function resolvedFiles(document, page, mount) {
+  const [tag, base] = /<base href="([^"]+)">/.exec(document);
+  const references = [...document.replace(tag, '').matchAll(/ (?:src|href|data-game-boot)="([^"]+)"/g)]
+    .map(match => match[1]);
+  return references.map(reference => {
+    for (const url of [base, reference]) assert.doesNotMatch(url, /^(?:\/|[a-z]+:)/, `${url} names no mount`);
+    const url = new URL(reference, new URL(base, page));
+    assert.ok(url.origin === page.origin && url.pathname.startsWith(mount), `${url} stays under ${mount}`);
+    return decodeURIComponent(url.pathname.slice(mount.length));
+  });
+}
+
+test('hosted preparation keeps every reference relative and adds the deployment metadata and editor entry', async context => {
+  const root = await distribution(context, trunkDocument());
   const revision = '1'.repeat(40);
-  execFileSync(process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3'),
-    [join(repositoryRoot, 'scripts/prepare-hosted-client.py'), root,
-      '--mount', '/game-stg', '--website-mount', '', '--revision', revision],
-    {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'}});
+  execFileSync(python, [join(repositoryRoot, 'scripts/prepare-hosted-client.py'), root,
+    '--mount', '/game-stg', '--website-mount', '', '--revision', revision],
+  {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'}});
   const document = await readFile(join(root, 'index.html'), 'utf8');
-  assert.match(document, /<base href="\/game-stg\/">/);
-  assert.match(document, /name="solomon-website-mount" content=""/);
-  assert.match(document, /name="solomon-game-mount" content="\/game-stg"/);
-  assert.equal(document.includes('<script type="module">'), false);
   const editor = await readFile(join(root, 'editor-test/index.html'), 'utf8');
+  const boot = /<script type="module" src="\.\/(solomon-boot-[a-f0-9]{16}\.mjs)"><\/script>/.exec(document)[1];
+  assert.match(document, /<base href="\.\/">/);
+  assert.match(editor, /<base href="\.\.\/">/);
+  assert.ok(editor.includes('<script type="module" src="./editor-test-boot.mjs" data-editor-test-boot '
+    + `data-game-boot="./${boot}"></script>`), 'the editor entry wraps the same game initializer');
   assert.match(editor, /name="solomon-editor-test"/);
-  assert.match(editor, /src="\/game-stg\/editor-test-boot\.mjs" data-editor-test-boot data-game-boot="\/game-stg\/solomon-boot-/);
+  for (const page of [document, editor]) {
+    assert.equal(page.split('<script').length, 2, 'the one external entry is the only script');
+    assert.match(page, /name="solomon-build-revision" content="1{40}"/);
+    assert.match(page, /name="solomon-website-mount" content=""/);
+    // The mount is deployment metadata only; no URL names it.
+    assert.match(page, /name="solomon-game-mount" content="\/game-stg"/);
+    assert.equal(page.split('/game-stg').length, 2);
+  }
+  // One distribution serves at the site root or below any mount.
+  for (const mount of ['/', '/game/', '/game-rust/', '/game-stg/']) {
+    const origin = 'https://example.test';
+    assert.deepEqual(resolvedFiles(document, new URL(mount, origin), mount),
+      ['assets/stock/favicon.png', boot]);
+    assert.deepEqual(resolvedFiles(editor, new URL(`${mount}editor-test/`, origin), mount),
+      ['assets/stock/favicon.png', 'editor-test-boot.mjs', boot]);
+  }
+  for (const name of ['assets/stock/favicon.png', 'editor-test-boot.mjs', boot]) await readFile(join(root, name));
   assert.equal(await readFile(join(root, 'editor-test-boot.mjs'), 'utf8'),
     await readFile(join(repositoryRoot, 'web/editor-test-boot.mjs'), 'utf8'));
   assert.deepEqual(JSON.parse(await readFile(join(root, 'deployment.json'), 'utf8')), {revision});
-  assert.equal(await readFile(join(root, 'index.html'), 'utf8'), document);
 });

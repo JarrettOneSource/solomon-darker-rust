@@ -33,7 +33,8 @@ window.addEventListener('message', async event => {
   try {
     const entry = document.querySelector('script[data-editor-test-boot]')?.dataset.gameBoot
     if (!entry) throw new Error('The private test entry is missing.')
-    await import(entry)
+    // Like the tag's own src, the entry is relative to the document base: the client root.
+    await import(new URL(entry, document.baseURI).href)
   } catch (error) {
     if (cleanupTimer !== undefined) {
       window.clearInterval(cleanupTimer)
