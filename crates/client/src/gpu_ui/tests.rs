@@ -6,8 +6,25 @@ use super::*;
 pub(crate) fn record_shapes(
     ctx: &Context,
     paths: &[&str],
-    mut paint: impl FnMut(&mut UiFrame<'_>),
+    paint: impl FnMut(&mut UiFrame<'_>),
 ) -> Vec<egui::epaint::ClippedShape> {
+    record_frame(ctx, paths, paint).shapes
+}
+
+/// The settled pass of [`record_shapes`]: its shapes, widgets and claimed controller scope.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) struct RecordedFrame {
+    pub shapes: Vec<egui::epaint::ClippedShape>,
+    pub widgets: BTreeMap<String, WidgetGeometry>,
+    pub input_scope: Option<(egui::LayerId, String)>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn record_frame(
+    ctx: &Context,
+    paths: &[&str],
+    mut paint: impl FnMut(&mut UiFrame<'_>),
+) -> RecordedFrame {
     let images = painter::Images::decoded_test_images(paths);
     let widgets = RefCell::new(BTreeMap::new());
     let previous_widgets = BTreeMap::new();
@@ -20,6 +37,7 @@ pub(crate) fn record_shapes(
     // New Areas first establish their bounds; inspect the settled paint pass.
     for _ in 0..2 {
         widgets.borrow_mut().clear();
+        input_scope.borrow_mut().take();
         let output = ctx.run_pass(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 900.0))),
@@ -50,7 +68,7 @@ pub(crate) fn record_shapes(
         shapes = output.shapes.clone();
         output.drop_without_applying_deltas();
     }
-    shapes
+    RecordedFrame { shapes, widgets: widgets.into_inner(), input_scope: input_scope.into_inner() }
 }
 
 fn frame(
