@@ -112,13 +112,13 @@ These must be finished before Rust moves to `/game`.
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
 | 1 | PixiJS critical-fix-only policy | Done | Recorded above and in the device wiki for future campaigns. |
-| 2 | Cutover checklist (what "passes QC" means) | Not started | See [Cutover checklist](#cutover-checklist). Needs owner review before use. |
+| 2 | Cutover checklist (what "passes QC" means) | In progress | The [checklist](#cutover-checklist) now names the evidence for each check. It needs the owner's review, and the swap waits for his explicit approval. |
 | 3 | Boneyard art without PixiJS | Done | The Rust client draws every Boneyard itself: it loads `catalog.json`, the retail ground, road, river, rise and fence-grate textures, and the DeadHawg glyphs, which are crops of the retail atlas. The 4,886 PNGs (424 MB) and 13 manifests that `tools/export-boneyard-art.mjs` baked through the Website's painter were never read, and still showed the editor's placement shadows. They and the tool are removed; a build without them passes the Boneyard, Tutorial and Hub journeys and requests nothing from the removed paths. The shape tables in `catalog.json` still come from `tools/export-boneyard-catalog.mjs` (item 10). |
 | 4 | Move PixiJS players' saves | Not started | Cloud saves use the shared save document that `solomon-assets::website_save` reads; test real production documents. Browser-local PixiJS saves need a one-time import. |
 | 5 | Browser storage keys independent of the URL | Not started | `WebsiteMount::storage_key` (`crates/client/src/hosted.rs`) appends the Website mount to every key. The Website's `/game-rust` remount sets that mount, so Rust's guest saves live in `solomon-dark-game-saves:/game-rust` while PixiJS owns the unsuffixed names. Moving Rust to `/game` as built today would orphan its data and read PixiJS's. Have the deployment supply a storage namespace separate from the URL path (staging at `/game-stg` keeps its own), and copy the suffixed keys once at the swap. Coordinate with the Website's guest-save migration and item 8. |
 | 6 | Mount-independent build | Not started | The hosted build is made for `/game` and the Website's `build-parallel-apps.mjs` rewrites it for `/game-rust`. Relative asset URLs remove the rewrite. |
 | 7 | Community content in Rust | Not started | Published boneyards and mods load, and the Website editor's test-play uses Rust. |
-| 8 | Swap plan | Not started | Rust to `/game`, PixiJS to `/game-legacy` with a banner for a few weeks, `/game-rust` redirects to `/game`. Needs Website and Caddy changes. |
+| 8 | Swap plan | In progress | The owner decided on 2026-11-06 that PixiJS retires at the swap: there is no `/game-legacy`, and its source stays in the Website repository until he confirms the result. Players' PixiJS saves carry over with nothing to import or choose ([decision](DECISIONS.md#pixijs-retires-at-the-swap)). The swap is Website draft PR 17. It moves the companion mount to `/game` in `frontend/tools/companion-game.json` and turns on save adoption; the Caddy block moves from `/game-rust` to `/game`, and `/game-rust` links 308-redirect there; both API processes use the Rust save namespace; and the root site is built for the Rust game. Rollback is reverting that PR: PixiJS's own saves are never modified. It merges only on the owner's word. |
 | 9 | README play link | Done | It pointed at `/game/` (PixiJS); it now points at `/game-rust/` until the swap. |
 | 29 | Rejoin during a level-up | Done | A wizard who rejoins with a level-up pending stays staged outside the world until it chooses. The client kept its loading screen up while its own wizard was staged, so the picker never appeared and the run stayed on "Waiting for the coven..." (PR13's head too). The loading screen and the "Waiting on players" overlay now ignore the player's own staging. |
 | 30 | Rejoin placement | Done | A wizard who joined or rejoined after the arena began to lock appeared at the spawn point in the entrance strip, outside the combat bounds, so the camera left it at the screen's edge. It now enters just inside the arena in the spawn point's column ([decision](DECISIONS.md#where-a-rejoining-wizard-enters)); before the lock nothing changes. |
@@ -167,20 +167,31 @@ These must be finished before Rust moves to `/game`.
 
 ## Cutover checklist
 
-Draft. Rust moves to `/game` only when all of these hold:
+Awaiting the owner's review. Rust moves to `/game` only when all of these hold and
+the owner approves the swap:
 
 - Every item in [Before the cutover](#before-the-cutover) is done.
 - Feature parity with PixiJS for everything players use: each mode, menu, spell,
   item, enemy, boss, boneyard and multiplayer flow, with differences resolved in
   favor of retail.
-- Real production saves load, play and save again, from both cloud and browser
-  storage.
-- Published community boneyards and mods load; the editor's test-play uses Rust.
+- Real production saves load and play: the cloud-save checker
+  (`solomon-save-check`, README "Checking stored cloud saves") reports no Rust load
+  failure for the saves the PixiJS client could load, in either slot. Guest saves
+  carry over by the same adoption rule.
+- Published community boneyards and mods load (item 7's content sweep), and the
+  Website editor's test-play uses Rust.
 - Supported browsers pass the browser journeys; the desktop packages pass their
-  platform journeys.
+  platform journeys in CI.
 - Performance is at least as good as PixiJS on the workloads in
   [Performance](PERFORMANCE.md).
-- A public period on `/game-rust` ends with no open serious Rust-only bugs.
+- A public period on `/game-rust`, running current main, ends with no open serious
+  Rust-only bugs.
+- The swap PR's post-merge checks pass:
+  - Continue at `/game/` as a guest and signed in;
+  - an old `/game-rust/` link redirects;
+  - root editor test-play;
+  - the Account page's save export;
+  - `/game-stg` unchanged.
 
 ## Evidence
 
