@@ -4,14 +4,26 @@ use egui::{Color32, Id, Rect, Sense, Ui, vec2};
 use solomon_sim::hud::HudRect;
 use solomon_sim::social::party_ui::{
     PARTY_MENU_FRAME, PARTY_MENU_VIEWPORT, PARTY_MENU_WHEEL_STEP, PARTY_VISIBILITIES,
-    PartyMenuMember, PartyMenuRequest, PartyMenuSpec, PartyMenuTag, clamp_party_menu_scroll,
-    plan_party_menu, visibility_id,
+    PartyMenuMember, PartyMenuPlan, PartyMenuRequest, PartyMenuSpec, PartyMenuTag,
+    clamp_party_menu_scroll, plan_party_menu, visibility_id,
 };
-use solomon_sim::social::{party_member_display_name, party_menu_leave_label};
+use solomon_sim::social::{PartyVisibility, party_member_display_name, party_menu_leave_label};
 use solomon_sim::ui_text::UiTextSpec;
 
 use super::super::{PartyTab, SocialUi, gpu};
 use crate::gpu_ui::{UiFrame, message_frame_scaled};
+
+/// One frame of the Party menu: the selected tab's plan, the party's join code and
+/// visibility, and the menu's placement on the 1600×900 stage.
+struct PartyMenu {
+    tab: PartyTab,
+    plan: PartyMenuPlan,
+    code: Option<String>,
+    visibility: PartyVisibility,
+    origin: egui::Pos2,
+    scale: f32,
+    viewport: Rect,
+}
 
 impl SocialUi {
     pub(in crate::social) fn paint_party_menu(
@@ -20,8 +32,49 @@ impl SocialUi {
         ui: &mut Ui,
         tab: PartyTab,
     ) -> Result<(), String> {
-        let Some(snapshot) = &self.snapshot else { return Ok(()) };
-        let Some(state) = &snapshot.party_state else { return Ok(()) };
+        let Some(menu) = self.party_menu(tab) else { return Ok(()) };
+        let panel = gpu::rect(PARTY_MENU_FRAME, menu.origin, menu.scale);
+        ui.interact(panel, Id::unique("social/party-panel-block"), egui::Sense::CLICK);
+        message_frame_scaled(frame, ui.painter(), &self.ui, panel, menu.scale)?;
+        frame.record_rect("social/party-menu", "PARTY", "dialog", panel, true);
+        let mut activated = None;
+        self.paint_party_tabs(frame, ui, &menu, &mut activated)?;
+        if tab == PartyTab::Members {
+            self.paint_member_rows(frame, ui, &menu)?;
+        }
+        for bounds in &menu.plan.settings_rows {
+            gpu::brackets(
+                frame,
+                ui.painter(),
+                &self.ui,
+                gpu::rect(*bounds, menu.origin, menu.scale),
+                menu.scale,
+            )?;
+        }
+        if tab == PartyTab::Mods {
+            self.paint_party_mods(frame, ui, menu.origin, menu.scale)?;
+        }
+        paint_party_texts(frame, ui, &menu);
+        self.paint_party_actions(frame, ui, &menu, &mut activated)?;
+        if let Some(action) = activated {
+            if action == "copy" {
+                if let Some(code) = menu.code {
+                    self.clipboard.copy(code);
+                }
+            } else {
+                self.activate(match action.as_str() {
+                    "generate" => "party-generate",
+                    _ => &action,
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The selected tab's plan from the party snapshot, or `None` outside a party.
+    fn party_menu(&self, tab: PartyTab) -> Option<PartyMenu> {
+        let snapshot = self.snapshot.as_ref()?;
+        let state = snapshot.party_state.as_ref()?;
         let leader = state.party.leader_player_id == snapshot.local_player_id;
         let members: Vec<_> = state
             .party
@@ -81,12 +134,19 @@ impl SocialUi {
         let code = state.party.join_code.clone();
         let visibility = state.party.visibility;
         let (origin, scale) = gpu::stage(self.size);
-        let panel = gpu::rect(PARTY_MENU_FRAME, origin, scale);
-        ui.interact(panel, Id::unique("social/party-panel-block"), egui::Sense::CLICK);
-        message_frame_scaled(frame, ui.painter(), &self.ui, panel, scale)?;
-        frame.record_rect("social/party-menu", "PARTY", "dialog", panel, true);
         let viewport = gpu::rect(PARTY_MENU_VIEWPORT, origin, scale);
-        let mut activated = None;
+        Some(PartyMenu { tab, plan, code, visibility, origin, scale, viewport })
+    }
+
+    /// The tab headers; arrow keys on a focused tab select and focus its neighbor.
+    fn paint_party_tabs(
+        &self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        menu: &PartyMenu,
+        activated: &mut Option<String>,
+    ) -> Result<(), String> {
+        let PartyMenu { tab, origin, scale, .. } = *menu;
         for (index, candidate) in PartyTab::ALL.iter().enumerate() {
             let bounds = gpu::rect(
                 HudRect::new(431.0 + index as f64 * 246.0, 190.0, 246.0, 69.0),
@@ -139,7 +199,7 @@ impl SocialUi {
             gpu::native_text(frame, ui.painter(), &spec, origin, scale);
             gpu::focus_outline(frame, ui, &response, scale);
             if response.clicked() {
-                activated = Some(format!("party-{}", candidate.id()));
+                *activated = Some(format!("party-{}", candidate.id()));
             }
             if response.has_focus() {
                 let direction = ui.input_mut(|input| {
@@ -154,84 +214,76 @@ impl SocialUi {
                 if direction != 0 {
                     let next =
                         (index as i32 + direction).rem_euclid(PartyTab::ALL.len() as i32) as usize;
-                    activated = Some(format!("party-{}", PartyTab::ALL[next].id()));
+                    *activated = Some(format!("party-{}", PartyTab::ALL[next].id()));
                     ui.memory_mut(|memory| {
                         memory.request_focus(Id::unique(("social/tab", PartyTab::ALL[next].id())))
                     });
                 }
             }
         }
-        if tab == PartyTab::Members {
-            let scroll = ui.interact(viewport, Id::unique("social/party-scroll"), Sense::drag());
-            let wheel =
-                if scroll.hovered() { ui.input(|input| input.smooth_scroll_delta.y) } else { 0.0 };
-            let mut requested = self.party_ui.scroll_y;
-            if wheel != 0.0 {
-                requested -= f64::from(wheel.signum()) * PARTY_MENU_WHEEL_STEP;
-            }
-            if scroll.dragged() {
-                requested -= f64::from(scroll.drag_delta().y / scale);
-            }
-            if scroll.has_focus() {
-                requested += ui.input_mut(|input| {
-                    if input.consume_key(egui::Modifiers::NONE, egui::Key::PageDown) {
-                        PARTY_MENU_VIEWPORT.height
-                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::PageUp) {
-                        -PARTY_MENU_VIEWPORT.height
-                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
-                        PARTY_MENU_WHEEL_STEP
-                    } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
-                        -PARTY_MENU_WHEEL_STEP
-                    } else {
-                        0.0
-                    }
-                });
-            }
-            self.party_ui.scroll_y = clamp_party_menu_scroll(requested, plan.content_height);
-            let painter = ui.painter().with_clip_rect(viewport);
-            for row in &plan.rows {
-                if row.visible_bounds.is_some() {
-                    gpu::brackets(
-                        frame,
-                        &painter,
-                        &self.ui,
-                        gpu::rect(row.bounds, origin, scale),
-                        scale,
-                    )?;
+        Ok(())
+    }
+
+    /// Scrolls the Members list by wheel, drag and keys, then brackets its visible rows.
+    fn paint_member_rows(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        menu: &PartyMenu,
+    ) -> Result<(), String> {
+        let PartyMenu { origin, scale, viewport, .. } = *menu;
+        let plan = &menu.plan;
+        let scroll = ui.interact(viewport, Id::unique("social/party-scroll"), Sense::drag());
+        let wheel =
+            if scroll.hovered() { ui.input(|input| input.smooth_scroll_delta.y) } else { 0.0 };
+        let mut requested = self.party_ui.scroll_y;
+        if wheel != 0.0 {
+            requested -= f64::from(wheel.signum()) * PARTY_MENU_WHEEL_STEP;
+        }
+        if scroll.dragged() {
+            requested -= f64::from(scroll.drag_delta().y / scale);
+        }
+        if scroll.has_focus() {
+            requested += ui.input_mut(|input| {
+                if input.consume_key(egui::Modifiers::NONE, egui::Key::PageDown) {
+                    PARTY_MENU_VIEWPORT.height
+                } else if input.consume_key(egui::Modifiers::NONE, egui::Key::PageUp) {
+                    -PARTY_MENU_VIEWPORT.height
+                } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                    PARTY_MENU_WHEEL_STEP
+                } else if input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                    -PARTY_MENU_WHEEL_STEP
+                } else {
+                    0.0
                 }
+            });
+        }
+        self.party_ui.scroll_y = clamp_party_menu_scroll(requested, plan.content_height);
+        let painter = ui.painter().with_clip_rect(viewport);
+        for row in &plan.rows {
+            if row.visible_bounds.is_some() {
+                gpu::brackets(
+                    frame,
+                    &painter,
+                    &self.ui,
+                    gpu::rect(row.bounds, origin, scale),
+                    scale,
+                )?;
             }
         }
-        for bounds in &plan.settings_rows {
-            gpu::brackets(frame, ui.painter(), &self.ui, gpu::rect(*bounds, origin, scale), scale)?;
-        }
-        if tab == PartyTab::Mods {
-            self.paint_party_mods(frame, ui, origin, scale)?;
-        }
-        for text in &plan.texts {
-            if tab == PartyTab::Mods && text.label == "party:empty" {
-                continue;
-            }
-            if text.label.starts_with("visibility:") && text.label.ends_with(":label") {
-                continue;
-            }
-            let painter = if text.clipped {
-                ui.painter().with_clip_rect(viewport)
-            } else {
-                ui.painter().clone()
-            };
-            gpu::native_text(
-                frame,
-                &painter,
-                &UiTextSpec {
-                    align: text.align,
-                    scale: text.scale,
-                    tint: text.tint,
-                    ..UiTextSpec::new(text.font, &text.text, text.x, text.y)
-                },
-                origin,
-                scale,
-            );
-        }
+        Ok(())
+    }
+
+    /// The plan's buttons and visibility options; the tab headers are painted separately.
+    fn paint_party_actions(
+        &mut self,
+        frame: &mut UiFrame<'_>,
+        ui: &mut Ui,
+        menu: &PartyMenu,
+        activated: &mut Option<String>,
+    ) -> Result<(), String> {
+        let PartyMenu { origin, scale, viewport, visibility, .. } = *menu;
+        let plan = &menu.plan;
         for action in &plan.actions {
             if action.id.starts_with("tab:") {
                 continue;
@@ -297,7 +349,7 @@ impl SocialUi {
                             .unwrap_or(0);
                         let next =
                             PARTY_VISIBILITIES[(index as i32 + direction).rem_euclid(3) as usize];
-                        activated = Some(format!("visibility:{}", visibility_id(next)));
+                        *activated = Some(format!("visibility:{}", visibility_id(next)));
                     }
                 }
                 response
@@ -320,27 +372,15 @@ impl SocialUi {
             }
             if action.id == "copy"
                 && !action.disabled
-                && let Some(code) = &code
+                && let Some(code) = &menu.code
             {
                 self.clipboard.target(&response, code.clone());
                 frame.record_value("social/copy", code, None);
             }
             if response.clicked() && !action.disabled {
-                activated = Some(action.id.clone());
+                *activated = Some(action.id.clone());
             }
             ui.set_clip_rect(old_clip);
-        }
-        if let Some(action) = activated {
-            if action == "copy" {
-                if let Some(code) = code {
-                    self.clipboard.copy(code);
-                }
-            } else {
-                self.activate(match action.as_str() {
-                    "generate" => "party-generate",
-                    _ => &action,
-                })?;
-            }
         }
         Ok(())
     }
@@ -452,5 +492,33 @@ impl SocialUi {
             frame.record_value(&format!("social/party-mod:{}", package.id), &package.version, None);
         }
         Ok(())
+    }
+}
+
+/// The plan's text, except the Mods tab's empty notice and the visibility labels that
+/// their options paint.
+fn paint_party_texts(frame: &mut UiFrame<'_>, ui: &Ui, menu: &PartyMenu) {
+    let PartyMenu { tab, origin, scale, viewport, .. } = *menu;
+    for text in &menu.plan.texts {
+        if tab == PartyTab::Mods && text.label == "party:empty" {
+            continue;
+        }
+        if text.label.starts_with("visibility:") && text.label.ends_with(":label") {
+            continue;
+        }
+        let painter =
+            if text.clipped { ui.painter().with_clip_rect(viewport) } else { ui.painter().clone() };
+        gpu::native_text(
+            frame,
+            &painter,
+            &UiTextSpec {
+                align: text.align,
+                scale: text.scale,
+                tint: text.tint,
+                ..UiTextSpec::new(text.font, &text.text, text.x, text.y)
+            },
+            origin,
+            scale,
+        );
     }
 }

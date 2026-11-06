@@ -1,7 +1,9 @@
 //! Authored room map and host controls rendered over the game scene.
 
+use std::sync::Arc;
+
 use crate::gpu_ui::{
-    FontRunOptions, GroupEffect, ImageShadow, NativeFontStroke, UiFrame, font_run,
+    FontRunOptions, GroupEffect, ImageShadow, NativeFontRun, NativeFontStroke, UiFrame, font_run,
     font_run_with_options,
 };
 use egui::{Color32, FontFamily, FontId, Id, Order, Rect, Stroke, pos2, vec2};
@@ -50,6 +52,28 @@ struct Room {
     walls: Vec<Wall>,
     props: Vec<Prop>,
     party: Vec<String>,
+}
+/// The overlay's text runs and placement for one frame, laid out before it paints.
+struct SceneLayout {
+    small: bool,
+    width: f32,
+    left: f32,
+    count_text: String,
+    count: Arc<NativeFontRun>,
+    title: Arc<NativeFontRun>,
+    description: Option<Arc<NativeFontRun>>,
+    heading_height: f32,
+    header_height: f32,
+    /// Each button's ID, label, room step (0 returns to the Boneyard) and whether it is enabled.
+    buttons: [(&'static str, &'static str, i32, bool); 3],
+    runs: Vec<Arc<NativeFontRun>>,
+    button_sizes: Vec<egui::Vec2>,
+    /// The Previous/Next row's height when the buttons stack on a small screen.
+    first_height: f32,
+    footer_height: f32,
+    header: Rect,
+    footer: Rect,
+    viewport: Rect,
 }
 /// The authored room map drawn over the scene and the room controls the party leader clicked.
 pub struct ModSceneOverlay {
@@ -134,6 +158,49 @@ impl ModSceneOverlay {
             .input_scope(&format!("mod/scene:{}:{}", room.content_id, room.index), self.layer_id());
         let ctx = frame.ctx.clone();
         let screen = ctx.content_rect();
+        let layout = SceneLayout::new(frame, room, screen)?;
+        let mut direction = None;
+        egui::Area::new(self.layer_id().id)
+            .fade_in(false)
+            .order(self.layer_id().order)
+            .fixed_pos(screen.min)
+            .show(&ctx, |ui| -> Result<(), String> {
+                ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
+                ui.set_min_size(screen.size());
+                ui.interact(screen, Id::unique("mod/scene-block"), egui::Sense::CLICK);
+                paint_background(ui.painter(), screen);
+                paint_header(frame, ui, room, &layout)?;
+                paint_map(frame, ui, room, layout.viewport)?;
+                paint_buttons(frame, ui, &layout, &mut direction)?;
+                if !room.is_host {
+                    paint_waiting(frame, ui, screen)?;
+                }
+                frame.record_rect("mod/scene", &room.name, "dialog", screen, true);
+                Ok(())
+            })
+            .inner?;
+        if let Some(direction) = direction {
+            if !room.is_host {
+                return Ok(());
+            }
+            let mut arguments = LuaObject::new();
+            let action = if direction == 0 {
+                ModAction::SceneReturn
+            } else {
+                let index = room.index as i64 + i64::from(direction);
+                if index < 0 || index as usize >= room.count {
+                    return Ok(());
+                }
+                arguments.insert("room".into(), LuaValue::Number(index as f64));
+                ModAction::SceneRoom
+            };
+            self.actions.push(ModViewAction { action, target: room.content_id.clone(), arguments });
+        }
+        Ok(())
+    }
+}
+impl SceneLayout {
+    fn new(frame: &UiFrame<'_>, room: &Room, screen: Rect) -> Result<Self, String> {
         let small = screen.width() <= 700.0;
         let padding = if small { 9.6 } else { 16.0 };
         let width = (screen.width() - padding * 2.0).min(1120.0);
@@ -210,228 +277,215 @@ impl ModSceneOverlay {
             pos2(left, header.bottom() + 12.0),
             pos2(left + width, (footer.top() - 12.0).max(header.bottom() + 14.0)),
         );
-        let mut direction = None;
-        egui::Area::new(self.layer_id().id)
-            .fade_in(false)
-            .order(self.layer_id().order)
-            .fixed_pos(screen.min)
-            .show(&ctx, |ui| -> Result<(), String> {
-                ui.memory_mut(|memory| memory.set_modal_layer(ui.layer_id()));
-                ui.set_min_size(screen.size());
-                ui.interact(screen, Id::unique("mod/scene-block"), egui::Sense::CLICK);
-                paint_background(ui.painter(), screen);
-                let heading_top =
-                    header.top() + if small { 0.0 } else { (header_height - heading_height) / 2.0 };
-                title.paint(frame, ui.painter(), pos2(left, heading_top), 1.0)?;
-                frame.record_rect(
-                    "mod/scene-title",
-                    &room.name,
-                    "heading",
-                    Rect::from_min_size(pos2(left, heading_top), title.size()),
-                    true,
-                );
-                if let Some(description) = &description {
-                    let origin = pos2(left, heading_top + title.size().y);
-                    description.paint(frame, ui.painter(), origin, 1.0)?;
-                    frame.record_rect(
-                        "mod/scene-description",
-                        &room.description,
-                        "text",
-                        Rect::from_min_size(origin, description.size()),
-                        true,
-                    );
-                }
-                let count_origin = pos2(
-                    header.right() - count.size().x,
-                    header.top() + if small { 0.0 } else { (header_height - count.size().y) / 2.0 },
-                );
-                count.paint(frame, ui.painter(), count_origin, 1.0)?;
-                frame.record_rect(
-                    "mod/scene-room-count",
-                    &count_text,
-                    "status",
-                    Rect::from_min_size(count_origin, count.size()),
-                    true,
-                );
-                frame.paint_outer_shadow(
-                    ui.painter(),
-                    ImageShadow {
-                        offset: egui::Vec2::ZERO,
-                        blur: 15.0,
-                        color: Color32::from_black_alpha(179),
-                    },
-                    |caster| {
-                        caster.rect_filled(viewport, 0.0, Color32::WHITE);
-                        Ok(())
-                    },
-                )?;
-                ui.painter().rect_filled(viewport, 0.0, Color32::from_rgb(8, 7, 11));
-                let inner = viewport.shrink(1.0);
-                let scale = (inner.width() / room.size.x).min(inner.height() / room.size.y);
-                if scale > 0.0 {
-                    let map = Rect::from_center_size(inner.center(), room.size * scale);
-                    let painter = ui.painter().with_clip_rect(inner);
-                    let point = |point: egui::Pos2| map.min + point.to_vec2() * scale;
-                    painter.rect_filled(map, 0.0, room.floor);
-                    painter.rect_stroke(
-                        map.shrink(4.0 * scale),
-                        0.0,
-                        Stroke::new(8.0 * scale, Color32::from_rgb(139, 123, 157)),
-                        egui::StrokeKind::Middle,
-                    );
-                    for wall in &room.walls {
-                        painter.rect_filled(
-                            Rect::from_min_size(point(wall.rect.min), wall.rect.size() * scale),
-                            0.0,
-                            wall.color,
-                        );
-                    }
-                    for prop in &room.props {
-                        let center = point(prop.center);
-                        painter.circle_filled(center, prop.radius * scale, prop.color);
-                        label(
-                            frame,
-                            &painter,
-                            center + vec2(0.0, 34.0 * scale),
-                            &prop.label,
-                            scale,
-                        )?;
-                    }
-                    for (index, name) in room.party.iter().enumerate() {
-                        let center = point(pos2(
-                            room.size.x / 2.0
-                                + (index as f32 - (room.party.len() as f32 - 1.0) / 2.0) * 44.0,
-                            room.size.y * 0.72,
-                        ));
-                        painter.circle_filled(
-                            center,
-                            16.0 * scale,
-                            Color32::from_rgb(177, 139, 211),
-                        );
-                        painter.circle_stroke(
-                            center,
-                            16.0 * scale,
-                            Stroke::new(3.0 * scale, Color32::from_rgb(242, 231, 200)),
-                        );
-                        label(frame, &painter, center + vec2(0.0, 32.0 * scale), name, scale)?;
-                    }
-                }
-                ui.painter().rect_stroke(
-                    viewport,
+        Ok(Self {
+            small,
+            width,
+            left,
+            count_text,
+            count,
+            title,
+            description,
+            heading_height,
+            header_height,
+            buttons,
+            runs,
+            button_sizes,
+            first_height,
+            footer_height,
+            header,
+            footer,
+            viewport,
+        })
+    }
+}
+/// The room name and description, with the room count on the right.
+fn paint_header(
+    frame: &UiFrame<'_>,
+    ui: &egui::Ui,
+    room: &Room,
+    layout: &SceneLayout,
+) -> Result<(), String> {
+    let SceneLayout { small, left, header, header_height, heading_height, .. } = *layout;
+    let heading_top =
+        header.top() + if small { 0.0 } else { (header_height - heading_height) / 2.0 };
+    layout.title.paint(frame, ui.painter(), pos2(left, heading_top), 1.0)?;
+    frame.record_rect(
+        "mod/scene-title",
+        &room.name,
+        "heading",
+        Rect::from_min_size(pos2(left, heading_top), layout.title.size()),
+        true,
+    );
+    if let Some(description) = &layout.description {
+        let origin = pos2(left, heading_top + layout.title.size().y);
+        description.paint(frame, ui.painter(), origin, 1.0)?;
+        frame.record_rect(
+            "mod/scene-description",
+            &room.description,
+            "text",
+            Rect::from_min_size(origin, description.size()),
+            true,
+        );
+    }
+    let count_origin = pos2(
+        header.right() - layout.count.size().x,
+        header.top() + if small { 0.0 } else { (header_height - layout.count.size().y) / 2.0 },
+    );
+    layout.count.paint(frame, ui.painter(), count_origin, 1.0)?;
+    frame.record_rect(
+        "mod/scene-room-count",
+        &layout.count_text,
+        "status",
+        Rect::from_min_size(count_origin, layout.count.size()),
+        true,
+    );
+    Ok(())
+}
+/// The room's floor, walls, props and party members, scaled to fit the map viewport.
+fn paint_map(
+    frame: &UiFrame<'_>,
+    ui: &egui::Ui,
+    room: &Room,
+    viewport: Rect,
+) -> Result<(), String> {
+    frame.paint_outer_shadow(
+        ui.painter(),
+        ImageShadow { offset: egui::Vec2::ZERO, blur: 15.0, color: Color32::from_black_alpha(179) },
+        |caster| {
+            caster.rect_filled(viewport, 0.0, Color32::WHITE);
+            Ok(())
+        },
+    )?;
+    ui.painter().rect_filled(viewport, 0.0, Color32::from_rgb(8, 7, 11));
+    let inner = viewport.shrink(1.0);
+    let scale = (inner.width() / room.size.x).min(inner.height() / room.size.y);
+    if scale > 0.0 {
+        let map = Rect::from_center_size(inner.center(), room.size * scale);
+        let painter = ui.painter().with_clip_rect(inner);
+        let point = |point: egui::Pos2| map.min + point.to_vec2() * scale;
+        painter.rect_filled(map, 0.0, room.floor);
+        painter.rect_stroke(
+            map.shrink(4.0 * scale),
+            0.0,
+            Stroke::new(8.0 * scale, Color32::from_rgb(139, 123, 157)),
+            egui::StrokeKind::Middle,
+        );
+        for wall in &room.walls {
+            painter.rect_filled(
+                Rect::from_min_size(point(wall.rect.min), wall.rect.size() * scale),
+                0.0,
+                wall.color,
+            );
+        }
+        for prop in &room.props {
+            let center = point(prop.center);
+            painter.circle_filled(center, prop.radius * scale, prop.color);
+            label(frame, &painter, center + vec2(0.0, 34.0 * scale), &prop.label, scale)?;
+        }
+        for (index, name) in room.party.iter().enumerate() {
+            let center = point(pos2(
+                room.size.x / 2.0 + (index as f32 - (room.party.len() as f32 - 1.0) / 2.0) * 44.0,
+                room.size.y * 0.72,
+            ));
+            painter.circle_filled(center, 16.0 * scale, Color32::from_rgb(177, 139, 211));
+            painter.circle_stroke(
+                center,
+                16.0 * scale,
+                Stroke::new(3.0 * scale, Color32::from_rgb(242, 231, 200)),
+            );
+            label(frame, &painter, center + vec2(0.0, 32.0 * scale), name, scale)?;
+        }
+    }
+    ui.painter().rect_stroke(
+        viewport,
+        0.0,
+        Stroke::new(1.0, Color32::from_rgb(170, 149, 97)),
+        egui::StrokeKind::Inside,
+    );
+    frame.record_rect("mod/scene-map", &format!("{} map", room.name), "img", viewport, true);
+    Ok(())
+}
+/// The Previous, Next and Return buttons; a click records the room step it asks for.
+fn paint_buttons(
+    frame: &UiFrame<'_>,
+    ui: &mut egui::Ui,
+    layout: &SceneLayout,
+    direction: &mut Option<i32>,
+) -> Result<(), String> {
+    let SceneLayout { small, width, footer, footer_height, first_height, .. } = *layout;
+    let spare = width - layout.button_sizes.iter().map(|size| size.x).sum::<f32>();
+    let mut button_left = footer.left();
+    for (index, ((id, text, next, enabled), run)) in
+        layout.buttons.iter().zip(&layout.runs).enumerate()
+    {
+        let bounds = if small {
+            if index == 2 {
+                Rect::from_min_size(
+                    pos2(footer.left(), footer.top() + first_height + 10.4),
+                    vec2(width, layout.button_sizes[2].y),
+                )
+            } else {
+                Rect::from_min_size(
+                    pos2(footer.left() + index as f32 * (width + 10.4) / 2.0, footer.top()),
+                    vec2((width - 10.4) / 2.0, first_height),
+                )
+            }
+        } else {
+            let bounds = Rect::from_min_size(
+                pos2(
+                    button_left,
+                    footer.top() + (footer_height - layout.button_sizes[index].y) / 2.0,
+                ),
+                layout.button_sizes[index],
+            );
+            button_left = bounds.right() + spare / 2.0;
+            bounds
+        };
+        let response = ui
+            .add_enabled_ui(*enabled, |ui| {
+                ui.interact(bounds, Id::unique(("mod/scene-button", id)), egui::Sense::click())
+            })
+            .inner;
+        frame.paint_group(
+            ui.painter(),
+            GroupEffect { opacity: if *enabled { 1.0 } else { 0.38 }, ..Default::default() },
+            |frame, painter| {
+                painter.rect_filled(bounds, 0.0, Color32::from_rgb(25, 23, 34));
+                painter.rect_stroke(
+                    bounds,
                     0.0,
-                    Stroke::new(1.0, Color32::from_rgb(170, 149, 97)),
+                    Stroke::new(1.0, Color32::from_rgb(210, 190, 139)),
                     egui::StrokeKind::Inside,
                 );
-                frame.record_rect(
-                    "mod/scene-map",
-                    &format!("{} map", room.name),
-                    "img",
-                    viewport,
-                    true,
-                );
-                let spare = width - button_sizes.iter().map(|size| size.x).sum::<f32>();
-                let mut button_left = footer.left();
-                for (index, ((id, text, next, enabled), run)) in
-                    buttons.iter().zip(&runs).enumerate()
-                {
-                    let bounds = if small {
-                        if index == 2 {
-                            Rect::from_min_size(
-                                pos2(footer.left(), footer.top() + first_height + 10.4),
-                                vec2(width, button_sizes[2].y),
-                            )
-                        } else {
-                            Rect::from_min_size(
-                                pos2(
-                                    footer.left() + index as f32 * (width + 10.4) / 2.0,
-                                    footer.top(),
-                                ),
-                                vec2((width - 10.4) / 2.0, first_height),
-                            )
-                        }
-                    } else {
-                        let bounds = Rect::from_min_size(
-                            pos2(
-                                button_left,
-                                footer.top() + (footer_height - button_sizes[index].y) / 2.0,
-                            ),
-                            button_sizes[index],
-                        );
-                        button_left = bounds.right() + spare / 2.0;
-                        bounds
-                    };
-                    let response = ui
-                        .add_enabled_ui(*enabled, |ui| {
-                            ui.interact(
-                                bounds,
-                                Id::unique(("mod/scene-button", id)),
-                                egui::Sense::click(),
-                            )
-                        })
-                        .inner;
-                    frame.paint_group(
-                        ui.painter(),
-                        GroupEffect {
-                            opacity: if *enabled { 1.0 } else { 0.38 },
-                            ..Default::default()
-                        },
-                        |frame, painter| {
-                            painter.rect_filled(bounds, 0.0, Color32::from_rgb(25, 23, 34));
-                            painter.rect_stroke(
-                                bounds,
-                                0.0,
-                                Stroke::new(1.0, Color32::from_rgb(210, 190, 139)),
-                                egui::StrokeKind::Inside,
-                            );
-                            run.paint(frame, painter, bounds.center() - run.size() / 2.0, 1.0)
-                        },
-                    )?;
-                    frame.record(&format!("mod/scene:{id}"), text, "button", &response);
-                    if response.clicked() {
-                        direction = Some(*next);
-                    }
-                }
-                if !room.is_host {
-                    let waiting = font_run(
-                        frame.ctx,
-                        FontId::new(11.52, FontFamily::Name("Alegreya".into())),
-                        Color32::from_rgb(230, 217, 178),
-                        "Waiting for the party leader…",
-                        None,
-                    )?;
-                    let origin = screen.right_bottom() - vec2(16.0, 16.0) - waiting.size();
-                    waiting.paint(frame, ui.painter(), origin, 1.0)?;
-                    frame.record_rect(
-                        "mod/scene-waiting",
-                        "Waiting for the party leader…",
-                        "status",
-                        Rect::from_min_size(origin, waiting.size()),
-                        true,
-                    );
-                }
-                frame.record_rect("mod/scene", &room.name, "dialog", screen, true);
-                Ok(())
-            })
-            .inner?;
-        if let Some(direction) = direction {
-            if !room.is_host {
-                return Ok(());
-            }
-            let mut arguments = LuaObject::new();
-            let action = if direction == 0 {
-                ModAction::SceneReturn
-            } else {
-                let index = room.index as i64 + i64::from(direction);
-                if index < 0 || index as usize >= room.count {
-                    return Ok(());
-                }
-                arguments.insert("room".into(), LuaValue::Number(index as f64));
-                ModAction::SceneRoom
-            };
-            self.actions.push(ModViewAction { action, target: room.content_id.clone(), arguments });
+                run.paint(frame, painter, bounds.center() - run.size() / 2.0, 1.0)
+            },
+        )?;
+        frame.record(&format!("mod/scene:{id}"), text, "button", &response);
+        if response.clicked() {
+            *direction = Some(*next);
         }
-        Ok(())
     }
+    Ok(())
+}
+/// "Waiting for the party leader…" in the bottom-right corner, for everyone but the leader.
+fn paint_waiting(frame: &UiFrame<'_>, ui: &egui::Ui, screen: Rect) -> Result<(), String> {
+    let waiting = font_run(
+        frame.ctx,
+        FontId::new(11.52, FontFamily::Name("Alegreya".into())),
+        Color32::from_rgb(230, 217, 178),
+        "Waiting for the party leader…",
+        None,
+    )?;
+    let origin = screen.right_bottom() - vec2(16.0, 16.0) - waiting.size();
+    waiting.paint(frame, ui.painter(), origin, 1.0)?;
+    frame.record_rect(
+        "mod/scene-waiting",
+        "Waiting for the party leader…",
+        "status",
+        Rect::from_min_size(origin, waiting.size()),
+        true,
+    );
+    Ok(())
 }
 fn color(value: &str) -> Result<Color32, String> {
     Color32::from_hex(value).map_err(|error| format!("Invalid admitted room color: {error:?}"))

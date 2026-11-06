@@ -27,6 +27,15 @@ pub(super) struct CreateView {
     reduced_motion: bool,
     finalizing: bool,
 }
+/// One frame of the Create scene: the main stage, the clamped animation time, the
+/// element effect tick, and whether the choices accept input.
+#[derive(Clone, Copy)]
+struct CreateScene {
+    stage: Stage,
+    elapsed: f64,
+    tick: f64,
+    enabled: bool,
+}
 impl CreateView {
     pub async fn new() -> Result<Self, String> {
         Ok(Self {
@@ -122,6 +131,69 @@ impl CreateView {
             scale: name_scale,
         };
         let dice = Stage { origin: Pos2::new(view.right() - 1600.0 * scale, view.top()), scale };
+        self.paint_backdrop(frame, ui, stage)?;
+        let elapsed = self.phase_elapsed.min(if self.selected.is_some() {
+            menu::CREATE_SELECTION_ANIMATION_MS
+        } else {
+            menu::CREATE_ENTRY_ANIMATION_MS
+        });
+        let motion = if self.selected.is_some() {
+            menu::create_selection_motion_at(elapsed)
+        } else {
+            menu::create_entry_motion_at(elapsed)
+        };
+        let idle = menu::create_hand_idle_offset_at(if self.reduced_motion {
+            0.0
+        } else {
+            self.scene_elapsed
+        });
+        hand(
+            frame,
+            ui,
+            stage,
+            motion.left_pose,
+            400.0 + motion.left_offset.x + motion.left_impulse.x + idle.x,
+            560.0 + motion.left_offset.y + motion.left_impulse.y + idle.y,
+            false,
+        );
+        let tick = if self.reduced_motion { 0.0 } else { (self.scene_elapsed / 10.0).floor() };
+        let enabled =
+            admitted && !self.finalizing && self.scene_elapsed >= CREATE_ENTRY_FADE_MS as f64;
+        let scene = CreateScene { stage, elapsed, tick, enabled };
+        if self.selected.is_none() && motion.elements_visible {
+            self.paint_element_choices(frame, ui, scene, actions)?;
+        }
+        if let Some(element) = self.selected {
+            let held = menu::create_selected_element_motion_at(element, elapsed);
+            paint_vfx(
+                frame,
+                ui.painter(),
+                &self.bad_guys,
+                stage.at(held.position.x, held.position.y),
+                scale,
+                &element_vfx::element_vfx_plan(element, tick, held.scale * 2.0),
+            )?;
+        }
+        hand(
+            frame,
+            ui,
+            stage,
+            motion.right_pose,
+            1200.0 + motion.right_offset.x + motion.right_impulse.x + idle.x,
+            560.0 + motion.right_offset.y + motion.right_impulse.y + idle.y,
+            true,
+        );
+        if self.selected.is_some() && motion.disciplines_visible {
+            self.paint_discipline_choices(frame, ui, scene, actions)?;
+        }
+        self.paint_name(frame, ui, name_stage, admitted, actions)?;
+        self.paint_back_button(frame, ui, view, enabled, actions)?;
+        self.paint_randomize_button(frame, ui, dice, enabled, actions)?;
+        Ok(())
+    }
+    /// The turning swirl and, once an element is chosen with motion allowed, fifty drifting motes.
+    fn paint_backdrop(&self, frame: &UiFrame<'_>, ui: &Ui, stage: Stage) -> Result<(), String> {
+        let scale = stage.scale;
         self.create.paint_centered(
             frame,
             ui.painter(),
@@ -167,168 +239,137 @@ impl CreateView {
                 )?;
             }
         }
-        let elapsed = self.phase_elapsed.min(if self.selected.is_some() {
-            menu::CREATE_SELECTION_ANIMATION_MS
-        } else {
-            menu::CREATE_ENTRY_ANIMATION_MS
-        });
-        let motion = if self.selected.is_some() {
-            menu::create_selection_motion_at(elapsed)
-        } else {
-            menu::create_entry_motion_at(elapsed)
-        };
-        let idle = menu::create_hand_idle_offset_at(if self.reduced_motion {
-            0.0
-        } else {
-            self.scene_elapsed
-        });
-        hand(
-            frame,
-            ui,
-            stage,
-            motion.left_pose,
-            400.0 + motion.left_offset.x + motion.left_impulse.x + idle.x,
-            560.0 + motion.left_offset.y + motion.left_impulse.y + idle.y,
-            false,
-        );
-        let tick = if self.reduced_motion { 0.0 } else { (self.scene_elapsed / 10.0).floor() };
-        let enabled =
-            admitted && !self.finalizing && self.scene_elapsed >= CREATE_ENTRY_FADE_MS as f64;
-        if self.selected.is_none() && motion.elements_visible {
-            for (element, record) in [
-                (WizardElement::Earth, 13),
-                (WizardElement::Ether, 9),
-                (WizardElement::Fire, 10),
-                (WizardElement::Water, 12),
-                (WizardElement::Air, 11),
-            ] {
-                let reveal = menu::create_element_reveal_motion_at(element, elapsed);
-                let center = stage.at(reveal.position.x, reveal.position.y);
-                let mut painter = ui.painter().clone();
-                painter.multiply_opacity(reveal.opacity as f32);
-                paint_vfx(
-                    frame,
-                    &painter,
-                    &self.bad_guys,
-                    center,
-                    scale,
-                    &element_vfx::element_vfx_plan(element, tick, 2.0),
-                )?;
-                let metrics = self.create.record(record)?;
-                let size = Vec2::new(metrics.width as f32, metrics.height as f32) * scale;
-                let rect = Rect::from_center_size(center, size.max(Vec2::splat(44.0)));
-                let id = format!("element:{}", element.as_str());
-                let response = widgets::interact_unstyled(
-                    frame,
-                    ui,
-                    &id,
-                    element.as_str(),
-                    "button",
-                    rect,
-                    enabled,
-                );
-                let paint = frame.with_brightness(
-                    if enabled && (response.hovered() || frame.focus_visible(&response)) {
-                        1.3
-                    } else {
-                        1.0
-                    },
-                );
-                self.create.paint_centered(
-                    &paint,
-                    ui.painter(),
-                    record,
-                    center,
-                    scale,
-                    0.0,
-                    widgets::alpha(0xffffff, reveal.opacity),
-                )?;
-                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
-                if response.clicked() && enabled {
-                    actions.push(id);
-                }
-            }
-            self.create.paint(
-                frame,
-                ui.painter(),
-                3,
-                stage.at(620.0, 793.0),
-                scale,
-                Color32::WHITE,
-            )?;
-        }
-        if let Some(element) = self.selected {
-            let held = menu::create_selected_element_motion_at(element, elapsed);
+        Ok(())
+    }
+    /// The five element choices with their effects, then the CHOOSE YOUR ELEMENT title.
+    fn paint_element_choices(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        scene: CreateScene,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let CreateScene { stage, elapsed, tick, enabled } = scene;
+        let scale = stage.scale;
+        for (element, record) in [
+            (WizardElement::Earth, 13),
+            (WizardElement::Ether, 9),
+            (WizardElement::Fire, 10),
+            (WizardElement::Water, 12),
+            (WizardElement::Air, 11),
+        ] {
+            let reveal = menu::create_element_reveal_motion_at(element, elapsed);
+            let center = stage.at(reveal.position.x, reveal.position.y);
+            let mut painter = ui.painter().clone();
+            painter.multiply_opacity(reveal.opacity as f32);
             paint_vfx(
                 frame,
-                ui.painter(),
+                &painter,
                 &self.bad_guys,
-                stage.at(held.position.x, held.position.y),
+                center,
                 scale,
-                &element_vfx::element_vfx_plan(element, tick, held.scale * 2.0),
+                &element_vfx::element_vfx_plan(element, tick, 2.0),
             )?;
-        }
-        hand(
-            frame,
-            ui,
-            stage,
-            motion.right_pose,
-            1200.0 + motion.right_offset.x + motion.right_impulse.x + idle.x,
-            560.0 + motion.right_offset.y + motion.right_impulse.y + idle.y,
-            true,
-        );
-        if self.selected.is_some() && motion.disciplines_visible {
-            for (discipline, record) in [
-                (WizardDiscipline::Arcane, 0),
-                (WizardDiscipline::Body, 1),
-                (WizardDiscipline::Mind, 5),
-            ] {
-                let p = menu::create_discipline_reveal_motion_at(discipline, elapsed);
-                let center = stage.at(p.x, p.y);
-                let metrics = self.create.record(record)?;
-                let size =
-                    Vec2::new(metrics.logical_width as f32, metrics.logical_height as f32) * scale;
-                let id = format!("discipline:{}", discipline.as_str());
-                let response = widgets::interact_unstyled(
-                    frame,
-                    ui,
-                    &id,
-                    discipline.as_str(),
-                    "button",
-                    Rect::from_center_size(center, size.max(Vec2::splat(44.0))),
-                    enabled,
-                );
-                let paint = frame.with_brightness(
-                    if enabled && (response.hovered() || frame.focus_visible(&response)) {
-                        1.3
-                    } else {
-                        1.0
-                    },
-                );
-                self.create.paint_centered(
-                    &paint,
-                    ui.painter(),
-                    record,
-                    center,
-                    scale,
-                    0.0,
-                    Color32::WHITE,
-                )?;
-                widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
-                if response.clicked() && enabled {
-                    actions.push(id);
-                }
-            }
-            self.create.paint(
+            let metrics = self.create.record(record)?;
+            let size = Vec2::new(metrics.width as f32, metrics.height as f32) * scale;
+            let rect = Rect::from_center_size(center, size.max(Vec2::splat(44.0)));
+            let id = format!("element:{}", element.as_str());
+            let response = widgets::interact_unstyled(
                 frame,
+                ui,
+                &id,
+                element.as_str(),
+                "button",
+                rect,
+                enabled,
+            );
+            let paint = frame.with_brightness(
+                if enabled && (response.hovered() || frame.focus_visible(&response)) {
+                    1.3
+                } else {
+                    1.0
+                },
+            );
+            self.create.paint_centered(
+                &paint,
                 ui.painter(),
-                2,
-                stage.at(620.0, 793.0),
+                record,
+                center,
                 scale,
+                0.0,
+                widgets::alpha(0xffffff, reveal.opacity),
+            )?;
+            widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
+            if response.clicked() && enabled {
+                actions.push(id);
+            }
+        }
+        self.create.paint(frame, ui.painter(), 3, stage.at(620.0, 793.0), scale, Color32::WHITE)?;
+        Ok(())
+    }
+    /// The three discipline choices, then the CHOOSE YOUR DISCIPLINE title.
+    fn paint_discipline_choices(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        scene: CreateScene,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let CreateScene { stage, elapsed, enabled, .. } = scene;
+        let scale = stage.scale;
+        for (discipline, record) in [
+            (WizardDiscipline::Arcane, 0),
+            (WizardDiscipline::Body, 1),
+            (WizardDiscipline::Mind, 5),
+        ] {
+            let p = menu::create_discipline_reveal_motion_at(discipline, elapsed);
+            let center = stage.at(p.x, p.y);
+            let metrics = self.create.record(record)?;
+            let size =
+                Vec2::new(metrics.logical_width as f32, metrics.logical_height as f32) * scale;
+            let id = format!("discipline:{}", discipline.as_str());
+            let response = widgets::interact_unstyled(
+                frame,
+                ui,
+                &id,
+                discipline.as_str(),
+                "button",
+                Rect::from_center_size(center, size.max(Vec2::splat(44.0))),
+                enabled,
+            );
+            let paint = frame.with_brightness(
+                if enabled && (response.hovered() || frame.focus_visible(&response)) {
+                    1.3
+                } else {
+                    1.0
+                },
+            );
+            self.create.paint_centered(
+                &paint,
+                ui.painter(),
+                record,
+                center,
+                scale,
+                0.0,
                 Color32::WHITE,
             )?;
+            widgets::focus_outline(frame, ui, &response, 2.0, 8.0, widgets::GOLD);
+            if response.clicked() && enabled {
+                actions.push(id);
+            }
         }
-        self.paint_name(frame, ui, name_stage, admitted, actions)?;
+        self.create.paint(frame, ui.painter(), 2, stage.at(620.0, 793.0), scale, Color32::WHITE)?;
+        Ok(())
+    }
+    /// The skull button in the top-left corner that leaves the Create screen.
+    fn paint_back_button(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        view: Rect,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
         let back = Rect::from_min_size(view.min + Vec2::splat(4.0), Vec2::splat(44.0));
         let response = widgets::interact(
             frame,
@@ -352,6 +393,17 @@ impl CreateView {
         if response.clicked() && enabled && self.back_enabled {
             actions.push("create-back".to_owned());
         }
+        Ok(())
+    }
+    /// The dice in the top-right corner that randomize the wizard's loadout.
+    fn paint_randomize_button(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &Ui,
+        dice: Stage,
+        enabled: bool,
+        actions: &mut Vec<String>,
+    ) -> Result<(), String> {
         let rect = dice.rect(1516.0, 0.0, 84.0, 60.0);
         let response = widgets::interact(
             frame,
@@ -363,7 +415,14 @@ impl CreateView {
             enabled && self.finalized_name().is_ok(),
         );
         let paint = frame.with_brightness(if response.hovered() { 1.2 } else { 1.0 });
-        self.create.paint(&paint, ui.painter(), 6, dice.at(1518.0, 3.0), scale, Color32::WHITE)?;
+        self.create.paint(
+            &paint,
+            ui.painter(),
+            6,
+            dice.at(1518.0, 3.0),
+            dice.scale,
+            Color32::WHITE,
+        )?;
         if response.clicked() && enabled {
             actions.push("randomize-loadout".to_owned());
         }

@@ -124,6 +124,18 @@ fn message_description(label: &str, body: &str) -> String {
     format!("{label} {}", body.trim_start())
 }
 
+/// This frame's chat panel layout and input, shared by its painting steps.
+struct ChatPanel {
+    open: bool,
+    faded: bool,
+    width: f32,
+    screen: Rect,
+    opacity: f32,
+    translation: egui::Vec2,
+    /// Tab was pressed while the message field had focus.
+    channel_key: bool,
+}
+
 impl SocialUi {
     pub(super) fn paint_chat(&mut self, frame: &mut UiFrame<'_>) -> Result<(), String> {
         if !self.context.chat_enabled || self.context.input_suspended {
@@ -179,6 +191,7 @@ impl SocialUi {
         let anchor = if self.coarse { egui::Align2::LEFT_TOP } else { egui::Align2::LEFT_BOTTOM };
         let offset = vec2(left, if self.coarse { if open { 0.0 } else { 11.0 } } else { -34.0 });
         let layer = Self::chat_layer(open);
+        let panel = ChatPanel { open, faded, width, screen, opacity, translation, channel_key };
         egui::Area::new(layer.id)
             .fade_in(false)
             .background_interactable(open)
@@ -191,251 +204,7 @@ impl SocialUi {
                     intent = Some(Intent::Action("chat-open".into()));
                 }
                 if panel_visible {
-                    let available = ui.available_rect_before_wrap();
-                    let mut panel_ui = ui.new_child(
-                        egui::UiBuilder::new()
-                            .id_salt("social/chat-panel")
-                            .max_rect(available.translate(translation)),
-                    );
-                    let painter = panel_ui.painter().clone();
-                    frame.paint_group(
-                        &painter,
-                        GroupEffect { opacity, ..Default::default() },
-                        |frame, _| {
-                            let ui = &mut panel_ui;
-                            ui.spacing_mut().item_spacing.y = if open { 3.0 } else { 4.0 };
-                            if open {
-                                egui::Frame::new()
-                                    .fill(Color32::from_rgba_unmultiplied(10, 12, 17, 244))
-                                    .stroke(Stroke::new(
-                                        2.0,
-                                        Color32::from_rgba_unmultiplied(216, 188, 114, 209),
-                                    ))
-                                    .corner_radius(4.0)
-                                    .inner_margin(9.0)
-                                    .show(ui, |ui| -> Result<(), String> {
-                                        ui.set_min_width(width - 22.0);
-                                        ui.horizontal(|ui| {
-                                            for channel in self.channels() {
-                                                let unread = self.unread[channel_index(channel)];
-                                                let label = if unread > 0 {
-                                                    format!("{} {unread}", channel.label())
-                                                } else {
-                                                    channel.label().to_owned()
-                                                };
-                                                let response = ui.add(
-                                                    egui::Button::new(text(
-                                                        &label,
-                                                        13.0,
-                                                        if channel == self.channel {
-                                                            channel_color(channel)
-                                                        } else {
-                                                            Color32::from_gray(142)
-                                                        },
-                                                    ))
-                                                    .selected(channel == self.channel)
-                                                    .frame(false),
-                                                );
-                                                frame.record(
-                                                    &format!(
-                                                        "social/channel:{}",
-                                                        channel_id(channel)
-                                                    ),
-                                                    channel.label(),
-                                                    "tab",
-                                                    &response,
-                                                );
-                                                if response.clicked() {
-                                                    intent = Some(Intent::Action(format!(
-                                                        "channel:{}",
-                                                        channel_id(channel)
-                                                    )));
-                                                }
-                                            }
-                                            let close = ui.add(
-                                                egui::Button::new(text(
-                                                    "×",
-                                                    if self.coarse { 24.0 } else { 20.0 },
-                                                    gpu::GOLD,
-                                                ))
-                                                .frame(false),
-                                            );
-                                            frame.record(
-                                                "social/chat-close",
-                                                "Close chat",
-                                                "button",
-                                                &close,
-                                            );
-                                            if close.clicked() {
-                                                intent = Some(Intent::Action("chat-close".into()));
-                                            }
-                                        });
-                                        ui.separator();
-                                        let height = if self.coarse {
-                                            (screen.height() - 150.0).clamp(64.0, 220.0)
-                                        } else {
-                                            (screen.height() * 0.34).clamp(104.0, 260.0)
-                                        };
-                                        egui::ScrollArea::vertical()
-                                            .id_salt("social/chat/transcript")
-                                            .max_height(height)
-                                            .min_scrolled_height(if self.coarse {
-                                                64.0
-                                            } else {
-                                                104.0
-                                            })
-                                            .stick_to_bottom(true)
-                                            .show(ui, |ui| -> Result<(), String> {
-                                                if messages.is_empty() {
-                                                    ui.label(text(
-                                                        format!(
-                                                            "No {} messages yet.",
-                                                            self.channel.label().to_lowercase()
-                                                        ),
-                                                        14.0,
-                                                        Color32::from_gray(130),
-                                                    ));
-                                                }
-                                                for message in &messages {
-                                                    if let Some(action) = self.paint_chat_message(
-                                                        frame, ui, message, true,
-                                                    )? {
-                                                        intent = Some(Intent::Action(action));
-                                                    }
-                                                }
-                                                Ok(())
-                                            })
-                                            .inner?;
-                                        if let Some(status) = &self.chat_status {
-                                            let response = ui.label(text(
-                                                status,
-                                                13.0,
-                                                Color32::from_rgb(255, 154, 138),
-                                            ));
-                                            frame.record(
-                                                "social/chat-status",
-                                                status,
-                                                "status",
-                                                &response,
-                                            );
-                                        }
-                                        ui.separator();
-                                        ui.horizontal(|ui| {
-                                            ui.label(text("◆", 12.0, channel_color(self.channel)));
-                                            let placeholder = if self.channel
-                                                == GameChatChannel::Whisper
-                                            {
-                                                format!(
-                                                    "Whisper {}",
-                                                    self.whisper
-                                                        .as_ref()
-                                                        .map_or("", |target| &target.display_name)
-                                                )
-                                            } else {
-                                                format!("Message {}", self.channel.label())
-                                            };
-                                            let (_, field) = ui.allocate_space(vec2(
-                                                (width - 118.0).max(50.0),
-                                                if self.coarse { 40.0 } else { 34.0 },
-                                            ));
-                                            let response =
-                                                crate::gpu_ui::NativeTextEdit::singleline(
-                                                    &mut self.chat_draft,
-                                                    "social/chat-message",
-                                                    "Chat message",
-                                                )
-                                                .hint_text(placeholder)
-                                                .font(FontId::new(
-                                                    if self.coarse { 16.0 } else { 14.0 },
-                                                    FontFamily::Name("Alegreya".into()),
-                                                ))
-                                                .color(Color32::from_rgb(255, 245, 220))
-                                                .rules(crate::gpu_ui::EditorRules {
-                                                    utf16_limit: Some(180),
-                                                    ..Default::default()
-                                                })
-                                                .request_focus(self.focus_chat)
-                                                .show(frame, ui, field);
-                                            if ui.is_visible() && response.has_focus() {
-                                                self.focus_chat = false;
-                                            }
-                                            if response.changed() {
-                                                self.last_activity = self.now;
-                                            }
-                                            if channel_key {
-                                                intent = Some(Intent::NextChannel);
-                                            }
-                                            let send = ui.add(
-                                                egui::Button::new(text("Send", 11.0, gpu::GOLD))
-                                                    .min_size(vec2(58.0, 34.0))
-                                                    .fill(Color32::from_rgb(36, 28, 14))
-                                                    .stroke(Stroke::new(1.0, gpu::GOLD)),
-                                            );
-                                            frame.record(
-                                                "social/chat-send",
-                                                "Send",
-                                                "button",
-                                                &send,
-                                            );
-                                            if response.submitted || send.clicked() {
-                                                intent =
-                                                    Some(Intent::Submit(self.chat_draft.clone()));
-                                            }
-                                        });
-                                        if !self.coarse {
-                                            ui.label(
-                                                RichText::new(
-                                                    "Enter send · Tab channel · Esc close",
-                                                )
-                                                .font(FontId::new(
-                                                    10.0,
-                                                    FontFamily::Name("JetBrains Mono".into()),
-                                                ))
-                                                .color(Color32::from_rgb(129, 123, 107)),
-                                            );
-                                        }
-                                        Ok(())
-                                    })
-                                    .inner?;
-                            } else {
-                                for message in &messages {
-                                    if let Some(action) =
-                                        self.paint_chat_message(frame, ui, message, false)?
-                                    {
-                                        intent = Some(Intent::Action(action));
-                                    }
-                                }
-                                if let Some(status) = &self.chat_status {
-                                    ui.add(
-                                        egui::Label::new(text(
-                                            status,
-                                            13.0,
-                                            Color32::from_rgb(255, 154, 138),
-                                        ))
-                                        .selectable(false),
-                                    );
-                                }
-                            }
-                            Ok(())
-                        },
-                    )?;
-                    let bounds = panel_ui.min_rect();
-                    ui.advance_cursor_after_rect(bounds.translate(-translation));
-                    frame.record_rect(
-                        "social/chat-panel",
-                        "Chat transcript",
-                        "region",
-                        bounds,
-                        open,
-                    );
-                    frame.record_value(
-                        "social/chat-panel",
-                        &format!(
-                            "{{\"opacity\":{opacity},\"translateY\":{},\"faded\":{faded}}}",
-                            translation.y
-                        ),
-                        None,
-                    );
+                    self.paint_chat_panel(frame, ui, &panel, &messages, &mut intent)?;
                 }
                 if !self.coarse && !open {
                     ui.add_space(7.0);
@@ -453,9 +222,270 @@ impl SocialUi {
                 Ok(())
             })
             .inner?;
+        self.announce_chat(frame, &snapshot.local_player_id, &messages);
+        if let Some(intent) = intent {
+            self.handle_intent(intent)?;
+        }
+        Ok(())
+    }
+
+    /// The panel at its eased opacity and offset, then its accessibility records.
+    fn paint_chat_panel(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ui: &mut egui::Ui,
+        panel: &ChatPanel,
+        messages: &[&GameChatMessage],
+        intent: &mut Option<Intent>,
+    ) -> Result<(), String> {
+        let available = ui.available_rect_before_wrap();
+        let mut panel_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("social/chat-panel")
+                .max_rect(available.translate(panel.translation)),
+        );
+        let painter = panel_ui.painter().clone();
+        frame.paint_group(
+            &painter,
+            GroupEffect { opacity: panel.opacity, ..Default::default() },
+            |frame, _| {
+                let ui = &mut panel_ui;
+                ui.spacing_mut().item_spacing.y = if panel.open { 3.0 } else { 4.0 };
+                if panel.open {
+                    self.paint_open_chat(frame, ui, panel, messages, intent)?;
+                } else {
+                    self.paint_recent_messages(frame, ui, messages, intent)?;
+                }
+                Ok(())
+            },
+        )?;
+        let bounds = panel_ui.min_rect();
+        ui.advance_cursor_after_rect(bounds.translate(-panel.translation));
+        frame.record_rect("social/chat-panel", "Chat transcript", "region", bounds, panel.open);
+        frame.record_value(
+            "social/chat-panel",
+            &format!(
+                "{{\"opacity\":{},\"translateY\":{},\"faded\":{}}}",
+                panel.opacity, panel.translation.y, panel.faded
+            ),
+            None,
+        );
+        Ok(())
+    }
+
+    /// The open chat's frame: channel tabs, transcript, status, composer and key hints.
+    fn paint_open_chat(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ui: &mut egui::Ui,
+        panel: &ChatPanel,
+        messages: &[&GameChatMessage],
+        intent: &mut Option<Intent>,
+    ) -> Result<(), String> {
+        egui::Frame::new()
+            .fill(Color32::from_rgba_unmultiplied(10, 12, 17, 244))
+            .stroke(Stroke::new(2.0, Color32::from_rgba_unmultiplied(216, 188, 114, 209)))
+            .corner_radius(4.0)
+            .inner_margin(9.0)
+            .show(ui, |ui| -> Result<(), String> {
+                ui.set_min_width(panel.width - 22.0);
+                self.paint_channel_tabs(frame, ui, intent);
+                ui.separator();
+                self.paint_chat_transcript(frame, ui, panel.screen, messages, intent)?;
+                if let Some(status) = &self.chat_status {
+                    let response = ui.label(text(status, 13.0, Color32::from_rgb(255, 154, 138)));
+                    frame.record("social/chat-status", status, "status", &response);
+                }
+                ui.separator();
+                self.paint_chat_composer(frame, ui, panel.width, panel.channel_key, intent);
+                if !self.coarse {
+                    ui.label(
+                        RichText::new("Enter send · Tab channel · Esc close")
+                            .font(FontId::new(10.0, FontFamily::Name("JetBrains Mono".into())))
+                            .color(Color32::from_rgb(129, 123, 107)),
+                    );
+                }
+                Ok(())
+            })
+            .inner
+    }
+
+    /// The channel tabs with unread counts, then the close button.
+    fn paint_channel_tabs(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &mut egui::Ui,
+        intent: &mut Option<Intent>,
+    ) {
+        ui.horizontal(|ui| {
+            for channel in self.channels() {
+                let unread = self.unread[channel_index(channel)];
+                let label = if unread > 0 {
+                    format!("{} {unread}", channel.label())
+                } else {
+                    channel.label().to_owned()
+                };
+                let response = ui.add(
+                    egui::Button::new(text(
+                        &label,
+                        13.0,
+                        if channel == self.channel {
+                            channel_color(channel)
+                        } else {
+                            Color32::from_gray(142)
+                        },
+                    ))
+                    .selected(channel == self.channel)
+                    .frame(false),
+                );
+                frame.record(
+                    &format!("social/channel:{}", channel_id(channel)),
+                    channel.label(),
+                    "tab",
+                    &response,
+                );
+                if response.clicked() {
+                    *intent = Some(Intent::Action(format!("channel:{}", channel_id(channel))));
+                }
+            }
+            let close = ui.add(
+                egui::Button::new(text("×", if self.coarse { 24.0 } else { 20.0 }, gpu::GOLD))
+                    .frame(false),
+            );
+            frame.record("social/chat-close", "Close chat", "button", &close);
+            if close.clicked() {
+                *intent = Some(Intent::Action("chat-close".into()));
+            }
+        });
+    }
+
+    fn paint_chat_transcript(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &mut egui::Ui,
+        screen: Rect,
+        messages: &[&GameChatMessage],
+        intent: &mut Option<Intent>,
+    ) -> Result<(), String> {
+        let height = if self.coarse {
+            (screen.height() - 150.0).clamp(64.0, 220.0)
+        } else {
+            (screen.height() * 0.34).clamp(104.0, 260.0)
+        };
+        egui::ScrollArea::vertical()
+            .id_salt("social/chat/transcript")
+            .max_height(height)
+            .min_scrolled_height(if self.coarse { 64.0 } else { 104.0 })
+            .stick_to_bottom(true)
+            .show(ui, |ui| -> Result<(), String> {
+                if messages.is_empty() {
+                    ui.label(text(
+                        format!("No {} messages yet.", self.channel.label().to_lowercase()),
+                        14.0,
+                        Color32::from_gray(130),
+                    ));
+                }
+                for message in messages {
+                    if let Some(action) = self.paint_chat_message(frame, ui, message, true)? {
+                        *intent = Some(Intent::Action(action));
+                    }
+                }
+                Ok(())
+            })
+            .inner
+    }
+
+    /// The message field and Send button; Tab in the focused field selects the next channel.
+    fn paint_chat_composer(
+        &mut self,
+        frame: &UiFrame<'_>,
+        ui: &mut egui::Ui,
+        width: f32,
+        channel_key: bool,
+        intent: &mut Option<Intent>,
+    ) {
+        ui.horizontal(|ui| {
+            ui.label(text("◆", 12.0, channel_color(self.channel)));
+            let placeholder = if self.channel == GameChatChannel::Whisper {
+                format!(
+                    "Whisper {}",
+                    self.whisper.as_ref().map_or("", |target| &target.display_name)
+                )
+            } else {
+                format!("Message {}", self.channel.label())
+            };
+            let (_, field) = ui.allocate_space(vec2(
+                (width - 118.0).max(50.0),
+                if self.coarse { 40.0 } else { 34.0 },
+            ));
+            let response = crate::gpu_ui::NativeTextEdit::singleline(
+                &mut self.chat_draft,
+                "social/chat-message",
+                "Chat message",
+            )
+            .hint_text(placeholder)
+            .font(FontId::new(
+                if self.coarse { 16.0 } else { 14.0 },
+                FontFamily::Name("Alegreya".into()),
+            ))
+            .color(Color32::from_rgb(255, 245, 220))
+            .rules(crate::gpu_ui::EditorRules { utf16_limit: Some(180), ..Default::default() })
+            .request_focus(self.focus_chat)
+            .show(frame, ui, field);
+            if ui.is_visible() && response.has_focus() {
+                self.focus_chat = false;
+            }
+            if response.changed() {
+                self.last_activity = self.now;
+            }
+            if channel_key {
+                *intent = Some(Intent::NextChannel);
+            }
+            let send = ui.add(
+                egui::Button::new(text("Send", 11.0, gpu::GOLD))
+                    .min_size(vec2(58.0, 34.0))
+                    .fill(Color32::from_rgb(36, 28, 14))
+                    .stroke(Stroke::new(1.0, gpu::GOLD)),
+            );
+            frame.record("social/chat-send", "Send", "button", &send);
+            if response.submitted || send.clicked() {
+                *intent = Some(Intent::Submit(self.chat_draft.clone()));
+            }
+        });
+    }
+
+    /// The closed chat's recent messages and status, without a frame.
+    fn paint_recent_messages(
+        &self,
+        frame: &UiFrame<'_>,
+        ui: &mut egui::Ui,
+        messages: &[&GameChatMessage],
+        intent: &mut Option<Intent>,
+    ) -> Result<(), String> {
+        for message in messages {
+            if let Some(action) = self.paint_chat_message(frame, ui, message, false)? {
+                *intent = Some(Intent::Action(action));
+            }
+        }
+        if let Some(status) = &self.chat_status {
+            ui.add(
+                egui::Label::new(text(status, 13.0, Color32::from_rgb(255, 154, 138)))
+                    .selectable(false),
+            );
+        }
+        Ok(())
+    }
+
+    /// Announces newly visible messages and the chat status to assistive technology.
+    fn announce_chat(
+        &mut self,
+        frame: &UiFrame<'_>,
+        local_player_id: &str,
+        messages: &[&GameChatMessage],
+    ) {
         let accepted = self.chat_announcements.take_visible(messages.iter().map(|m| m.sequence));
         for message in messages.iter().filter(|message| accepted.contains(&message.sequence)) {
-            let (label, body) = message_parts(message, &snapshot.local_player_id);
+            let (label, body) = message_parts(message, local_player_id);
             frame.announce(
                 &self.chat_announcements.owner(&format!("message:{}", message.sequence)),
                 &message_description(&label, body),
@@ -464,10 +494,6 @@ impl SocialUi {
         if let Some(status) = &self.chat_status {
             frame.announce(&self.chat_announcements.owner("status"), status);
         }
-        if let Some(intent) = intent {
-            self.handle_intent(intent)?;
-        }
-        Ok(())
     }
 
     fn paint_chat_opener(
