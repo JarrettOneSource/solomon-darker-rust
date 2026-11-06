@@ -6,7 +6,7 @@ use super::*;
 use solomon_graphics::assets;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::scenery::{
-    SceneryLayer, SceneryPlan, SceneryShadowTexture, ScenerySource, native_fence_grate,
+    SceneryLayer, SceneryPlan, SceneryShadowTexture, ScenerySource, intact_fence_grate,
     scenery_object_entry, scenery_plan, scenery_shadow_plan, wall_skirt_plan,
 };
 use solomon_sim::boneyard::surface::{
@@ -484,7 +484,7 @@ impl SceneCompiler<'_> {
                     }
                     draws
                 } else {
-                    let Some(grate) = native_fence_grate(&fence.points) else {
+                    let Some(grate) = intact_fence_grate(&fence.points) else {
                         return Ok(None);
                     };
                     let points = grate.corners;

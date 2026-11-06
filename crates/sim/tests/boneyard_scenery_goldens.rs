@@ -126,7 +126,7 @@ fn authored_placements_shared_posts_and_private_broken_halves_match_source() {
         let posts: Vec<_> = plan.posts.iter().map(|post| json!({"fenceIndex":post.fence_index,"position":point_json(post.position),"variant":post.variant,"style":post.style})).collect();
         website_rows::compare(&json!(posts), &case["posts"], "shared post selectors");
         for (fence, expected) in scene.fences.iter().zip(case["grates"].as_array().unwrap()) {
-            let actual = native_fence_grate(&fence.points).map_or(Value::Null, |grate| {
+            let actual = intact_fence_grate(&fence.points).map_or(Value::Null, |grate| {
                 json!({
                 "topStart":point_json(grate.corners[0]),"topEnd":point_json(grate.corners[1]),
                 "bottomStart":point_json(grate.corners[2]),"bottomEnd":point_json(grate.corners[3]),
