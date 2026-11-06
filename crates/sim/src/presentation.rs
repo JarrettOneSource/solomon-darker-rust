@@ -55,7 +55,7 @@ pub fn multiply_tints(first: u32, second: u32) -> u32 {
 /// The hit pass selects diffuse red while retaining texture alpha. Its lighting scale is
 /// distinct from the ordinary material tint.
 #[must_use]
-pub fn native_puppet_hit_tint(complex_lighting: bool, main_tint: u32) -> u32 {
+pub fn puppet_hit_tint(complex_lighting: bool, main_tint: u32) -> u32 {
     let red = if complex_lighting { 0.65_f32 as f64 } else { 1.0 };
     ((f64::from((main_tint >> 16) & 255) * red).trunc() as u32) << 16
 }

@@ -17,6 +17,7 @@ pub use skeleton::skeleton_base_tint;
 use crate::Vec2;
 use crate::enemies::EnemyToken;
 use crate::enemies::model::*;
+use crate::presentation::puppet_hit_tint;
 
 #[must_use]
 pub fn enemy_actor_plan(
@@ -176,11 +177,6 @@ fn attack_effect_origin(
         Vec2::new(point.x + controller.offset.x * actor.config.scale, point.y),
         controller.offset.y * actor.config.scale,
     ))
-}
-
-pub(super) fn puppet_hit_tint(complex_lighting: bool, tint: u32) -> u32 {
-    let red = if complex_lighting { f64::from(0.65_f32) } else { 1.0 };
-    ((((tint >> 16) & 255) as f64 * red).trunc() as u32) << 16
 }
 
 /// Coffin children register and paint independently from the parent body.

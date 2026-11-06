@@ -6,7 +6,7 @@ use crate::Vec2;
 use crate::float;
 use crate::hub::painter::{PainterLane, PainterLayer};
 use crate::loot::{BonusKind, LootDropKind, OrbKind};
-use crate::presentation::native_puppet_hit_tint;
+use crate::presentation::puppet_hit_tint;
 use crate::spells::presentation::{SpellAtlas, SpellBlend};
 
 /// One sprite layer of a ground loot or Goodie drawing: atlas entry, offset, scale,
@@ -91,7 +91,7 @@ pub fn goodie_presentation_plan(
             draw.alpha *= hit_alpha;
             draw.diffuse_color = true;
             draw.role = format!("hit:{}", draw.role);
-            draw.tint = native_puppet_hit_tint(complex_lighting, draw.tint);
+            draw.tint = puppet_hit_tint(complex_lighting, draw.tint);
             layers.push(draw);
         }
     }

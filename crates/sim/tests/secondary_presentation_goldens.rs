@@ -7,6 +7,7 @@ mod native_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::enemies::presentation::*;
+use solomon_sim::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use solomon_sim::secondary::golem::{GolemPhase, SecondaryGolemState};
 use solomon_sim::secondary::presentation::*;
 use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState, SecondaryPlayerState};
@@ -358,19 +359,19 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
     for case in fixture["projectiles"].as_array().unwrap() {
         let value = &case["actor"];
         let kind = match value["kind"].as_str().unwrap() {
-            "arrow" => NativeEnemyProjectileKind::Arrow,
-            "firebolt" => NativeEnemyProjectileKind::Firebolt,
-            "guided-missile" => NativeEnemyProjectileKind::GuidedMissile,
-            "demon-bomb" => NativeEnemyProjectileKind::DemonBomb,
-            "poison-pool" => NativeEnemyProjectileKind::PoisonPool,
+            "arrow" => EnemyProjectileKind::Arrow,
+            "firebolt" => EnemyProjectileKind::Firebolt,
+            "guided-missile" => EnemyProjectileKind::GuidedMissile,
+            "demon-bomb" => EnemyProjectileKind::DemonBomb,
+            "poison-pool" => EnemyProjectileKind::PoisonPool,
             other => panic!("unknown kind {other}"),
         };
         let payload = match value["payload"].as_str().unwrap() {
-            "normal" => NativeEnemyProjectilePayload::Normal,
-            "fire" => NativeEnemyProjectilePayload::Fire,
-            "poison" => NativeEnemyProjectilePayload::Poison,
-            "cold" => NativeEnemyProjectilePayload::Cold,
-            "none" => NativeEnemyProjectilePayload::None,
+            "normal" => EnemyProjectilePayload::Normal,
+            "fire" => EnemyProjectilePayload::Fire,
+            "poison" => EnemyProjectilePayload::Poison,
+            "cold" => EnemyProjectilePayload::Cold,
+            "none" => EnemyProjectilePayload::None,
             other => panic!("unknown payload {other}"),
         };
         let actual = enemy_projectile_plan(

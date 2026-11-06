@@ -1,6 +1,6 @@
 //! Loot drop construction for enemies and scripts, and placement of the dropped carriers.
 
-use crate::economy::{DOWSING_EQUIPMENT_RECIPES, HubInventoryItem};
+use crate::economy::{EQUIPMENT_RECIPES, HubInventoryItem};
 use crate::float;
 use crate::float::fround;
 use crate::{Rng, Vec2};
@@ -116,7 +116,7 @@ pub fn materialize_loot_script_action(
         LootScriptAction::DropItem { recipe_index } => {
             let mut result = LootMaterialization::empty(input);
             let Some(recipe) =
-                DOWSING_EQUIPMENT_RECIPES.iter().find(|recipe| recipe.source_index == recipe_index)
+                EQUIPMENT_RECIPES.iter().find(|recipe| recipe.source_index == recipe_index)
             else {
                 return result;
             };

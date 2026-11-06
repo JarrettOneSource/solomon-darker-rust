@@ -13,7 +13,7 @@ mod services;
 pub use crate::equipment::EquipmentEffect;
 pub use archive::{CompletedRunEconomyArchive, RETAINED_SACK_SUFFIXES};
 pub use catalog::{
-    DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS, SKILL_BOOK_DEFINITIONS,
+    EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS, SKILL_BOOK_DEFINITIONS,
 };
 pub use feedback::{
     HubActionFeedback, HubActionFeedbackAction, HubTransferGesture, SkillBookFeedbackCursor,
@@ -225,13 +225,16 @@ pub struct HubShopItem {
 }
 
 /// An authored named equipment item, offered by dowsing and dropped as loot. `source_index` is
-/// its position in `DOWSING_EQUIPMENT_RECIPES`; items store it as `recipe_index`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// its position in `EQUIPMENT_RECIPES`; items store it as `recipe_index`.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EquipmentRecipe {
     pub icon_records: &'static [usize],
     pub icon_tints: [Option<u32>; 2],
     pub level: u32,
     pub name: &'static str,
+    pub description: &'static str,
+    /// What the item does while equipped.
+    pub effects: &'static [EquipmentEffect],
     pub type_id: u32,
     pub rarity: ItemRarity,
     pub set_name: Option<&'static str>,

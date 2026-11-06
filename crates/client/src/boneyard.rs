@@ -36,7 +36,7 @@ use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::float::fround;
 use solomon_sim::hub::painter::{PainterLane, PainterLayer};
 use solomon_sim::painter::overlays::{PainterOverlayOrder, PainterOwnerOverlay};
-use solomon_sim::presentation::native_puppet_hit_tint;
+use solomon_sim::presentation::puppet_hit_tint;
 
 use crate::courtyard::{ActorPainters, Camera};
 use crate::presentation::PresentationClocks;
@@ -98,7 +98,7 @@ fn scenery_hit_redraw(
             tint: if vertex_colors_own_material {
                 0xffffff
             } else {
-                native_puppet_hit_tint(complex_lighting, 0xffffff)
+                puppet_hit_tint(complex_lighting, 0xffffff)
             },
             diffuse: true,
             hit_alpha: Some(hit_alpha),
@@ -148,7 +148,7 @@ impl PreparedBoneyardView {
                 TreeOcclusion::new(
                     &tree.eid,
                     tree.position.into(),
-                    [bounds.x, bounds.y, bounds.w, bounds.h],
+                    [bounds.x, bounds.y, bounds.width, bounds.height],
                     tree.polygon.iter().copied().map(Into::into).collect(),
                 ),
             );
@@ -294,7 +294,7 @@ impl BoneyardView {
             && let Some(bounds) = frame.cleanup_bounds
         {
             assert_eq!(
-                self.document.cleanup.bounds.as_ref().map(NativeBoundsDocument::world_bounds),
+                self.document.cleanup.bounds.as_ref().map(BoundsDocument::world_bounds),
                 Some(bounds),
                 "validated scenery cleanup domain matches the displayed world",
             );
@@ -1025,7 +1025,7 @@ struct SceneryDocument {
 }
 
 struct CleanupDocument {
-    bounds: Option<NativeBoundsDocument>,
+    bounds: Option<BoundsDocument>,
     retired_layers: BTreeSet<usize>,
     retired_roads: BTreeSet<usize>,
     base_images: Vec<CleanedBaseImage>,
@@ -1048,11 +1048,14 @@ impl From<PointDocument> for Vec2 {
     }
 }
 
-#[derive(Clone, Debug)]
+/// A rectangle in a scene document or catalog, whose JSON names the size `w` and `h`.
+#[derive(Clone, Copy, Debug, Deserialize)]
 struct BoundsDocument {
     x: f64,
     y: f64,
+    #[serde(rename = "w")]
     width: f64,
+    #[serde(rename = "h")]
     height: f64,
 }
 
@@ -1062,9 +1065,9 @@ impl From<Vec2> for PointDocument {
     }
 }
 
-impl From<BoneyardBounds> for NativeBoundsDocument {
+impl From<BoneyardBounds> for BoundsDocument {
     fn from(bounds: BoneyardBounds) -> Self {
-        Self { x: bounds.x, y: bounds.y, w: bounds.width, h: bounds.height }
+        Self { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
     }
 }
 
@@ -1140,24 +1143,10 @@ struct GateDocument {
     sort_bias: f64,
 }
 
-#[derive(Clone, Copy, Deserialize)]
-struct NativeBoundsDocument {
-    x: f64,
-    y: f64,
-    w: f64,
-    h: f64,
-}
-
-impl NativeBoundsDocument {
-    fn world_bounds(&self) -> BoneyardBounds {
-        BoneyardBounds::new(self.x, self.y, self.w, self.h)
-    }
-}
-
 struct TreeDocument {
     eid: String,
     position: PointDocument,
-    bounds: NativeBoundsDocument,
+    bounds: BoundsDocument,
     polygon: Vec<PointDocument>,
 }
 

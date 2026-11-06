@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::belt::BeltCommand;
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, EquipmentSlot, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyState,
+    EQUIPMENT_RECIPES, EquipmentSlot, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyState,
     HubInventoryAction, HubInventoryItem, TransferDirection, create_equipment_inventory_item,
     create_fomentius_inventory_item,
 };
@@ -70,7 +70,7 @@ fn inventory_drop_commands_restore_swaps_addresses_and_sink_order_match_current_
 fn item(spec: &Value) -> HubInventoryItem {
     let id = spec["id"].as_u64().unwrap();
     let mut built = if let Some(recipe) = spec["recipe"].as_u64() {
-        create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[recipe as usize], id)
+        create_equipment_inventory_item(&EQUIPMENT_RECIPES[recipe as usize], id)
     } else {
         let definition = FOMENTIUS_STOCK_DEFINITIONS
             .iter()

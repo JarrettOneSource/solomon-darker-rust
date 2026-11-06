@@ -6,6 +6,7 @@ use super::boss_spell::BossSpellKind;
 use super::config::{EnemyClassification, EnemyFamilyConfig};
 use super::dampen::spawn_dampened_mage_smoke;
 use super::model::{EnemyBrain, EnemyLifeState, EnemyTarget};
+use super::projectiles::MAGE_LIGHTNING_PULSE_LIFETIME_TICKS;
 use super::targeting::primary_cell_changed;
 use super::world::{EnemyStepContext, EnemyWorld};
 use super::{EnemySpawnIntent, EnemyToken};
@@ -123,7 +124,8 @@ impl EnemyWorld {
         self.step_spider_remains();
         self.step_boss_voices(context);
         self.step_detached_crows(context);
-        self.mage_lightning_pulses.retain(|pulse| tick - pulse.tick < 5);
+        self.mage_lightning_pulses
+            .retain(|pulse| tick - pulse.tick < MAGE_LIGHTNING_PULSE_LIFETIME_TICKS);
         self.step_death_effects(tick, order);
         self.step_projectile_effects(tick);
         let capabilities = self.demon_skull_encounter.pending_capabilities;

@@ -6,9 +6,7 @@ mod native_bits;
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::*;
-use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, HubInventoryItem, create_equipment_inventory_item,
-};
+use solomon_sim::economy::{EQUIPMENT_RECIPES, HubInventoryItem, create_equipment_inventory_item};
 use solomon_sim::loot::*;
 use solomon_sim::painter::WorldPainterOrder;
 
@@ -53,7 +51,7 @@ fn sequential_enemy_and_goodie_selections_exclude_live_direct_ground_recipes() {
             .iter()
             .map(|index| {
                 let index = index.as_u64().unwrap() as usize;
-                create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[index], index as u64 + 1)
+                create_equipment_inventory_item(&EQUIPMENT_RECIPES[index], index as u64 + 1)
             })
             .collect();
         store.spawn_custom_items(&items, Vec2::new(2000.0, 2000.0), 0, &mut order);

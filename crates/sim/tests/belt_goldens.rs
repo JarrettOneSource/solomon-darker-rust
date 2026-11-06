@@ -51,7 +51,7 @@ fn native_belt_bindings_follow_owned_items_learned_skills_and_live_potion_stacks
         create_fomentius_inventory_item(&FOMENTIUS_STOCK_DEFINITIONS[0], 101, 3),
         create_fomentius_inventory_item(&FOMENTIUS_STOCK_DEFINITIONS[6], 102, 1),
         create_fomentius_inventory_item(&FOMENTIUS_STOCK_DEFINITIONS[3], 103, 1),
-        create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[35], 104),
+        create_equipment_inventory_item(&EQUIPMENT_RECIPES[35], 104),
     ]);
     economy.backpack.push(sack);
     let mut belt = PlayerBeltComponent::new(&book);

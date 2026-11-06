@@ -2,8 +2,9 @@
 //! from the Website client.
 
 use serde_json::{Value, json};
+use solomon_sim::economy::EQUIPMENT_RECIPES;
 use solomon_sim::equipment::{
-    EQUIPMENT_RECIPES, EQUIPMENT_SETS, EquipmentEffect, EquipmentEffectSource, EquipmentModifiers,
+    EQUIPMENT_SETS, EquipmentEffect, EquipmentEffectSource, EquipmentModifiers,
     EquipmentScalarTransform, resolve_equipment_effects,
 };
 

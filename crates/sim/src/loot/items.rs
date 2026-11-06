@@ -6,7 +6,7 @@ use crate::appearance::{clamp_unit, rgb_tint};
 use crate::boneyard::waves::programs::BossKind;
 use crate::boneyard::waves::survival_programs;
 use crate::economy::{
-    DOWSING_EQUIPMENT_RECIPES, EquipmentRecipe, EquipmentType, FOMENTIUS_STOCK_DEFINITIONS,
+    EQUIPMENT_RECIPES, EquipmentRecipe, EquipmentType, FOMENTIUS_STOCK_DEFINITIONS,
     HubInventoryItem, HubItemKind, ItemRarity, SKILL_BOOK_DEFINITIONS, base_item,
     create_equipment_inventory_item, create_fomentius_inventory_item,
     create_skill_book_inventory_item,
@@ -62,7 +62,7 @@ pub fn resolve_goodie_contents(
             }
         }
         10 => {
-            let candidates: Vec<_> = DOWSING_EQUIPMENT_RECIPES
+            let candidates: Vec<_> = EQUIPMENT_RECIPES
                 .iter()
                 .filter(|recipe| {
                     recipe.level <= 100
@@ -121,7 +121,7 @@ pub fn select_enemy_item(
     if let Some(indexes) = item_recipe_pool {
         let mut pool = Vec::with_capacity(indexes.len());
         for index in indexes {
-            let recipe = DOWSING_EQUIPMENT_RECIPES
+            let recipe = EQUIPMENT_RECIPES
                 .get(*index)
                 .expect("enemy Item pool requires valid named recipes");
             pool.push(recipe);
@@ -139,7 +139,7 @@ pub fn select_enemy_item(
         let recipe = candidates[rng.draw_integer(candidates.len() as i32) as usize];
         return Some(equipment_recipe_item(recipe, item_ids, rng));
     }
-    let recipes: Vec<_> = DOWSING_EQUIPMENT_RECIPES
+    let recipes: Vec<_> = EQUIPMENT_RECIPES
         .iter()
         .filter(|recipe| {
             recipe.level as i32 >= input.arena.item_level_minimum
