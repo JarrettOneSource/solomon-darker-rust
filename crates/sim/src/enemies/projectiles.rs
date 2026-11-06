@@ -148,7 +148,11 @@ pub enum MageLightningContact {
     World { position: Vec2 },
     TargetAttached { local_offset: Vec2, target_player_id: String },
 }
-/// One Mage lightning bolt, kept with its light and painters for five ticks.
+/// How many enemy ticks a Mage lightning pulse stays alive.
+pub const MAGE_LIGHTNING_PULSE_LIFETIME_TICKS: u64 = 5;
+
+/// One Mage lightning bolt, kept with its light and painters for
+/// [`MAGE_LIGHTNING_PULSE_LIFETIME_TICKS`].
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct MageLightningPulse {

@@ -33,7 +33,7 @@ use solomon_sim::painter::PainterRegistration;
 use solomon_sim::painter::overlays::PainterOwnerOverlay;
 use solomon_sim::player::PlayerState;
 use solomon_sim::player_presentation::LevelUpPresentationFrame;
-use solomon_sim::presentation::{native_puppet_hit_tint, player_material_tint};
+use solomon_sim::presentation::{player_material_tint, puppet_hit_tint};
 use solomon_sim::profile::WeldBuildId;
 use solomon_sim::screen_feedback::{present_secondary_screen_overlay, secondary_world_shake};
 use solomon_sim::secondary::presentation::{SecondaryAtlas, SecondaryBlend, SecondarySpriteDraw};
@@ -642,7 +642,7 @@ impl BattleViews {
                             .and_then(|clocks| clocks.puppet_hits.get(&target_id))
                             .copied()
                             .unwrap_or_else(|| hit.feedback.alpha(frame.presentation_tick)),
-                        tint: native_puppet_hit_tint(frame.settings.complex_lighting, 0xffffff),
+                        tint: puppet_hit_tint(frame.settings.complex_lighting, 0xffffff),
                     },
                 );
             }

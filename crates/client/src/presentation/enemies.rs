@@ -15,14 +15,15 @@ use solomon_sim::enemies::model::{
     EnemyActor, EnemyBrain, EnemyDeathEffect, EnemyEvent, SpiderPhase,
 };
 use solomon_sim::enemies::presentation::EnemyEffectPresentationInput;
-use solomon_sim::enemies::projectiles::{EnemyProjectile, EnemyProjectileKind, MageLightningPulse};
+use solomon_sim::enemies::projectiles::{
+    EnemyProjectile, EnemyProjectileKind, MAGE_LIGHTNING_PULSE_LIFETIME_TICKS, MageLightningPulse,
+};
 use solomon_sim::enemies::world::EnemyWorld;
 
 use super::math::{interpolate_members, interpolate_projected_members, lerp, lerp_cycle, lerp_vec};
 
 // Stock frame and lifetime counts used by these samples.
 const IMP_UPPER_EFFECT_FRAME_COUNT: f64 = 10.0;
-const MAGE_LIGHTNING_MAX_PULSE_AGES: f64 = 5.0;
 const ENEMY_GAIT_POSE_COUNT: f64 = 8.0;
 const GUIDED_MISSILE_VISUAL_PHASE_PERIOD: f64 = 720.0;
 
@@ -557,7 +558,9 @@ fn merge_pulses<'a>(
 ) -> Vec<MageLightningPulse> {
     let mut pulses = BTreeMap::new();
     for pulse in older.into_iter().chain(newer) {
-        if pulse.tick as f64 > tick || tick - pulse.tick as f64 >= MAGE_LIGHTNING_MAX_PULSE_AGES {
+        if pulse.tick as f64 > tick
+            || tick - pulse.tick as f64 >= MAGE_LIGHTNING_PULSE_LIFETIME_TICKS as f64
+        {
             continue;
         }
         pulses.insert(pulse.id, pulse.clone());

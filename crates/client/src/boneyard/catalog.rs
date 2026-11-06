@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-use super::{BoundsDocument, NativeBoundsDocument, PointDocument};
+use super::{BoundsDocument, PointDocument};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::scenery::scenery_art_corners;
 
@@ -14,7 +14,7 @@ use solomon_sim::boneyard::scenery::scenery_art_corners;
 pub(super) struct SceneryCatalog {
     pub records: Vec<Option<SceneryRecord>>,
     pub shadows: BTreeMap<String, Vec<Vec<PointDocument>>>,
-    pub tree_bounds: Vec<NativeBoundsDocument>,
+    pub tree_bounds: Vec<BoundsDocument>,
     pub tree_polygons: Vec<Vec<PointDocument>>,
 }
 

@@ -12,7 +12,6 @@ pub const ETHER_BLAST_CONTACT_RADIUS: f64 = 175.0;
 pub const ETHER_BLAST_PARTICLE_LIFETIME_TICKS: u64 = 100;
 pub const ETHER_BLAST_PRESENTATION_RNG_WORDS: usize = 720;
 pub const ETHER_BLAST_SCREEN_FLASH_DECAY: f64 = 0.025_f32 as f64;
-pub const NATIVE_ETHER_BLAST_SCREEN_GREEN: f64 = 0.25;
 
 /// One tick of Ether Blast charging: the new charge and whether it crossed a whole charge.
 #[derive(Clone, Copy, Debug, PartialEq)]

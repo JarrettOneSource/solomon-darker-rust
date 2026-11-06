@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use solomon_sim::combat::PlayerCombatState;
-use solomon_sim::presentation::{multiply_tints, native_puppet_hit_tint, player_material_tint};
+use solomon_sim::presentation::{multiply_tints, player_material_tint, puppet_hit_tint};
 use solomon_sim::secondary::SecondaryPlayerState;
 
 #[derive(Deserialize)]
@@ -48,8 +48,8 @@ fn player_status_insertion_order_and_native_dye_hit_colours_replay_the_website()
         let tint = player_material_tint(case.world_tint, Some(&secondary), &combat);
         assert_eq!(tint, case.tint);
         assert_eq!(multiply_tints(0x916491, tint), case.robe_tint);
-        assert_eq!(native_puppet_hit_tint(true, tint), case.hit_tint);
-        assert_eq!(native_puppet_hit_tint(false, tint), case.flat_hit_tint);
+        assert_eq!(puppet_hit_tint(true, tint), case.hit_tint);
+        assert_eq!(puppet_hit_tint(false, tint), case.flat_hit_tint);
     }
     for color in fixture.primary_colors {
         assert_eq!(

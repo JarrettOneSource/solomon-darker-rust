@@ -36,7 +36,7 @@ pub struct SecondaryPainter {
 }
 
 /// Projection of the canonical puppet feedback at its fixed tick. The caller samples
-/// the feedback alpha and uses `native_puppet_hit_tint`; the view owns no feedback clock.
+/// the feedback alpha and uses `puppet_hit_tint`; the view owns no feedback clock.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryPuppetHit {
     pub alpha: f64,

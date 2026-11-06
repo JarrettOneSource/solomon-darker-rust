@@ -221,8 +221,8 @@ fn mage_pulses(enemies: &Value, version: u64) -> Result<Vec<Value>, String> {
         if id <= previous_id || tick < previous_tick {
             return Err("game save Mage lightning pulse order is invalid".into());
         }
-        // `NATIVE_MAGE_LIGHTNING_MAX_PULSE_AGES` is five enemy epochs.
-        if last_tick - tick >= 5.0 {
+        let lifetime = solomon_sim::enemies::projectiles::MAGE_LIGHTNING_PULSE_LIFETIME_TICKS;
+        if last_tick - tick >= lifetime as f64 {
             return Err(format!("{field} exceeds the live pulse age limit"));
         }
         previous_id = id;
