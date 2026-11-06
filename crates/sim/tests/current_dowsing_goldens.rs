@@ -5,14 +5,14 @@ mod support;
 use serde_json::{Value, json};
 use solomon_sim::Rng;
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyContext, HubEconomyState,
+    EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyContext, HubEconomyState,
     HubInventoryAction, HubInventoryItem, create_equipment_inventory_item,
     create_fomentius_inventory_item, project_inventory_items,
 };
 use solomon_sim::profile::WizardElement;
 
 fn item(index: usize) -> HubInventoryItem {
-    create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[index], 90000 + index as u64)
+    create_equipment_inventory_item(&EQUIPMENT_RECIPES[index], 90000 + index as u64)
 }
 
 fn source_for(mode: &str) -> HubEconomyState {
@@ -24,7 +24,7 @@ fn source_for(mode: &str) -> HubEconomyState {
     match mode {
         "hood" => economy.backpack = vec![item(16)],
         "all" | "missing-37" => {
-            economy.backpack = DOWSING_EQUIPMENT_RECIPES
+            economy.backpack = EQUIPMENT_RECIPES
                 .iter()
                 .filter(|recipe| mode != "missing-37" || recipe.source_index != 37)
                 .map(|recipe| item(recipe.source_index))
@@ -34,7 +34,7 @@ fn source_for(mode: &str) -> HubEconomyState {
             let mut sack =
                 create_fomentius_inventory_item(&FOMENTIUS_STOCK_DEFINITIONS[5], 99000, 1);
             sack.contents = Some(
-                DOWSING_EQUIPMENT_RECIPES
+                EQUIPMENT_RECIPES
                     .iter()
                     .filter(|recipe| ![5, 16, 17, 19].contains(&recipe.source_index))
                     .map(|recipe| item(recipe.source_index))

@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 use solomon_sim::appearance::equipment::*;
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, EquipmentSlot, EquipmentType, HubEconomyState, HubEquipmentState,
+    EQUIPMENT_RECIPES, EquipmentSlot, EquipmentType, HubEconomyState, HubEquipmentState,
     create_equipment_inventory_item,
 };
 use solomon_sim::modding::assets::ModSpriteFrame;
@@ -158,10 +158,8 @@ fn starter_recipe_dye_and_generated_equipment_appearance_replay_the_website() {
         };
         if mode == "recipe" || mode == "dyed" {
             let index = case["recipe"].as_u64().unwrap() as usize;
-            let recipe = DOWSING_EQUIPMENT_RECIPES
-                .iter()
-                .find(|recipe| recipe.source_index == index)
-                .unwrap();
+            let recipe =
+                EQUIPMENT_RECIPES.iter().find(|recipe| recipe.source_index == index).unwrap();
             let mut item = create_equipment_inventory_item(recipe, 100);
             if mode == "dyed" {
                 item.icon_tints = Some([Some(0x123456), Some(0xabcdef)]);

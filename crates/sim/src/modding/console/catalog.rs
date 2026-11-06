@@ -2,8 +2,8 @@
 //! catalogs.
 
 use crate::economy::{
-    DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubInventoryItem,
-    SKILL_BOOK_DEFINITIONS, create_equipment_inventory_item, create_fomentius_inventory_item,
+    EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubInventoryItem, SKILL_BOOK_DEFINITIONS,
+    create_equipment_inventory_item, create_fomentius_inventory_item,
     create_skill_book_inventory_item,
 };
 use crate::enemies::EnemyToken;
@@ -85,7 +85,7 @@ pub fn web_lua_developer_items() -> Vec<WebLuaDeveloperItemDescriptor> {
             recipe_index: None,
         });
     }
-    for recipe in DOWSING_EQUIPMENT_RECIPES {
+    for recipe in EQUIPMENT_RECIPES {
         rows.push(WebLuaDeveloperItemDescriptor {
             key: format!("equipment:{}", recipe.source_index),
             kind: "equipment",
@@ -155,7 +155,7 @@ pub fn create_web_lua_developer_grant_items(
             (0..quantity).map(|_| create_skill_book_inventory_item(definition, 0)).collect(),
         );
     }
-    let recipe = DOWSING_EQUIPMENT_RECIPES
+    let recipe = EQUIPMENT_RECIPES
         .iter()
         .find(|recipe| format!("equipment:{}", recipe.source_index) == key)?;
     Some((0..quantity).map(|_| create_equipment_inventory_item(recipe, 0)).collect())

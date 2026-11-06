@@ -9,7 +9,7 @@ use super::inventory::{
     find_inventory_item, insert, project_inventory_items, remove_tree, replace_tree,
 };
 use super::{
-    DOWSING_EQUIPMENT_RECIPES, DowsingOffer, DyeLayer, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS,
+    DowsingOffer, DyeLayer, EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS,
     HUB_INVENTORY_SLOT_CAPACITY, HagathaOffer, HubEconomyContext, HubEconomyRejection as Rejection,
     HubEconomyResult, HubEconomyState, HubInventoryAction, HubInventoryItem, HubItemKind,
     HubShopItem, InventoryDyeSession, UnforgeOutcome, UnforgeOutcomeKind as UnforgeKind,
@@ -89,7 +89,7 @@ impl HubInventoryItem {
     /// Stock recipe tints fill only absent channels; equipped dyed colours retain ownership.
     #[must_use]
     pub fn clothing_tints(&self) -> Option<[u32; 2]> {
-        let recipe = self.recipe_index.and_then(|index| DOWSING_EQUIPMENT_RECIPES.get(index));
+        let recipe = self.recipe_index.and_then(|index| EQUIPMENT_RECIPES.get(index));
         let recipe_tints = recipe.map_or([None, None], |recipe| recipe.icon_tints);
         let item_tints = self.icon_tints.unwrap_or([None, None]);
         Some([item_tints[0].or(recipe_tints[0])?, item_tints[1].or(recipe_tints[1])?])
@@ -438,10 +438,10 @@ impl HubEconomyState {
         let requested_count = self.rng.draw_integer(2) as usize + 3;
         let mut selected = Vec::new();
         if let Some((type_id, recipe_index)) = reference {
-            let set_name = recipe_index.and_then(|index| DOWSING_EQUIPMENT_RECIPES[index].set_name);
+            let set_name = recipe_index.and_then(|index| EQUIPMENT_RECIPES[index].set_name);
             for slot in 0..requested_count + 2 {
                 let mut candidates = Vec::new();
-                for recipe in &DOWSING_EQUIPMENT_RECIPES {
+                for recipe in &EQUIPMENT_RECIPES {
                     if owned_recipes.contains(&recipe.source_index)
                         || selected.contains(&recipe.source_index)
                     {
@@ -464,8 +464,7 @@ impl HubEconomyState {
         } else {
             for _ in 0..requested_count {
                 for attempt in 1..=100 {
-                    let index =
-                        self.rng.draw_integer(DOWSING_EQUIPMENT_RECIPES.len() as i32) as usize;
+                    let index = self.rng.draw_integer(EQUIPMENT_RECIPES.len() as i32) as usize;
                     if owned_recipes.contains(&index) || selected.contains(&index) {
                         continue;
                     }
@@ -499,8 +498,7 @@ impl HubEconomyState {
         if self.gold < offer.price {
             return Err(Rejection::InsufficientGold);
         }
-        let recipe =
-            DOWSING_EQUIPMENT_RECIPES.get(offer.recipe_index).ok_or(Rejection::InvalidOffer)?;
+        let recipe = EQUIPMENT_RECIPES.get(offer.recipe_index).ok_or(Rejection::InvalidOffer)?;
         let item = create_equipment_inventory_item(recipe, self.next_item_id);
         self.backpack = insert(&self.backpack, item, HUB_INVENTORY_SLOT_CAPACITY)
             .ok_or(Rejection::CapacityFull)?;

@@ -3,7 +3,7 @@
 //! updates, emitted commands and canonical economy transactions remain real.
 use super::*;
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, EquipmentType, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyContext,
+    EQUIPMENT_RECIPES, EquipmentType, FOMENTIUS_STOCK_DEFINITIONS, HubEconomyContext,
     HubInventoryItem, create_equipment_inventory_item, create_fomentius_inventory_item,
     project_inventory_items,
 };
@@ -43,8 +43,7 @@ impl Fixture {
             potion(103, 2),
             sack(100, 6, vec![sack(101, 0, vec![potion(105, 0), potion(106, 2)]), potion(104, 2)]),
         ];
-        let recipe =
-            DOWSING_EQUIPMENT_RECIPES.iter().find(|recipe| recipe.equipment_type == kind).unwrap();
+        let recipe = EQUIPMENT_RECIPES.iter().find(|recipe| recipe.equipment_type == kind).unwrap();
         economy.equipment.set(slot, Some(create_equipment_inventory_item(recipe, 900)));
         economy.owned_perk_selectors = vec![19];
         let book = SkillBookState::new(element, discipline);

@@ -6,7 +6,7 @@ mod stat_book;
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, EquipmentEffect, EquipmentType, HubEconomyState,
+    EQUIPMENT_RECIPES, EquipmentEffect, EquipmentType, HubEconomyState,
     create_equipment_inventory_item,
 };
 use solomon_sim::equipment::{EquipmentModifiers, EquipmentScalarTransform};
@@ -152,7 +152,7 @@ fn setup(
     let mut ring = 0;
     for (index, recipe) in value["recipes"].as_array().unwrap().iter().enumerate() {
         let item = create_equipment_inventory_item(
-            &DOWSING_EQUIPMENT_RECIPES[recipe.as_u64().unwrap() as usize],
+            &EQUIPMENT_RECIPES[recipe.as_u64().unwrap() as usize],
             1000 + index as u64,
         );
         match item.equipment_type.unwrap() {

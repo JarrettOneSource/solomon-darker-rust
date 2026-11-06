@@ -108,14 +108,14 @@ pub fn inventory_item_icon_tints(
     item: &crate::economy::HubInventoryItem,
     element: crate::profile::WizardElement,
 ) -> [u32; 2] {
-    use crate::economy::{DOWSING_EQUIPMENT_RECIPES, EquipmentType};
+    use crate::economy::{EQUIPMENT_RECIPES, EquipmentType};
     if !matches!(item.equipment_type, Some(EquipmentType::Hat | EquipmentType::Robe)) {
         return [0xffffff; 2];
     }
     item.icon_tints
         .or_else(|| {
             item.recipe_index
-                .and_then(|index| DOWSING_EQUIPMENT_RECIPES.get(index))
+                .and_then(|index| EQUIPMENT_RECIPES.get(index))
                 .map(|recipe| recipe.icon_tints)
         })
         .unwrap_or([
@@ -279,9 +279,7 @@ pub fn clamp_unit(value: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::economy::{
-        DOWSING_EQUIPMENT_RECIPES, EquipmentType, create_equipment_inventory_item,
-    };
+    use crate::economy::{EQUIPMENT_RECIPES, EquipmentType, create_equipment_inventory_item};
     use crate::profile::WizardElement;
 
     #[test]
@@ -292,7 +290,7 @@ mod tests {
 
     #[test]
     fn belt_item_art_retains_every_authored_equipment_layer_and_tint() {
-        for recipe in &DOWSING_EQUIPMENT_RECIPES {
+        for recipe in &EQUIPMENT_RECIPES {
             let item = create_equipment_inventory_item(recipe, 100);
             let icon = HudItemIcon::from_item(&item, WizardElement::Ether);
             assert_eq!(icon.records, recipe.icon_records, "{} records", recipe.name);
@@ -315,10 +313,8 @@ mod tests {
     #[test]
     fn belt_garment_art_retains_dye_before_recipe_and_element_defaults() {
         for kind in [EquipmentType::Hat, EquipmentType::Robe] {
-            let recipe = DOWSING_EQUIPMENT_RECIPES
-                .iter()
-                .find(|recipe| recipe.equipment_type == kind)
-                .unwrap();
+            let recipe =
+                EQUIPMENT_RECIPES.iter().find(|recipe| recipe.equipment_type == kind).unwrap();
             let mut item = create_equipment_inventory_item(recipe, 100);
             item.icon_tints = Some([Some(0x123456), Some(0xabcdef)]);
             assert_eq!(

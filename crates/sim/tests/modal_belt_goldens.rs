@@ -221,7 +221,7 @@ fn equipment(
     kind: solomon_sim::economy::EquipmentType,
     id: u64,
 ) -> solomon_sim::economy::HubInventoryItem {
-    let recipe = solomon_sim::economy::DOWSING_EQUIPMENT_RECIPES
+    let recipe = solomon_sim::economy::EQUIPMENT_RECIPES
         .iter()
         .find(|recipe| recipe.equipment_type == kind)
         .unwrap();

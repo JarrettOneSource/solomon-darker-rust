@@ -4,9 +4,9 @@
 mod catalog;
 pub mod random;
 
-pub use catalog::{EQUIPMENT_RECIPES, EQUIPMENT_SETS};
+pub use catalog::EQUIPMENT_SETS;
 
-use crate::economy::{HubEquipmentState, HubInventoryItem};
+use crate::economy::{EQUIPMENT_RECIPES, HubEquipmentState, HubInventoryItem};
 use crate::float::fround;
 use crate::profile::{SKILL_CATALOG, SKILL_ROW_COUNT, skill_root};
 
@@ -120,15 +120,6 @@ impl Default for EquipmentModifiers {
             weld_effect: 1.0,
         }
     }
-}
-
-/// The authored name, description and effects of an equipment recipe, indexed like an item's
-/// `recipe_index`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEquipmentRecipe {
-    pub name: &'static str,
-    pub description: &'static str,
-    pub effects: &'static [EquipmentEffect],
 }
 
 /// An authored equipment set: its member recipes and the bonus effects granted while all of

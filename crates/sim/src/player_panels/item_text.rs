@@ -7,7 +7,7 @@ mod hagatha;
 use crate::Vec2;
 use crate::boneyard::tutorial::{TUTORIAL_AMULET_DESCRIPTION, tutorial_amulet_identity_matches};
 use crate::economy::{
-    DOWSING_EQUIPMENT_RECIPES, HAGATHA_PERKS, HubEconomyContext, HubEconomyState, HubInventoryItem,
+    EQUIPMENT_RECIPES, HAGATHA_PERKS, HubEconomyContext, HubEconomyState, HubInventoryItem,
     HubItemKind, ItemRarity, equipment_meets_level_requirement, equipment_required_level,
 };
 use crate::equipment::{
@@ -323,7 +323,7 @@ pub fn hub_item_tooltip_lines(
                 } else {
                     BODY
                 },
-                ..HubTooltipLine::body(format!("  {}", DOWSING_EQUIPMENT_RECIPES[*index].name))
+                ..HubTooltipLine::body(format!("  {}", EQUIPMENT_RECIPES[*index].name))
             });
         }
         lines.push(HubTooltipLine::body(""));

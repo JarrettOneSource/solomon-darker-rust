@@ -78,7 +78,7 @@ fn current_profile_envelopes_preserve_advanced_unlocks_and_hydrate_historical_sa
 fn portable_item_rarities_keep_source_spelling_and_read_earlier_rust_exports() {
     use solomon_assets::website_save::{CreateSaveOptions, SaveIntegrity, SaveMetadata};
     use solomon_sim::economy::{
-        DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubItemKind,
+        EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HubItemKind,
         create_equipment_inventory_item, create_fomentius_inventory_item,
     };
     use solomon_sim::modding::LuaObject;
@@ -96,8 +96,8 @@ fn portable_item_rarities_keep_source_spelling_and_read_earlier_rust_exports() {
         FOMENTIUS_STOCK_DEFINITIONS.iter().find(|item| item.kind == HubItemKind::Sack).unwrap();
     let mut inner = create_fomentius_inventory_item(sack, 1001, 1);
     inner.contents = Some(vec![
-        create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[0], 1002),
-        create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[1], 1003),
+        create_equipment_inventory_item(&EQUIPMENT_RECIPES[0], 1002),
+        create_equipment_inventory_item(&EQUIPMENT_RECIPES[1], 1003),
     ]);
     let mut outer = create_fomentius_inventory_item(sack, 1000, 1);
     outer.contents = Some(vec![inner]);
@@ -105,11 +105,10 @@ fn portable_item_rarities_keep_source_spelling_and_read_earlier_rust_exports() {
         let participant = session.participants.get_mut("local").unwrap();
         let economy = &mut participant.player.economy;
         economy.storage = vec![outer];
-        economy.equipment.robe =
-            Some(create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[1], 1004));
+        economy.equipment.robe = Some(create_equipment_inventory_item(&EQUIPMENT_RECIPES[1], 1004));
         economy.equipment.rings[0] =
-            Some(create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[0], 1005));
-        economy.backpack.push(create_equipment_inventory_item(&DOWSING_EQUIPMENT_RECIPES[0], 1006));
+            Some(create_equipment_inventory_item(&EQUIPMENT_RECIPES[0], 1005));
+        economy.backpack.push(create_equipment_inventory_item(&EQUIPMENT_RECIPES[0], 1006));
         economy.next_item_id = 1010;
     }
     let metadata = SaveMetadata {

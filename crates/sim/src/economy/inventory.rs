@@ -7,12 +7,12 @@ use crate::appearance::StarterEquipmentAppearance;
 use crate::modding::inventory::mod_item_inventory_identity_is_valid;
 
 use super::{
-    BoastSelection, BoastState, DOWSING_EQUIPMENT_RECIPES, EquipmentRecipe, EquipmentSlot,
-    EquipmentType, FomentiusStockDefinition, HUB_INVENTORY_SLOT_CAPACITY,
-    HUB_SACK_CHILD_REPLICATION_LIMIT, HUB_SACK_REPLICATION_DEPTH_LIMIT, HUB_STORAGE_SLOT_CAPACITY,
-    HubEconomyContext, HubEconomyRejection as Rejection, HubEconomyResult, HubEconomyState,
-    HubEquipmentState, HubInventoryItem, HubItemKind, LOOT_BACKPACK_REPLICATION_LIMIT,
-    SkillBookDefinition, TransferDirection,
+    BoastSelection, BoastState, EQUIPMENT_RECIPES, EquipmentRecipe, EquipmentSlot, EquipmentType,
+    FomentiusStockDefinition, HUB_INVENTORY_SLOT_CAPACITY, HUB_SACK_CHILD_REPLICATION_LIMIT,
+    HUB_SACK_REPLICATION_DEPTH_LIMIT, HUB_STORAGE_SLOT_CAPACITY, HubEconomyContext,
+    HubEconomyRejection as Rejection, HubEconomyResult, HubEconomyState, HubEquipmentState,
+    HubInventoryItem, HubItemKind, LOOT_BACKPACK_REPLICATION_LIMIT, SkillBookDefinition,
+    TransferDirection,
 };
 
 /// Longest name a Sack rename accepts, in UTF-16 code units. Names a Sack already has are not
@@ -1127,7 +1127,7 @@ impl HubEconomyState {
 pub fn equipment_required_level(item: &HubInventoryItem) -> u32 {
     let recipe_level = item
         .recipe_index
-        .and_then(|index| DOWSING_EQUIPMENT_RECIPES.get(index))
+        .and_then(|index| EQUIPMENT_RECIPES.get(index))
         .map_or(0, |recipe| recipe.level);
     item.generated_level.unwrap_or(recipe_level)
 }

@@ -4,7 +4,7 @@ mod support;
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, EquipmentSlot, EquipmentType, FOMENTIUS_STOCK_DEFINITIONS,
+    EQUIPMENT_RECIPES, EquipmentSlot, EquipmentType, FOMENTIUS_STOCK_DEFINITIONS,
     HubEconomyContext, HubEconomyState, HubInventoryAction, HubInventoryItem,
     create_equipment_inventory_item, create_fomentius_inventory_item,
     normalize_inventory_sack_name, project_inventory_items,
@@ -26,8 +26,7 @@ fn sack(id: u64, contents: Vec<HubInventoryItem>) -> HubInventoryItem {
 }
 
 fn equipment(kind: EquipmentType, id: u64) -> HubInventoryItem {
-    let recipe =
-        DOWSING_EQUIPMENT_RECIPES.iter().find(|recipe| recipe.equipment_type == kind).unwrap();
+    let recipe = EQUIPMENT_RECIPES.iter().find(|recipe| recipe.equipment_type == kind).unwrap();
     create_equipment_inventory_item(recipe, id)
 }
 
@@ -106,7 +105,7 @@ fn current_unequip_preserves_destination_swaps_capacity_and_rejection_order() {
         let mut state = HubEconomyState::new(1, WizardElement::Ether);
         state.backpack = vec![sack(100, vec![potion(103)]), potion(102)];
         if expected["mode"] == "full-visible" {
-            let recipe = DOWSING_EQUIPMENT_RECIPES
+            let recipe = EQUIPMENT_RECIPES
                 .iter()
                 .find(|recipe| recipe.equipment_type == EquipmentType::Ring)
                 .unwrap();

@@ -3,7 +3,7 @@
 
 use solomon_sim::audio::AudioCue;
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, HAGATHA_PERKS, HubInventoryAction, HubInventoryItem, HubTraderId,
+    EQUIPMENT_RECIPES, HAGATHA_PERKS, HubInventoryAction, HubInventoryItem, HubTraderId,
     TransferDirection, create_equipment_inventory_item, project_inventory_root_slots,
 };
 use solomon_sim::hub::interaction::HubInteractionId;
@@ -153,7 +153,7 @@ impl PlayerPanels {
                         |offer| {
                             (
                                 create_equipment_inventory_item(
-                                    &DOWSING_EQUIPMENT_RECIPES[offer.recipe_index],
+                                    &EQUIPMENT_RECIPES[offer.recipe_index],
                                     offer.id,
                                 ),
                                 Some(offer.price),
@@ -309,7 +309,7 @@ impl PlayerPanels {
                     HubTraderId::Shlorio => {
                         if let Some(offer) = s.economy.dowsing_offers.get(index) {
                             generated = create_equipment_inventory_item(
-                                &DOWSING_EQUIPMENT_RECIPES[offer.recipe_index],
+                                &EQUIPMENT_RECIPES[offer.recipe_index],
                                 offer.id,
                             );
                             (Some(&generated), offer.price)
