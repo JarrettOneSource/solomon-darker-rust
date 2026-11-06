@@ -1,4 +1,4 @@
-//! Seeded retail TimeLine compilation from `core-kernels/boneyard-wave-timeline.ts`.
+//! Seeded compilation of the opening and each retail wave.txt row into TimeLine spawn bursts.
 
 use crate::Rng;
 use crate::enemies::{EnemyFlag, EnemyToken, SpawnLocationPolicy, SpawnPositionPolicy};
@@ -50,8 +50,9 @@ pub fn compile_boneyard_opening(rng: &mut Rng) -> CompiledOpening {
     }
 }
 
-/// `GenerateTimeline` consumes a group-cost budget and merges consecutive samples of the
-/// same GROUP. Even discarded native draws remain in the seeded stream.
+/// Like the original game's `GenerateTimeline`, this consumes a group-cost budget and merges
+/// consecutive samples of the same GROUP. Even discarded native draws remain in the seeded
+/// stream.
 #[must_use]
 pub fn compile_boneyard_wave_section(
     wave: &WaveDef,

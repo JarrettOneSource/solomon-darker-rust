@@ -1,6 +1,7 @@
-//! The owned content engines, restore transaction and gameplay filters from
-//! `host/prepared-mod-host.ts`. The live Lua session is borrowed only while its
-//! checkpoint is read/restored; actual stock players stay in `GameSession`.
+//! The prepared mod content engines, their all-or-nothing checkpoint restore, and the
+//! gameplay hooks they give the game session: loot, damage and mana filters, consumables and
+//! Boasts. The Lua session is borrowed only to read or restore its checkpoint; stock players
+//! stay in `GameSession`.
 
 use std::sync::Arc;
 
@@ -158,8 +159,8 @@ impl PreparedModRuntime {
 
 impl GameSimulationExtensions for PreparedModRuntime {
     fn create_loot_items(&self, input: GameSimulationLootInput) -> Vec<HubInventoryItem> {
-        // Source enemy loot supplies its native semantic word, at most 30 bits.
-        // This cannot fail the catalog's safe-integer seed contract.
+        // Enemy loot supplies a semantic RNG word of at most 30 bits, which always
+        // passes the catalog's safe-integer seed check.
         self.content
             .create_loot_items(input.actor_seed, input.enemy_token == EnemyToken::Demon)
             .expect("enemy loot supplies a native semantic seed")
@@ -201,7 +202,9 @@ impl GameSimulationExtensions for PreparedModRuntime {
     }
 }
 
-/// Source slot and affix iteration order is observable for mixed add/set/multiply.
+/// Applies the equipped items' mod affix modifiers for `key` in slot order (amulet, hat, three
+/// rings, robe, weapon) and then affix order; the order matters when add, multiply and set
+/// mix. A negative result becomes zero, and NaN stays NaN.
 pub fn filter_equipment_modifiers(equipment: &HubEquipmentState, key: &str, source: f64) -> f64 {
     let mut value = source;
     let items = [

@@ -12,6 +12,8 @@ use super::model::replacement;
 use super::model::{Intent, Model, Receipt, byte_index};
 use super::{EditorDescriptor, TextSelection};
 
+/// The focused field's provisional input state: its descriptor, draft model, active pointer
+/// and preferred caret x for vertical movement.
 pub(crate) struct Session {
     pub descriptor: EditorDescriptor,
     pub model: Model,

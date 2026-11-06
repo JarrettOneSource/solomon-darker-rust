@@ -116,8 +116,8 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
                 "spells":{"nextId":state.next_id,"projectiles":state.projectiles.iter().map(rows::projectile).collect::<Vec<_>>(),"transients":state.transients.iter().map(rows::transient).collect::<Vec<_>>()},
                 "rng":{"indexA":rng.index_a,"indexB":rng.index_b,"words":rng.words.as_slice()},"order":{"actor":order.next_actor_ordinal,"transient":order.next_transient_ordinal},"emissions":emissions});
             let mut expected = expected.clone();
-            // Steam stores an unrounded atan2 heading. Its source-sized floats,
-            // queue membership and every shared random word remain exact below.
+            // Steam stores an unrounded atan2 heading. Its other floats, queue
+            // membership and every shared random word remain exact below.
             for (index, actor) in
                 actual["spells"]["transients"].as_array().unwrap().iter().enumerate()
             {
@@ -139,7 +139,7 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
             qualify_boulder_motion(&mut expected, blocked && tick > release);
             if case["name"] == "weld-1005-empty" {
                 // Keep frozen fixture bytes and every other trajectory field.
-                // Report133 native evidence supersedes these two weak fields;
+                // Retail evidence at 0x00543266 supersedes these two weak fields;
                 // native_steam_low_mana covers the replacement contact clock.
                 for (actual, expected) in actual["spells"]["transients"]
                     .as_array_mut()
@@ -162,8 +162,8 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
     }
 }
 
-// Retail Report131 recovery invalidates the old clock and released trajectory,
-// while these journey recordings still assert all ownership, queues, IDs, RNG,
+// Recovered retail Ethereal Boulder behavior invalidates the recorded clock and released
+// trajectory, while these journey recordings still assert all ownership, queues, IDs, RNG,
 // mana, animation, held growth, damage pools and scene teardown epochs.
 fn qualify_boulder_motion(frame: &mut Value, terrain_after_release: bool) {
     for actor in frame["spells"]["transients"].as_array_mut().unwrap() {

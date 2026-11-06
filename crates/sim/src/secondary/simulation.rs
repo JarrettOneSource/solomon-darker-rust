@@ -12,6 +12,8 @@ use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::{Rng, Vec2};
 
+/// The whole secondary simulation: live actors, events, per-player state, target effects,
+/// camera proposals and its own RNG.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondarySimulationState {
@@ -31,6 +33,7 @@ pub struct SecondarySimulationState {
     pub target_effects: Vec<SecondaryTargetEffectState>,
 }
 
+/// The camera displacement retained for one world, with the tick it was proposed.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryCameraDisplacement {
@@ -39,6 +42,7 @@ pub struct SecondaryCameraDisplacement {
     pub world_key: String,
 }
 
+/// A Fire burn to apply to a target: damage, owner, skill and rank.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryFireBurnInput {
     pub damage: f64,
@@ -49,6 +53,7 @@ pub struct SecondaryFireBurnInput {
     pub world_key: String,
 }
 
+/// An Ether burn to apply to a target: owner and rank.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryEtherBurnInput {
     pub owner_id: String,
@@ -57,12 +62,14 @@ pub struct SecondaryEtherBurnInput {
     pub world_key: String,
 }
 
+/// How damage to a player was split between absorption and health.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryPlayerDamageResult {
     pub absorbed_damage: f64,
     pub health_damage: f64,
 }
 
+/// How a player's damage is presented: physical or not, with Enhanced Effects or not.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SecondaryPlayerDamagePresentation {
     pub physical: bool,
@@ -75,6 +82,7 @@ impl Default for SecondaryPlayerDamagePresentation {
     }
 }
 
+/// Damage arriving at a player, with where and how to present it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryPlayerDamageInput<'a> {
     pub player_id: &'a str,
@@ -85,6 +93,8 @@ pub struct SecondaryPlayerDamageInput<'a> {
     pub presentation: SecondaryPlayerDamagePresentation,
 }
 
+/// The outcome of damaging a Golem: ignored or killed, its owner, and damage reflected
+/// back.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryGolemDamageResult {
     pub ignored: bool,
@@ -112,7 +122,7 @@ impl SecondarySimulationState {
     }
 
     /// Retain the strongest proposal per world. A replacement moves to the tail;
-    /// equal magnitudes keep the earlier proposal, as in the Source Region queue.
+    /// equal magnitudes keep the earlier proposal.
     pub fn record_camera_displacement(&mut self, world_key: &str, displacement: Vec2, tick: u64) {
         record_camera_displacement(&mut self.camera_displacements, world_key, displacement, tick);
     }
@@ -123,8 +133,8 @@ impl SecondarySimulationState {
         self.events.push(event);
     }
 
-    /// `emitNativeSecondaryEvent` writes these flashes unconditionally. Call at
-    /// the producer boundary, before a different family's writer can interleave.
+    /// Every event's flash is written unconditionally. Call at the producer boundary,
+    /// before a different family's writer can interleave.
     pub fn write_screen_flashes_since(
         &self,
         first_event_id: u64,
@@ -203,7 +213,7 @@ impl SecondarySimulationState {
         output
     }
 
-    /// `activateNativeSecondaryBeltSkill`: one immediate constructor transaction.
+    /// Activates a belt skill as one immediate constructor transaction.
     /// Existing actors, target effects, cooldowns and cast actions do not advance.
     pub fn activate_belt_skill(
         &mut self,

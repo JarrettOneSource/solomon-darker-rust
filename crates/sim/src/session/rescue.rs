@@ -1,10 +1,11 @@
-//! Accepted rescue protection from the normal and Game Over `game-simulation.ts` phases.
+//! Accepted rescue protection in the normal and Game Over tick phases, and direct authored
+//! damage to players.
 
 use super::{GameSession, ordered_participants_mut};
 
 impl GameSession {
-    /// `damageGameSimulationPlayer`: direct authored damage uses the actual
-    /// participant's receiver, then publishes its accepted loss/rescue effects once.
+    /// Direct authored damage uses the actual participant's receiver, then publishes its
+    /// accepted loss/rescue effects once.
     pub fn damage_player(
         &mut self,
         player_id: &str,

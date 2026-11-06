@@ -1,4 +1,5 @@
-//! World-light collection from `core-server/boneyard-world-light.ts`.
+//! World-light collection: light providers in manager registration order, and the logical
+//! light query that enemy spawning and visibility read.
 //!
 //! Providers keep their native manager registrations. Each participant contributes a stock
 //! view, including participants who are not currently alive; logical spawn queries use the
@@ -25,6 +26,8 @@ use super::lighting::{
 const WORLD_LIGHT_ZOOM: f64 = 1.35;
 const STOCK_VIEWPORT: Vec2 = Vec2::new(1600.0, 900.0);
 
+/// A player as the world light sees it: position, facing, weapon pulse and overlay phase,
+/// light registration and viewport.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldLightPlayer<'a> {
     pub id: &'a str,
@@ -44,6 +47,8 @@ pub struct WorldLightOwner {
     pub sources: Vec<BoneyardLightSource>,
 }
 
+/// A MiscLight owner, with the append ordinal, birth tick and ID that order it within its
+/// registration.
 #[derive(Clone, Debug)]
 pub struct WorldMiscLightOwner {
     pub birth_tick: i64,
@@ -52,6 +57,7 @@ pub struct WorldMiscLightOwner {
     pub owner: WorldLightOwner,
 }
 
+/// The scene inputs of a world light query: arena and camera bounds and the lantern's light.
 #[derive(Clone, Copy, Debug)]
 pub struct WorldLightScene {
     pub bounds: BoneyardBounds,
@@ -60,6 +66,8 @@ pub struct WorldLightScene {
     pub lantern_light_registration: Option<PainterRegistration>,
 }
 
+/// The logical world light seen from every player's camera. Light and point-gain queries
+/// take the maximum over the cameras.
 #[derive(Clone, Debug)]
 pub struct BoneyardWorldLightQuery {
     pub cameras: Vec<BoneyardBounds>,
@@ -151,7 +159,8 @@ impl BoneyardWorldLightQuery {
         scalar
     }
 
-    /// The source exposes concatenated accepted providers, including one copy per camera.
+    /// Every camera's accepted sources, concatenated, so a source two cameras accept appears
+    /// twice.
     pub fn accepted_sources(&self) -> impl Iterator<Item = &BoneyardLightSource> {
         self.indices.iter().flat_map(|index| index.accepted_sources())
     }
@@ -167,7 +176,9 @@ impl BoneyardWorldLightQuery {
     }
 }
 
-/// `primary-spell-targeting.ts::nativePrimaryViewBounds`, including each float32 store.
+/// A player's primary view: the viewport divided by `scale`, centred on `focus` but kept
+/// inside `bounds` (or centred on them when they are smaller), then padded. Each stored value
+/// is rounded to single precision.
 #[must_use]
 pub fn primary_view_bounds(
     bounds: BoneyardBounds,

@@ -4,6 +4,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+/// A text selection in UTF-16 indices: the fixed anchor and the moving focus.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Selection {
     pub anchor: usize,
@@ -24,7 +25,7 @@ impl Selection {
     }
 }
 
-/// Field-owned Source rules run in native dispatch as well as chronological UI
+/// A field's own rules run in native dispatch as well as chronological UI
 /// replay. Neither path duplicates or guesses the field's actual validation.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Rules {
@@ -54,6 +55,7 @@ impl Rules {
     }
 }
 
+/// The kind of consecutive edit that undo groups into one step.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditGroup {
     Typing,
@@ -63,6 +65,7 @@ pub enum EditGroup {
     ForwardWord,
 }
 
+/// One editing intent: replace, select, clipboard, undo/redo, submit or IME composition.
 #[derive(Clone, Debug)]
 pub enum Intent {
     Replace { range: Selection, text: String, group: Option<EditGroup> },
@@ -77,6 +80,7 @@ pub enum Intent {
     CompositionEnd { cancelled: bool },
 }
 
+/// One dispatched edit: its owner, sequence, text before and after, selection and intent.
 #[derive(Clone, Debug)]
 pub struct Receipt {
     pub owner: Option<super::EditorOwner>,
@@ -150,6 +154,7 @@ impl History {
     }
 }
 
+/// One field's accepted editing state: its value, undo history and IME composition.
 #[derive(Clone)]
 pub struct Model {
     value: Value,
@@ -159,6 +164,8 @@ pub struct Model {
     pub composition: Option<Selection>,
 }
 
+/// What applying an edit did: changed or submitted the value, a rejection reason, or copied
+/// text.
 #[derive(Default)]
 pub struct Change {
     pub changed: bool,
@@ -337,8 +344,8 @@ impl Model {
                 self.value.selection = Selection::caret(boundary(&self.value.text, position));
             }
             Err(reason) => {
-                // Source restores the accepted native value on rejection. That
-                // setter moves the caret to its end and retires native history.
+                // A rejected edit restores the accepted value: the caret moves to
+                // its end and the edit history is cleared.
                 self.value.selection = Selection::caret(self.value.text.encode_utf16().count());
                 self.history = History::default();
                 self.composition = None;
@@ -439,8 +446,8 @@ mod tests {
 
     #[test]
     fn rejected_native_name_restore_resets_caret_and_native_undo_history() {
-        // c140 Create's input listener restores `.value = accepted`; the native
-        // browser oracle records caret-at-end and no prior undo/redo afterward.
+        // Restoring the accepted name leaves the caret at the end and no undo/redo
+        // history, as a browser text input does when its value is set.
         let rules = Rules { validate: Some(create_rule), ..Default::default() };
         let mut model = Model::new("Helvidius");
         model.apply(&insert(1, "Helvidius", Selection::caret(9), "X"), rules, false);

@@ -14,6 +14,7 @@ use browser::ContentCache;
 #[cfg(not(target_arch = "wasm32"))]
 use native::ContentCache;
 
+/// A failure to download or verify mod content, naming the mod when one asset caused it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameModContentLoadError {
     pub mod_id: String,
@@ -45,7 +46,8 @@ pub struct GameContentDownloadProgress<'a> {
     pub total_bytes: u64,
 }
 
-/// The accepted descriptors remain owned by the session; this owner verifies and caches their bytes.
+/// The accepted descriptors remain owned by the session; this owner verifies and caches their
+/// bytes.
 #[derive(Clone)]
 pub struct ModContentCache {
     api: WebsiteApi,

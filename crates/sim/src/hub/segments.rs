@@ -1,5 +1,4 @@
-//! The Hub courtyard's collision segments, copied verbatim from the native-verified table
-//! (`Website/frontend/src/game/core-kernels/hub-collision.ts`, `SEGMENT_COORDINATES`).
+//! The Hub courtyard's collision segments, a table verified against the original game.
 //!
 //! Order matters: the sweep kernel resolves against the first overlapping segment in list
 //! order, so this table must never be sorted or deduplicated.

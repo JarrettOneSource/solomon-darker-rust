@@ -1,4 +1,4 @@
-//! Three native eight-slot hotbars from Website `core-kernels/native-belt.ts`.
+//! The Belt: three eight-slot hotbars of skills, potion aliases and items.
 //! The local command boundary reports invalid bindings without changing an existing slot.
 
 use crate::economy::{
@@ -15,6 +15,7 @@ pub const MANA_BELT_SLOT: usize = 4;
 pub const BELT_ITEM_TYPE_IDS: [u32; 10] =
     [7001, 7002, 7003, 7004, 7005, 7006, 7008, 7009, 7010, 7011];
 
+/// What a Belt slot holds: a skill, the health or mana potion alias, or one owned item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum NativeBeltEntry {
@@ -30,6 +31,7 @@ pub enum NativeBeltEntry {
     },
 }
 
+/// A request to bind a skill (or clear the slot with `None`) or an owned item to a Belt slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BeltCommand {
@@ -37,6 +39,7 @@ pub enum BeltCommand {
     BindItem { item_id: u64, slot: usize },
 }
 
+/// A player's Belt: its three eight-slot hotbars stored as one array, bank by bank.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerBeltComponent {
@@ -48,7 +51,8 @@ pub struct PlayerBeltComponent {
 }
 
 impl PlayerBeltComponent {
-    /// `createNativePlayerBelt`: the first slot is the learned secondary, not the primary attack.
+    /// A fresh Belt: the first slot is the learned secondary, not the primary attack, and
+    /// `HEALTH_BELT_SLOT` and `MANA_BELT_SLOT` hold the potion aliases.
     #[must_use]
     pub fn new(book: &SkillBookState) -> Self {
         let skill_id = book
@@ -64,7 +68,7 @@ impl PlayerBeltComponent {
         Self { entries }
     }
 
-    /// `freezeNativeBelt`: retain current banks and pad an eight-slot legacy belt.
+    /// Retain current banks and pad an eight-slot legacy belt with empty banks.
     /// The accepted component always has three banks, including after old-save restore.
     #[must_use]
     pub fn from_entries(source: &[Option<NativeBeltEntry>]) -> Option<Self> {
@@ -76,7 +80,8 @@ impl PlayerBeltComponent {
         Some(Self { entries })
     }
 
-    /// `migrateSkillQuickbarToNativeBelt`: legacy empty potion cells acquire native aliases.
+    /// Converts a legacy eight-slot skill quickbar. Its empty potion cells acquire the health
+    /// and mana potion aliases.
     #[must_use]
     pub fn from_skill_quickbar(quickbar: [Option<usize>; BELT_SLOT_COUNT]) -> Option<Self> {
         if quickbar.iter().flatten().any(|id| !is_belt_skill(*id)) {
@@ -141,8 +146,8 @@ impl PlayerBeltComponent {
         }
     }
 
-    /// `refreshNativePlayerBelt`: potion aliases survive empty stacks; stale item and skill
-    /// references disappear when ownership changes, including transfers into storage.
+    /// Potion aliases survive empty stacks; stale item and skill references disappear when
+    /// ownership changes, including transfers into storage.
     pub fn refresh(&mut self, book: &SkillBookState, economy: &HubEconomyState) {
         for entry in &mut self.entries {
             let retained = match *entry {
@@ -194,12 +199,14 @@ where
     Ok(belt.entries)
 }
 
+/// The potion a Belt alias draws from: health or mana.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BeltPotionKind {
     Health,
     Mana,
 }
 
+/// The backpack's total count of one potion kind and its first matching item, if any.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BeltPotionProjection<'a> {
     pub count: u64,

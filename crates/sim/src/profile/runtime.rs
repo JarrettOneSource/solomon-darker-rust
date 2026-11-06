@@ -1,5 +1,6 @@
-//! Canonical concentrations, equipment refresh and derived player stats from Website
-//! `core-kernels/player-skill-runtime.ts`. Resource state remains in PlayerCombatState.
+//! Canonical concentrations, equipment refresh, derived player stats and per-tick skill
+//! effects such as Meditation, Hurricane charge and Harden. Resource state remains in
+//! PlayerCombatState.
 
 mod defenses;
 pub use crate::hurricane::{HurricaneChargeTick, hurricane_charge_tick};
@@ -26,6 +27,7 @@ use crate::float::fround;
 pub const CONCENTRATABLE_SKILL_IDS: [usize; 14] =
     [57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69, 70, 71];
 
+/// One of a wizard's two concentration slots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PlayerConcentrationSlot {
@@ -33,6 +35,8 @@ pub enum PlayerConcentrationSlot {
     B,
 }
 
+/// A wizard's skill state that changes during play: concentrations, equipment modifiers,
+/// Harden, Hurricane charge, Meditation timers and Mindstar.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerSkillRuntimeState {
@@ -52,6 +56,7 @@ pub struct PlayerSkillRuntimeState {
     pub staff_melee_alternate: bool,
 }
 
+/// Every combat stat derived from a wizard's skills, equipment and perks.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerSkillDerivedStats {
     pub cast_progress_factor: f64,
@@ -93,6 +98,8 @@ pub struct PlayerSkillDerivedStats {
     pub staff_equipped: bool,
 }
 
+/// What a wizard is doing this tick, as the skill runtime needs it: acting, moving and
+/// primary casting.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PlayerSkillActivity {
     pub acting: bool,
@@ -102,6 +109,7 @@ pub struct PlayerSkillActivity {
     pub primary_underpowered: bool,
 }
 
+/// One tick's mana recovery: the base rate and the Meditation rate.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerSkillRuntimeTickResult {
     pub base_mana_recovery_per_tick: f64,
@@ -718,6 +726,7 @@ pub fn refresh_player_combat_from_skill_stats(
     combat.maximum_mana = derived.maximum_mana;
 }
 
+/// One of the two alternating staff melee swings, primary or secondary.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayerStaffDamageLane {
@@ -735,6 +744,7 @@ impl PlayerStaffDamageLane {
     }
 }
 
+/// The result of a staff attack: a normal hit or one of the four flailing outcomes.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayerStaffAttackOutcome {
@@ -745,6 +755,7 @@ pub enum PlayerStaffAttackOutcome {
     Whirl,
 }
 
+/// A resolved staff attack: its outcome and action timing factor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerStaffAttackResult {
     pub action_timing_factor: f64,

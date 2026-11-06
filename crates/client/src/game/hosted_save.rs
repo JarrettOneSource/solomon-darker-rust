@@ -1,4 +1,4 @@
-//! State transitions from Website `save/game-save-coordinator.ts`.
+//! The hosted save coordinator: one write at a time for the host's save stream.
 //! One writer owns the revision. Arrivals during that write share the newest pending
 //! document, while each accepted checkpoint keeps its own completion outcome.
 
@@ -6,6 +6,7 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use crate::storage::StoredSave;
 
+/// Where a save write stands: pending, committed, or failed with an error.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum SaveOutcome {
     Pending,
@@ -18,6 +19,7 @@ struct Accepted {
     receipt: SaveReceipt,
 }
 
+/// A shared handle to one write's outcome.
 #[derive(Clone, Debug)]
 pub(super) struct SaveReceipt(Rc<RefCell<SaveOutcome>>);
 
@@ -31,6 +33,8 @@ impl SaveReceipt {
     }
 }
 
+/// One write to perform: the newest document, the stored revision it replaces, whether it
+/// is unchanged, and the receipts it settles.
 pub(super) struct SaveBatch {
     pub document: String,
     pub revision: u64,
@@ -38,6 +42,8 @@ pub(super) struct SaveBatch {
     receipts: Vec<SaveReceipt>,
 }
 
+/// Orders hosted save writes: the stored record, accepted checkpoints by sequence, and the
+/// active, ready and pending batches.
 pub(super) struct HostedSaveCoordinator {
     pub record: Option<StoredSave>,
     stream: Option<u64>,
@@ -111,8 +117,8 @@ impl HostedSaveCoordinator {
 
     fn enqueue(&mut self, document: String, receipt: SaveReceipt) {
         self.last_outcome = receipt.clone();
-        // Source accept() begins the first write synchronously. Reserve it before
-        // returning to the browser's message drain, even though I/O starts after it.
+        // Reserve the first write immediately, before returning to the browser's
+        // message drain, even though its I/O starts later.
         let slot =
             if !self.active && self.ready.is_none() { &mut self.ready } else { &mut self.pending };
         let pending = slot.get_or_insert_with(|| SaveBatch {
@@ -157,7 +163,7 @@ impl HostedSaveCoordinator {
         self.accepted.get(&sequence).map(|checkpoint| checkpoint.receipt.clone())
     }
 
-    /// Source `idle()` captures the latest requested write, including a failed one.
+    /// The receipt of the latest requested write, including a failed one.
     pub fn idle(&self) -> SaveReceipt {
         self.last_outcome.clone()
     }

@@ -1,4 +1,5 @@
-//! Weld display fields from `client/primary-spell-transient-interpolation.ts`.
+//! Which fields of a Weld world actor, including Hail children and persistent actors,
+//! blend between two snapshots.
 
 use solomon_sim::Vec2;
 use solomon_sim::spells::weld::{

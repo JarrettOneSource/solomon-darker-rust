@@ -1,5 +1,5 @@
-//! Exactly-once primary/secondary actor sounds from `primary-spell-audio.ts`.
-//! Only the source's small previous-snapshot cursors are retained, not actor copies.
+//! Exactly-once sounds for primary and secondary spell actors. Only small
+//! previous-snapshot cursors are retained, not actor copies.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -32,6 +32,8 @@ struct GoodImpSoundClock {
     contact: u64,
 }
 
+/// The spell actors and sound counters seen on the previous snapshot, so each birth, impact
+/// or contact sound plays once.
 #[derive(Default)]
 pub(super) struct PrimarySoundMemory {
     ether_blasts: BTreeSet<ActorKey>,
@@ -193,8 +195,8 @@ impl CombatAudioCursor {
             }
         }
 
-        // Preserve the source's separate actor passes: their sound order is observable
-        // when several different effects are born on one accepted snapshot.
+        // Keep one pass per actor kind: sound order is observable when several different
+        // effects are born on one accepted snapshot.
         for actor in frame.primary.transients.iter() {
             if let PrimarySpellTransient::EtherBlast(blast) = actor
                 && blast.common.world_key == world_key
@@ -475,8 +477,8 @@ fn earth_impact(output: &mut CombatAudioOutput, charge: f64, volume: f64) {
     play(output, AudioCue::StoneBreak, earth_boulder_stone_break_pitch(charge), volume);
 }
 
-/// `primary-spell-ether-native.ts::nativeEtherImpactPitch`: a presentation-only hash of
-/// the accepted actor ID. It consumes no world entropy and narrows at the source fround.
+/// A presentation-only Ether impact pitch hashed from the accepted actor ID. It consumes no
+/// world entropy, and the result is narrowed to single precision.
 #[must_use]
 pub fn ether_impact_pitch(id: u64) -> f64 {
     let mut value = (id as u32).wrapping_mul(0x9e3779b1) ^ 0xc2b2ae35;

@@ -1,5 +1,5 @@
-//! The existing standalone supervisor runs in one application-owned thread.
-//! Its route is ready before admission; the native client retains source-save ownership.
+//! Runs the standalone supervisor on a loopback port in one application-owned thread.
+//! Its route is ready before admission; the client, not this authority, keeps the saves.
 
 use std::net::TcpListener;
 use std::path::PathBuf;
@@ -18,6 +18,7 @@ use solomon_launcher::{
     transport::{NativeServer, TransportConfig},
 };
 
+/// The desktop's own game authority: a standalone supervisor thread and its loopback endpoint.
 pub struct LocalAuthority {
     endpoint: DesktopEndpoint,
     stop: Arc<AtomicBool>,

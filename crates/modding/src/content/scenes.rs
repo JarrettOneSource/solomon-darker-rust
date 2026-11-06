@@ -1,4 +1,5 @@
-//! Scenes, shops, Boasts and UI definitions from `mod-content-catalog.ts`.
+//! Validation of Boneyard, Boast, room, scene, shop and UI definitions for the prepared mod
+//! catalog.
 
 use std::collections::BTreeSet;
 

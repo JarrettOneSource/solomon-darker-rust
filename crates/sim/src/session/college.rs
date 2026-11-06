@@ -1,4 +1,5 @@
-//! Participant College admission and loadout commands from `game-simulation.ts`.
+//! Participant College admission and loadout commands: the College intro, declining the
+//! Tutorial and confirming a loadout.
 
 use super::*;
 use crate::game_run::GameRunPhase;
@@ -125,6 +126,6 @@ fn reset_loadout_character(participant: &mut SessionParticipant) {
         transition: participant.wizard.transition,
         ..HubWizard::at(participant.wizard.position)
     };
-    // replacePlayerLoadout installs its selected primary before the next cast epoch.
+    // Replacing the loadout installs its selected primary before the next cast epoch.
     super::lifecycle::reset_selected_primary(&mut participant.wizard, &participant.player);
 }

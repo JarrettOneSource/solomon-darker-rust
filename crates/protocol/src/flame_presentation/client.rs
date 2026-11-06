@@ -1,5 +1,5 @@
-//! Current Source `client/flame-presentation.ts`: connection births augment only
-//! sampled display spells. A reset never invents missing legacy birth samples.
+//! Client-side replay of Flame Lash presentation births. Received births augment only
+//! sampled display spells; a reset never invents birth samples that actors lack.
 
 use std::collections::BTreeMap;
 
@@ -14,6 +14,7 @@ use super::{
     materialize_flame_presentation,
 };
 
+/// A client's received Flame births, merged into the spells of each sampled display frame.
 pub struct RetainedFlamePresentation {
     replay: FlamePresentationReplay,
     reset_tick: u64,

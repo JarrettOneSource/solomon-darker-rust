@@ -1,4 +1,4 @@
-//! `player-staff-combat-system.ts`: one ordered host over the canonical transient queue.
+//! Staff combat: one ordered host over the canonical transient queue.
 
 use super::*;
 use crate::Vec2;
@@ -14,6 +14,8 @@ use crate::spells::model::PrimarySpellTransient;
 use crate::spells::staff::*;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// What the staff step leaves for later phases: acting players, camera and target
+/// displacements, dazzles, heading changes and pike-break feedback.
 #[derive(Default)]
 pub(super) struct StaffTickResult {
     pub acting_player_ids: BTreeSet<String>,
@@ -344,8 +346,8 @@ impl GameSession {
             }
         }
         let mut accepted = Vec::new();
-        // The source damage host returns on an empty selection. Physical contacts
-        // above still run, and the positive-count kernel must not receive zero.
+        // Damage stops on an empty selection. Physical contacts above still run, and the
+        // positive-count kernel must not receive zero.
         if !selected.is_empty() {
             let damage = staff_contact_damage_per_target(
                 total,

@@ -1,5 +1,4 @@
-//! Illuminated Silk and fragment triangles from `native-silk-presentation.ts`
-//! and `renderer/native-spider-web-views.ts`.
+//! Triangle meshes for Spider webs: lit Silk strands and their fading fragments.
 
 use super::silk::SilkState;
 use super::silk_force::FadeLineState;
@@ -7,6 +6,7 @@ use crate::float::fround;
 use crate::line::{line_color, line_vertices};
 use crate::{Rng, Vec2};
 
+/// A colored triangle mesh for web art: vertices, per-vertex colors and indices.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EnemyWebMesh {
     pub vertices: Vec<Vec2>,
@@ -25,6 +25,7 @@ impl EnemyWebMesh {
     }
 }
 
+/// A Silk strand's mesh with its segment and sparkle counts.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SilkMesh {
     pub mesh: EnemyWebMesh,

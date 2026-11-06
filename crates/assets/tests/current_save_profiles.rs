@@ -1,4 +1,4 @@
-//! Current Website profile contracts and genuine historical profile inputs.
+//! Profile contracts recorded from the Website client, and genuine historical profile inputs.
 
 use serde_json::{Value, json};
 use solomon_assets::website_save;

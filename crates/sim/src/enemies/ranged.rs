@@ -1,8 +1,8 @@
-//! Archer/Mage attack range and native Arrow volley construction.
+//! Archer and Mage attack range, and Archer volley construction.
 //!
-//! Reference: Website `core-kernels/native-enemy-targeting.ts`. Shared randomness owns
-//! shot pitch and the random accuracy selector; the retained private action seed owns aim,
-//! fan spread, speed and lifetime. Their draw order must remain independent.
+//! The shared RNG owns shot pitch and the random accuracy selector; the retained private
+//! action seed owns aim, fan spread, speed and lifetime. Their draw orders must remain
+//! independent.
 
 use super::config::ArrowType;
 use crate::float;
@@ -10,12 +10,15 @@ use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::{Rng, Vec2};
 
+/// The two ranged enemy families, which roll their attack ranges from different bases.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RangedFamily {
     Archer,
     Mage,
 }
 
+/// A ranged enemy's attack range. Range mode 3 starts it shortened, and `range_easy_pending`
+/// marks that the first volley restores it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RangedAttackRange {
     pub range: f64,
@@ -57,6 +60,8 @@ pub fn restore_range_easy_after_volley(range: &mut RangedAttackRange) {
     }
 }
 
+/// What an Archer volley needs: accuracy and multi-arrow modes, arrow type and extra arrows,
+/// origin, private action seed, and the target's position and velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArcherVolleyRequest {
     pub accuracy_mode: u8,
@@ -69,6 +74,7 @@ pub struct ArcherVolleyRequest {
     pub target_velocity_per_tick: Vec2,
 }
 
+/// One arrow of an Archer volley: its type, heading, speed, lifetime and starting position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArcherArrowBirth {
     pub arrow_type: ArrowType,
@@ -79,6 +85,8 @@ pub struct ArcherArrowBirth {
     pub visual_heading_deg: f64,
 }
 
+/// An Archer volley: its arrows, shot pitch, the accuracy mode actually used and the scatter
+/// aim offset.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArcherVolley {
     pub aim_offset_radius: f64,
@@ -87,7 +95,8 @@ pub struct ArcherVolley {
     pub shot_pitch: f64,
 }
 
-/// `nativeArcherFanOffset`: centre, then alternating left/right rays ten degrees apart.
+/// The heading offset of a volley's arrow by index: centre, then alternating left/right rays
+/// ten degrees apart.
 #[must_use]
 pub fn archer_fan_offset(index: usize) -> f64 {
     if index == 0 {
@@ -97,7 +106,8 @@ pub fn archer_fan_offset(index: usize) -> f64 {
     if index % 2 == 1 { -magnitude } else { magnitude }
 }
 
-/// `buildNativeArcherVolley`, including leading/scatter/random aim and fan gate draws.
+/// Builds an Archer volley, including the leading, scatter and random aim and the fan gate
+/// draws.
 #[must_use]
 pub fn build_archer_volley(request: ArcherVolleyRequest, shared_rng: &mut Rng) -> ArcherVolley {
     assert!(request.extra_arrows <= 8, "Archer extra-arrow count must be within 0..8");

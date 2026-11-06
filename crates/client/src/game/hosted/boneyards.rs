@@ -1,6 +1,7 @@
-//! Rust GPU `DarkCloudBoneyards` / installed `BoneyardLibrary` authoring shelf.
-//! Editor documents and cloud rows use their ordinary stores and one-use bridge;
-//! the external Website editor retains all editing and disposable Test ownership.
+//! The Dark Cloud's Boneyard library shelf: local and cloud drafts with edit, test,
+//! delete and import actions. Editor documents and cloud rows use their ordinary stores
+//! and one-use bridge; the external Website editor retains all editing and disposable
+//! Test ownership.
 mod store;
 
 use crate::{
@@ -66,6 +67,8 @@ enum Completion {
         result: Result<String, String>,
     },
 }
+/// The Boneyard library shelf: local and cloud drafts, row actions in progress, the import
+/// file input and the Website API.
 pub(super) struct BoneyardLibrary {
     window: Window,
     api: WebsiteApi,
@@ -480,7 +483,7 @@ impl BoneyardLibrary {
     ) -> Result<(), String> {
         let origin = ui.cursor().min;
         let narrow = frame.ctx.input(|input| input.content_rect().width() <= 700.0);
-        // Source title is 252px; its fixed tools are 390px with a 24px header gap.
+        // The title is 252px and the fixed tools 390px, with a 24px header gap.
         let wrapped = narrow || width < 666.0;
         let columns = if narrow && width < 310.0 { 1 } else { 2 };
         let header_height = if wrapped { if columns == 1 { 134.0 } else { 80.0 } } else { 44.0 };
@@ -811,7 +814,7 @@ fn note(ui: &mut Ui, text: &str, width: f32) {
         Color32::from_rgb(178, 167, 141),
         width - 20.0,
     );
-    // Source's 8px note margin collapses with the heading's 6px bottom margin.
+    // The note's 8px margin collapses with the heading's 6px bottom margin.
     let (_, r) = ui.allocate_space(Vec2::new(width, galley.rows.len() as f32 * 21.0 + 2.0));
     ui.painter().galley(r.min + Vec2::new(10.0, 2.0), galley, Color32::from_rgb(178, 167, 141));
 }

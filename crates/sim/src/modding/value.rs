@@ -1,8 +1,9 @@
-//! JSON-compatible Lua values from `protocol/codecs/lua.ts`.
+//! JSON-compatible Lua values.
 //!
-//! Objects retain insertion order: the source uses JSON equality for state-cell
-//! revisions, so sorting an object's fields would change that observable contract.
+//! Objects retain insertion order: state-cell revisions compare values by their JSON text,
+//! so sorting an object's fields would change that observable contract.
 
+/// A JSON-compatible Lua value: null, a Boolean, a number, a string, an array or an object.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(untagged))]
@@ -63,8 +64,8 @@ impl LuaValue {
     }
 }
 
-/// A source Lua/JSON object. Reassigning a key preserves its original position,
-/// just as assigning a property of an existing JavaScript object does.
+/// A Lua/JSON object whose fields follow JavaScript object property order: reassigning a
+/// key keeps its position, and array-index keys come first in numeric order.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LuaObject {
     fields: Vec<(String, LuaValue)>,
@@ -102,8 +103,8 @@ impl LuaObject {
             }
         }
         if let Some(index) = javascript_array_index(&key) {
-            // JavaScript enumerates array-index properties first, in numeric
-            // order, even when Object.fromEntries inserted them in another order.
+            // Array-index keys come first, in numeric order, whatever order
+            // they were inserted in.
             let position = self.fields.iter().position(|(name, _)| {
                 javascript_array_index(name).is_none_or(|existing| existing > index)
             });

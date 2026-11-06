@@ -1,5 +1,6 @@
-//! Authored stock services, from Website core-kernels/hub-economy.ts.
-//! hub-economy-goldens.json retains every source table row.
+//! Authored economy tables: the Book of Skill items, Fomentius's stock, the equipment recipes
+//! dowsing offers, and Hagatha's perks. The recorded `hub-economy-goldens.json` fixture
+//! holds a copy of every stock, recipe and perk row.
 
 use super::{
     EquipmentRecipe, EquipmentType, FomentiusStockDefinition, HagathaPerkDefinition, HubItemKind,

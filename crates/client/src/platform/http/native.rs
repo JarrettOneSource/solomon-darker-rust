@@ -4,6 +4,8 @@ use futures_lite::AsyncReadExt;
 
 use super::{CachePolicy, ReadError};
 
+/// Sends requests with a blocking `ureq` agent off the main thread, with connect and receive
+/// timeouts.
 #[derive(Clone)]
 pub(super) struct Transport(ureq::Agent);
 
@@ -43,6 +45,7 @@ impl Transport {
     }
 }
 
+/// A desktop HTTP response from `ureq`.
 pub struct Response(ureq::http::Response<ureq::Body>);
 
 impl Response {

@@ -1,5 +1,5 @@
-//! GPU mod detail, screenshot gallery, versions and comments. The controller
-//! ports `DarkCloudModDetail`, `DarkCloudGallery` and `DarkCloudComments` lifetimes.
+//! GPU mod detail, screenshot gallery, versions and comments. Each detail, comment and
+//! comment-change request has an ID, and completions for any other ID are ignored.
 use super::rows::{control_action, ink};
 use super::{super::widgets, art::CloudArt, format, images::CloudImages};
 use crate::gpu_ui::{
@@ -54,6 +54,8 @@ fn detail_header(panel: Rect, viewport: Vec2, fallback_height: Option<f32>) -> D
     }
 }
 
+/// One mod's open detail view: its summary, loaded detail and comments, gallery position,
+/// comment draft and pending requests.
 pub(super) struct ModDetailView {
     pub summary: ModSummary,
     detail: Option<ModDetail>,
@@ -288,8 +290,8 @@ impl ModDetailView {
         let fallback = if native.unsupported_code_points.is_empty() {
             None
         } else {
-            // The Source fallback is ordinary inline text; its CSS whitespace
-            // collapses before normal phone wrapping. Bitmap text stays authored.
+            // A title the bitmap font cannot draw falls back to ordinary text, with
+            // whitespace runs collapsed before wrapping. Bitmap text stays authored.
             let text = summary
                 .name
                 .split([' ', '\t', '\r', '\n', '\u{c}'])
@@ -1218,8 +1220,8 @@ fn empty_panel(
     Ok(())
 }
 
-// DarkCloudGallery.tsx compares the original touch with its released clientX.
-// egui's drag_delta is a per-frame movement and becomes zero on release.
+// A swipe compares the touch's starting x with its release x, because egui's
+// drag_delta is a per-frame movement and becomes zero on release.
 fn gallery_swipe(response: &egui::Response, start_x: &mut Option<f32>) -> Option<&'static str> {
     let cancelled = response.ctx.input(|input| {
         input.events.iter().any(|event| {
@@ -1516,7 +1518,7 @@ mod tests {
 
     #[test]
     fn fallback_header_matches_native_wrapped_and_nowrap_flow() {
-        // Pinned fa08 dark-cloud-dialogs.css, native Chrome with the Website's
+        // Expected values were measured in the Website client in Chrome with its
         // imported faces: 25.2/37.8 title, 6px margin, 16/23.2 author.
         for (width, height, title_height, header_height, title_x, title_y, author_y) in [
             (390.0, 844.0, 75.6, 168.781_25, 28.0, 80.0, 161.593_75),

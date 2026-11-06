@@ -1,4 +1,4 @@
-//! Current Source `protocol/codecs/{flame-presentation,weld-flame}.ts`.
+//! Validation of received Flame presentation frames and their Flame Lash recipes.
 //! Typed wire shape is checked by serde; these checks bind a complete recipe to
 //! the accepted snapshot before geometry or retained replay can consume it.
 
@@ -334,7 +334,7 @@ fn limited_string(value: &str, field: &str, maximum: usize) -> Result<(), String
 }
 fn player_id(value: &str, field: &str) -> Result<(), String> {
     limited_string(value, field, 128)?;
-    // Own names of the standard ECMAScript Object.prototype, rejected by Source.
+    // The built-in property names of a JavaScript object are reserved.
     if matches!(
         value,
         "constructor"

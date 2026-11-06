@@ -1,6 +1,6 @@
-//! Player death and level-up world presentation from the Website renderer's
-//! The articulated character, Enchant Staff, death and level-up presentation programs.
-//! These cosmetic samples do not consume gameplay randomness or advance combat.
+//! Player world presentation: the articulated character's attachments, Enchant Staff,
+//! death and level-up programs. These cosmetic samples do not consume gameplay randomness
+//! or advance combat.
 
 mod attachments;
 mod death;

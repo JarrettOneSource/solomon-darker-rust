@@ -1,8 +1,9 @@
-//! Collision-safe births from `core-server/boneyard-collision.ts`.
+//! Collision-safe positions for births and blocked bodies, searched in rings around the
+//! requested point.
 //!
 //! Native policy retries own the steering stream. An accepted original position consumes no
 //! draw, each searched ring consumes one angle, and light placement deliberately falls back
-//! to the direct policy after its source radius threshold.
+//! to the direct policy once the ring radius passes 350 units.
 
 use crate::float;
 use std::fmt;
@@ -43,6 +44,8 @@ pub trait SpawnPolicyContext {
     }
 }
 
+/// A body that needs a collision-safe position: the requested point, the bounds it must stay
+/// inside, the collision world and the body radius.
 #[derive(Clone, Copy, Debug)]
 pub struct SpawnPlacement<'a> {
     pub position: Vec2,
@@ -51,6 +54,8 @@ pub struct SpawnPlacement<'a> {
     pub radius: f64,
 }
 
+/// The error when no collision-safe position exists, with the requested point, radius and
+/// placement policy.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NoSpawnPlacement {
     pub position: Vec2,
@@ -71,8 +76,9 @@ impl fmt::Display for NoSpawnPlacement {
 impl std::error::Error for NoSpawnPlacement {}
 
 impl SpawnPlacement<'_> {
-    /// The older source placement path uses a semantic angle and first clamps its search
-    /// origin. Native enemy births use `resolve_native` below instead.
+    /// Places a body without drawing random numbers: the search origin is first clamped
+    /// inside the bounds, and the rings start at `starting_angle_degrees` or an angle hashed
+    /// from the position and radius. Policy-driven enemy births use `resolve_native` below.
     pub fn resolve(self, starting_angle_degrees: Option<f64>) -> Result<Vec2, NoSpawnPlacement> {
         self.validate_radius();
         if self.is_mobile(self.position) {
@@ -118,8 +124,8 @@ impl SpawnPlacement<'_> {
         if self.policy_accepts(self.position, policy, context, false) {
             return Ok(self.position);
         }
-        // Source draws are immutable until a placement is returned. Failed searches must
-        // leave the caller's generator unchanged, just as a thrown source call does.
+        // Draws commit only when a placement is returned. A failed search must leave the
+        // caller's generator unchanged.
         let mut search_rng = rng.clone();
         let mut active_policy = policy;
         let mut ring_radius = self.radius;
@@ -213,8 +219,8 @@ pub fn spawn_ring_sample_count(ring_radius: f64, radius_step: f64) -> usize {
     (std::f64::consts::PI * (ring_radius + radius_step) / ring_radius).trunc().max(1.0) as usize
 }
 
-/// Every participant's stock view must exclude the point. Source policy cameras are fixed
-/// at 1600×900 and 1.35 zoom, independent of a user's actual viewport and rendering scale.
+/// Every participant's stock view must exclude the point. Policy cameras are fixed at
+/// 1600×900 and 1.35 zoom, independent of a user's actual viewport and rendering scale.
 #[must_use]
 pub fn boneyard_spawn_position_is_offscreen(
     position: Vec2,

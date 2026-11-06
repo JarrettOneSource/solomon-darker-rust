@@ -3,6 +3,7 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use std::net::IpAddr;
 
+/// A `solomondarker://` peer invite: host, port, game revision and the secret capability.
 #[derive(Clone)]
 pub struct Invite {
     pub host: String,

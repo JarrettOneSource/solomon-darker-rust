@@ -1,4 +1,5 @@
-//! Faculty spell births, contacts and retained ticks from `enemies/boss-spells.ts`.
+//! Faculty spell casts and their contacts with players, and the per-tick step of every live
+//! boss spell. The Discorporeal's spells and death banishment step in their own modules.
 
 use super::boss_spell::{BossSpell, BossSpellKind, BossSpellLight};
 use super::config::EnemyFamilyConfig;

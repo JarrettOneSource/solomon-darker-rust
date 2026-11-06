@@ -1,5 +1,5 @@
-//! `hub-world.ts`: one ordered actor epoch for all Hub participants and students.
-//! Room membership controls actor pairs; every room shares the source collision RNG.
+//! One ordered actor epoch for all Hub participants and students.
+//! Room membership controls actor pairs; every room shares one collision fallback sampler.
 
 use crate::Vec2;
 use crate::actor_physics::{ActorPhysicsBody, ActorPhysicsWorld, resolve_actor_motion};
@@ -16,6 +16,8 @@ use crate::hub::{
 };
 use crate::painter::WorldPainterOrder;
 
+/// One participant's input to the Hub actor epoch: its wizard, College intro state and
+/// requested movement.
 pub struct HubParticipantMotion<'a> {
     pub id: &'a str,
     pub wizard: &'a mut HubWizard,
@@ -27,6 +29,8 @@ pub struct HubParticipantMotion<'a> {
     pub force_movement_facing: bool,
 }
 
+/// One participant's outcome from the actor epoch: whether its region changed and whether its
+/// pending College intro flag should be cleared.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HubParticipantWorldResult {
     pub id: String,
@@ -34,7 +38,7 @@ pub struct HubParticipantWorldResult {
     pub clear_college_intro_pending: bool,
 }
 
-/// Input rows are in source participant/registration order. Planning precedes the
+/// Input rows are in participant/registration order. Planning precedes the
 /// single actor solve; admission and ambient registration remain the final world phase.
 pub fn step_hub_participants(
     participants: &mut [HubParticipantMotion<'_>],

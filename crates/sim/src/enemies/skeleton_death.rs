@@ -1,4 +1,5 @@
-//! Skeleton fragments from Website `enemies/skeleton-death.ts`.
+//! Skeleton and Heartmonger death fragments, skeleton armor breaking and the bone-fragment
+//! shuffle.
 
 use super::config::{EnemyFamilyConfig, SkeletonWeapon};
 use super::effects::{
@@ -13,7 +14,8 @@ use crate::painter::WorldPainterOrder;
 pub(super) const SKELETON_BASE_FRAGMENT_ENTRIES: [usize; 18] =
     [113, 113, 113, 115, 118, 121, 120, 119, 116, 121, 120, 119, 116, 117, 117, 117, 117, 117];
 
-/// `skeletonDeathFragmentEntries`: FastCPU changes membership before any shuffle draw.
+/// The bone sprite entries a Skeleton death scatters. Enhanced effects change the list before
+/// any shuffle draw.
 #[must_use]
 pub fn skeleton_death_fragment_entries(enhanced_effects: bool) -> &'static [usize] {
     if enhanced_effects {
@@ -222,7 +224,7 @@ impl EnemyWorld {
         self.spawn_heartmonger_departure(actor, tick, order);
     }
 
-    #[allow(clippy::too_many_arguments)] // Source fragment bank, angle writer and clock draw at different constructor boundaries.
+    #[allow(clippy::too_many_arguments)] // Entry, angle and distance draw at different points.
     fn spawn_skeleton_fragment(
         &mut self,
         owner: DeathEffectOwner,

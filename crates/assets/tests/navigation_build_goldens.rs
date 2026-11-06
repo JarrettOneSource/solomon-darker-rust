@@ -1,8 +1,8 @@
-//! Complete runtime graphs and source first-query cache ownership.
+//! Complete runtime graphs and first-query cache ownership.
 //!
-//! The mesh fixture imports the unmodified Website triangulator. It includes accepted
-//! non-stock scene documents, both native clearances, excluded collision primitives,
-//! and the actual collision of a gate after 100 source contact/step transitions.
+//! The mesh fixture was recorded with the Website client's unmodified triangulator. It
+//! includes accepted non-stock scene documents, both native clearances, excluded collision
+//! primitives, and the actual collision of a gate after 100 contact/step transitions.
 
 #[path = "../../sim/tests/support/mod.rs"]
 mod support;
@@ -279,7 +279,8 @@ fn catalog_materializations_retain_the_scene_owner_until_the_entry_is_replaced()
     let original_mesh = first.prepared_for(bounds, 25.0).unwrap();
     owners.retain(&catalog, &loaded, first).unwrap();
 
-    // Stock source templates are module-scoped even across source catalog objects.
+    // Stock templates are keyed by their hashes, so a separately loaded catalog
+    // reuses the retained graph.
     let second_catalog = BoneyardCatalog::load_embedded().unwrap();
     let repeated = second_catalog.materialize_choice("default-random", [0; 16], "second").unwrap();
     assert_eq!(loaded.scene == repeated.scene, expected["stockSameScene"]);

@@ -1,4 +1,4 @@
-//! Wizard layer offsets, ported from `player-character-presentation.ts`.
+//! Wizard layer offsets and material tints.
 //!
 //! The head bobs against the gait phase and sways across the facing; the fixed robe (hands)
 //! and the front staff attachment sway with half the gait phase.
@@ -11,8 +11,8 @@ use crate::combat::PlayerCombatState;
 use crate::float::fround;
 use crate::secondary::SecondaryPlayerState;
 
-/// `renderer/player-material.ts`: modifier insertion order changes overlapping
-/// poison/cold colours; Stoneskin composes afterwards, before equipment dye.
+/// The wizard's material tint. Modifier insertion order changes overlapping poison/cold
+/// colours; Stoneskin composes afterwards, before equipment dye.
 #[must_use]
 pub fn player_material_tint(
     world_tint: u32,
@@ -52,16 +52,16 @@ pub fn multiply_tints(first: u32, second: u32) -> u32 {
     (channel(16) << 16) | (channel(8) << 8) | channel(0)
 }
 
-/// `native-texture-color.ts`: the hit pass selects diffuse red while retaining
-/// texture alpha. Its lighting scale is distinct from the ordinary material tint.
+/// The hit pass selects diffuse red while retaining texture alpha. Its lighting scale is
+/// distinct from the ordinary material tint.
 #[must_use]
 pub fn native_puppet_hit_tint(complex_lighting: bool, main_tint: u32) -> u32 {
     let red = if complex_lighting { 0.65_f32 as f64 } else { 1.0 };
     ((f64::from((main_tint >> 16) & 255) * red).trunc() as u32) << 16
 }
 
-/// `selectedPrimaryId === -1` uses generic attachment pose 4 and the native robe's pose 13
-/// (`NATIVE_UNSELECTED_PRIMARY_*` in `player-character-presentation.ts`).
+/// With no primary spell selected, the wizard uses generic attachment pose 4 and fixed
+/// robe pose 13.
 pub const UNSELECTED_PRIMARY_ATTACHMENT_POSE: usize = 4;
 pub const UNSELECTED_PRIMARY_ROBE_FIXED_POSE: usize = 13;
 
@@ -76,8 +76,8 @@ pub struct WizardDrawPlan {
     pub head_offset: Vec2,
 }
 
-/// The unselected-primary branch of `createPlayerCharacterDrawPlan`, pinned across all
-/// facings and representative gait/walk phases by `wizard-attachments-goldens.json`.
+/// The draw plan of a wizard with no primary spell selected, pinned across all facings
+/// and representative gait/walk phases by `wizard-attachments-goldens.json`.
 #[must_use]
 pub fn wizard_draw_plan(
     heading_index: usize,

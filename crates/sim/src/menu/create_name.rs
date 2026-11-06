@@ -1,5 +1,5 @@
-//! Wizard-name admission and stock heading ink from Website `create-wizard-name.ts`.
-//! The editable browser input is semantic; its visible text is this native glyph layout.
+//! Wizard-name admission and the name's ink layout in the stock heading font.
+//! The editable text field is semantic; its visible text is this native glyph layout.
 
 use crate::ui_text::{
     UiFontName, UiGlyphLayout, UiTextAlign, UiTextSpec, layout_ui_text, measure_ui_text, ui_font,
@@ -11,6 +11,7 @@ pub const CREATE_WIZARD_NAME_MAX_WIDTH: f64 = 372.0;
 /// CreateWizardMenu::Update, 0058A8FF: an empty final TextBox uses this literal.
 pub const EMPTY_WIZARD_NAME: &str = "Genericus";
 
+/// Why a wizard name is rejected: empty, too long, unsupported characters or too wide.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreateWizardNameRejection {
     Empty,
@@ -31,6 +32,7 @@ impl CreateWizardNameRejection {
     }
 }
 
+/// A wizard name laid out in the heading font: its uppercase text, glyphs and ink bounds.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateWizardNameLayout {
     pub glyphs: Vec<UiGlyphLayout>,
@@ -80,8 +82,8 @@ pub fn validate_create_wizard_name(value: &str) -> Option<CreateWizardNameReject
     None
 }
 
-/// Current Source allows an empty editable draft and substitutes its native name
-/// only when validating the final manual or random loadout.
+/// An empty editable draft is allowed; the final manual or random loadout substitutes
+/// `EMPTY_WIZARD_NAME` before validating.
 pub fn finalize_create_wizard_name(value: &str) -> Result<&str, CreateWizardNameRejection> {
     let name = if value.is_empty() { EMPTY_WIZARD_NAME } else { value };
     if let Some(reason) = validate_create_wizard_name(name) {
@@ -144,7 +146,7 @@ pub fn layout_create_wizard_name(value: &str) -> CreateWizardNameLayout {
 
 fn supported_character(character: char) -> bool {
     let upper = character.to_uppercase().to_string();
-    // Source tests JavaScript upper.length === 1, so only one BMP code unit qualifies.
+    // The uppercase form must be a single UTF-16 code unit, so only BMP characters qualify.
     upper.encode_utf16().count() == 1
         && ui_font(UiFontName::Heading)
             .glyph(upper.chars().next().expect("uppercase character exists") as u32)

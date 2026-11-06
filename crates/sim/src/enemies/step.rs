@@ -1,4 +1,5 @@
-//! Ordered live enemy-store composition from `boneyard-enemy-store.ts`.
+//! The enemy world's tick: target binding, the ordered actor pass, wave births and the live
+//! counts that wave limits read.
 
 use super::actor_update::{step_damage_presentation_timers, step_living_actor};
 use super::boss_spell::BossSpellKind;
@@ -10,6 +11,7 @@ use super::world::{EnemyStepContext, EnemyWorld};
 use super::{EnemySpawnIntent, EnemyToken};
 use crate::painter::WorldPainterOrder;
 
+/// Retained enemy, Zombie and boss counts that the wave director checks against its limits.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct EnemyLiveCounts {
     pub enemies: usize,
@@ -32,7 +34,7 @@ impl EnemyWorld {
         counts
     }
 
-    /// Advances one source world epoch. The callback materializes wave births after
+    /// Advances the enemy world by one tick. The callback materializes wave births after
     /// projectile and boss-spell work, preserving the shared RNG and painter order.
     pub fn step(
         &mut self,
@@ -84,8 +86,8 @@ impl EnemyWorld {
             self.materialize_step_intents(&intents, &mut context, None, order);
         }
         if context.paused {
-            // Paused wave constructors still allocate IDs and register births. The
-            // source suppresses their event delivery only after those side effects.
+            // Paused wave constructors still allocate IDs and register births. Their events
+            // are dropped only after those side effects.
             self.events.clear();
         } else {
             self.step_puppet_hits(&context);

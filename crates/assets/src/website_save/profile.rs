@@ -1,4 +1,5 @@
-//! Durable profile normalization from `save/game-save-document.ts`.
+//! Restores and normalizes the durable profile in a save document: economy, Hagatha
+//! runtime and advanced unlocks.
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{
@@ -11,6 +12,8 @@ use solomon_sim::session::{GameSession, ParticipantProfile};
 use super::contract::{ParsedContinuation, SaveMetadata, integer, only_keys, record};
 use super::value::{decode, encode};
 
+/// The durable profile restored from a save document: economy, Hagatha runtime, advanced
+/// unlocks and metadata, plus the continuation if there is one.
 #[derive(Clone, Debug)]
 pub struct RestoredGameProfile {
     pub advanced_unlocks: [bool; 8],
@@ -159,7 +162,7 @@ pub(super) fn normalize_economy(
     if version < 17
         && let Some(tonics) = tonics.filter(|count| *count > tonic_entries)
     {
-        // The source rejects a larger tonic count through its canonical outcome validator.
+        // More than two tonics would fail canonical outcome validation.
         if tonics > 2 {
             return Err(
                 "game save player economy inventory is invalid or Hagatha state is invalid".into(),

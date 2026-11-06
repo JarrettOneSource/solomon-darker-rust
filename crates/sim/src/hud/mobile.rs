@@ -1,17 +1,22 @@
-//! Source touch quickbar banks from Website `mobile-quickbar-layout.ts`.
+//! The touch quickbar's two banks of four belt slots: the banks' size and inset for the
+//! viewport, and each slot's placement.
 
+/// The touch quickbar banks' inset from the screen edges and their slot size, in logical units.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MobileQuickbarBankLayout {
     pub inset: f64,
     pub size: f64,
 }
 
+/// A touch quickbar bank: the left holds slots 0 to 3, the right slots 4 to 7.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MobileQuickbarBank {
     Left,
     Right,
 }
 
+/// Where one touch quickbar slot sits: its bank, its inset from that bank's screen edge, its
+/// height above the bottom and its size.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MobileQuickbarSlotPlacement {
     pub bank: MobileQuickbarBank,

@@ -1,4 +1,4 @@
-//! Courtyard geometry adapter for the shared source actor-response solver.
+//! Adapts Courtyard collision geometry to the shared actor-response solver in `actor_physics`.
 
 use crate::Vec2;
 use crate::actor_physics::{ActorPhysicsBody, ActorPhysicsWorld};
@@ -6,6 +6,7 @@ use crate::hub::{is_hub_traversable, move_with_hub_collision};
 
 use super::HubStudentState;
 
+/// A Courtyard body in one solver step: the walking wizard, a student or a fixed actor.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct ActorBody {
     pub position: Vec2,
@@ -78,8 +79,8 @@ pub(super) fn resolve_actor_motion(bodies: &mut [ActorBody], rng: &mut u32) {
         })
         .collect();
     let mut world = HubPhysicsWorld { static_collision: &static_collision, rng };
-    // The College walker occupies index0 before every student. The source bypasses
-    // student/player pairs during onboarding while preserving its fixed trader contacts.
+    // The College walker occupies index 0 before every student. During onboarding the walker
+    // skips its student contacts but keeps its contacts with the fixed traders.
     crate::actor_physics::resolve_actor_motion(
         &mut shared_bodies,
         &mut world,

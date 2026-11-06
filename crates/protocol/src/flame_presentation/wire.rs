@@ -1,5 +1,5 @@
-//! Source-shaped wire adapters borrow canonical simulation birth data. The
-//! connection byte budget therefore uses the same field/number spelling as JS.
+//! Serde remote adapters that serialize the simulation's Flame birth types directly in
+//! their wire spelling. The connection byte budget measures this same JSON.
 use serde::{Deserialize, Serialize};
 use solomon_sim::Vec2;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
@@ -8,6 +8,7 @@ use solomon_sim::spells::weld::{
     FlamePathBirth, FlameRibbonBirth, WeldFlameLashFadeVariant,
 };
 
+/// Wire form of a `Vec2`.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "Vec2", deny_unknown_fields)]
 pub(super) struct Point {
@@ -36,12 +37,14 @@ pub(super) mod optional_point {
     }
 }
 
+/// Wire form of a `WorldManagerLane`.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "WorldManagerLane", rename_all = "lowercase")]
 pub(super) enum Lane {
     Actor,
     Transient,
 }
+/// Wire form of a `PainterRegistration`: its manager lane and registration ordinal.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "PainterRegistration", rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Registration {
@@ -49,6 +52,7 @@ pub(super) struct Registration {
     pub manager_lane: WorldManagerLane,
     pub registration_ordinal: usize,
 }
+/// Wire form of a `FlameRibbonBirth`: a short ribbon's width factor or a long one's phase.
 #[derive(Serialize, Deserialize)]
 #[serde(
     remote = "FlameRibbonBirth",
@@ -61,6 +65,7 @@ pub(super) enum RibbonBirth {
     Short { width_factor: f64 },
     Long { phase_degrees: f64 },
 }
+/// Wire form of a `FlamePathBirth`.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "FlamePathBirth", rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct PathBirth {
@@ -70,6 +75,7 @@ pub(super) struct PathBirth {
     pub creator_registration: PainterRegistration,
     pub misc_append_ordinal: usize,
 }
+/// Wire form of a `FlameChannelBirth`: the ribbon's curve, width, camera push and path.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "FlameChannelBirth", rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ChannelBirth {
@@ -90,6 +96,7 @@ pub(super) struct ChannelBirth {
     #[serde(with = "PathBirth")]
     pub path: FlamePathBirth,
 }
+/// Wire form of a `FlameChannelVisual`, tagged by `kind`.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "FlameChannelVisual", tag = "kind", deny_unknown_fields)]
 pub(super) enum ChannelVisual {
@@ -98,11 +105,13 @@ pub(super) enum ChannelVisual {
     #[serde(rename = "native-birth-v1")]
     Birth(#[serde(with = "ChannelBirth")] FlameChannelBirth),
 }
+/// Wire form of a `FlameFadeBirth`.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "FlameFadeBirth", rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct FadeBirth {
     pub birth_alpha: f64,
 }
+/// Wire form of a `FlameFadeVisual`, tagged by `kind`.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "FlameFadeVisual", tag = "kind", deny_unknown_fields)]
 pub(super) enum FadeVisual {
@@ -111,6 +120,7 @@ pub(super) enum FadeVisual {
     #[serde(rename = "native-birth-v1")]
     Birth(#[serde(with = "FadeBirth")] FlameFadeBirth),
 }
+/// Wire form of a `WeldFlameLashFadeVariant`.
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "WeldFlameLashFadeVariant", rename_all = "lowercase")]
 pub(super) enum FadeVariant {

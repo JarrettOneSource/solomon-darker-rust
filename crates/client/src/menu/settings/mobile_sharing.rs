@@ -1,11 +1,13 @@
-//! Real saved mobile-layout publication and clipboard receipt, from
-//! `MobileUiLayoutSettingsAction.tsx`. Closing invalidates its completion route.
+//! Publishing the player's saved mobile UI layout from Settings and copying its share
+//! code. Closing invalidates its completion route.
 use super::{SettingsView, widgets};
 use crate::gpu_ui::UiFrame;
 use crate::hosted::SharedMobileUiLayout;
 use egui::{Align2, Rect, Ui, Vec2};
 use std::cell::RefCell;
 use std::rc::Rc;
+/// The Settings layout sharing row: the pending publish request, the returned share code
+/// and the copy status.
 pub(super) struct SettingsLayoutPublication {
     pending: Option<u64>,
     account_available: bool,

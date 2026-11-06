@@ -1,5 +1,5 @@
-//! The local `HubScene` actor popup reads the presented wizard and current Party
-//! profile. It never performs the separate hosted PlayerCard lookup.
+//! The popup for a wizard selected in the College reads the presented wizard and
+//! current Party profile. It never performs the separate hosted player card lookup.
 
 use std::collections::BTreeMap;
 
@@ -9,6 +9,8 @@ use solomon_sim::session::GameSession;
 
 use super::{SocialUi, Surface};
 
+/// A wizard in the local player's College region as its popup shows them: player ID,
+/// wizard selection, gold and Hub activity.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct HubPlayerCard {
     pub player_id: String,
@@ -55,7 +57,7 @@ impl SocialUi {
         }
     }
 
-    /// Call after the source pointer/controller selection. The same local route
+    /// Call after a pointer or controller selects the wizard. The same local route
     /// handles Party member rows; no account or card-service availability gate is added.
     pub fn open_hub_player(&mut self, player_id: &str) -> bool {
         if !self.context.visible

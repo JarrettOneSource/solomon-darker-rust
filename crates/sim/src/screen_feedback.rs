@@ -1,6 +1,6 @@
-//! Shared event cursors, overlays and camera decay from
-//! `renderer/native-screen-feedback.ts`. All mutable fields are retained for
-//! checkpoints; the host supplies its existing tick and canonical actor events.
+//! Screen flash overlays, camera shake and decay, and the shared event cursors that apply
+//! each event once. All mutable fields are retained for checkpoints; the host supplies its
+//! existing tick and canonical actor events.
 
 mod flashes;
 mod region_camera;
@@ -22,16 +22,19 @@ use crate::spells::model::PrimarySpellEtherBlast;
 const CAMERA_MAGNITUDE_DECAY: f64 = 0.94_f32 as f64;
 const CAMERA_MAGNITUDE_CUTOFF: f64 = 0.001_f32 as f64;
 const CAMERA_DISPLACEMENT_DECAY: f64 = 0.75_f32 as f64;
-// `core-kernels/native-ether-blast.ts` stores both constants as singles.
+// Ether Blast stores both constants as singles.
 const ETHER_BLAST_FLASH_DECAY: f64 = 0.025_f32 as f64;
 const ETHER_BLAST_SCREEN_GREEN: f64 = 0.25_f32 as f64;
 
+/// A full-screen color overlay and its alpha.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryScreenOverlay {
     pub alpha: f64,
     pub color: u32,
 }
 
+/// The viewer's camera center, visible world width and alternate-player flag, which set
+/// point gain.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryScreenFeedbackContext {
     pub camera_center: Vec2,
@@ -51,6 +54,7 @@ pub struct EnemyScreenFeedbackInput<'a> {
     pub tick: u64,
 }
 
+/// A primary spell's camera displacement event.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PrimaryCameraDisplacementInput<'a> {
     pub displacement: Vec2,
@@ -59,6 +63,7 @@ pub struct PrimaryCameraDisplacementInput<'a> {
     pub world_key: &'a str,
 }
 
+/// A primary spell's camera shake magnitude event.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PrimaryCameraMagnitudeInput<'a> {
     pub event_id: u64,
@@ -102,6 +107,8 @@ pub fn secondary_world_shake(
     selected
 }
 
+/// One viewer's screen flash color and decay, camera displacement and magnitude, and the
+/// last event IDs already applied.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryScreenFeedbackPresentation {

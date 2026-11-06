@@ -1,4 +1,5 @@
-//! Native target-query and tracking replays against the pinned Website.
+//! Native target-query and tracking replays, against recordings from a pinned build of
+//! the Website client.
 use serde::Deserialize;
 use solomon_sim::Vec2;
 use solomon_sim::spells::targeting::*;

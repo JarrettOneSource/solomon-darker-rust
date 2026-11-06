@@ -1,5 +1,5 @@
 //! Shared game owner: assets and UI project the authoritative simulation state.
-//! Loading prepares resources before installation; fixed ticks remain in the Rust kernels.
+//! Loading prepares resources before installation; fixed ticks remain in the simulation kernels.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -97,7 +97,7 @@ const LOCAL_PLAYER_ID: &str = "local";
 const TICK_MILLISECONDS: f64 = 10.0;
 /// Longest stall the loop catches up on before dropping time (a tab that was in the background).
 const MAX_CATCH_UP_MILLISECONDS: f64 = 250.0;
-/// The source host publishes an autosave every thirty seconds of active simulation.
+/// Request an autosave after thirty seconds of active simulation, the host's autosave interval.
 const AUTOSAVE_TICKS: u64 = 3000;
 
 /// Game-owned metadata from the last submitted UI frame. Input dispatch can advance
@@ -110,6 +110,8 @@ struct GameUiSnapshot {
     borrowed_image_paths: Vec<String>,
 }
 
+/// The running game: the accepted session and local player, every presentation view and UI
+/// surface, audio, input, saving, and the native or hosted connection.
 pub struct Game {
     surface: crate::platform::Surface,
     renderer: Renderer,
@@ -195,6 +197,7 @@ pub struct Game {
     save_listeners: Vec<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>,
 }
 
+/// A save write to run asynchronously: the document, its store and the expected revision.
 pub struct PendingSave {
     store: SaveStore,
     revision: u64,
@@ -499,7 +502,7 @@ impl Game {
             });
             self.world_loading = false;
             self.apply_native_frame(frame, Some(loaded))?;
-            // Source game-observer-session.ts loads the world without claiming
+            // An observer loads the world without claiming
             // participant readiness or changing that participant's pause barrier.
             if !self.is_hosted_observer() {
                 self.send_native_message(&ClientMessage::ReadyBoneyard { run_id })?;
@@ -1218,8 +1221,8 @@ impl Game {
     }
 
     fn simulation_is_paused(&self) -> bool {
-        // The source host ignores gameplay-pause in the Hub. Panels seal the local
-        // input there, while the College's students, NPCs and onboarding keep ticking.
+        // Gameplay pause applies only in a Boneyard. In the Hub, panels seal the local
+        // input, while the College's students, NPCs and onboarding keep ticking.
         !self.has_game
             || self.world_loading
             || self.menu.covers_world()
@@ -1243,7 +1246,7 @@ impl Game {
             && self.session.can_edit_books(&self.local_player_id)
     }
 
-    /// `MainMenuScene.useHotbarShortcut`: optional books retain the owner's bank
+    /// Whether the hotbar shortcut may cycle banks. Optional books retain the owner's bank
     /// selection while modal, loading and shared readiness barriers prevent cycling.
     fn hotbar_available(&self) -> bool {
         self.has_game
@@ -1282,7 +1285,7 @@ impl Game {
         let Some(world) = &self.session.boneyard else {
             return;
         };
-        // MainMenuScene.recordHallSnapshot excludes the entire Tutorial run,
+        // The Hall of Fame excludes the entire Tutorial run,
         // including its archived death portrait before the College return.
         if world.tutorial.is_some() {
             return;
@@ -1363,7 +1366,7 @@ impl Game {
     }
 
     fn can_start_boneyard(&self) -> bool {
-        // HubScene::beginMatch admits only the host. A follower's ignored request
+        // Only the host may start a Boneyard. A follower's ignored request
         // must never create a loading screen that no accepted world can complete.
         self.session.can_enter_boneyard()
             && !self
@@ -1780,8 +1783,8 @@ impl Game {
     }
 
     fn apply_panel_action(&mut self, action: PlayerPanelAction, now: f64) -> Result<(), String> {
-        // `BoneyardScene` publishes surface acknowledgements only while a Tutorial
-        // exists. Ordinary Inventory/Skill Book use must not send rejected lesson commands.
+        // Surface acknowledgements are sent only while a Tutorial exists.
+        // Ordinary Inventory/Skill Book use must not send rejected lesson commands.
         if matches!(action, PlayerPanelAction::Surface(_))
             && self.session.boneyard.as_ref().is_none_or(|world| world.tutorial.is_none())
         {
@@ -1923,7 +1926,7 @@ impl Game {
         Ok(())
     }
 
-    /// `MainMenuScene.enhancedEffectsAuthority`: the public College changes the
+    /// Which game an Enhanced Effects change applies to: the public College changes the
     /// next party run; an admitted private or active game changes its own mode.
     fn enhanced_effects_authority(
         &self,
@@ -2344,7 +2347,7 @@ impl Game {
         {
             return Ok(());
         }
-        // HubInventorySurface seeds UI dialogue independently of the gameplay RNG.
+        // Dialogue lines are chosen from UI state, independently of the gameplay RNG.
         let random_index = if interaction == HubInteractionId::Skorcha {
             self.session.npcs.skorcha.skorcha.as_ref().map_or(0, |skorcha| skorcha.dismissal_index)
                 as i64
@@ -2829,7 +2832,7 @@ impl Game {
         let mut overlay_diagnostics = Default::default();
         if let Some(world) = &session.boneyard {
             let camera_focus = self.boneyard_camera_focus();
-            // The source owns one level-up view driven by this client's picker.
+            // Keep one level-up view, the one driven by this client's picker.
             self.level_up.retain(|id, _| id == &self.local_player_id);
             let local =
                 &session.participants.get(&self.local_player_id).expect("participant exists");
@@ -2851,7 +2854,7 @@ impl Game {
                         player: &participant.player,
                         wizard: &participant.wizard,
                         light_registration: lighting.light_registration,
-                        // `host/game-snapshot.ts` projects both action and weapon phases.
+                        // Both the action and the weapon phase drive the overlay effect.
                         overlay_effect_phase: participant
                             .wizard
                             .primary_cast

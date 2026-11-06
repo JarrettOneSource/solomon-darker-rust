@@ -1,7 +1,9 @@
-//! Native menu key admission from the current scene and Source input transitions.
+//! Filters the key presses a menu scene receives: plain non-repeating presses only, none
+//! for gameplay while its keys are blocked, and none in the pass after a discard.
 
 use crate::gpu_ui::KeyStroke;
 
+/// Whether gameplay menu keys are blocked and whether the next pass's keys are discarded.
 #[derive(Default)]
 pub(super) struct MenuKeyboard {
     gameplay_blocked: bool,

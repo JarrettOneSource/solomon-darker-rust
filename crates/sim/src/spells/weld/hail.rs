@@ -1,4 +1,5 @@
-//! Native Hail terrain/contact children from `core-kernels/native-weld-hail-contact.ts`.
+//! The children Hailstones spawn where they hit terrain or an enemy: particles, bouncing
+//! rocks, contact lines, flashes and knockback.
 
 use super::model::{WeldActorBase, WeldActorBirth};
 use super::persistent::WeldHailstonesState;
@@ -10,6 +11,7 @@ pub const WELD_HAIL_TARGET_RADIUS_FACTOR: f64 = 1.5;
 pub const WELD_HAIL_COLD_SLOW_FACTOR: f64 = 0.5;
 pub const WELD_HAIL_COLD_SLOW_TICKS: u64 = 250;
 
+/// A tinted particle thrown out where Hailstones hit terrain; it slows as it fades.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailTerrainParticleState {
@@ -25,6 +27,7 @@ pub struct WeldHailTerrainParticleState {
     pub velocity_factor: f64,
 }
 
+/// A rock that bounces away from where Hailstones hit terrain.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailTerrainBouncerState {
@@ -42,6 +45,7 @@ pub struct WeldHailTerrainBouncerState {
     pub vertical_velocity: f64,
 }
 
+/// The fading line drawn to the point where Hailstones hit an enemy.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailLineState {
@@ -54,6 +58,7 @@ pub struct WeldHailLineState {
     pub width: f64,
 }
 
+/// The fading flash where Hailstones hit an enemy.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailFlashState {
@@ -64,6 +69,7 @@ pub struct WeldHailFlashState {
     pub record: usize,
 }
 
+/// A push on one enemy hit by Hailstones, applied over several ticks.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldHailKnockbackState {
@@ -73,6 +79,7 @@ pub struct WeldHailKnockbackState {
     pub target_id: String,
 }
 
+/// A child actor of a Hailstones contact or terrain impact.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WeldHailChildActorState {

@@ -1,5 +1,5 @@
-//! Validates Website provisioner packages before any definition VM is created.
-//! Source: `host/web-mod-content.ts::materializeWebSessionContent`.
+//! Validates the session content the Website provisions before any definition VM is
+//! created: its fields, size limits, digests, packaged files and mod Boneyards.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -46,7 +46,8 @@ struct PackageMod {
     version: String,
 }
 
-/// Typed hosted callers and the raw trust boundary share one source validator.
+/// Typed hosted callers and the raw trust boundary share one validator: the payload is
+/// re-read from its JSON form.
 /// Lua callbacks are deliberately absent from the returned admission document.
 pub fn materialize_web_session_content(
     payload: &WebSessionContentPayload,
@@ -56,8 +57,8 @@ pub fn materialize_web_session_content(
     materialize_web_session_content_value(&value)
 }
 
-/// `materializeWebSessionContent`: reject missing or extra fields at the actual
-/// untrusted boundary, including the required nullable `entryScript` property.
+/// Validate untrusted session content, rejecting missing or extra fields, including the
+/// required nullable `entryScript` property.
 pub fn materialize_web_session_content_value(
     value: &LuaValue,
 ) -> Result<MaterializedWebSessionContent, String> {
@@ -74,8 +75,8 @@ pub fn materialize_web_session_content_value(
             "session content mods must be an array of at most {MAXIMUM_MODS} entries"
         ));
     }
-    // The Website parses every row before checking duplicate IDs or decoding
-    // legacy Boneyards. Preserve that order for rejected provisioner documents.
+    // Parse every row before checking duplicate IDs or decoding Boneyard files, so a
+    // rejected provisioner document reports a malformed row first.
     let mut packages = Vec::with_capacity(mods.len());
     for (index, value) in mods.iter().enumerate() {
         packages.push(parse_mod(value, index)?);
@@ -123,7 +124,7 @@ pub fn materialize_web_session_content_value(
             let entry = project_mod_boneyard(&package.id, &package.name, &boneyard.target, &bytes)?;
             let normalized_target = boneyard.target.to_lowercase();
             if let Some(&index) = boneyard_indices.get(&normalized_target) {
-                // Map.set replaces the value while retaining its first position.
+                // A later Boneyard for the same target, ignoring case, replaces it in place.
                 boneyards[index] = entry;
             } else {
                 boneyard_indices.insert(normalized_target, boneyards.len());
@@ -154,7 +155,8 @@ pub fn materialize_web_session_content_value(
     Ok(MaterializedWebSessionContent {
         assets,
         boneyards,
-        // Source materialization precedes its separate Lua definition stage.
+        // Lua definitions compile in a separate, later stage:
+        // `compile_web_session_content_definitions`.
         compiled_mods: Vec::new(),
         manifest: GameContentManifest {
             manifest_sha256: manifest_sha256.clone(),
@@ -165,8 +167,8 @@ pub fn materialize_web_session_content_value(
     })
 }
 
-/// `projectModBoneyard`: identity includes the original target spelling and
-/// source bytes; geometry uses the pinned JavaScript property's insertion order.
+/// Project a mod Boneyard file into a scene entry. Its identity hashes the target as spelled
+/// and the file's bytes; `geometry_sha256` hashes the scene's fields in insertion order.
 pub fn project_mod_boneyard(
     mod_id: &str,
     mod_name: &str,

@@ -14,6 +14,8 @@ use solomon_sim::profile::WizardElement;
 use solomon_sim::ui_text::{UiFontName, UiTextLayout, UiTextSpec};
 use std::cell::RefCell;
 
+/// A clickable region painted this frame: its target, NPC selector, hit and paint rectangles and
+/// whether it is enabled.
 #[derive(Clone)]
 pub(super) struct PanelHit {
     pub target: Target,
@@ -23,6 +25,7 @@ pub(super) struct PanelHit {
     pub enabled: bool,
 }
 
+/// Paints one panel pass in native design coordinates, recording hit regions and panel events.
 pub(crate) struct PanelCanvas<'a, 'gpu> {
     pub frame: &'a UiFrame<'gpu>,
     pub ui: &'a egui::Ui,
@@ -824,8 +827,8 @@ pub(super) fn book_layers(body: egui::LayerId, compact: bool) -> Vec<egui::Layer
         layers.push(super::skills::tooltip_layer_id());
     }
     layers.extend([super::flyby::layer_id(), dragger_layer_id()]);
-    // Compact tooltips are portaled out of the transformed stage in Source;
-    // the fixed navigation remains above both stage and tooltip.
+    // Compact tooltips stack above the flyby and dragger layers; the fixed navigation
+    // remains above both stage and tooltip.
     if compact {
         layers.push(super::skills::tooltip_layer_id());
     }

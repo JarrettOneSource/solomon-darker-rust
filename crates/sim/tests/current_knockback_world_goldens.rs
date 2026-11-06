@@ -1,4 +1,5 @@
-//! The Source area callback uses two real physics passes per target, then commits roots.
+//! Knockback area movement runs two real physics passes per target, then commits the enemy
+//! and lantern roots.
 #![cfg(feature = "persistence")]
 #[path = "support/native_bits.rs"]
 #[allow(dead_code)]

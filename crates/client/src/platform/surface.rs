@@ -1,5 +1,6 @@
 //! Drawable size and window ownership, independent of the world/UI painters.
 
+/// The game's drawing target: the browser canvas or the desktop window.
 #[derive(Clone)]
 pub struct Surface {
     #[cfg(target_arch = "wasm32")]

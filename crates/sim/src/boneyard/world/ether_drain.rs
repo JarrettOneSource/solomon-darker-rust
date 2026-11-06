@@ -1,4 +1,6 @@
-//! The field's mixed Puppet/loose-object force transaction from `boneyard-world-placement.ts`.
+//! The Ether Drain field's force transaction over Puppets and loose objects: enemies and
+//! players move through actor physics, Golems and ground loot sweep against world collision
+//! without body pairs, and consumed loot is removed.
 
 use super::*;
 use crate::actor_physics::ActorPhysicsWorld;
@@ -7,6 +9,8 @@ use crate::float::fround;
 use crate::secondary::ether_drain::{EtherDrainContact, EtherDrainTargetRef};
 use crate::secondary::{SecondaryActorKind, SecondarySimulationState};
 
+/// The result of one Ether Drain force pass: the field actors that consumed loot and each
+/// player's resolved position.
 pub struct BoneyardEtherDrainForces {
     pub consumed_field_actor_ids: Vec<u64>,
     pub player_positions: BTreeMap<String, Vec2>,
@@ -127,8 +131,8 @@ impl BoneyardWorld {
     }
 }
 
-/// This source force path rounds the requested point before the common sweep.
-/// Ordinary movement keeps its existing unrounded requested-point contract.
+/// Ether Drain forces round the requested point to single precision before the common
+/// sweep. Ordinary movement keeps its unrounded requested point.
 struct EtherDrainPhysics<'a> {
     bounds: BoneyardBounds,
     collision: &'a BoneyardCollisionWorld,

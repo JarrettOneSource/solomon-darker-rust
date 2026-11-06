@@ -1,11 +1,12 @@
-//! `native-ui-plan.ts::layoutNativeUiSingleActionMessage` and the MsgBox-specific
-//! wrapping scan in `native-ui-text.ts`. Ordinary word wrapping has different rules.
+//! The layout of a MsgBox with a single action button: its data lines, panel, frame and
+//! button, wrapped by the MsgBox-specific scan. Ordinary word wrapping has different rules.
 
 use crate::Vec2;
 use crate::hud::HudRect;
 
 use super::{UiFontName, UiTextSpec, layout_ui_text, ui_font};
 
+/// One data line requested for a MsgBox: font, text, tint and the gap after it.
 #[derive(Clone, Copy, Debug)]
 pub struct UiMessageDataLineSpec<'a> {
     pub font: UiFontName,
@@ -14,6 +15,7 @@ pub struct UiMessageDataLineSpec<'a> {
     pub tint: u32,
 }
 
+/// One laid-out MsgBox data line: wrapped text, position, size, line height and tint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiMessageDataLineLayout {
     pub baseline_y: f64,
@@ -27,6 +29,7 @@ pub struct UiMessageDataLineLayout {
     pub x: f64,
 }
 
+/// A single-action MsgBox's layout: its panel, frame, data lines and action button.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UiSingleActionMessageLayout {
     pub action_bounds: HudRect,

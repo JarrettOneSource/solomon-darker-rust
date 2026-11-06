@@ -1,16 +1,18 @@
-//! Heartmonger's retained foot chains from `renderer/native-heartmonger-tendrils.ts`.
+//! The Heartmonger's retained foot chains and the layers that draw them.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemySpriteLayer};
 use crate::float;
 use crate::float::{atan2, fround};
 use crate::{Rng, Vec2};
 
+/// One Heartmonger foot chain: its joint points and the fixed segment lengths between them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HeartmongerTendril {
     pub lengths: Vec<f64>,
     pub points: Vec<Vec2>,
 }
 
+/// Both Heartmonger foot chains and the leg pose they last moved at.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HeartmongerTendrils {
     pub chains: Vec<HeartmongerTendril>,

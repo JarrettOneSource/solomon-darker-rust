@@ -1,4 +1,5 @@
-//! Secondary player clocks, reserve and Focus recharge from native-secondary-abilities.ts.
+//! Each player's secondary state: cast actions, cooldown clocks, toggles, mana reserve and
+//! Focus recharge.
 
 use crate::Rng;
 use crate::float::fround;
@@ -13,6 +14,8 @@ use super::{
 
 pub const SECONDARY_GLOBAL_COOLDOWN_TICKS: f64 = 150.0;
 
+/// A secondary cast animation in progress: the weapon used, its progress and any bare-hand
+/// pose.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(try_from = "saved_cast::Document"))]
@@ -23,6 +26,8 @@ pub struct SecondaryCastAction {
     pub hand: Option<HandCast2>,
 }
 
+/// The bare-hand cast animation of a weaponless secondary cast: its pose and whether it
+/// has finished.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HandCast2 {
@@ -41,6 +46,7 @@ impl SecondaryCastAction {
     }
 }
 
+/// A secondary cast action after one step, and whether it crossed its release marker.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SecondaryCastStep {
     pub action: Option<SecondaryCastAction>,
@@ -104,6 +110,7 @@ pub fn step_secondary_cast_action(
 mod saved_cast {
     use super::{HandCast2, PlayerWeaponKind, SecondaryCastAction};
 
+    /// A saved cast action, validated before it becomes a `SecondaryCastAction`.
     #[derive(serde::Deserialize)]
     #[serde(rename = "SecondaryCastAction")]
     pub(super) struct Document {
@@ -131,6 +138,8 @@ mod saved_cast {
     }
 }
 
+/// A player's secondary ability state: cast action, cooldowns, toggles, Magic Shield,
+/// Planewalker and Stoneskin timers, and reserved mana.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryPlayerState {
@@ -190,7 +199,7 @@ impl SecondaryPlayerState {
         self.cast_action = Some(SecondaryCastAction::new(weapon_kind));
     }
 
-    /// Fractional recharge factors stay in doubles; the source does not narrow these timers.
+    /// Fractional recharge factors stay in doubles; these timers are never narrowed.
     pub fn step(
         &mut self,
         skill_book: &SkillBookState,

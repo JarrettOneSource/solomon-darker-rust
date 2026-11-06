@@ -1,5 +1,5 @@
-//! Secondary snapshot epoch and ordered mutations from `game-simulation.ts` and
-//! `native-secondary-world.ts`. Geometry callbacks borrow the actual active world.
+//! The session's secondary ability epoch: snapshot the players, step or cast, then apply
+//! the ordered mutations it returns. Geometry callbacks borrow the actual active world.
 
 use super::secondary_world::SessionSecondaryWorld;
 use super::*;
@@ -57,7 +57,7 @@ impl GameSession {
                 .map(|(id, participant)| (id.clone(), participant.wizard.region))
                 .collect(),
             teleport_bodies,
-            // Source supplies null secondaryProjectileVisible for this operation.
+            // An immediate belt cast supplies no projectile viewports.
             viewports: Vec::new(),
         };
         let participant = &self.participants.get(id).expect("participant exists");
@@ -98,7 +98,7 @@ impl GameSession {
         );
         self.apply_secondary_player_outcomes(&result, &previous_mindstars, self.ticks, extensions)?;
         let first_enemy_event = self.boneyard.as_ref().unwrap().enemies.next_event_id;
-        // Source immediate casts return damage:[]; shield dispel has no terminal
+        // Immediate casts return no damage; shield dispel has no terminal
         // payload. Only the fixed-tick receiver lane can return deferred newborns.
         let _ = self.apply_secondary_contacts(&result, self.ticks);
         if !result.target_heading_changes.is_empty()
@@ -241,7 +241,7 @@ impl GameSession {
         Ok(result)
     }
 
-    /// `applySecondaryPlayerOutcomes` is shared by tick and immediate belt casts.
+    /// Shared by tick and immediate belt casts.
     fn apply_secondary_player_outcomes(
         &mut self,
         result: &SecondaryTickResult,

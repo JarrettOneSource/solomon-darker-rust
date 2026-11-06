@@ -1,10 +1,12 @@
-//! The native Boulder contact child and lit-bit physics from
-//! `core-kernels/native-weld-boulder-debris.ts`. Ordinary Earth uses this same factory.
+//! Boulder debris: the lit rock bits that a boulder contact throws or an Ethereal Boulder
+//! sheds, and their physics. Ordinary Earth uses this same factory.
 
 use crate::float;
 use crate::float::fround;
 use crate::{Rng, Vec2};
 
+/// One debris bit as its constructor leaves it: position, height, velocities, rotation,
+/// scale, alpha, green tint and atlas record.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldMeteorDebrisSeed {
@@ -21,6 +23,7 @@ pub struct WeldMeteorDebrisSeed {
     pub vertical_velocity: f64,
 }
 
+/// A live boulder debris bit: its constructed state, bounce velocity and shadow setting.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldBoulderDebrisParticleState {
@@ -46,7 +49,7 @@ pub fn create_weld_ethereal_boulder_weak_debris_program(
     create_ethereal_boulder_debris_program(scale, Some(direction), rng)
 }
 
-// These two source factories have the same ordered constructor draws. Their
+// The breakup and weak programs have the same ordered constructor draws. Their
 // spawn offsets, count rounding and final size are the three native differences.
 fn create_ethereal_boulder_debris_program(
     input_scale: f64,
@@ -189,8 +192,8 @@ pub fn create_weld_boulder_debris_particle(
     }
 }
 
-/// Shared `Anim_BoulderBit` motion from `native-weld-boulder-debris.ts`.
-/// Coffin's art and primary Boulder metadata remain with their owning actors.
+/// The shared `Anim_BoulderBit` motion of one debris bit. Coffin's art and primary
+/// Boulder metadata remain with their owning actors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoulderDebrisMotion {

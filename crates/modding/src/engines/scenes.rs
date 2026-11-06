@@ -1,5 +1,5 @@
-//! Nested room ownership and portal admission from `mod-scene-engine.ts` and
-//! `mod-portal-engine.ts`. The same scene engine receives every admitted portal.
+//! Mod scenes and portals. Each owner has an active scene and room and a stack of up to eight
+//! scenes to return to; an admitted portal enters its destination through the scene engine.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -15,6 +15,7 @@ use super::MAXIMUM_SAFE_INTEGER;
 use crate::definition::values::typed_value;
 use crate::json::SourceCollator;
 
+/// Each owner's active mod scene and room, and the scenes it can return to.
 pub struct ModSceneEngine {
     catalog: Arc<PreparedModContentCatalog>,
     state: ModSceneCheckpoint,
@@ -184,6 +185,7 @@ impl ModSceneEngine {
     }
 }
 
+/// The portals placed by mod scene extensions, with their destinations and entry policies.
 pub struct ModPortalEngine {
     portals: Vec<PreparedModPortal>,
 }
@@ -289,6 +291,8 @@ impl ModPortalEngine {
     }
 }
 
+/// A request to use a portal: the portal, the scene and actor kind it is used from, the owner,
+/// and whether the party leader confirmed it.
 pub struct ModPortalActivation<'a> {
     pub actor_kind: &'a str,
     pub confirmed_by_leader: bool,

@@ -1,13 +1,15 @@
-//! Ordered actor circle response from Website `core-kernels/actor-physics.ts`.
+//! Ordered circle response between moving actors: Boneyard players, enemies and the lantern
+//! push one another through this solver.
 //!
-//! This extracts the verified Courtyard solver for use by Boneyard players, enemies and the
-//! lantern. Root moves use swept world collision; pair corrections require their entire
-//! candidate to be placeable. Each recursive recipient is visited once per root epoch.
+//! Root moves use swept world collision; pair corrections require their entire candidate to
+//! be placeable. Each recursive recipient is visited once per root epoch.
 
 use crate::Vec2;
 
 pub const ACTOR_SEPARATION_EPSILON: f64 = 0.1;
 
+/// One actor's circle in a push solve: position, requested move, radius, push strength
+/// and resistance, and whether it moves or receives contacts.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ActorPhysicsBody {
     /// Native Actor +0x36 admits this body as another mover's contact candidate.
@@ -22,11 +24,13 @@ pub struct ActorPhysicsBody {
     pub push_enabled: bool,
 }
 
+/// The world a push solve moves bodies through: placement tests and swept moves.
 pub trait ActorPhysicsWorld {
     fn can_place(&self, body_id: &str, position: Vec2, radius: f64) -> bool;
     fn move_body(&mut self, body_id: &str, position: Vec2, delta: Vec2, radius: f64) -> Vec2;
 }
 
+/// A body that a driven root mover touched during a push solve.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActorRootContact {
     pub mover_id: String,
@@ -51,8 +55,8 @@ pub fn resolve_actor_motion(
     }
 }
 
-/// Enemy root movement is the source's non-pushing specialization. Pair corrections keep
-/// ascending body order and never mutate the crowd, including when a correction is blocked.
+/// Enemy root movement, the solver's non-pushing case. Pair corrections keep ascending
+/// body order and never mutate the crowd, including when a correction is blocked.
 #[must_use]
 pub fn resolve_unpushed_mover_motion(
     bodies: &[ActorPhysicsBody],
@@ -183,7 +187,7 @@ fn actor_separation(
     }
     let distance = squared.sqrt();
     let overlap = radii + ACTOR_SEPARATION_EPSILON - distance;
-    // JavaScript's `ratio ** 4` uses its floating exponent operation. Integer-power
+    // Use the floating exponent operation for the fourth power. Integer-power
     // multiplication changes the last bit of weighted corrections in dense crowds.
     let weight = if weighted { (squared / radii_squared).powf(4.0) * 0.99 + 0.01 } else { 1.0 };
     Vec2::new(dx / distance * overlap * weight, dy / distance * overlap * weight)

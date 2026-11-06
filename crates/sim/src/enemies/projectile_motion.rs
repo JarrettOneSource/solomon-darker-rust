@@ -1,4 +1,5 @@
-//! Enemy projectile fixed ticks and contact ordering from `enemies/projectiles.ts`.
+//! Enemy projectile fixed ticks: each kind's motion, terrain checks, player contact ordering,
+//! impacts and retirement.
 use super::model::*;
 use super::projectile_effects::{spawn_firebolt_trail, spawn_projectile_impact_effects};
 use super::projectile_hazards::{

@@ -1,4 +1,4 @@
-//! Field membership, binary32 pressure and private animations from `native-ether-drain.ts`.
+//! Ether Drain field membership, binary32 pressure and private animations.
 
 use super::{
     EtherDrainAnimation, EtherDrainState, EtherDrainTargetRef, EtherDrainWorldAnimationIds,
@@ -12,6 +12,8 @@ pub const ETHER_DRAIN_CORPSE_TIMER_TICKS: u64 = 130;
 pub const ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED: f64 = 100.0;
 const PRESSURE_DISTANCE_SQUARED: f64 = 262_144.0;
 
+/// Something an Ether Drain field can pull: its reference, position, force factor,
+/// activation delay and flags.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EtherDrainTarget {
@@ -23,6 +25,8 @@ pub struct EtherDrainTarget {
     pub reference: EtherDrainTargetRef,
 }
 
+/// A world animation an Ether Drain field can pull: its reference, position and bounce
+/// velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EtherDrainWorldAnimationTarget {
@@ -32,6 +36,8 @@ pub struct EtherDrainWorldAnimationTarget {
     pub reference: EtherDrainWorldAnimationRef,
 }
 
+/// The Ether Drain actor whose field is being applied: ID, owner, position, alpha and
+/// damage.
 #[derive(Clone, Copy, Debug)]
 pub struct EtherDrainField<'a> {
     pub alpha: f64,
@@ -41,6 +47,8 @@ pub struct EtherDrainField<'a> {
     pub position: Vec2,
 }
 
+/// One Ether Drain pull on a target: its displacement, damage, and whether it consumes
+/// the target.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EtherDrainContact {
@@ -56,6 +64,7 @@ pub struct EtherDrainContact {
     pub hit_strength: f64,
 }
 
+/// One Ether Drain pull on a world animation, and whether it consumes the animation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EtherDrainWorldAnimationContact {
@@ -66,6 +75,7 @@ pub struct EtherDrainWorldAnimationContact {
     pub source_actor_id: u64,
 }
 
+/// The private animations that survive one step, and a pulse for each one that finished.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct EtherDrainAnimationStep {
@@ -288,7 +298,7 @@ pub fn ether_drain_captures_family(family: &str) -> bool {
 }
 
 /// The private Anim_Manager runs after the field, including children born in this
-/// tick. Even a debris fragment expiring now consumes its three source draws.
+/// tick. Even a debris fragment expiring now consumes its three random draws.
 #[must_use]
 pub fn step_ether_drain_animations(
     source: &[EtherDrainAnimation],

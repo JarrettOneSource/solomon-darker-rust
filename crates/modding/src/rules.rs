@@ -1,6 +1,7 @@
-//! Ordered events, timers, reducer circuits and named RNG from `mod-rule-engine.ts`.
-//! The native owner holds each real VM directly; closing/unloading a mod drops
-//! its timer subscriptions and closes that VM before returning.
+//! The mod rule engine: events dispatched in order to rules and reducers, rule timers,
+//! reducers disabled after repeated failures, and named random draws. The engine holds each
+//! mod's VM directly; closing a mod drops its timer subscriptions and closes that VM before
+//! returning.
 
 mod program;
 
@@ -17,6 +18,8 @@ use crate::definition::runtime::WebLuaDefinitionRuntime;
 use crate::json::SourceCollator;
 use crate::state::{ModStateStore, validate_schema_value};
 
+/// Limits for the mod rule engine: failures before a reducer is disabled, the time budget
+/// per dispatch and the tick rate.
 pub struct ModRuleEngineOptions {
     pub failure_threshold: u64,
     pub tick_budget_ms: f64,
@@ -35,6 +38,8 @@ struct RegisteredMod {
     reducers: Vec<ModReducerHealthCheckpoint>,
 }
 
+/// Runs the registered mods' rules and reducers: it dispatches events, fires timers, tracks
+/// reducer failures and holds the reducers' state cells.
 pub struct ModRuleEngine {
     options: ModRuleEngineOptions,
     mods: Vec<RegisteredMod>,
@@ -283,8 +288,8 @@ impl ModRuleEngine {
                     .runtime
                     .reducer(&key)
                     .expect("registered reducer has a real callback");
-                // Source initializes the cell outside the reducer catch. An
-                // invalid schema/budget here is a host error, not a circuit hit.
+                // The cell is created outside the reducer's error handling, so an invalid
+                // schema or budget here is a host error, not a reducer failure.
                 let cell = self
                     .state
                     .cell(cell_definition(&self.mods[index], &key)?, input.scope.clone())?;
@@ -525,8 +530,8 @@ fn cell_definition(package: &RegisteredMod, key: &str) -> Result<ModStateCellDef
 fn node_index(value: &str) -> Option<usize> {
     let suffix = value.strip_prefix('r')?;
     let index: usize = suffix.parse().ok()?;
-    // Source looks up the exact generated ID in a Map; accepting an alternate
-    // numeric spelling would admit a timer that its checkpoint rejects.
+    // Only the exact generated spelling is accepted; an alternate numeric
+    // spelling would admit a timer that its checkpoint rejects.
     (suffix == index.to_string()).then_some(index)
 }
 fn validate_tick(tick: u64) -> Result<(), String> {

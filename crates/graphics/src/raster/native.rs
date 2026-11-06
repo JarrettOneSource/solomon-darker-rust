@@ -8,6 +8,7 @@ use vello_cpu::{Image, ImageSource, Pixmap, RenderContext, Resources};
 
 use super::Paint;
 
+/// A `vello_cpu` surface that rasterizes generated scenery strokes on the desktop.
 pub struct Raster(RenderContext);
 
 impl Raster {

@@ -9,12 +9,13 @@ use crate::float;
 use crate::float::{fround, hypot};
 use crate::secondary::SecondaryActorState;
 
+/// Where an Ether fade appears: at a bolt's muzzle or at its impact.
 pub(super) enum EtherFadePresentation {
     Muzzle,
     Impact,
 }
 
-/// `spawnPlanewalkerMote`: one ordinary-life FadeMove per eligible active tick.
+/// One ordinary-life FadeMove mote per eligible active Planewalker tick.
 pub(super) fn planewalker_mote(
     state: &mut State,
     owner_id: &str,

@@ -18,6 +18,7 @@ struct ConsoleEntry {
     returned: String,
     error: Option<String>,
 }
+/// The cheat Console: the Lua editor, input history, pending request and returned results.
 pub(super) struct ConsoleView {
     editor: String,
     entries: Vec<ConsoleEntry>,

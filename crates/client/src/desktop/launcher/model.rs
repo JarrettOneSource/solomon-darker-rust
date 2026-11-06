@@ -2,16 +2,20 @@
 
 use serde::{Deserialize, Serialize};
 
+/// The installed desktop build.
 #[derive(Clone, Deserialize)]
 pub struct Build {
     pub revision: String,
 }
 
+/// A newer desktop build that can be downloaded.
 #[derive(Clone, Deserialize)]
 pub struct Update {
     pub revision: String,
 }
 
+/// What the desktop application reports to the launcher: its build, local addresses for
+/// hosting and update status.
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopState {
@@ -21,6 +25,7 @@ pub struct DesktopState {
     pub update_error: Option<String>,
 }
 
+/// How to start a desktop session: solo, hosting on an address and port, or joining an invite.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "mode", rename_all = "lowercase")]
 pub enum SessionOptions {
@@ -29,6 +34,7 @@ pub enum SessionOptions {
     Join { invite: String },
 }
 
+/// A launcher request for the desktop application to carry out.
 #[derive(Clone)]
 pub enum Action {
     Start(SessionOptions),
@@ -43,6 +49,8 @@ pub enum Action {
     CloseWithoutSaving,
 }
 
+/// The launcher's state: the desktop state, host and invite drafts, status text and the
+/// pending action.
 pub(super) struct Model {
     pub previous_app_data: bool,
     pub state: DesktopState,

@@ -1,4 +1,4 @@
-//! Random item effects and names from Website `core-kernels/native-random-equipment.ts`.
+//! Random equipment: the effects, item level and name rolled for a randomly generated item.
 //!
 //! Selection retries and discarded draws are observable in the shared loot stream.
 //! `loot-goldens.json` replays all equipment types, tiers and advanced-skill pools.
@@ -15,6 +15,7 @@ const PRIMARY_TARGET_SKILL_IDS: [usize; 18] =
 const DISCIPLINE_TARGET_SKILL_IDS: [usize; 14] =
     [57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69, 70, 71];
 
+/// A rolled random item: its effects, item level and generated name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RandomEquipmentEffects {
     pub effects: Vec<EquipmentEffect>,
@@ -22,6 +23,8 @@ pub struct RandomEquipmentEffects {
     pub name: String,
 }
 
+/// The skill rows a random effect may target, given which advanced skills are unlocked: all
+/// available skills, a primary subset, and that subset plus the discipline skills.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RandomEquipmentSkillPools {
     pub all: Vec<usize>,

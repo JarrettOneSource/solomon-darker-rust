@@ -1,6 +1,6 @@
-//! Website `PlayerCardRequests` owns latest-wins lookup feedback per session.
+//! Player card lookup feedback for one session, where only the latest request counts.
 //! The five-second notice and ten-second lookup deadline are product UI choices,
-//! independent of retail gameplay ticks (Website social ledger 136).
+//! independent of retail gameplay ticks.
 
 const FEEDBACK_MS: f64 = 5_000.0;
 const REQUEST_TIMEOUT_MS: f64 = 10_000.0;
@@ -15,6 +15,8 @@ struct Feedback {
     until: f64,
 }
 
+/// The pending player card lookup with its deadline, and the notice shown when a lookup
+/// fails or times out.
 #[derive(Default)]
 pub(crate) struct PlayerCardRequests {
     next_id: u64,

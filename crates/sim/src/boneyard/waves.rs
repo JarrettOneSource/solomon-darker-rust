@@ -1,4 +1,5 @@
-//! Authored survival waves from `boneyard-wave-schema.ts` and `boneyard-wave-timeline.ts`.
+//! Survival waves: the retail wave.txt schedule, its compiled spawn bursts, the generated
+//! Boneyards' scripted programs and the director that runs them.
 
 pub mod director;
 mod legacy_timeline;
@@ -20,6 +21,7 @@ pub struct WaveGroupEntry {
     pub flags: &'static [EnemyFlag],
 }
 
+/// One authored GROUP of a wave row; the wave compiler samples whole groups.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct WaveGroup {
@@ -39,7 +41,8 @@ pub struct WaveDef {
     pub groups: &'static [WaveGroup],
 }
 
-/// The compiler removes the two source flags whose native effects were discarded.
+/// A compiled burst member. The compiler drops `Ignite` and `Immortalize`, which have no
+/// effect on the spawned enemy.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompiledWaveEntry {
@@ -47,6 +50,8 @@ pub struct CompiledWaveEntry {
     pub flags: Vec<EnemyFlag>,
 }
 
+/// One compiled spawn burst: how many enemies of a group to spawn, where, and over how many
+/// ticks.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompiledSpawnBurst {
@@ -61,6 +66,8 @@ pub struct CompiledSpawnBurst {
     pub steady: bool,
 }
 
+/// One compiled wave row: its spawn bursts and the living-enemy counts below which the
+/// director moves on to the lull and then to the next wave.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CompiledWaveSection {
@@ -69,6 +76,8 @@ pub struct CompiledWaveSection {
     pub release_threshold: usize,
 }
 
+/// The compiled opening: its spawn bursts and the living-enemy count below which the first
+/// schedule row begins.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompiledOpening {
     pub bursts: Vec<CompiledSpawnBurst>,

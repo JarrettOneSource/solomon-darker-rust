@@ -1,4 +1,4 @@
-//! Solomon's collision and navigation phase from `core-server/boneyard-world-placement.ts`.
+//! Solomon's collision and navigation phase while he escapes from his grave.
 //!
 //! The encounter kernel requests motion. This world phase keeps the fixed escape target,
 //! routes around static scenery, resolves against current gates and releases only the scenery
@@ -132,8 +132,8 @@ pub fn resolve_solomon_escape_movement(
 
 #[must_use]
 pub fn solomon_escape_traversal_bounds(bounds: BoneyardBounds) -> BoneyardBounds {
-    // The resolver insets by body radius. Compensate so the center reaches the source
-    // state-4 rectangle expanded by its separate 50-unit path margin.
+    // The resolver insets by body radius. Compensate so the center reaches the escape path
+    // target, which may lie up to the separate 50-unit path margin outside the bounds.
     let padding = SOLOMON_ESCAPE_PATH_MARGIN + SOLOMON_COLLISION_RADIUS;
     BoneyardBounds::new(
         bounds.x - padding,

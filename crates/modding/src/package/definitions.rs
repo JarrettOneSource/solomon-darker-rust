@@ -1,6 +1,7 @@
-//! Definition admission from `host/web-mod-content.ts`.
-//! Each temporary VM closes before its immutable compiled values leave this
-//! worker, so the native authority can receive the result without Lua handles.
+//! Compiles each provisioned mod's Lua definition, with the mods before it as dependencies,
+//! and adds the Boneyards those definitions declare. Each temporary VM closes before its
+//! immutable compiled values leave this worker, so the native authority can receive the
+//! result without Lua handles.
 
 use solomon_assets::boneyard::boneyard_scene_source_value;
 use solomon_sim::modding::LuaValue;
@@ -82,8 +83,8 @@ pub fn compile_web_session_content_definitions(
                     mode.is_finite() && mode.fract() == 0.0 && mode.abs() <= 9_007_199_254_740_991.0
                 });
             if let Some(mode) = mode {
-                // Invalid signed/oversized modes cannot be represented by a
-                // scene. They are also rejected by the Source prepared catalog.
+                // Invalid signed/oversized modes cannot be represented by a scene.
+                // The prepared catalog also rejects any mode outside 0..2.
                 if mode < 0.0 || mode > f64::from(u32::MAX) {
                     return Err(format!(
                         "{}.environment.mode must be an integer within 0..2",

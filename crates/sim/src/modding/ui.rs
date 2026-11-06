@@ -1,5 +1,5 @@
-//! Borrowed frontend projections from Website `mod-ui/`. Accepted content and
-//! runtime rows stay with their existing host/client owners.
+//! Borrowed mod UI projections: the authored minimap, skill book and skill picker.
+//! Accepted content and runtime rows stay with their existing host/client owners.
 
 mod minimap;
 mod skills;

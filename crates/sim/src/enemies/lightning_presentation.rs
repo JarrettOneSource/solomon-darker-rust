@@ -1,5 +1,5 @@
-//! Mage pulse factories and Faculty ribbons from `native-mage-lightning-pulse-presentation.ts`
-//! and `native-dark-lightning.ts`, reusing the canonical Air meshes and corona factories.
+//! Draw plans for Mage lightning pulses and the Faculty's dark Blightning ribbons, reusing the
+//! canonical Air meshes and corona factories.
 
 use super::boss_spell::{BossSpell, BossSpellKind};
 use super::projectiles::{MageLightningContact, MageLightningPulse};
@@ -10,6 +10,8 @@ use crate::spells::air::{
     build_air_path_light_sources, build_air_ribbon_with_style,
 };
 
+/// What a Mage lightning pulse draws this frame: its ribbon body, source and contact coronas, path
+/// lights and endpoints.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyMageLightningPlan {
     pub age_ticks: u64,

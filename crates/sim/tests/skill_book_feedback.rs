@@ -1,4 +1,5 @@
-//! Pinned fa08 `skill-book-feedback.ts`: a retained receipt is not a new outcome.
+//! Skill book feedback: a retained receipt is not a new outcome, and rejected or unrelated
+//! receipts never replay.
 use solomon_sim::economy::{
     HubActionFeedback, HubActionFeedbackAction, SkillBookFeedbackCursor, SkillBookOutcome,
     skill_book_result_text,

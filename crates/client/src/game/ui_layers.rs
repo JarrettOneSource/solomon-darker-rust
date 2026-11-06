@@ -1,6 +1,6 @@
-//! Current application stacking contexts from c140's body append sites and CSS.
-//! Native inner painters retain fa08 geometry. Every entry is supplied by its real
-//! producer; registration never creates a hidden Area or changes its input admission.
+//! The fixed back-to-front order of the application's UI layers. Trailing numbers give
+//! each layer's stacking level. Every entry is supplied by its real producer;
+//! registration never creates a hidden Area or changes its input admission.
 
 use super::Game;
 use crate::fullscreen::FullscreenControl;
@@ -32,7 +32,7 @@ impl Game {
             hub_notices,                 // 45
         ]);
 
-        // Both menu subtrees stay inside body50 even when their local levels are large.
+        // Both menu subtrees stay at level 50 even when their local levels are large.
         let mut scene = vec![crate::menu::scene_layer(), crate::menu::library_layer()];
         let mut overlay = vec![crate::menu::overlay_layer()];
         if let Some(parent) = self.menu.mobile_editor_parent_layer() {
@@ -74,19 +74,19 @@ impl Game {
             ModSkillsUi::picker_layer(),      // 10002
             ModSkillsUi::book_layer(),        // 10004
             self.game_over.layer_id(),        // 20000
-            self.panels.notebox_layer_id(),   // 31000, independently body-mounted.
+            self.panels.notebox_layer_id(),   // 31000, outside the panels' subtree.
             crate::menu::orientation_layer(), // 100000, appended before Cheats.
             self.cheats.layer_id(),
         ]);
         if fullscreen_above_guidance {
-            layers.extend(FullscreenControl::fixed_layers()); // Coarse portrait100001.
+            layers.extend(FullscreenControl::fixed_layers()); // 100001 on portrait touch.
         }
         layers.push(self.match_loading_view.layer_id()); // 200000
         // Rejected admission returns to an opaque title. Its reason must remain
         // above that scene and the desktop controls rather than behind them.
         layers.push(crate::runtime_ui::layer_id());
 
-        // The Source native dialogs retain mount order independently of document z.
+        // Native dialogs keep their mount order, independent of stacking level.
         // A content update keeps its place; closing removes it; reopening appends it.
         let active: Vec<_> = [
             self.panels.skill_book_result_layer_id(),

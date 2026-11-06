@@ -1,4 +1,4 @@
-//! Exact stock SkillScreen text from `renderer/skill-book-render-contract.ts`.
+//! Exact stock skill page text: display names, wrapped lines, text heights and root tints.
 //! These authored page wraps count glyph advances without kerning. Ordinary UI
 //! wrapping remains in ui_text and must not replace this separate contract.
 
@@ -13,8 +13,8 @@ pub fn skill_page_display_name(source: &str, effective_rank: u32) -> String {
     if effective_rank > 1 { format!("{name} {effective_rank}") } else { name }
 }
 
-/// `nativeSkillPageWrappedLines`: preserves authored CR/LF handling, replaced
-/// hyphen/space breaks and the inserted hyphen for an overlong unbroken word.
+/// Wraps skill page text, preserving authored CR/LF handling, replaced hyphen/space
+/// breaks and the inserted hyphen for an overlong unbroken word.
 #[must_use]
 pub fn skill_page_wrapped_lines(source: &str) -> Vec<String> {
     let mut characters: Vec<char> = source.chars().collect();

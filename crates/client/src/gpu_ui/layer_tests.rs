@@ -1,4 +1,4 @@
-//! Real egui layout/input/drain contracts for the Source composition policy.
+//! Real egui layout/input/drain contracts for the fixed UI layer composition policy.
 
 use egui::{
     Area, Color32, Context, Event, Id, LayerId, Modifiers, Order, Pos2, RawInput, Rect, Sense,

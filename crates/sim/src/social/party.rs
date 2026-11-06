@@ -1,10 +1,12 @@
-//! Party presentation and direct-session admission rules from `host/party-system.ts`.
+//! Party records, presentation and direct-session admission rules: membership, rosters,
+//! invitations, join requests and rejections.
 
 use crate::combat::PlayerLifeState;
 use crate::profile::WizardElement;
 
 use super::GameSessionKind;
 
+/// A party's visibility setting: public, invite-only or private.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PartyVisibility {
@@ -24,6 +26,7 @@ impl PartyVisibility {
     }
 }
 
+/// A player as party menus show them: display name, ID and account statistics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyPlayerProfile {
@@ -34,6 +37,8 @@ pub struct PartyPlayerProfile {
     pub player_id: String,
 }
 
+/// A party: its ID, leader, members in join order, visibility, join code, listing and
+/// Enhanced Effects setting.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyMembership {
@@ -52,8 +57,8 @@ const fn default_enhanced_effects() -> bool {
     true
 }
 
-/// The source transfers leadership to the first retained member, preserving join order,
-/// and removes an empty party. Disconnection alone does not remove durable membership.
+/// Leadership passes to the first retained member, preserving join order, and an empty
+/// party is removed. Disconnection alone does not remove durable membership.
 #[must_use]
 pub fn party_after_member_departure(
     party: &PartyMembership,
@@ -68,6 +73,7 @@ pub fn party_after_member_departure(
     Some(next)
 }
 
+/// A party member's roster row: name, element, health, life state and connection.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyRosterPlayer {
@@ -80,6 +86,7 @@ pub struct PartyRosterPlayer {
     pub player_id: String,
 }
 
+/// A pending party invitation as its recipient sees it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyInvitationView {
@@ -88,6 +95,7 @@ pub struct PartyInvitationView {
     pub party_id: String,
 }
 
+/// A player asking to join a party: display name, account and ID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyJoinRequester {
@@ -96,6 +104,7 @@ pub struct PartyJoinRequester {
     pub requester_id: String,
 }
 
+/// A pending request to join the party, as the leader sees it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyJoinRequestView {
@@ -103,6 +112,8 @@ pub struct PartyJoinRequestView {
     pub requester: PartyJoinRequester,
 }
 
+/// The local player's party view: membership, roster, invitations, join requests, Hub
+/// players and revision.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct LocalPartyState {
@@ -114,7 +125,7 @@ pub struct LocalPartyState {
     pub revision: u64,
 }
 
-/// `projectPartyState` requires a durable row for every admitted member. A missing actor
+/// Projection requires a durable row for every admitted member. A missing actor
 /// can be offline; a missing retained roster entry is an authority/projection error.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MissingPartyRosterPlayer(pub String);
@@ -144,6 +155,7 @@ pub fn project_direct_party_state(
     })
 }
 
+/// Why a party action was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PartyActionRejection {
@@ -186,7 +198,7 @@ impl PartyActionRejection {
         }
     }
 
-    /// Authored `partyActionErrorMessage` copy from `MainMenuScene.tsx`.
+    /// The authored message shown for this rejection.
     #[must_use]
     pub const fn text(self) -> &'static str {
         match self {
@@ -208,8 +220,9 @@ impl PartyActionRejection {
     }
 }
 
-/// Admission order is the source `kickPartyPlayer` order. The host performs the accepted
-/// departure and transport close; this predicate never edits another gameplay owner.
+/// Checks party membership, leadership, self-kick, then the target. The host performs the
+/// accepted departure and transport close; this predicate never edits another gameplay
+/// owner.
 #[must_use]
 pub fn party_kick_rejection(
     party: Option<&PartyMembership>,

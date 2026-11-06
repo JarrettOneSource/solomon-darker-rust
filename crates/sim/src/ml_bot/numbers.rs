@@ -1,4 +1,4 @@
-//! Shared scalar operations used by the Source policy's observation modules.
+//! Shared scalar operations used by the bot's observation modules.
 
 use crate::Vec2;
 use crate::float::{hypot, sin_cos};
@@ -32,7 +32,7 @@ pub(super) fn heading_vector(degrees: f64) -> Vec2 {
 }
 
 pub(super) fn directions() -> [Vec2; 8] {
-    // This Source expression rounds one bit below FRAC_1_SQRT_2.
+    // This expression rounds one bit below FRAC_1_SQRT_2, so keep it.
     let diagonal = 1.0 / 2.0_f64.sqrt();
     [
         Vec2::new(1.0, 0.0),

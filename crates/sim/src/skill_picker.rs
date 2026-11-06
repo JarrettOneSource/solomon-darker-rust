@@ -1,5 +1,5 @@
-//! Native skill-offer presentation from `skill-picker-render-contract.ts` and
-//! `level-up-presentation.ts`. Offers and acceptance remain in `profile::progression`.
+//! The level-up skill picker's presentation: its fade in and out, panel and card layout,
+//! and each offered card. Offers and acceptance remain in `profile::progression`.
 
 use crate::hud::HudRect;
 use crate::profile::{
@@ -11,6 +11,8 @@ pub const SKILL_PICKER_ROOT_TINTS: [u32; 8] =
 const ROOT_LABELS: [&str; 8] =
     [" ETHER", " FIRE", " AIR", " WATER", " EARTH", "BODY ", "MIND ", "ARCANE "];
 
+/// The skill picker's fade at one moment: curtain, panel, ambient and reveal alphas, and
+/// whether it accepts input.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SkillPickerReveal {
     pub ambient_alpha: f64,
@@ -20,6 +22,8 @@ pub struct SkillPickerReveal {
     pub reveal_alpha: f64,
 }
 
+/// One offered skill's card: name, description, icon and frame records, root label and
+/// tints.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkillPickerCard {
     pub family_label: &'static str,

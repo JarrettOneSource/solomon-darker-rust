@@ -1,5 +1,5 @@
-//! Mobile editor geometry from Website `mobile-ui-layout.ts`.
-//! All snaps use the source's authored grid/edge priorities and fixed-opposite resize
+//! Mobile layout editor geometry: moving, resizing and snapping elements.
+//! All snaps use the authored grid/edge priorities and fixed-opposite resize
 //! anchor. These values are presentation transforms, never gameplay coordinates.
 
 use crate::Vec2;
@@ -18,6 +18,7 @@ pub const MOBILE_UI_PAGE_ZOOM_MIN: f64 = 0.35;
 pub const MOBILE_UI_PAGE_ZOOM_MAX: f64 = 4.0;
 const SNAP_EPSILON: f64 = 1e-6;
 
+/// A resize handle on one of an element's edges or corners.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MobileUiResizeHandle {
     NorthWest,
@@ -75,6 +76,7 @@ impl MobileUiResizeHandle {
     }
 }
 
+/// The axis a snap guide aligns: x or y.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MobileUiSnapAxis {
     X,
@@ -105,7 +107,8 @@ impl MobileUiSnapAxis {
     }
 }
 
-/// Declaration order is the source priority: sibling edges, page edges, then grid.
+/// What a guide snaps to. Declaration order is the priority: sibling edges, page edges,
+/// then grid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MobileUiSnapKind {
     Element,
@@ -124,6 +127,7 @@ impl MobileUiSnapKind {
     }
 }
 
+/// An element's snap frame on the page: its edges and center.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MobileUiSnapRect {
     pub bottom: f64,
@@ -134,6 +138,7 @@ pub struct MobileUiSnapRect {
     pub top: f64,
 }
 
+/// A snap guide: its axis, kind and position on the page.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MobileUiSnapGuide {
     pub axis: MobileUiSnapAxis,
@@ -141,6 +146,7 @@ pub struct MobileUiSnapGuide {
     pub position: f64,
 }
 
+/// A snapped transform and the guides it aligned to.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobileUiSnapResult {
     pub guides: Vec<MobileUiSnapGuide>,
@@ -273,9 +279,9 @@ pub fn mobile_ui_resize_transform(
     constrain_mobile_ui_transform(resize_at_scale(resize, resize.scale), natural_size, page)
 }
 
-/// The complete source gesture record uses the same snap targets/threshold as movement.
-/// Keeping the gesture together avoids reordering
-/// its opposite-anchor arithmetic at individual UI callers.
+/// Snaps a resize gesture with the same snap targets and threshold as movement. Keeping the
+/// gesture together avoids reordering its opposite-anchor arithmetic at individual UI
+/// callers.
 #[must_use]
 pub fn snap_mobile_ui_resize(
     gesture: MobileUiResizeGesture,
@@ -355,6 +361,8 @@ pub fn snap_mobile_ui_resize(
     snap_result(transform, guides)
 }
 
+/// A resize in progress: the element's initial transform and natural size, the page, the
+/// handle, and the initial and current pointer positions.
 #[derive(Clone, Copy, Debug)]
 pub struct MobileUiResizeGesture {
     pub initial: MobileUiElementTransform,

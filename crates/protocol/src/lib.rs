@@ -1,8 +1,8 @@
 //! Direct-join messages shared by the native authority and the WebAssembly client.
 //!
-//! This is the Rust port's own versioned protocol, separate from the Website's wire
-//! format. Admission, input sequencing, pause and readiness follow `host/game-host.ts`;
-//! gameplay payloads reuse the actual simulation types rather than a second player model.
+//! This is the game's own versioned protocol. It covers admission, input sequencing,
+//! pause, resume grace and renderer readiness; gameplay payloads reuse the simulation
+//! types rather than a second player model.
 
 use std::collections::BTreeMap;
 
@@ -39,6 +39,7 @@ pub struct ResumeCredentials {
     pub token: String,
 }
 
+/// The menu whose opening paused gameplay.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PauseSource {
@@ -48,6 +49,8 @@ pub enum PauseSource {
     SkillSelector,
 }
 
+/// A College status shown above a player's wizard: paused in a blocking menu, or
+/// occupied with a panel or picker.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HubActivity {
@@ -55,6 +58,7 @@ pub enum HubActivity {
     Occupied,
 }
 
+/// Why the host holds gameplay in a resume grace before ticking again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResumeGraceReason {
@@ -71,7 +75,7 @@ pub enum ResumeGraceReason {
 impl PauseSource {
     #[must_use]
     pub const fn resume_grace_reason(self) -> Option<ResumeGraceReason> {
-        // `gameplay-resume-grace.ts`: closing a selector has no countdown.
+        // Releasing a skill-selector pause starts no countdown.
         match self {
             Self::Inventory => Some(ResumeGraceReason::InventoryClosed),
             Self::PauseMenu => Some(ResumeGraceReason::PauseMenuClosed),
@@ -140,6 +144,7 @@ pub enum GameCommand {
     },
 }
 
+/// A message from a client to the host.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClientMessage {
@@ -176,8 +181,9 @@ pub enum ClientMessage {
         sequence: u64,
         next_offset: usize,
     },
-    /// Actual client camera for source audio gain. This presentation value never
-    /// changes simulation visibility, aiming, collision or random streams.
+    /// The client's camera, which the host uses to attenuate combat sounds by distance.
+    /// This presentation value never changes simulation visibility, aiming, collision
+    /// or random streams.
     ListenerView {
         center: Vec2,
         world_width: f64,
@@ -212,6 +218,7 @@ pub enum ClientMessage {
     Disconnect,
 }
 
+/// The player whose open menu pauses gameplay, and which menu it is.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GameplayPause {
@@ -220,6 +227,7 @@ pub struct GameplayPause {
     pub source: PauseSource,
 }
 
+/// A hold before gameplay resumes. Clients acknowledge it by `sequence` once ready.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GameplayResumeGrace {
@@ -229,6 +237,8 @@ pub struct GameplayResumeGrace {
     pub sequence: u64,
 }
 
+/// Host-owned status sent with every snapshot: party leader, connected players, College
+/// activities, pause, resume grace and the run whose renderers are still loading.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HostSnapshot {
@@ -260,8 +270,8 @@ pub struct SnapshotFrame<S> {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ServerMessage<S> {
-    /// Source chunks count UTF-16 units. A chunk may end between a surrogate pair;
-    /// paired Rust endpoints carry those units losslessly until final assembly.
+    /// Chunks count UTF-16 units. A chunk may end between a surrogate pair; both
+    /// endpoints carry those units losslessly until final assembly.
     WelcomeChunk {
         data: Vec<u16>,
         offset: usize,
@@ -333,6 +343,7 @@ pub enum ServerMessage<S> {
     },
 }
 
+/// The kind of failure the host reports in `ServerMessage::Error`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostErrorCode {

@@ -22,6 +22,8 @@ enum TargetSlot {
     Vertical,
 }
 
+/// A drawing view: physical and logical size, origin and clip, for the screen or a group's
+/// offscreen target.
 #[derive(Clone, Copy)]
 pub(super) struct View {
     pub physical: [i32; 2],
@@ -60,6 +62,7 @@ struct Slot {
     vertical: Option<RenderTarget>,
 }
 
+/// Offscreen render targets reused per nesting depth for group composition and blur.
 #[derive(Default)]
 pub(super) struct Targets {
     slots: Vec<Slot>,

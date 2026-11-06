@@ -1,4 +1,4 @@
-//! Current Source `renderer/native-region-camera-presentation.ts`.
+//! Region camera displacement presentation.
 //! Late Flame births replay one short shared history; independently aging each
 //! family's displacement would reverse stored-float ties and cutoff decisions.
 
@@ -11,6 +11,8 @@ use crate::spells::weld::{
     FLAME_CAMERA_MAX_PRESENTATION_TICKS, camera_magnitude_squared, decay_region_camera_displacement,
 };
 
+/// The displayed region camera displacement, with a short history so late Flame births can
+/// be replayed.
 #[derive(Clone, Debug)]
 pub struct RegionCameraPresentation {
     checkpoint_tick: i64,

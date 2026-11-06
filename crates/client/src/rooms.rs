@@ -1,8 +1,9 @@
-//! The four College private rooms from `renderer/hub-private-room-scene.ts`.
+//! The four College private rooms: mortuary, library, storeroom and office, with their
+//! props, flames and resident actors.
 //!
-//! The stock-derived images are copied from the pinned Website by `sync-stock-assets.sh`.
-//! `tools/hub_room_art.py` and `tools/extract-hub-assets.py` own their composition; sim's
-//! room tables keep collider roots, painting anchors and painter roots separate.
+//! The stock-derived room images are copied from a Website checkout by
+//! `scripts/sync-stock-assets.sh`. The simulation's room tables keep collider roots,
+//! painting anchors and painter roots separate.
 
 use solomon_sim::Vec2;
 use solomon_sim::hub::HubWizard;
@@ -18,10 +19,13 @@ use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
 const WHITE: [f32; 4] = [1.0; 4];
 
+/// Loaded textures and resident actors for the four College private rooms.
 pub struct PrivateRoomScenes {
     rooms: [RoomScene; 4],
 }
 
+/// One frame's inputs for drawing a private room: the local wizard, player painter
+/// layers, the tick and the dowser's animation frame.
 pub struct PrivateRoomFrame<'a> {
     pub local_wizard: &'a HubWizard,
     pub player_painters: &'a [PainterLayer],

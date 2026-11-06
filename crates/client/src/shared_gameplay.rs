@@ -1,4 +1,4 @@
-//! GPU shared pause/resume presentation from GameplayPauseMenu/GameplayResumeProgress.
+//! GPU banners for a shared gameplay pause and the resume grace before play continues.
 //! Native authority owns the hold clock; this view only extrapolates its displayed progress.
 
 use crate::gpu_ui::{FontRunOptions, GroupEffect, ImageShadow, UiFrame, font_run_with_options};
@@ -8,22 +8,28 @@ use solomon_sim::menu::shared::{
     GameplayPausePresentation, gameplay_pause_presentation, gameplay_resume_grace_progress,
 };
 
+/// A shared pause as the host reports it: who owns it and what they are doing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SharedPauseView<'a> {
     pub owner_player_id: &'a str,
     pub owner_display_name: &'a str,
-    /// Source labels: Inventory, the Skill Book, the skill selector; None for pause menu.
+    /// The `PauseSource` label: Inventory, the Skill Book, the skill selector; None for
+    /// the pause menu.
     pub activity: Option<&'a str>,
 }
 
+/// The grace countdown before gameplay resumes: its reason, remaining time and sequence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ResumeGraceView<'a> {
-    /// Source hyphen IDs, including party-rejoin-wait and skill-picker-closed.
+    /// The `ResumeGraceReason` as a hyphenated ID, such as party-rejoin-wait or
+    /// skill-picker-closed.
     pub reason: &'a str,
     pub remaining_ms: Option<u64>,
     pub sequence: u64,
 }
 
+/// One frame's shared pause and resume state, and whether a menu or Settings covers
+/// the world.
 #[derive(Clone, Copy, Debug)]
 pub struct SharedGameplaySnapshot<'a> {
     pub local_player_id: &'a str,
@@ -52,6 +58,7 @@ struct ResumePresentation {
     progress: Option<f64>,
 }
 
+/// The shared pause and resume banners, with the clocks used to extrapolate progress.
 pub struct SharedGameplayUi {
     pause_key: Option<(String, Option<String>)>,
     pause_received_at: f64,
@@ -264,7 +271,8 @@ impl SharedGameplayUi {
                 resume.label,
                 options,
             )?;
-            // Absolute left50%/width:auto uses Source shrink-to-fit before its display scale.
+            // The banner shrinks to fit its unscaled label, within half the screen and
+            // a minimum width.
             let intrinsic_width = (full_label.size().x / scale).max(if resume.progress.is_some() {
                 336.0
             } else {

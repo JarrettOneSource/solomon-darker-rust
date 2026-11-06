@@ -1,4 +1,4 @@
-//! Source `MatchLoadingScreen.tsx`: the accepted transition owns progress and delay.
+//! The match loading screen. The accepted transition owns progress and delay.
 //! Stock artwork, status and its progress track are painted in the same GPU frame.
 
 use crate::gpu_ui::{FontRunOptions, GroupEffect, ImageShadow, UiFrame, font_run_with_options};
@@ -7,6 +7,8 @@ use solomon_sim::menu::loading::MatchLoadingState;
 
 const ART: &str = "assets/stock/menu/match-loading-background.png";
 
+/// The match loading screen's current transition state and whether its artwork delay
+/// has passed.
 #[derive(Default)]
 pub struct MatchLoadingView {
     loading: Option<MatchLoadingState>,

@@ -7,6 +7,8 @@ use solomon_sim::secondary::motion::STONESKIN_GRID_COMPONENTS;
 use super::*;
 use crate::beam_mesh::sprite_texel_rect;
 
+/// The mesh that draws a Stoneskin wizard's captured body: the warped 10-by-10 birth grid
+/// with Enhanced Effects, otherwise a single quad over the whole capture.
 pub(super) struct StoneskinMesh {
     birth_positions: Vec<f64>,
     enhanced_effects: bool,

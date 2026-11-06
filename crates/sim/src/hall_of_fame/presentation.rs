@@ -1,4 +1,4 @@
-//! Native Hall box/row geometry from `hall-of-fame-presentation.ts` (`0x005A2C80`).
+//! The original game's Hall of Fame box and row geometry (`0x005A2C80`).
 //! Coordinates are inside the 1200×695 box at stage (200,80), before viewport scaling.
 
 use crate::Vec2;
@@ -11,6 +11,7 @@ pub const HALL_EXPANDED_HEIGHT: f64 = 150.0;
 pub const HALL_CONTENT_TOP: f64 = 80.0;
 pub const HALL_TILE_SIZE: f64 = 264.0;
 
+/// The font of a Hall of Fame text label.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HallFont {
     Body,
@@ -31,6 +32,7 @@ impl HallFont {
     }
 }
 
+/// How a Hall of Fame text label aligns horizontally to its anchor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HallTextAlign {
     Center,
@@ -38,6 +40,7 @@ pub enum HallTextAlign {
     Right,
 }
 
+/// Where one Hall of Fame text label is drawn, in which font and alignment.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HallTextAnchor {
     pub align: HallTextAlign,
@@ -51,12 +54,14 @@ impl HallTextAnchor {
     }
 }
 
+/// The centre and rotation in degrees of a row's chevron, which shows or hides its details.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HallChevronPlacement {
     pub position: Vec2,
     pub rotation: f64,
 }
 
+/// One highest-skill cell of an expanded row: the skill icon's centre and its rank numeral.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HallSkillCellLayout {
     pub center: Vec2,
@@ -75,6 +80,8 @@ impl HallSkillCellLayout {
     }
 }
 
+/// Where an expanded row draws its details: survival time and wave, kills, awesomest kill,
+/// highest skills and perks used.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HallExpandedLayout {
     pub awesomest_kill: HallTextAnchor,
@@ -93,6 +100,8 @@ pub struct HallExpandedLayout {
     pub wave_value: HallTextAnchor,
 }
 
+/// The layout of one Hall of Fame row: rank, wizard portrait, name, level, Awesomeness,
+/// account, chevron, highlight and separator, and the details when expanded.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HallRowLayout {
     pub account: HallTextAnchor,

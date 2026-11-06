@@ -1,5 +1,5 @@
-//! Native experience thresholds, skill offers and acquisition from Website
-//! `core-kernels/player-progression.ts`. Combat resources stay in their canonical state.
+//! Experience thresholds, level-up skill offers and acquisition, Hagatha runtime charges
+//! and potion effects. Combat resources stay in their canonical state.
 
 use crate::Rng;
 use crate::combat::PlayerCombatState;
@@ -23,6 +23,8 @@ pub const LEVEL_THRESHOLDS: [u32; 76] = [
 const ELEMENTAL_PRIMARIES: [usize; 5] = [8, 16, 24, 32, 40];
 const WELDING_RELATED: [[usize; 2]; 5] = [[10, 9], [18, 17], [25, 26], [34, 33], [43, 42]];
 
+/// Hagatha perk state that changes during play: the Cheat Death charge and the until-hurt
+/// Reverie and Serendipity effects.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HagathaRuntimeState {
@@ -78,6 +80,7 @@ impl HagathaRuntimeState {
     }
 }
 
+/// The potion kinds a wizard can drink.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PotionKind {
     Health,
@@ -103,6 +106,8 @@ impl PotionKind {
     }
 }
 
+/// One choice in a level-up skill offer: the skill, its target rank, any Weld build, and
+/// whether Creativity marked it with insight.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerSkillOfferOption {
@@ -112,6 +117,7 @@ pub struct PlayerSkillOfferOption {
     pub weld_build_id: Option<u32>,
 }
 
+/// A pending level-up skill offer: its sequence, level, options and any automatic choice.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerSkillOffer {
@@ -121,6 +127,7 @@ pub struct PlayerSkillOffer {
     pub sequence: u64,
 }
 
+/// A player's pick from a skill offer, identified by offer sequence and option index.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerSkillChoice {
@@ -129,6 +136,7 @@ pub struct PlayerSkillChoice {
     pub skill_id: usize,
 }
 
+/// The level, experience and newly crossed levels one player shares with another.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SharedPlayerLevelMilestone {
@@ -156,8 +164,8 @@ impl SharedPlayerLevelMilestone {
     }
 }
 
-/// The progression fields of PlayerProgressionComponent. Current resources and statuses
-/// remain in PlayerCombatState and are passed only to commands that change them.
+/// A wizard's level, experience, skill offers and timed potion effects. Current resources
+/// and statuses remain in PlayerCombatState and are passed only to commands that change them.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerProgressionState {
@@ -295,9 +303,9 @@ impl PlayerProgressionState {
         self.sorcerors_charm_available = sorcerors_charm_available;
     }
 
-    /// `synchronizePlayerLevelMilestone` copies the source player's milestone and
-    /// opens the receiver's own offer. It does not heal the receiver; rejoin has
-    /// a separate resource-recovery boundary after this shared progression step.
+    /// Copies another player's milestone and opens the receiver's own offer. It does not
+    /// heal the receiver; rejoin has a separate resource-recovery boundary after this
+    /// shared progression step.
     pub fn synchronize_level_milestone(
         &mut self,
         book: &SkillBookState,
@@ -416,8 +424,8 @@ impl PlayerProgressionState {
         true
     }
 
-    /// `replacePlayerSkillChoiceWithMod`: the admitted authored reward consumes this
-    /// native offer without awarding any of its skills or drawing native offer RNG.
+    /// An admitted mod reward consumes this stock offer without awarding any of its skills
+    /// or drawing offer RNG.
     pub fn replace_choice_with_mod(&mut self, offer_sequence: u64) -> bool {
         if self.pending_offer.as_ref().is_none_or(|offer| offer.sequence != offer_sequence) {
             return false;
@@ -596,7 +604,7 @@ pub fn skill_passes_offer_eligibility(skill_id: usize, level: u32, book: &SkillB
     learned(book, skill_id) || level >= rule.minimum_level.saturating_sub(reduction)
 }
 
-/// `buildPlayerSkillOffer`: local offer-seed draws choose pools; the gameplay RNG owns
+/// Builds a level-up offer. Local offer-seed draws choose pools; the gameplay RNG owns
 /// Weld selection and final full-range shuffle, so the two streams cannot be merged.
 #[must_use]
 pub fn build_player_skill_offer(

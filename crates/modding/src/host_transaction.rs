@@ -1,4 +1,5 @@
-//! Borrowed atomic host transactions from `prepared-mod-host.ts`.
+//! Intent transactions for the prepared mod host. A batch is applied to a copy of the game and
+//! to the engines; commit swaps the copy in, and rollback restores the game and the engines.
 
 use solomon_sim::enemies::EnemySpawnIntent;
 use solomon_sim::modding::runtime::*;
@@ -9,6 +10,8 @@ use crate::host_runtime::PreparedModRuntime;
 use crate::intents::{ModIntentAdapter, ModIntentExecutionContext, ModIntentTransaction};
 use crate::player_control::{ModControlLease, ModPlayerControl, select_mod_player_skill};
 
+/// Borrows the game, the content engines, player controls and the pending spawn and
+/// presentation queues so that mod intent batches can be prepared as transactions.
 pub(crate) struct HostIntentAdapter<'a> {
     pub game: &'a mut GameSession,
     pub runtime: &'a mut PreparedModRuntime,
@@ -77,9 +80,9 @@ impl ModIntentAdapter for HostIntentAdapter<'_> {
         context: &'a ModIntentExecutionContext,
     ) -> Result<Box<dyn ModIntentTransaction + 'a>, String> {
         let checkpoint = TransactionCheckpoint::capture(self.runtime, self.controls);
-        // Source builds an immutable candidate and writes it only at commit.
-        // This transient clone is the same canonical Session type, including its
-        // actual RNG streams. It is never stepped or retained as another world.
+        // Intents change a candidate copy that is written back only at commit. The copy
+        // is a full `GameSession`, RNG streams included, and is never stepped or
+        // retained as another world.
         let mut candidate = self.game.clone();
         let mut births = Vec::new();
         let mut projected = Vec::new();
@@ -131,8 +134,8 @@ impl ModIntentAdapter for HostIntentAdapter<'_> {
 
 impl ModIntentTransaction for HostIntentTransaction<'_> {
     fn commit(&mut self) -> Result<(), String> {
-        // The exclusive game borrow enforces Source's state-identity guard:
-        // nothing can replace authority between prepare and this commit.
+        // The exclusive game borrow guarantees that nothing replaced the game
+        // between prepare and this commit.
         if self.candidate.is_none() {
             return Err("authoritative game state changed during a mod transaction".into());
         }

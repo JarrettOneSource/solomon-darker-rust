@@ -13,8 +13,8 @@ pub const INITIAL_INDEX_B: usize = 31;
 pub const STOCK_DIVISOR: u32 = 100_000;
 pub const SEED_TICK_MULTIPLIER: u32 = 0x0ef3;
 
-/// The Website's FNV-1a over UTF-16 code units, used for separately owned gate, encounter
-/// and wave random streams. Zero uses the same nonzero escape seed as those source owners.
+/// FNV-1a over UTF-16 code units, which seeds the separately owned gate, encounter and wave
+/// random streams. A zero hash becomes the same nonzero escape seed their xorshift uses.
 #[must_use]
 pub fn seed_from_text(seed: &str) -> u32 {
     let mut state = 0x811c_9dc5_u32;
@@ -25,8 +25,8 @@ pub fn seed_from_text(seed: &str) -> u32 {
     if state == 0 { 0x6d2b_79f5 } else { state }
 }
 
-/// The Website's private actor/gate/wave xorshift stream (`nextBoneyardWaveRandom`).
-/// Its zero escape is also the returned word, unlike the courtyard ambient sampler.
+/// The private actor/gate/wave xorshift stream. Its zero escape is also the returned word,
+/// unlike the courtyard ambient sampler.
 pub fn next_xorshift_word(state: &mut u32) -> u32 {
     let mut next = *state;
     next ^= next << 13;
@@ -40,6 +40,8 @@ pub fn next_xorshift_random(state: &mut u32) -> f64 {
     f64::from(next_xorshift_word(state)) / 4_294_967_296.0
 }
 
+/// The original game's 55-word lagged-Fibonacci generator: two ring cursors, the words and
+/// the float divisor.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(try_from = "saved::RngDocument"))]
@@ -56,6 +58,7 @@ mod saved {
     use super::{MASK, Rng, WORD_COUNT};
 
     // Deserialization must establish the ring invariants before any kernel indexes it.
+    /// A saved generator, checked against the ring invariants before it becomes an `Rng`.
     #[derive(serde::Deserialize)]
     pub(super) struct RngDocument {
         index_a: usize,
@@ -92,7 +95,8 @@ mod saved {
 }
 
 impl Rng {
-    /// `drawNativeUnitVector` preserves the native float32 angle stores before trig.
+    /// A unit vector from one angle draw, preserving the native float32 angle stores before
+    /// trig.
     pub fn draw_unit_vector(&mut self) -> crate::Vec2 {
         let angle = self.draw_scaled_float(360.0, false);
         let radians =
@@ -105,7 +109,7 @@ impl Rng {
 
     /// Seeds the ladder: `words[0] = seed & MASK`, `words[1] = 1`, then pairwise sums.
     ///
-    /// Like the reference, the seed is reduced to its low 32 bits before masking.
+    /// The seed is reduced to its low 32 bits before masking.
     #[must_use]
     pub fn new(seed: i64) -> Self {
         let mut words = [0u32; WORD_COUNT];
@@ -176,8 +180,8 @@ impl Rng {
         if signed { self.apply_sign(scaled) } else { scaled }
     }
 
-    /// Native `0x004012C0` (`drawNativeSign`): zero selects negative, the opposite
-    /// polarity from the optional sign word of `drawNativeFloat`.
+    /// Native `0x004012C0`: zero selects negative, the opposite polarity from the optional
+    /// sign word of `draw_unit_float` and `draw_scaled_float`.
     pub fn draw_sign(&mut self, magnitude: f64) -> f64 {
         if self.draw_integer(2) == 0 { -magnitude } else { magnitude }
     }

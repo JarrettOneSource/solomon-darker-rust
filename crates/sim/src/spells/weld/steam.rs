@@ -1,4 +1,4 @@
-//! Steam channel particles and private detonation fans from `native-weld-steam.ts`.
+//! The Steam Weld: its channel particles and the private fan of a Steam detonation.
 
 use super::model::{WeldActorBase, WeldActorBirth};
 use crate::float::{fround, hypot};
@@ -8,6 +8,8 @@ use crate::spells::model::FireExplosionPresentation;
 use crate::spells::targeting::direction_from_heading;
 use crate::{Rng, Vec2};
 
+/// A Steam particle's variant: a normal particle that can make contact, or a faster,
+/// fainter overlay particle that cannot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WeldSteamVariant {
@@ -15,6 +17,8 @@ pub enum WeldSteamVariant {
     Over,
 }
 
+/// One Steam particle: its motion, life, color fade, contact clock and damage, and where
+/// terrain stops it.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldSteamActorState {
@@ -50,6 +54,8 @@ struct WeldSteamConstructorProgram {
     tint_fade: f64,
 }
 
+/// Inputs for spawning a Steam particle: birth, damage, query origin, power and the
+/// terrain obstruction query.
 pub struct SpawnWeldSteamInput<'a> {
     pub birth: WeldActorBirth<'a>,
     pub damage: f64,
@@ -136,6 +142,8 @@ pub fn spawn_weld_steam_actor(
     })
 }
 
+/// Inputs for a Steam detonation: explosion damage and radius, fragment count and damage,
+/// origin, owner and private seed.
 pub struct WeldSteamDetonationInput<'a> {
     pub explode_damage: f64,
     pub explode_radius: f64,
@@ -149,12 +157,15 @@ pub struct WeldSteamDetonationInput<'a> {
     pub world_key: &'a str,
 }
 
+/// A Steam detonation's explosion and its sound pitch.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldSteamExplosionState {
     pub explosion: FireExplosionState,
     pub sound_pitch: f64,
 }
 
+/// A Steam detonation: its optional explosion, the Steam fragments it throws and the next
+/// free ID.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldSteamDetonation {
     pub explosion: Option<WeldSteamExplosionState>,

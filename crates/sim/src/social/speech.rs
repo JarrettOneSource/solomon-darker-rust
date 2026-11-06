@@ -1,4 +1,4 @@
-//! Retained accepted-chat speech from Website `world-speech-presentation.ts`.
+//! Speech bubbles over players for accepted chat: when each appears, holds and fades.
 //! This is a client receipt clock; snapshot history never starts a world bubble.
 
 use super::{GameChatChannel, GameChatMessage};
@@ -7,6 +7,7 @@ pub const GAME_WORLD_SPEECH_HOLD_MS: f64 = 3_000.0;
 pub const GAME_WORLD_SPEECH_FADE_MS: f64 = 2_000.0;
 pub const GAME_WORLD_SPEECH_SPEAKER_LIMIT: usize = 64;
 
+/// One speech bubble over a player: its text, channel, sequence and timing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GameWorldSpeech {
     pub channel: GameChatChannel,

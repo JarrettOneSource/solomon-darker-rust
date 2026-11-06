@@ -5,6 +5,7 @@ use web_sys::{Request, RequestInit, Window};
 
 use super::{CachePolicy, ReadError};
 
+/// Sends requests with the browser's `fetch`.
 #[derive(Clone)]
 pub(super) struct Transport(Window);
 
@@ -57,6 +58,7 @@ impl Transport {
     }
 }
 
+/// A browser `fetch` response; dropping it aborts the request.
 pub struct Response {
     pub(super) response: web_sys::Response,
     _abort: RequestAbort,

@@ -22,6 +22,7 @@ pub fn hand_cast1_rate(profile: &PrimarySkillProfile, cast_factor: f64) -> f64 {
     }
 }
 
+/// The no-item Cast1 action of a one-shot primary cast: its progress, rate and hand pose.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(try_from = "saved::HandCast1Document"))]
@@ -79,6 +80,7 @@ impl HandCast1 {
 mod saved {
     use super::HandCast1;
 
+    /// The saved form of `HandCast1`, validated before it becomes one.
     #[derive(serde::Deserialize)]
     pub(super) struct HandCast1Document {
         progress: f64,

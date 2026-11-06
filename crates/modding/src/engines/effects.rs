@@ -1,4 +1,6 @@
-//! Actual area/channel/projectile simulation from `mod-spell-effect-engine.ts`.
+//! Mod spell effects in the world: areas and channels that pulse on the targets inside them,
+//! and projectiles that hit the first target along their path. Each hit or pulse produces a
+//! batch of effect intents.
 
 use std::collections::HashSet;
 
@@ -14,11 +16,14 @@ use solomon_sim::modding::{LuaObject, LuaValue};
 use super::{MAXIMUM_SAFE_INTEGER, validate_tick, validate_tick_rate};
 use crate::duration::duration_ticks_value;
 
+/// The active mod spell effects and the counters for effect IDs and intent sequences.
 pub struct ModSpellEffectEngine {
     ticks_per_second: u32,
     state: ModSpellEffectCheckpoint,
 }
 
+/// A request to start a mod spell effect: its authored fields, owner, scope, origin, target
+/// and start tick.
 pub struct ModSpellEffectSpawn<'a> {
     pub content_id: &'a str,
     pub fields: &'a LuaObject,
@@ -167,8 +172,8 @@ impl ModSpellEffectEngine {
             x: position.x,
             y: position.y,
         };
-        // Source increments the instance sequence before the distinct-target
-        // admission check. A rejected zero-length projectile still spends it.
+        // The effect ID is spent before the distinct-target check, so a rejected
+        // zero-length projectile still uses one up.
         self.state.next_id += 1;
         if kind == ModSpellEffectKind::Projectile && length == 0.0 {
             return Err("projectile requires a distinct target".into());

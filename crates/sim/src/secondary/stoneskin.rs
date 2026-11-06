@@ -1,5 +1,5 @@
-//! The ordinary Bouncer births from `native-secondary-abilities.ts`:
-//! `spawnStoneskinBurst` and `spawnStoneskinChip` share the secondary RNG.
+//! Stoneskin's ordinary Bouncer births: `spawn_stoneskin_burst` and `spawn_stoneskin_chip`
+//! share the secondary RNG.
 
 use super::{SecondaryActorKind, SecondaryActorState, SecondarySimulationState};
 use crate::Vec2;

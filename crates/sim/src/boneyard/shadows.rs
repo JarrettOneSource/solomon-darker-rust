@@ -1,4 +1,4 @@
-//! Directional scenery shadows from `renderer/boneyard-complex-shadows.ts`.
+//! Directional scenery shadows cast by the live light field.
 //!
 //! Authored outlines stay in the scenery manifest. This module projects the live light
 //! field through those outlines and the stock fence, gate, rail and wall programs.
@@ -13,6 +13,8 @@ use super::lighting::{
 
 const FENCE_BAR_STEP: f64 = 13.333333015441895;
 
+/// A shape that casts directional shadows: its ID, which seeds the shadow length jitter, its
+/// root position, and an authored outline or a stock shadow program.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShadowCaster {
     pub id: String,
@@ -21,6 +23,8 @@ pub struct ShadowCaster {
     pub program: Option<ShadowProgram>,
 }
 
+/// A stock shadow shape used instead of an outline: a broken or intact fence grate (gate
+/// leaves included), rails or a wall.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ShadowProgram {
     BrokenFenceGrate { start: Vec2, end: Vec2, step: Vec2, count: usize },
@@ -29,6 +33,9 @@ pub enum ShadowProgram {
     Wall { start: Vec2, end: Vec2 },
 }
 
+/// One light's shadow on a caster: the direction away from the light, the squared distance
+/// fraction within its reach, the projection length, the base alpha left by the caster's
+/// other lights, and the light's position and radius.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ShadowRecord {
     pub base_alpha: f64,
@@ -40,6 +47,7 @@ pub struct ShadowRecord {
     pub source_radius: f64,
 }
 
+/// A shadow quad from a base edge to a projected tip edge, each with its own alpha.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ShadowEdge {
     pub base_alpha: f64,

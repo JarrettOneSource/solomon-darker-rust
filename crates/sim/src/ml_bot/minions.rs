@@ -1,4 +1,5 @@
-//! Source `ml-bot-policy/minions.ts`: own and allied Golems in retained actor order.
+//! The bot's minion observation: its own and allied Golems, its own first and then nearest
+//! first.
 
 use std::collections::BTreeSet;
 
@@ -10,6 +11,8 @@ use crate::secondary::{SecondaryActorKind, SecondarySimulationState};
 use super::numbers::{distance_squared, normalized, ratio, unsigned, write};
 use super::spec::scales;
 
+/// A minion observation: the encoded block S, the enemies the bot's own Golems target, and
+/// which quickbar slots hold the skill of one of its Golems in this world.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyMinionObservation {
     pub block_s: Vec<f32>,

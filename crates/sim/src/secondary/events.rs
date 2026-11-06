@@ -3,6 +3,7 @@
 use crate::Vec2;
 use crate::float::fround;
 
+/// A sound a secondary event plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SecondaryAudioCue {
@@ -128,6 +129,8 @@ impl SecondaryAudioCue {
     }
 }
 
+/// What a secondary event reports: a cast, fizzle, impact, pulse, loop start or stop,
+/// shield hit and so on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SecondaryEventKind {
@@ -165,6 +168,7 @@ impl SecondaryEventKind {
     }
 }
 
+/// A screen flash's color, starting alpha and decay, and whether distance attenuates it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryScreenFlashState {
@@ -197,6 +201,8 @@ impl SecondaryScreenFlashState {
     }
 }
 
+/// One secondary semantic event: its kind, owner, world, position and any sound, screen
+/// flash or camera shake.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SecondaryEventState {

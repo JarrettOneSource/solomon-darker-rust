@@ -1,7 +1,7 @@
 //! Native loot selection, materialization and item identity.
 //!
-//! References: Website `core-kernels/native-loot.ts`, `native-loot-selection.ts` and
-//! `native-loot-items.ts`. `loot-goldens.json` pins drops, item trees and both RNG streams.
+//! An enemy's private stream selects a candidate category; constructing the candidate advances
+//! the shared loot stream. `loot-goldens.json` pins drops, item trees and both RNG streams.
 
 pub mod items;
 mod materialize;
@@ -19,6 +19,7 @@ pub const LOOT_ACTOR_SEED_BOUND: u32 = 10_000_000;
 pub const LOOT_CARRIER_PLACEMENT_RADIUS: f64 = 15.0;
 pub const LOOT_PLACEMENT_VERTICAL_SCALE: f64 = 0.8_f32 as f64;
 
+/// A category of enemy drop: key, orb, gold, item, potion or powerup.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LootCategory {
     Key,
@@ -29,6 +30,7 @@ pub enum LootCategory {
     Powerup,
 }
 
+/// A drop policy for one loot category. `GoldScatter` also adds a scattered Gold drop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LootPolicy {
     Ordinary,
@@ -54,6 +56,7 @@ impl LootPolicy {
     }
 }
 
+/// Whether an orb restores health or mana.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum OrbKind {
@@ -61,6 +64,7 @@ pub enum OrbKind {
     Mana,
 }
 
+/// A Bonus drop's reward: a skill choice, a skill rank or quadruple damage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BonusKind {
@@ -81,6 +85,7 @@ impl BonusKind {
     }
 }
 
+/// A player's derived gold amount, orb pull and pickup range factors, before perks apply.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LootAttractionModifiers {
     pub gold_amount: f64,
@@ -94,6 +99,8 @@ impl Default for LootAttractionModifiers {
     }
 }
 
+/// A player's loot factors after perks: drop chances, gold amount, orb pull and value, and
+/// pickup range.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LootModifiers {
     pub gold_amount: f64,
@@ -145,6 +152,8 @@ pub fn loot_modifiers(
     }
 }
 
+/// The drop policy for each loot category, usually from an enemy's recipe, and the
+/// specific-item mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LootPolicies {
     pub gold: LootPolicy,
@@ -166,6 +175,8 @@ impl LootPolicies {
     };
 }
 
+/// The arena's loot state: disable mask, item level range, last successful item level, level,
+/// mode and special suppression.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LootArenaInput {
     pub disable_mask: u32,
@@ -177,6 +188,8 @@ pub struct LootArenaInput {
     pub special_suppression: bool,
 }
 
+/// The player a drop is rolled for: level, loot modifiers, owned recipes, advanced unlocks and
+/// slot.
 #[derive(Clone, Copy, Debug)]
 pub struct LootParticipantInput<'a> {
     pub advanced_unlocks: &'a [bool; 8],
@@ -186,6 +199,7 @@ pub struct LootParticipantInput<'a> {
     pub slot: usize,
 }
 
+/// Key drop state: the level at which the next key drops, the current level and the keys left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LootKeyInput {
     pub current: u32,
@@ -193,6 +207,7 @@ pub struct LootKeyInput {
     pub remaining: usize,
 }
 
+/// Answers whether a loot carrier of a given radius fits at a position.
 pub trait LootPlacement {
     fn can_place(&self, position: Vec2, radius: f64) -> bool;
 }
@@ -203,7 +218,7 @@ impl<F: Fn(Vec2, f64) -> bool> LootPlacement for F {
     }
 }
 
-/// Explicitly open geometry for source fixtures and authored scripts that request it.
+/// Placement that accepts every position, for fixtures and authored scripts that request it.
 pub struct LootOpenPlacement;
 
 impl LootPlacement for LootOpenPlacement {
@@ -212,6 +227,7 @@ impl LootPlacement for LootOpenPlacement {
     }
 }
 
+/// The ground loot actor a drop creates: a Bonus, Gold, an Orb or a Sack.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum LootDropKind {
@@ -221,6 +237,7 @@ pub enum LootDropKind {
     Sack,
 }
 
+/// What produced a drop: an enemy, a Goodie or a script.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum LootDropSource {
@@ -229,6 +246,7 @@ pub enum LootDropSource {
     Script,
 }
 
+/// A ground loot actor to create: its kind, position, contents, appearance and activation delay.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootDropSpec {
     pub activation_delay_ticks: i64,
@@ -277,6 +295,8 @@ impl LootDropSpec {
     }
 }
 
+/// Everything an enemy loot roll reads: the enemy's seed and position, the arena, the player,
+/// drop policies, placement and world counts.
 #[derive(Clone, Copy)]
 pub struct LootSelectionInput<'a> {
     pub actor_seed: u32,
@@ -298,6 +318,7 @@ pub struct LootSelectionInput<'a> {
     pub world_has_health_potion_sack: bool,
 }
 
+/// The drops a roll created, with the updated last item level and next key drop level.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootMaterialization {
     pub drops: Vec<LootDropSpec>,
@@ -315,6 +336,8 @@ impl LootMaterialization {
     }
 }
 
+/// An enemy loot roll's result: its drops, the selected category and whether the emergency
+/// potion was attempted.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LootSelection {
     pub materialization: LootMaterialization,
@@ -322,6 +345,7 @@ pub struct LootSelection {
     pub selected_category: Option<LootCategory>,
 }
 
+/// A scripted loot drop: gold, a named item, a key, a potion, random gold or a random item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LootScriptAction {
     DropGold { amount: i64 },
@@ -332,6 +356,7 @@ pub enum LootScriptAction {
     DropRandomItem { mode: u32 },
 }
 
+/// Allocates loot item IDs in increasing order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LootItemIds {
     pub next_id: u64,
@@ -380,13 +405,14 @@ pub fn advance_key_drop_level(rng: &mut Rng, current_level: u32) -> u32 {
     }
 }
 
-/// `enableOperand == 0` clears the supplied disable bits; every other operand sets them.
+/// `enable_operand == 0` clears the supplied disable bits; every other operand sets them.
 #[must_use]
 pub fn loot_disable_mask(current: u32, enable_operand: i32, mask: u32) -> u32 {
     let disabled = current | mask;
     if enable_operand == 0 { disabled ^ mask } else { disabled }
 }
 
+/// An arena's item level range for drops, and its mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LootArenaDropLimits {
     pub item_level_maximum: i32,

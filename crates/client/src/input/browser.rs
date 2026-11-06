@@ -3,6 +3,8 @@ use super::*;
 use wasm_bindgen::{JsCast, prelude::*};
 use web_sys::{Event, EventTarget, HtmlCanvasElement, MouseEvent, PointerEvent};
 
+/// The canvas and window listeners that feed browser mouse, pointer and touch events
+/// into the shared gameplay input state.
 pub(super) struct InputTransport {
     canvas: HtmlCanvasElement,
     _listeners: Vec<InputListener>,

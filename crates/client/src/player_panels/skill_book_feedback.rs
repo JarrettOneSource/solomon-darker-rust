@@ -1,4 +1,4 @@
-//! `skill-book-feedback.ts` and `use-skill-book-feedback.ts` at fa08ae24.
+//! The message shown after a skill book grants a rank, with its sound and the Inventory close.
 //! The accepted rank receipt owns a result that outlives the Inventory close.
 use super::{PanelEvent, PlayerPanel, PlayerPanels, Target};
 use crate::gpu_ui::UiFrame;
@@ -13,6 +13,7 @@ use solomon_sim::ui_text::messages::{
 };
 use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec};
 
+/// Consumes skill book receipts and holds the result message currently shown, if any.
 pub(super) struct SkillBookFeedback {
     cursor: SkillBookFeedbackCursor,
     result: Option<SkillBookResult>,
@@ -92,7 +93,8 @@ impl PlayerPanels {
     pub fn skill_book_result_open(&self) -> bool {
         self.skill_book_feedback.result.is_some()
     }
-    /// Keeps the original book's native pause source after its visual close.
+    /// The panel that pauses play. While a skill book result shows, the book that was open when
+    /// it arrived keeps pausing play after it visually closes.
     pub fn pause_panel(&self) -> Option<PlayerPanel> {
         self.skill_book_feedback.result.as_ref().map(|result| result.pause_panel).or(self.panel)
     }

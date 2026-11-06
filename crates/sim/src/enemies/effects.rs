@@ -1,6 +1,6 @@
-//! Enemy death-effect births and stepping from Website `enemies/death-effects.ts` and
-//! `core-server/boneyard-transient-effects.ts`. Native draw order is retained at birth,
-//! including the immediate Bouncer tick before it enters the world list.
+//! Enemy death effects: their births, including Bouncers and the smoke they trail, and their
+//! per-tick steps. Painter registration happens at birth, and a Bouncer takes its first step
+//! immediately, before it enters the world list.
 
 use super::model::*;
 use super::world::EnemyWorld;
@@ -9,11 +9,12 @@ use crate::float;
 use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
-// Source `boneyard-transient-effects.ts` keeps these native Fade stores as singles.
+// The original game's Fade stores these alpha losses as single-precision floats.
 pub const FADE_ALPHA_LOSS: f64 = 0.1_f32 as f64;
 pub const BANISH_RING_ALPHA_LOSS: f64 = (0.1_f32 * 0.25_f32) as f64;
 pub const TRAGIC_CONTACT_ALPHA_LOSS: f64 = (0.1_f32 * 0.5_f32) as f64;
 
+/// The actor an effect or sound belongs to, and the position it starts from by default.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeathEffectOwner {
     pub id: usize,
@@ -26,8 +27,9 @@ impl From<&EnemyActor> for DeathEffectOwner {
     }
 }
 
-/// The required fields of `spawnSimpleDeathEffect`; source optional fields are separate
-/// so a caller cannot accidentally omit the atlas, lifetime or fade program.
+/// The required fields of a simple death effect. Optional fields live in
+/// `DeathEffectOverrides` so a caller cannot accidentally omit the atlas, lifetime or fade
+/// program.
 pub struct SimpleDeathEffectSpec<'a> {
     pub alpha: f64,
     pub alpha_loss_per_tick: f64,
@@ -40,6 +42,7 @@ pub struct SimpleDeathEffectSpec<'a> {
     pub scale: f64,
 }
 
+/// Optional settings for a simple death effect; each `None` keeps the default.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DeathEffectOverrides {
     pub painter_sort_bias: Option<f64>,
@@ -64,6 +67,8 @@ pub struct DeathEffectOverrides {
     pub velocity_damping: Option<f64>,
 }
 
+/// The smoke a Bouncer trails while airborne: none, occasional pale smoke, or black smoke on
+/// every tick.
 #[derive(Clone, Copy, Debug, Default)]
 pub enum BouncerKind {
     #[default]
@@ -72,6 +77,8 @@ pub enum BouncerKind {
     BlackSmoky,
 }
 
+/// Optional settings for a Bouncer's birth: its smoke kind, atlas, position, motion, scale,
+/// tint, opacity and presentation owner. Unset fields keep their defaults.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BouncerOptions {
     pub bounce_velocity_multiplier: Option<f64>,
@@ -157,7 +164,7 @@ impl EnemyWorld {
 
     /// The four constructor draws precede both callbacks. Entry-bank selection and
     /// custom trajectories therefore consume randomness at their native call sites.
-    #[allow(clippy::too_many_arguments)] // Source work policy accompanies both constructor callbacks.
+    #[allow(clippy::too_many_arguments)] // Both callbacks plus the enhanced-effects flag.
     pub fn spawn_bouncer(
         &mut self,
         owner: DeathEffectOwner,
@@ -245,9 +252,9 @@ impl EnemyWorld {
         }
     }
 
-    /// `stepDeathEffects`: visit all retained rows in source order at each represented
-    /// tick, then append that tick's smoke births. Skipping directly to the final age
-    /// would consume a different random sequence on bounces.
+    /// Steps every retained effect in admission order at each tick it has not yet reached,
+    /// then appends that tick's smoke births. Skipping directly to the final age would
+    /// consume a different random sequence on bounces.
     pub fn step_death_effects(&mut self, tick: u64, order: &mut WorldPainterOrder) {
         let mut effects = std::mem::take(&mut self.death_effects);
         let Some(first) =

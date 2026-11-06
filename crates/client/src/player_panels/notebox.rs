@@ -9,6 +9,7 @@ struct Notice {
     started_at: f64,
     dismissed: Option<f64>,
 }
+/// The NPC note box on screen, if any, with its kind, text and fade timing.
 pub(super) struct NpcNotebox {
     active: Option<Notice>,
 }

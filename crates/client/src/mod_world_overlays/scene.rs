@@ -9,15 +9,19 @@ use solomon_protocol::hosted::ModAction;
 use solomon_sim::modding::presentation::{mod_scene_color, mod_scene_number, project_mod_scene};
 use solomon_sim::modding::{LuaObject, LuaValue};
 
+/// A mod action to send to the host: its kind, target content ID and arguments.
 pub struct ModViewAction {
     pub action: ModAction,
     pub target: String,
     pub arguments: LuaObject,
 }
+/// A party member listed on the authored room map.
 pub struct ModScenePartyMember<'a> {
     pub id: &'a str,
     pub display_name: &'a str,
 }
+/// What the room map refreshes from: the mod runtime, the scene owner, whether this player is
+/// the party leader, and the party list.
 pub struct ModSceneOverlayFrame<'a> {
     pub runtime: Option<&'a LuaObject>,
     pub owner_id: &'a str,
@@ -47,6 +51,7 @@ struct Room {
     props: Vec<Prop>,
     party: Vec<String>,
 }
+/// The authored room map drawn over the scene and the room controls the party leader clicked.
 pub struct ModSceneOverlay {
     room: Option<Room>,
     actions: Vec<ModViewAction>,

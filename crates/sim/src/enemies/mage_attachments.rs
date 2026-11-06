@@ -1,5 +1,6 @@
-//! BadGuys:1729..1818 attachment slot 0, consumed by native Mage lightning.
-//! Source: pinned Website editor/manifest/badguys.json.
+//! Raw attachment points of the `BadGuys:1729..1818` bundle records in
+//! `web/assets/stock/BadGuys.bundle`, by body pose and then by one of 18 facings.
+//! Slot 0 is where Mage lightning starts.
 use crate::Vec2;
 pub const MAGE_LIGHTNING_ATTACHMENTS: [[Vec2; 18]; 5] = [
     [
@@ -104,7 +105,7 @@ pub const MAGE_LIGHTNING_ATTACHMENTS: [[Vec2; 18]; 5] = [
     ],
 ];
 
-/// The second registered Mage hand, used by dampened-caster smoke.
+/// Slot 1: the second registered Mage hand, used by dampened-caster smoke.
 pub const MAGE_SECOND_HAND_ATTACHMENTS: [[Vec2; 18]; 5] = [
     [
         Vec2::new(-24.5, -8.0),

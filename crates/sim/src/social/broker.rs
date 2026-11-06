@@ -1,4 +1,5 @@
-//! Cross-College social routing from Website `host/game-social-broker.ts`.
+//! Cross-College social routing: Global chat, whispers, activity messages, player cards
+//! and College invitations.
 //!
 //! The native supervisor supplies cryptographic references/IDs and wall time. Profiles
 //! and invitation availability are queried from its actual current worlds. This broker
@@ -13,25 +14,29 @@ pub const GAME_SOCIAL_INVITATION_TIMEOUT_MS: u64 = 10 * 60 * 1_000;
 pub const GAME_SOCIAL_MAX_INVITATIONS_PER_PLAYER: usize = 8;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
+/// A player as the broker knows them: the hosting College and their local player ID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameSocialParticipant {
     pub host_id: String,
     pub local_player_id: String,
 }
 
-/// Borrowed query boundary for the source participant callbacks. The supervisor reads
+/// The broker's borrowed queries into the current worlds. The supervisor reads
 /// Session/economy/connection owners here; no social copy can decide gameplay admission.
 pub trait GameSocialWorlds {
     fn profile(&self, participant: &GameSocialParticipant) -> Option<GamePlayerCardProfile>;
     fn can_receive_college_invitation(&self, participant: &GameSocialParticipant) -> bool;
 }
 
+/// One registration of a player with the broker; a newer registration replaces it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameSocialConnection {
     pub player_reference: String,
     generation: u64,
 }
 
+/// A chat message routed to one connection: channel, sender, any recipient or activity,
+/// and text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GameSocialChatDelivery {
     pub activity: Option<GameChatActivity>,
@@ -42,6 +47,8 @@ pub struct GameSocialChatDelivery {
     pub text: String,
 }
 
+/// A request to invite a player to the sender's College: target reference, party, join
+/// code and time.
 pub struct CollegeInvitationRequest<'a> {
     pub target_reference: &'a str,
     pub source_party_id: &'a str,
@@ -49,6 +56,8 @@ pub struct CollegeInvitationRequest<'a> {
     pub now_unix_ms: u64,
 }
 
+/// Something the broker delivers to one connection: a chat message or the current College
+/// invitations.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GameSocialDelivery {
     Chat { connection: GameSocialConnection, message: GameSocialChatDelivery },
@@ -69,9 +78,11 @@ struct BrokerInvitation {
     target_player_reference: String,
 }
 
+/// The cross-College social router: registered members, pending invitations and queued
+/// deliveries.
 pub struct GameSocialBroker {
-    // JavaScript Map insertion order also defines Global delivery order. Replacing a
-    // member keeps its original position, just as Map.set(existingKey, value) does.
+    // Registration order also defines Global delivery order. Replacing a member keeps its
+    // original position.
     members: Vec<BrokerMember>,
     invitations: Vec<BrokerInvitation>,
     closed: bool,

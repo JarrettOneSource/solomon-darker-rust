@@ -1,5 +1,5 @@
-//! Current Website `HotbarControls.tsx` owns one presentation bank across the
-//! gameplay HUD and both optional books. All assignments remain player-owned.
+//! The visible Belt bank, shared by the gameplay HUD and both optional books, and the
+//! shortcut and controls that cycle it. Slot assignments stay with the player.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -9,6 +9,7 @@ use solomon_sim::belt::{BELT_SLOT_COUNT, PLAYER_HOTBAR_COUNT};
 use solomon_sim::hud::HudRect;
 use solomon_sim::settings::GameSettings;
 
+/// Which way a cycle moves through the three Belt banks.
 #[derive(Clone, Copy)]
 pub enum HotbarDirection {
     Previous,
@@ -113,8 +114,8 @@ impl HotbarSelection {
         cycle_bank(&self.0.state.bank, direction);
     }
 
-    /// Game supplies the Source admission predicate; an owned optional-book pause
-    /// allows cycling, while settings/chat/loading/resume barriers do not.
+    /// The game decides `enabled`: a pause this player owns from an optional book
+    /// allows cycling, while Settings, chat, loading and resume barriers do not.
     pub fn set_shortcut(&self, settings: &GameSettings, enabled: bool) {
         let mut shortcut = self.0.state.shortcut.borrow_mut();
         if shortcut.code != settings.controls.cycle_hotbar {

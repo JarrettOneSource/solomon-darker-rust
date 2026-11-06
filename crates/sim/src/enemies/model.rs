@@ -6,6 +6,7 @@ use super::path::EnemyPathState;
 use crate::Vec2;
 pub use crate::combat::PuppetHitState as PuppetHit;
 
+/// Whether an enemy is alive or playing its death.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyLifeState {
@@ -13,6 +14,7 @@ pub enum EnemyLifeState {
     Dying,
 }
 
+/// The contact attack a Skeleton performs: claw, pike or weapon swing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SkeletonAction {
@@ -21,6 +23,7 @@ pub enum SkeletonAction {
     Weapon,
 }
 
+/// Where a Skeleton is in its approach, attack and death cycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SkeletonPhase {
@@ -29,6 +32,7 @@ pub enum SkeletonPhase {
     Death,
 }
 
+/// Where a Skeleton Archer is in its range-keeping, attack and death cycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum ArcherPhase {
@@ -37,6 +41,7 @@ pub enum ArcherPhase {
     Death,
 }
 
+/// Where a Skeleton Mage is in its range-keeping, cast and death cycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum MagePhase {
@@ -45,6 +50,8 @@ pub enum MagePhase {
     Death,
 }
 
+/// Which of its two cast animations a Skeleton Mage plays; the short one reaches its release marker
+/// sooner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum MageCastProgram {
@@ -52,6 +59,7 @@ pub enum MageCastProgram {
     Short,
 }
 
+/// Whether an Imp or Wraith is flying or dying.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum FlightPhase {
@@ -59,6 +67,7 @@ pub enum FlightPhase {
     Death,
 }
 
+/// Where a Zombie is in its approach, swipe, knockback and death cycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum ZombiePhase {
@@ -68,6 +77,7 @@ pub enum ZombiePhase {
     Death,
 }
 
+/// Where a Demon is in its approach, bomb attack and death cycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum DemonPhase {
@@ -76,6 +86,7 @@ pub enum DemonPhase {
     Death,
 }
 
+/// A Coffin's timed phases, from hidden through rising, holding and opening to open, then death.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum CoffinPhase {
@@ -87,6 +98,7 @@ pub enum CoffinPhase {
     Death,
 }
 
+/// Whether a Portal is active or dying.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PortalPhase {
@@ -94,6 +106,7 @@ pub enum PortalPhase {
     Death,
 }
 
+/// Where a Demon Skull or Faculty boss is in its range-keeping, cast and death cycle.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BossPhase {
@@ -102,6 +115,7 @@ pub enum BossPhase {
     Death,
 }
 
+/// Whether a Heartmonger is approaching or dying.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HeartmongerPhase {
@@ -109,6 +123,7 @@ pub enum HeartmongerPhase {
     Death,
 }
 
+/// Whether a Spider is active, dying, or captured by an Ether Drain kill.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpiderPhase {
@@ -117,6 +132,7 @@ pub enum SpiderPhase {
     Captured,
 }
 
+/// Whether a Cocoon is active or dying.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum CocoonPhase {
@@ -124,6 +140,7 @@ pub enum CocoonPhase {
     Death,
 }
 
+/// A Faculty hand action: a throw, a two-handed attack or lightning.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum FacultyActionKind {
@@ -132,6 +149,7 @@ pub enum FacultyActionKind {
     Lightning,
 }
 
+/// Whether a Heartmonger crow is orbiting or diving.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum CrowPhase {
@@ -139,6 +157,7 @@ pub enum CrowPhase {
     Dive,
 }
 
+/// The Demon Skull's ranged attacks: eye shots, the mouth beam or spit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum DemonSkullRangedAttack {
@@ -147,6 +166,7 @@ pub enum DemonSkullRangedAttack {
     Spit,
 }
 
+/// A player restrained by a Skeleton's pike: the held position and the pike's reach.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SkeletonPike {
@@ -155,6 +175,7 @@ pub struct SkeletonPike {
     pub distance: f64,
 }
 
+/// Skeleton controller state: contact action and phase, airborne recoil and any pike restraint.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SkeletonBrain {
@@ -168,6 +189,7 @@ pub struct SkeletonBrain {
     pub phase: SkeletonPhase,
 }
 
+/// A Skeleton Archer's strafe: direction, limb heading, movement ramp and turn blend.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ArcherStrafeState {
@@ -177,6 +199,8 @@ pub struct ArcherStrafeState {
     pub turn_blend: f64,
 }
 
+/// Skeleton Archer controller state: phase, attack progress and range, aim seed, airborne recoil
+/// and strafe.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ArcherBrain {
@@ -191,6 +215,8 @@ pub struct ArcherBrain {
     pub strafe: ArcherStrafeState,
 }
 
+/// Skeleton Mage controller state: phase, cast program and progress, lightning target, and shield
+/// and disabled-primary timers.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct MageBrain {
@@ -210,6 +236,8 @@ pub struct MageBrain {
     pub shield_ticks_remaining: u64,
 }
 
+/// Imp controller state: flight phase and speed, body pose and variant, effect fade and a private
+/// visual random state.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ImpBrain {
@@ -226,6 +254,8 @@ pub struct ImpBrain {
     pub visual_rng_state: u32,
 }
 
+/// Zombie controller state: phase and swipe action, body and head variants and poses, contact
+/// target and vertical motion.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ZombieBrain {
@@ -251,6 +281,7 @@ pub struct ZombieBrain {
     pub visual_rng_state: u32,
 }
 
+/// Wraith controller state: flyby speed and turn gains, contact cooldown and flight phase.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WraithBrain {
@@ -266,6 +297,8 @@ pub struct WraithBrain {
     pub phase: FlightPhase,
 }
 
+/// One planted Demon foot: where its step started, where it is heading and where it is now, with
+/// its lift and step phase.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DemonExtremity {
@@ -276,6 +309,8 @@ pub struct DemonExtremity {
     pub target: Vec2,
 }
 
+/// The Demon's planted-foot gait: front and rear feet that replant half a step interval apart, and
+/// their base rotations.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DemonArticulation {
@@ -287,6 +322,7 @@ pub struct DemonArticulation {
     pub step_interval_ticks: u64,
 }
 
+/// Demon controller state: phase, bomb attack progress and foot articulation.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DemonBrain {
@@ -296,6 +332,7 @@ pub struct DemonBrain {
     pub phase: DemonPhase,
 }
 
+/// Coffin controller state: phase timing, anchor position, Maggot charge and launch pose.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CoffinBrain {
@@ -308,6 +345,8 @@ pub struct CoffinBrain {
     pub phase_ticks_remaining: u64,
 }
 
+/// Portal controller state: anchor, fade and animation phases, the countdown to the next Imp
+/// ejection and the hurt timer.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PortalBrain {
@@ -322,6 +361,8 @@ pub struct PortalBrain {
     pub phase: PortalPhase,
 }
 
+/// Demon Skull controller state: body pose and motion, glows and light, capabilities, pending
+/// ranged attack, queued actions and boss phase.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DemonSkullBrain {
@@ -350,6 +391,7 @@ pub struct DemonSkullBrain {
     pub phase: BossPhase,
 }
 
+/// One Demon Skull action program and whether it has retired.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DemonSkullAction {
@@ -357,6 +399,8 @@ pub struct DemonSkullAction {
     pub program: DemonSkullActionProgram,
 }
 
+/// The Demon Skull's action programs and their timers: scream, bite, eye shots, mouth beam, spit
+/// and flair.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum DemonSkullActionProgram {
@@ -395,6 +439,8 @@ pub enum DemonSkullActionProgram {
     },
 }
 
+/// A Faculty hand action in progress: its kind, hands, animation frames, release marker, progress
+/// and rate.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FacultyAction {
@@ -407,6 +453,8 @@ pub struct FacultyAction {
     pub rate: f64,
 }
 
+/// Faculty controller state: body pose and heading, current hand action, attack range, light, orbit
+/// direction, spell cooldowns and boss phase.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FacultyBrain {
@@ -429,6 +477,7 @@ pub struct FacultyBrain {
     pub phase: BossPhase,
 }
 
+/// One crow summoned by a Heartmonger: its orbit or dive, flight height and speed, and target.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CrowState {
@@ -451,6 +500,8 @@ pub struct CrowState {
     pub target_id: Option<String>,
 }
 
+/// Heartmonger controller state: activation, summoned crows and their cooldown, head variant and
+/// body animation phases.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HeartmongerBrain {
@@ -464,6 +515,8 @@ pub struct HeartmongerBrain {
     pub torso_phase: f64,
 }
 
+/// Spider controller state: movement, strafe, action and spit timers, animation frame, and
+/// attachment to a player.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpiderBrain {
@@ -484,6 +537,7 @@ pub struct SpiderBrain {
     pub phase: SpiderPhase,
 }
 
+/// Cocoon controller state: phase and the player who owns it.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct CocoonBrain {
@@ -492,6 +546,7 @@ pub struct CocoonBrain {
     pub owner_position: Vec2,
 }
 
+/// An enemy's per-family controller state.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyBrain {
@@ -511,6 +566,8 @@ pub enum EnemyBrain {
     Cocoon(CocoonBrain),
 }
 
+/// The light an enemy adds to the Boneyard light field: charge, glow and how many light sources it
+/// provides.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyLighting {
@@ -583,6 +640,8 @@ pub struct EnemyActor {
     pub wave_ordinal: u64,
 }
 
+/// A player or summoned ally as enemies see it: identity, position, motion, collision radius and
+/// whether it can be targeted.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyTarget {
     pub id: String,
@@ -596,9 +655,11 @@ pub struct EnemyTarget {
     pub velocity_per_tick: Vec2,
 }
 
+/// A request to damage one enemy: amount, hit strength, magic flags, the attacking player and
+/// feedback options.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyDamageRequest {
-    /// Source omission enables enhanced births; this is call policy, not world state.
+    /// `None` enables enhanced births; this is call policy, not world state.
     pub enhanced_effects: Option<bool>,
     pub hit_strength: f64,
     pub ether_drain_capture: bool,
@@ -617,6 +678,8 @@ pub(super) const fn default_enhanced_effects() -> bool {
     true
 }
 
+/// The outcome of a damage request: whether it was accepted, the health removed, and whether it
+/// killed the enemy or triggered a special death.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyDamageResult {
     pub accepted: bool,
@@ -626,6 +689,8 @@ pub struct EnemyDamageResult {
     pub special_death_accepted: bool,
 }
 
+/// Where damage to a player came from: its position, its collision radius and the enemy a
+/// reflection can hit back.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyPlayerDamageSource {
@@ -634,6 +699,8 @@ pub struct EnemyPlayerDamageSource {
     pub reflectable_actor_id: Option<usize>,
 }
 
+/// Damage an enemy deals to one player: physical, magic and poison amounts, status effects and the
+/// damage source.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyPlayerDamage {
@@ -704,6 +771,7 @@ impl EnemyPlayerDamage {
     }
 }
 
+/// A push an enemy applies to one player this tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyPlayerKnockback {
@@ -712,6 +780,7 @@ pub struct EnemyPlayerKnockback {
     pub event_id: usize,
     pub player_id: String,
 }
+/// An enemy or Maggot that left the world this tick, with its retirement event.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyRetirement {
@@ -719,8 +788,8 @@ pub struct EnemyRetirement {
     pub event_id: usize,
 }
 
-/// Terminal reward source from `enemies/model.ts`; actual drop selection belongs to
-/// the world's loot store. Authored recipes alone carry policies and a recipe UID.
+/// What a killed enemy offers the loot system; actual drop selection belongs to the
+/// world's loot store. Authored recipes alone carry policies and a recipe UID.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyLootSource {
@@ -733,6 +802,7 @@ pub struct EnemyLootSource {
     pub recipe_uid: Option<usize>,
 }
 
+/// The experience and loot source a killed enemy grants to the player who last damaged it.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyReward {
@@ -745,6 +815,7 @@ pub struct EnemyReward {
 
 pub use crate::painter::PainterRegistration as EnemyPainterRegistration;
 
+/// Every sound an enemy event can request, with its sound identifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemySound {
@@ -907,6 +978,7 @@ impl EnemySound {
     }
 }
 
+/// The kinds of enemy event, with their identifiers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyEventKind {
@@ -967,6 +1039,8 @@ impl EnemyEventKind {
     }
 }
 
+/// The terminal output that ends an enemy's death, such as a Skeleton shattering or a Wraith
+/// fragmenting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyTerminalOutput {
@@ -1005,6 +1079,7 @@ impl EnemyTerminalOutput {
     }
 }
 
+/// The sprite atlas an enemy effect draws from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyEffectAtlas {
@@ -1025,6 +1100,7 @@ impl EnemyEffectAtlas {
     }
 }
 
+/// The blend mode of an enemy effect: normal or additive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyEffectBlend {
@@ -1041,6 +1117,7 @@ impl EnemyEffectBlend {
     }
 }
 
+/// How an enemy death effect moves, fades and draws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyDeathEffectKind {
@@ -1093,6 +1170,8 @@ impl EnemyDeathEffectKind {
     }
 }
 
+/// Which drawing pass presents a death effect: the background, the sorted world queue, or a pass
+/// before, after or over the world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeathPresentationOwner {
@@ -1115,6 +1194,8 @@ impl DeathPresentationOwner {
     }
 }
 
+/// How a camera shake weakens with its source's distance from the camera: not at all, by point
+/// gain, or by hit gain, optionally squared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum CameraShakeAttenuation {
@@ -1135,6 +1216,8 @@ impl CameraShakeAttenuation {
     }
 }
 
+/// The rocking of a Scrap death effect: its rotation is `sin(phase_deg) * amplitude_deg`, and the
+/// phase advances by `step_deg` each tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScrapOscillation {
@@ -1143,6 +1226,7 @@ pub struct ScrapOscillation {
     pub amplitude_deg: f64,
 }
 
+/// A camera shake requested by an enemy event: its displacement and attenuation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyCameraShake {
@@ -1150,6 +1234,8 @@ pub struct EnemyCameraShake {
     pub displacement: Vec2,
 }
 
+/// A screen flash requested by an enemy event: color, starting alpha, decay per tick and whether
+/// distance attenuates it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyScreenFlash {
@@ -1161,6 +1247,8 @@ pub struct EnemyScreenFlash {
     pub red: f64,
 }
 
+/// Something an enemy did this tick that other systems react to, such as a sound, death, spawn,
+/// impact, reward, screen flash or camera shake.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyEvent {
@@ -1205,7 +1293,7 @@ pub struct EnemyEvent {
     pub screen_flash: Option<EnemyScreenFlash>,
 }
 
-// Source events distinguish an omitted target from an explicitly untargeted impact.
+// Events distinguish an omitted target from an explicitly untargeted impact.
 // Serde's ordinary nested Option reader collapses both to None.
 #[cfg(feature = "persistence")]
 fn deserialize_event_target<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
@@ -1241,6 +1329,8 @@ impl EnemyEvent {
     }
 }
 
+/// One retained piece of an enemy death presentation: a sprite with its motion, fade, frames and
+/// drawing pass.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyDeathEffect {
@@ -1285,12 +1375,14 @@ pub struct EnemyDeathEffect {
     pub scrap_oscillation: Option<ScrapOscillation>,
 }
 
+/// Which part of a Coffin a Maggot launches from: the edge or the lid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum MaggotLaunchTrajectory {
     Edge,
     Lid,
 }
+/// Whether a Maggot is still emerging from its Coffin or crawling.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum MaggotMovementPhase {
@@ -1298,6 +1390,8 @@ pub enum MaggotMovementPhase {
     Emerging,
 }
 
+/// A player's webbed status: severity (three means cocooned), web strength, the Cocoon's remaining
+/// health and its hit pulse.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WebbedState {

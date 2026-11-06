@@ -1,4 +1,5 @@
-//! `MainMenuScene` resolves a received College invitation through the actual Website API.
+//! Hosted social actions: party mod names, host commands, and resolving a received College
+//! invitation through the actual Website API.
 
 use super::*;
 use crate::social::HostedSocialAction;

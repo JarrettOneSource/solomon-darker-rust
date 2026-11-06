@@ -1,6 +1,6 @@
-//! Shared Hub Memorial durability from `host/game-memorial-persistence.ts`.
-//! The existing checkpoint file owns atomic fsync/rename; this owner adds the
-//! Memorial's smaller external bound and exact Source document validation.
+//! Durable storage for the shared Hub Memorial. The checkpoint file owns atomic
+//! fsync/rename; this owner adds the Memorial's smaller size bound and validates the
+//! document with `solomon_assets::memorial`.
 
 use std::fs::{self, File};
 use std::io::Read;
@@ -14,6 +14,8 @@ use solomon_sim::hub::memorial::{HubMemorialState, create_hub_memorial_state};
 
 use super::checkpoint::CheckpointFile;
 
+/// The shared Hub Memorial's file: read once when opened, then committed atomically on
+/// each persist.
 pub(super) struct MemorialPersistence {
     file: CheckpointFile,
 }

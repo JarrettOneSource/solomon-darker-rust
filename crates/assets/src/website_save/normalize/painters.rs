@@ -1,5 +1,6 @@
 //! Saved world-manager enrollment and schema 21 Hub remapping.
-//! Allocation order follows `migrateLegacyWorldPainterState`, then ownership validation.
+//! Saves before schema 21 allocate registrations in `legacy::migrate`, then ownership
+//! is validated.
 
 mod enemies;
 mod legacy;
@@ -84,7 +85,7 @@ fn primary_contract(actor: &Value) -> Result<(usize, WorldManagerLane), String> 
             )?),
             Actor,
         ),
-        // `NATIVE_ETHER_BLAST_PARTICLE_COUNT` in native-ether-blast.ts.
+        // One registration per Ether Blast particle (`create_ether_blast_particle_program`).
         Some("ether-blast") => (108, Transient),
         Some(
             "ether-impact" | "ether-pierce-streak" | "fire-explosion" | "fire-impact" | "water",
@@ -138,7 +139,7 @@ fn primary_actor(
     fill_primary_actor(actor, contract, order)
 }
 
-/// Registrations are identified structurally throughout the source JSON tree. Counters
+/// Registrations are identified structurally throughout the saved JSON tree. Counters
 /// deliberately do not match this shape and are adjusted separately by each migration.
 fn map_actor_registrations(value: &mut Value, map: &dyn Fn(u64) -> u64) {
     match value {

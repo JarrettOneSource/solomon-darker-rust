@@ -1,4 +1,5 @@
-//! Fire's stock compositor passes from `renderer/primary-spell-fire-native.ts`.
+//! Sprite plans for the Fire primary: fireballs, particles, impacts, explosions, embers,
+//! fire patches and friendly Imps.
 
 use super::fire::{
     fire_particle_fade_step, fire_presentation_random, fire_presentation_random_int,
@@ -9,6 +10,7 @@ use crate::Vec2;
 use crate::float;
 use crate::float::{atan2, fround};
 
+/// The fireball state its drawing depends on: age, position, direction and power.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FireballPresentationState {
     pub age_ticks: f64,
@@ -136,8 +138,8 @@ pub fn fire_explosion_plan(
     visual_scale: f64,
     point_gain: f64,
 ) -> SpellSpritePlan {
-    // The source explosion arrays deliberately sample whole native epochs even
-    // when their containing snapshot has a fractional display age.
+    // The explosion arrays deliberately sample whole native epochs even when their
+    // containing snapshot has a fractional display age.
     let age = age_ticks.max(0.0).floor() as u64;
     let scale = visual_scale;
     let tint = if presentation == FireExplosionPresentation::Steam { 0xcccccc } else { 0xffffff };
@@ -185,7 +187,7 @@ pub fn fire_ember_plan(
     let alpha = life.min(1.0);
     let frame = 267 + phase.floor() as usize % 4;
     let mut plan = SpellSpritePlan::at(position);
-    // The view adds the source's registered airborne ground glow beneath this stack.
+    // The view adds a ground glow beneath this stack while an enhanced ember is airborne.
     plan.draws.push(SpellSprite {
         alpha,
         offset: Vec2::new(0.0, height),
@@ -252,7 +254,8 @@ pub struct FirePatchTransform {
     pub scale_y: f64,
 }
 
-/// `nativeFirePatchTransform` in `renderer/primary-spell-fire-native.ts`.
+/// The flame's position and scale: it grows with the fade-in and is mirrored by the
+/// patch's horizontal sign.
 #[must_use]
 pub fn fire_patch_transform(
     position: Vec2,
@@ -272,6 +275,7 @@ pub fn fire_patch_transform(
     }
 }
 
+/// The red glow drawn on the ground beneath a fire patch.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FireGroundGlowPlan {
     pub alpha: f64,
@@ -280,7 +284,7 @@ pub struct FireGroundGlowPlan {
     pub tint: u32,
 }
 
-/// `nativeFireGroundGlowPlan`; its draw is submitted before the world painter.
+/// The ground glow's draw is submitted before the world painter.
 #[must_use]
 pub fn fire_ground_glow_plan(
     id: u64,

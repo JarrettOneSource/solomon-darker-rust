@@ -1,6 +1,6 @@
-//! The entity resource/death phase from `core-server/player-entity-store.ts`.
+//! The player resource and death phase: damage, mana debits, recovery, poison and death.
 //! PlayerState retains the components; the session applies returned presentation,
-//! Last Word and poison response packets at their source positions in the tick.
+//! Last Word and poison response packets at their fixed positions in the tick.
 
 use crate::combat::{PlayerCombatTickOptions, PlayerLifeState, player_poison_health_damage};
 use crate::economy::{HubInventoryAction, project_inventory_items};
@@ -23,6 +23,8 @@ use crate::{HubWizard, Rng};
 
 const LAST_WORD_SELECTOR: u32 = 12;
 
+/// What damaging a player triggered: an automatic health potion, Cheat Death or lost
+/// Hagatha charms.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PlayerEntityDamageResult {
     pub auto_health_potion_used: bool,
@@ -30,6 +32,7 @@ pub struct PlayerEntityDamageResult {
     pub hagatha_charms_lost: bool,
 }
 
+/// Whether a mana debit was accepted, and whether it used an automatic mana potion.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PlayerEntityManaDebitResult {
     pub accepted: bool,
@@ -144,6 +147,8 @@ impl PlayerState {
     }
 }
 
+/// What one player's combat step reads and writes: the player and wizard, primary cast,
+/// staff action, blindness, tick, mana ceiling and RNG.
 pub struct PlayerCombatContext<'a> {
     pub player_id: &'a str,
     pub player: &'a mut PlayerState,
@@ -156,12 +161,15 @@ pub struct PlayerCombatContext<'a> {
     pub rng: &'a mut Rng,
 }
 
+/// A response to this tick's poison: a Deflect sound or a Flash response.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlayerPoisonResponse {
     Deflect { pitch: f64 },
     Flash { response: PlayerFlashResponse },
 }
 
+/// What one player's combat step produced: potion and Cheat Death triggers, death phases
+/// and bursts, Last Word and poison responses.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PlayerCombatResult {
     pub auto_health_potion_used: bool,
@@ -238,8 +246,8 @@ pub fn step_player_combat_with_extensions(
                 rescue_protection: &player.combat.rescue_protection,
                 reflection_source_in_range: false,
                 position: context.wizard.position,
-                // This Source resource branch supplies zero physical damage and
-                // uses the helper's default quality; it can never birth a shard.
+                // This resource branch supplies zero physical damage and uses the
+                // helper's default quality; it can never birth a shard.
                 enhanced_effects: true,
             },
             PlayerIncomingDamage { physical_damage: 0.0, magic_damage: 0.0 },
@@ -256,8 +264,8 @@ pub fn step_player_combat_with_extensions(
     let poison_damage = if deflected.is_some() {
         0.0
     } else if let Some(extensions) = extensions {
-        // The source calls this filter even when no poison clock is active. Health
-        // damage still requires poisonActive below; a callback can observe this tick.
+        // Call this filter even when no poison clock is active. Health damage still
+        // requires `poison_active` below; a callback can observe this tick.
         finite_mod_mutation(
             extensions.filter_damage(
                 GameSimulationDamageFilterInput {

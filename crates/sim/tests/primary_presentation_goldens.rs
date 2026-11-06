@@ -57,8 +57,8 @@ fn light_row(light: AirLightPlan) -> Value {
     json!([light.casts_directional_shadow, light.intensity, point(light.position), light.radius])
 }
 
-// These final compositor operations remain doubles in Pixi. The native float32
-// ribbon geometry is compared separately without this libm rounding tolerance.
+// These final compositor operations are doubles, so they allow a libm rounding tolerance.
+// The native float32 ribbon geometry is compared separately without it.
 fn compare_draws(actual: &Value, expected: &Value, path: &str) {
     match (actual, expected) {
         (Value::Number(actual), Value::Number(expected)) => {

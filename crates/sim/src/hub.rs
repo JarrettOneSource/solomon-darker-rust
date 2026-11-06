@@ -1,13 +1,10 @@
 //! Hub courtyard kernels: segment collision, the camera, and the wizard's walk.
 //!
-//! The courtyard is the first room of the web port. Its walls and props are line segments
-//! (`segments.rs`), and the stock controller resolves a moving circle against them with a
-//! two-pass bisection sweep. The wizard's walk is the Website's units-per-second form of the
-//! retail-verified player kernel: the same 100 Hz tick, cap, retention, and `fround` points,
-//! with velocity held in units per second and scaled by the tick length when it moves.
-//!
-//! Reference: `Website/frontend/src/game/core-kernels/hub-collision.ts`, `hub-math.ts`, and
-//! `player-character.ts`.
+//! The courtyard's walls and props are line segments (`segments.rs`), and the stock controller
+//! resolves a moving circle against them with a two-pass bisection sweep. The wizard's walk is
+//! a units-per-second form of the retail-verified player kernel: the same 100 Hz tick, cap,
+//! retention, and `fround` points, with velocity held in units per second and scaled by the
+//! tick length when it moves.
 
 pub mod ambient;
 pub mod college_intro;
@@ -135,8 +132,8 @@ fn separate_from_segment(position: Vec2, radius: f64, segment: &HubSegment) -> V
     Vec2::new(nearest.x + dx / distance * separation, nearest.y + dy / distance * separation)
 }
 
-/// The stock call site uses the game's shared additive RNG; the web port keeps this lane local
-/// and deterministic (xorshift32) while preserving the recovered `[0, 1]` contract.
+/// The stock call site uses the game's shared additive RNG; this lane stays local and
+/// deterministic (xorshift32) while preserving the recovered `[0, 1]` contract.
 fn fallback_sample(state: u32) -> (u32, f64) {
     let mut value = state;
     value ^= value << 13;
@@ -291,7 +288,7 @@ pub fn hub_camera_origin(position: Vec2) -> Vec2 {
     hub_region_camera_origin(HubRegion::Courtyard, position)
 }
 
-/// `hubRegionCameraOrigin`: centres rooms narrower than the logical view, and clamps
+/// The camera origin in `region`: centres rooms narrower than the logical view, and clamps
 /// larger rooms around the wizard.
 #[must_use]
 pub fn hub_region_camera_origin(region: HubRegion, position: Vec2) -> Vec2 {
@@ -327,7 +324,7 @@ pub struct HubWizardPlan {
     pub retained_velocity: Vec2,
 }
 
-/// The Website's units-per-second player kernel (`planPlayerCharacterTick`).
+/// Plans one tick of the wizard's walk with the units-per-second player kernel.
 ///
 /// `movement` is the raw input vector (any length; it is normalized) and `movement_scale`
 /// scales both acceleration and the lane cap.
@@ -416,14 +413,14 @@ impl HubWizard {
         }
     }
 
-    /// `playerCharacterFacing`: continuous angle and body bank change together.
+    /// Sets the facing: the continuous angle and the body bank change together.
     pub fn set_facing(&mut self, heading: f64) {
         self.heading_degrees = fround(heading);
         self.heading_index = heading_index(self.heading_degrees);
     }
 
-    /// Applies a plan whose displacement collision resolved to `resolved_position`
-    /// (`commitPlayerCharacterTick`). Gait and walk cycle advance by the requested distance.
+    /// Applies a plan whose displacement collision resolved to `resolved_position`.
+    /// Gait and walk cycle advance by the requested distance.
     pub fn commit(&mut self, plan: &HubWizardPlan, resolved_position: Vec2) {
         let requested_speed = hypot(plan.requested_velocity.x, plan.requested_velocity.y);
         let requested_distance = hypot(plan.delta.x, plan.delta.y);
@@ -443,8 +440,8 @@ impl HubWizard {
     }
 
     /// Advances a participant tick: forced or input movement, regional collision, commit,
-    /// then portal contact/fades (`hub-participant-movement.ts`). Doorway walks bypass
-    /// segments; fixed room actors still separate the wizard.
+    /// then portal contact/fades. Doorway walks bypass segments; fixed room actors still
+    /// separate the wizard.
     pub fn tick(&mut self, movement: Vec2, collision_rng: &mut u32) {
         let plan = self.movement_plan(movement);
         let bypass = self.transition.is_some();
@@ -483,7 +480,7 @@ impl HubWizard {
         }
     }
 
-    /// `stepHubParticipantTransition`, after this tick's movement committed. Outgoing
+    /// Starts or advances a doorway transition after this tick's movement committed. Outgoing
     /// placement happens one tick after alpha reaches one; incoming completion happens
     /// one tick after both the fade and the walk have finished.
     pub fn step_transition(&mut self) {

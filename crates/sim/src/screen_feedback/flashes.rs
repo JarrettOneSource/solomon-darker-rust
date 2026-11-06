@@ -1,5 +1,5 @@
-//! Current Source `renderer/native-screen-flash.ts`: one accepted overwrite lane,
-//! sampled at display time with point gain captured before each write is eligible.
+//! Screen flash presentation: one accepted overwrite lane, sampled at display time with
+//! point gain captured before each write is eligible.
 
 use std::collections::BTreeMap;
 
@@ -15,6 +15,8 @@ struct ObservedWrite {
     eligible: bool,
 }
 
+/// The accepted screen flash writes one viewer has observed, sampled into a full-screen
+/// overlay at display time.
 #[derive(Clone, Debug)]
 pub struct ScreenFlashPresentation {
     writes: BTreeMap<u64, ObservedWrite>,

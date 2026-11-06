@@ -8,6 +8,7 @@ use web_sys::{CloseEvent, Event, MessageEvent, WebSocket, Window};
 use super::connection::{ConnectionCore, Delivery, encode};
 use super::{ClientMessage, MAX_PENDING_SEND_BYTES, NetworkPoll};
 
+/// The browser build's WebSocket connection to the host, driven by event callbacks.
 pub(super) struct NativeConnection {
     state: Rc<RefCell<BrowserConnection>>,
     // Callbacks detach before their owner retires; weak captures do not retain it.

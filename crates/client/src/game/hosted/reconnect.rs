@@ -4,6 +4,8 @@ use solomon_protocol::ResumeCredentials;
 
 use super::*;
 
+/// One series of reconnect attempts after an unexpected disconnect: its deadline, attempt
+/// count, resume credentials and pending request.
 pub(super) struct ReconnectEpisode {
     deadline_ms: f64,
     attempts: u8,
@@ -15,6 +17,8 @@ pub(super) struct ReconnectEpisode {
     retry_at_ms: Option<f64>,
 }
 
+/// One reconnect attempt to send: the endpoint, resume credentials, request ID and abort
+/// registration.
 pub(super) struct ReconnectRequest {
     pub endpoint: String,
     pub credentials: ResumeCredentials,

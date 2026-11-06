@@ -1,9 +1,11 @@
-//! The final `promoteOwnerOverlays` pass runs after the native region planner.
-//! Pixi sorts its child list in place, so equal depths retain the preceding frame's
-//! display order, with newly created views appended in creation order.
+//! The final owner-overlay pass, run after the region planner: each overlay draws at
+//! least half a depth unit above its owner. Retained views are re-sorted in place each
+//! frame, so equal depths keep the preceding frame's display order, with newly created
+//! views appended in creation order.
 
 use std::collections::BTreeMap;
 
+/// A draw that must appear above its owner's draw, and the spell view that holds it.
 #[derive(Clone, Copy, Debug)]
 pub struct PainterOwnerOverlay {
     pub draw_id: usize,
@@ -18,6 +20,7 @@ struct RetainedView {
     depth: f64,
 }
 
+/// The spell views retained between frames, each with the depth it last drew at.
 #[derive(Default)]
 pub struct PainterOverlayOrder {
     views: Vec<RetainedView>,
@@ -28,8 +31,8 @@ impl PainterOverlayOrder {
         self.views.clear();
     }
 
-    /// `painters` carries the planner's actual display depths. Empty retained views
-    /// keep their previous depth until they emit a painter again, as Pixi does.
+    /// `painters` carries the planner's actual display depths. A retained view with no
+    /// overlay this frame keeps its previous depth until it emits one again.
     pub fn apply(
         &mut self,
         painters: &[(usize, f64)],

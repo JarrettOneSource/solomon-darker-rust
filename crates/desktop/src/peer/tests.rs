@@ -99,7 +99,7 @@ fn stream(port: u16) -> StdStream {
 
 #[test]
 fn published_key_derivation_matches_node_and_the_tls_session_uses_the_same_cipher() {
-    // Recorded with Node crypto.hkdfSync from the published peer-network.mjs contract.
+    // Computed independently with Node's crypto.hkdfSync for the published v1 derivation.
     let key = tls::transport_key(&URL_SAFE_NO_PAD.encode([17; 32])).unwrap();
     assert_eq!(
         key.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),

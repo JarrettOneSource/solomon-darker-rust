@@ -11,6 +11,7 @@ use web_sys::{Document, Element, Event, MouseEvent, Window};
 
 const CHANGE_EVENTS: [&str; 2] = ["fullscreenchange", "webkitfullscreenchange"];
 
+/// Document listeners for the trusted click that toggles fullscreen and for fullscreen changes.
 pub(super) struct Binding {
     document: Document,
     click: Closure<dyn FnMut(Event)>,

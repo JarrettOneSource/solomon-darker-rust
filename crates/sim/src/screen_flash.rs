@@ -1,7 +1,7 @@
-//! Shared authority-order screen flashes from `core-kernels/native-screen-flash.ts`.
+//! Screen flash writes in authority order, shared by every effect that flashes the screen.
 //!
 //! Family-local actor/event IDs cannot order these writes. One writer spans an
-//! accepted Session operation; the browser applies point gain and conditional admission.
+//! accepted Session operation; the client applies point gain and conditional admission.
 
 use crate::Vec2;
 use crate::secondary::SecondaryScreenFlashState;
@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
+/// One accepted screen flash write: its authority order, tick, world, position and flash.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScreenFlashWrite {
@@ -20,6 +21,7 @@ pub struct ScreenFlashWrite {
     pub only_if_clear: bool,
 }
 
+/// The current epoch's retained screen flash writes and the next write order.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScreenFlashState {
@@ -41,7 +43,7 @@ impl ScreenFlashState {
         self.writes.clear();
     }
 
-    /// Prepare the source's private operation writer. An unaccepted operation can
+    /// Prepares the private writer for one operation. An unaccepted operation can
     /// discard it without pruning or otherwise mutating the retained authority.
     #[must_use]
     pub fn writer(&self, tick: u64) -> ScreenFlashWriter {
@@ -71,6 +73,7 @@ pub struct ScreenFlashInput {
     pub only_if_clear: bool,
 }
 
+/// Assigns authority order to one operation's screen flash writes.
 pub struct ScreenFlashWriter {
     state: ScreenFlashState,
 }

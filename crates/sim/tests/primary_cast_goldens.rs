@@ -74,7 +74,7 @@ fn shared_spell_draws_keep_equal_damage_ranges_and_high_tail_percentiles() {
     use solomon_sim::Rng;
     use solomon_sim::spells::air_water::{draw_disintegrate_percentile, draw_spell_damage};
 
-    // Sequential Website air-water-spell-actors.ts calls with native seed 7.
+    // Expected values come from sequential calls in the Website client, with native seed 7.
     let mut rng = Rng::new(7);
     assert_eq!(draw_spell_damage(&mut rng, 3.0, 3.0), 3.0);
     assert_eq!(draw_spell_damage(&mut rng, 1.2, 2.7), 1.953_180_074_691_772_5);

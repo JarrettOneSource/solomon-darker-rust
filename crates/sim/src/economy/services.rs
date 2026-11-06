@@ -1,4 +1,5 @@
-//! Purchases, dowsing, dye and Unforge from Website `core-kernels/hub-economy.ts`.
+//! College services (purchases, dowsing, dye and Unforge) and the dispatcher that applies each
+//! economy command.
 
 use crate::float::fround;
 use crate::hub::interaction::{LIBRARIAN_BOOKS, TEACHER_SPELLS};
@@ -218,7 +219,7 @@ impl HubEconomyState {
                 }
             }
             HubInventoryAction::BuyTeacherSpell { skill_id } => {
-                // Prices follow the authored teacherSpells order, not a numeric-id formula.
+                // Prices come from the authored `TEACHER_SPELLS` table, not a formula over ids.
                 let price = TEACHER_SPELLS
                     .iter()
                     .find(|spell| spell.skill_id == *skill_id)
@@ -534,7 +535,8 @@ impl HubEconomyState {
         Ok(())
     }
 
-    /// `beginInventoryDyeSession`: opening validates ownership without consuming a kit.
+    /// Opens a Fabric Dye session. Opening checks that the backpack holds the Dye kit but does
+    /// not consume it.
     pub fn begin_inventory_dye_session(
         &mut self,
         dye_item_id: u64,
@@ -546,7 +548,8 @@ impl HubEconomyState {
         )
     }
 
-    /// `dyeInventoryClothing`: the first committed paint consumes one initiating kit.
+    /// Paints one layer of a hat or robe. The session's first committed paint consumes the Dye
+    /// kit that opened it.
     pub fn dye_inventory_clothing(
         &mut self,
         session: &InventoryDyeSession,
@@ -572,7 +575,8 @@ impl HubEconomyState {
         dye_item_id: u64,
         session_id: &str,
     ) -> Result<InventoryDyeSession, Rejection> {
-        // Website length is UTF-16 code units, not UTF-8 bytes or Unicode scalars.
+        // Length is in UTF-16 code units, not UTF-8 bytes or Unicode scalars, matching the
+        // 64-unit `dyeSessionId` limit of Website save documents.
         let length = session_id.encode_utf16().count();
         if length == 0 || length > 64 {
             return Err(Rejection::InvalidTarget);

@@ -1,5 +1,6 @@
-//! Delivered Tree frames from `boneyard-tree-frame-history.ts`. Changing camera
-//! ownership discards guessed history without resetting the Trees' retained fade.
+//! Feeds Tree occlusion the actor and camera frames of the ticks delivered since its last
+//! update. Changing camera ownership discards guessed history without resetting the Trees'
+//! retained fade.
 
 use std::collections::BTreeMap;
 
@@ -21,6 +22,7 @@ struct TreeCameraEpoch {
     camera_limits: BoneyardBounds,
 }
 
+/// The camera epoch and last tick already fed to Tree occlusion.
 #[derive(Default)]
 pub(super) struct TreeFrameHistory {
     epoch: Option<TreeCameraEpoch>,
@@ -28,6 +30,8 @@ pub(super) struct TreeFrameHistory {
     last_tick: u64,
 }
 
+/// One display frame's inputs to Tree occlusion: actor poses, camera and the
+/// presentation timeline.
 pub(crate) struct TreeFrameSource<'a> {
     pub run_id: &'a str,
     pub local_player_id: &'a str,

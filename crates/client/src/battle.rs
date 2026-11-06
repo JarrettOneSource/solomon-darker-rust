@@ -67,7 +67,7 @@ pub struct BattleScene {
     pub lights: BoneyardLightIndex,
     pub weather: BoneyardWeatherView,
     pub compact_masks: CompactMaskView,
-    /// BoneyardWorldRenderer's retained draw count, independent of snapshot ticks.
+    /// Frames drawn for this map, counted independently of snapshot ticks.
     pub compact_frame_count: u64,
 }
 
@@ -96,6 +96,7 @@ pub struct BattleFrame<'a> {
     pub device_resolution: f64,
 }
 
+/// One participant's borrowed state for drawing a Boneyard frame.
 pub struct BattlePlayer<'a> {
     pub id: &'a str,
     pub player: &'a PlayerState,
@@ -411,7 +412,7 @@ impl BattleViews {
                 )
             })
             .collect();
-        // Source compact admission uses the full scene until sealing completes;
+        // Compact masks admit the full scene until the arena seals;
         // Tutorial camera cleanup and the rain viewport are separate bounds.
         let compact_bounds = world
             .arena_transition

@@ -1,4 +1,5 @@
-//! Developer bot policy from Website `core-server/ml-bot-policy`.
+//! The developer bot policy: a trained checkpoint that observes the session, chooses each
+//! bot's movement, target, ability and aim, and picks from its skill offers.
 //!
 //! A checkpoint model is immutable and shared. Per-bot observation and controller memory
 //! belongs to the admitted bot, and every intent is applied through the real Session.
@@ -34,12 +35,14 @@ pub const OPTION_DESCRIPTOR_WIDTH: usize = 138;
 pub const MODEL_FORMAT: &str = "solomon-dark-web-bot-policy";
 pub const ARCHITECTURE: &str = "mlp-tanh-four-head-v7";
 
+/// How a bot picks from a skill offer: with the checkpoint's choice head or the scripted chooser.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MlBotPolicyChoiceMode {
     Learned,
     Scripted,
 }
 
+/// The option chosen by each action head: movement, target, ability and aim.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MlBotPolicyActionIndices {
     pub ability: usize,
@@ -48,6 +51,7 @@ pub struct MlBotPolicyActionIndices {
     pub target: usize,
 }
 
+/// Which options each action head may choose, one byte per option (1 is legal).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MlBotPolicyActionMasks {
     pub ability: Vec<u8>,
@@ -56,7 +60,7 @@ pub struct MlBotPolicyActionMasks {
     pub target: Vec<u8>,
 }
 
-/// The Source worker chooses movement and target first, then the target's ability mask,
+/// The policy chooses movement and target first, then uses the target's ability mask,
 /// followed by the selected ability's aim mask. These rows are captured at observation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MlBotPolicyActionMaskPlan {
@@ -66,6 +70,7 @@ pub struct MlBotPolicyActionMaskPlan {
     pub target: Vec<u8>,
 }
 
+/// One checkpoint tensor's name and shape.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotTensorSpec {
     pub name: &'static str,
@@ -95,6 +100,7 @@ pub const TENSOR_SPECS: [MlBotTensorSpec; 20] = [
     MlBotTensorSpec { name: "value_weight", shape: &[1, 256] },
 ];
 
+/// A checkpoint's weights and biases, one flat `f32` tensor per field.
 #[derive(Clone, Debug, Default)]
 pub struct MlBotPolicyTensors {
     pub ability_bias: Vec<f32>,
@@ -195,7 +201,7 @@ impl MlBotPolicyTensors {
     }
 }
 
-/// These are Source host intents, applied to the admitted participant by the host.
+/// Intents a bot returns to its host, which applies them to the admitted participant.
 /// They never own an independent player/session simulation.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MlBotHostIntent {

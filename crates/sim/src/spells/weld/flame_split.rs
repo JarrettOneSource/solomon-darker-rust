@@ -1,10 +1,11 @@
-//! Current Source `renderer/primary-spell-weld-view.ts`: Flame's padded owner
+//! Horizontal bands that split a Flame Lash for painter sorting. Flame's padded owner
 //! determines band count; the Region view only moves the first band and masks it.
 
 use super::FlameLashBounds;
 use crate::float::fround;
 use crate::painter::zanim_split_band_height;
 
+/// One horizontal band of a split Flame Lash: its clip rectangle and painter Y.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlameLashSplitBand {
     pub id: String,

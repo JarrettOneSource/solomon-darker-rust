@@ -104,7 +104,7 @@ fn compact_ground_masks_and_player_cell_admission_match_source() {
             &format!("compact[{index}]"),
         );
     }
-    // Only the source's unrounded sine may differ between Darwin libm and V8.
+    // Only the unrounded sine may differ in its last bit from the Website client's recording.
     const TRIG_TOLERANCE: f64 = 1e-15;
     for aperture in fixture["apertures"].as_array().unwrap() {
         let alpha = direct_environment_light_alpha(

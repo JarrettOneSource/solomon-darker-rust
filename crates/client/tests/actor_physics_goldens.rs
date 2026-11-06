@@ -1,4 +1,5 @@
-//! Canonical actor physics against the source's ordered all-pairs solver.
+//! Canonical actor physics against frozen recordings of the Website client's ordered
+//! all-pairs solver.
 
 use serde_json::Value;
 use solomon_assets::boneyard::decode_scene;

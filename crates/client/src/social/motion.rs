@@ -1,6 +1,9 @@
-//! The two recovered Social `ease` transitions, with interrupted reversal timing.
-//! CSS Transitions1 §3 supplies reversal shortening; no styles or DOM are interpreted.
+//! Ease transitions for the ally health bars and chat panel, with interrupted reversal
+//! timing. Reversal shortening follows CSS Transitions Level 1 §3; no styles or DOM are
+//! interpreted.
 
+/// A value easing toward its target on the standard `ease` curve, with a reversal that
+/// interrupts it shortened accordingly.
 pub(super) struct EaseTransition {
     from: f64,
     target: f64,

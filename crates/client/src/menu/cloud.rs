@@ -1,5 +1,6 @@
-//! GPU Dark Cloud catalog/directory, search/sort sheets and detail lifetimes.
-//! Source: `DarkCloudScene.tsx`; the Website coordinator retains all I/O/admission.
+//! The Dark Cloud scene: its tabs, mod catalog, Party directory, search and sort sheets
+//! and mod detail view. It emits `HostedMenuAction`s; the hosted game owner performs
+//! every Website request and admission.
 mod art;
 mod detail;
 mod format;
@@ -57,6 +58,8 @@ enum Sheet {
     Search { input: String },
     Sort,
 }
+/// The Dark Cloud scene's state: selected tab, loaded catalog, directory and presence
+/// rows, open requests and their errors.
 pub(super) struct CloudView {
     art: CloudArt,
     layouts: LayoutsView,

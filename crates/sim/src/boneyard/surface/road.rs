@@ -1,4 +1,5 @@
-//! `renderer/native-boneyard-surface.ts`: the five native road style programs.
+//! Road meshes from the five native road style programs: an inner quad between two edge
+//! strips that fade out toward the road's sides.
 
 use crate::Vec2;
 use crate::boneyard::BoneyardRoad;

@@ -1,5 +1,5 @@
-//! GPU stock widgets shared by the menu screens. Source geometry comes from
-//! `NativeUiButton`, `NativeUiControlPanel`, and `NativeSettingsPresentation`.
+//! GPU stock widgets shared by the menu screens: the 1600 × 900 stage, stock buttons,
+//! control panels, labels, text fields and gradients.
 
 use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
 use egui::{
@@ -14,6 +14,7 @@ use unicode_segmentation::UnicodeSegmentation;
 pub(super) const GOLD: Color32 = Color32::from_rgb(217, 186, 112);
 pub(super) const ERROR: Color32 = Color32::from_rgb(228, 163, 154);
 
+/// The 1600 × 900 menu stage placed in the view: its top-left origin and scale.
 #[derive(Clone, Copy)]
 pub(super) struct Stage {
     pub origin: Pos2,
@@ -313,7 +314,7 @@ pub(crate) fn paint_stock_button(
         response.hovered() || frame.focus_visible(response),
     );
 }
-/// Shared nativeUI54 chrome; each source family chooses its actual highlighted state.
+/// The shared stock button chrome; each caller decides when it is highlighted.
 pub(crate) fn paint_stock_button_highlight(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -441,7 +442,8 @@ pub(super) fn gradient(ui: &Ui, rect: Rect, top: Color32, bottom: Color32) {
     mesh.add_triangle(0, 2, 3);
     ui.painter().add(egui::Shape::mesh(mesh));
 }
-// This adapter preserves the Source field's explicit drawing and admission policy.
+// A text field with an explicit font, color, margin and editing rules, outlined in
+// gold while focused.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn edit(
     frame: &UiFrame<'_>,
@@ -499,7 +501,8 @@ pub(super) fn control_panel(
     )
 }
 
-/// Source Dark Cloud/Shelf button policy uses pressed chrome and half-opacity disabled art.
+/// Dark Cloud and Boneyard shelf buttons show pressed chrome and draw disabled art at
+/// half opacity.
 pub(crate) fn cloud_button(
     frame: &UiFrame<'_>,
     ui: &Ui,
@@ -585,7 +588,8 @@ pub(crate) fn narrative_line(
     )
 }
 
-/// A Source circle gradient, including its premultiplied alpha, painted once per pixel.
+/// A circular gradient between premultiplied colors, painted as one 32 × 32 grid mesh
+/// over `rect` so each pixel is drawn once.
 pub(crate) fn radial_gradient(
     ui: &Ui,
     rect: Rect,

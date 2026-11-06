@@ -1,4 +1,5 @@
-//! Semantic projections from the Source SDK, over its one lazily sampled frame.
+//! The Console SDK's read operations: catalog lists, mod identity and capabilities, and game
+//! state projected from one lazily sampled frame.
 use super::*;
 use serde_json::json;
 

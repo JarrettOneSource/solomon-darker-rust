@@ -25,6 +25,8 @@ impl Drop for Listener {
     }
 }
 
+/// The browser input transport: DOM listeners on the canvas and a hidden textarea, feeding
+/// one input queue.
 pub(in crate::gpu_ui) struct BrowserInput {
     document: Document,
     canvas: HtmlCanvasElement,
@@ -188,7 +190,7 @@ impl BrowserInput {
                             && matches!(mapped, Some(Key::ArrowUp | Key::ArrowDown))
                     });
                 // Physical editor arrows own native caret receipts. Controller
-                // arrows are queued separately and retain Source spatial focus;
+                // arrows are queued separately and keep spatial focus movement;
                 // Console Alt+Up/Down still reaches its actual history owner.
                 if let Some(mapped) = mapped
                     && !native_caret_arrow

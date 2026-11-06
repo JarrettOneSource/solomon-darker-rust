@@ -1,4 +1,5 @@
-//! Scoped primitive values from `mod-semantic-state-engine.ts`.
+//! Values that mods store under a key within a scope, such as an entity, a scene or a
+//! participant's run. Participant-scoped values are visible only to that participant.
 
 use std::collections::HashSet;
 
@@ -9,6 +10,7 @@ use solomon_sim::modding::runtime::{ModSemanticStateCheckpoint, ModSemanticValue
 use super::MAXIMUM_SAFE_INTEGER;
 use crate::json::SourceCollator;
 
+/// Mod-stored values, each identified by its mod, scope and key and bounded in size.
 pub struct ModSemanticStateEngine {
     mod_ids: HashSet<String>,
     values: Vec<(String, ModSemanticValue)>,

@@ -12,11 +12,12 @@ pub(super) fn navigation_layer_id() -> egui::LayerId {
 
 pub(super) fn navigation_layer(ctx: &egui::Context, body: egui::LayerId) -> egui::LayerId {
     let navigation = navigation_layer_id();
-    // An interacted Area rises within its order. Source's fixed toolbar must
+    // An interacted Area rises within its order. The fixed section toolbar must
     // remain above the scrolling book after that interaction too.
     ctx.set_sublayer(body, navigation);
     navigation
 }
+/// A compact-screen toolbar shortcut: scroll to a section, or one screen back or forward.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum PanelSection {
     Stats,
@@ -304,8 +305,8 @@ impl PlayerPanels {
                             }
                             labels.push((response, rect, *label));
                         }
-                        // Source labels have z-index 1 across sibling buttons,
-                        // so neighbouring corners cannot cover their glyphs.
+                        // Labels paint after every button, so neighbouring corners
+                        // cannot cover their glyphs.
                         for (response, rect, label) in labels {
                             let paint = frame.with_brightness(
                                 if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 },

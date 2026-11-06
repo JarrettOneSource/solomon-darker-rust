@@ -1,6 +1,6 @@
-//! Source `MainMenuScene` cheat-menu admission and `game-client-session` authority.
-//! The host welcome and accepted party leader determine access; the view emits Lua
-//! requests and never changes the local simulation to report a successful command.
+//! Cheat menu admission and authority. The host welcome and accepted party leader
+//! determine access; the view emits Lua requests and never changes the local simulation
+//! to report a successful command.
 
 use super::*;
 use crate::cheats::CheatViewSnapshot;

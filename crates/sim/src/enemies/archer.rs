@@ -1,5 +1,5 @@
-//! Archer action scheduling and native tangential strafe from `skeleton-family.ts`
-//! and `native-archer-strafe.ts`. Volley births retain their private action seed.
+//! Skeleton Archer attack cycle and the tangential strafe it performs while attacking.
+//! Each volley uses the private seed drawn when its attack starts.
 use super::combat::attack_marker;
 use super::config::EnemyFamilyConfig;
 use super::model::*;
@@ -140,6 +140,7 @@ pub fn reset_archer(brain: &mut ArcherBrain) {
     brain.phase = ArcherPhase::RangeControl;
 }
 
+/// One tick of Archer strafe: the movement delta and how far the gait and stride phases advance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArcherStrafeMovement {
     pub delta: Vec2,

@@ -1,14 +1,14 @@
-//! Player action clocks and weapon emitters from `core-kernels/primary-spells.ts`.
+//! A player's primary cast clock, cast poses and weapon emitter offsets.
 //!
-//! The source's -1 action/selection sentinels become `None`. Cast progress stays f64: its
-//! native-rate thresholds must observe the same crossing tick as the Website.
+//! `None` marks an idle action clock or an empty selection. Cast progress stays f64:
+//! narrowing it would move the tick on which a native-rate threshold is crossed.
 
 use super::weapon_offsets::{BARE_OFFSETS, STAFF_OFFSETS, WAND_OFFSETS};
 use crate::Vec2;
 use crate::float::hypot;
 use crate::profile::WizardElement;
 
-/// The Website's stored single is 0.8999999761581421.
+/// 0.9 stored as a single: 0.8999999761581421.
 pub const PLAYER_WEAPON_PULSE_DECAY: f64 = 0.9_f32 as f64;
 pub const ETHER_BLAST_WEAPON_PULSE: f64 = 0.25_f32 as f64;
 
@@ -19,6 +19,7 @@ pub fn forward_action_marker_crossed(previous: f64, current: f64, marker: f64) -
     previous <= marker && marker <= current && current > previous
 }
 
+/// An equipped Staff or Wand, which decides where a wizard's spells are emitted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PlayerWeaponKind {
@@ -26,6 +27,8 @@ pub enum PlayerWeaponKind {
     Wand,
 }
 
+/// One player's primary casting state: action clock, selected spell, aim, Ether Blast
+/// charge, weapon pulse and cue counters.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerPrimaryCastState {
@@ -91,8 +94,8 @@ impl PlayerPrimaryCastState {
         self.weapon_pulse = pulse;
     }
 
-    /// Book selection clears occupancy while retaining the source's emission counters,
-    /// aim direction, Ether charge and weapon pulse from the previous selection.
+    /// Book selection clears occupancy while retaining the emission counters, aim
+    /// direction, Ether charge and weapon pulse from the previous selection.
     pub fn reset_for_selection(&mut self, selected_primary_id: u32) {
         self.action_tick = None;
         self.hand_cast = None;
@@ -107,8 +110,9 @@ impl PlayerPrimaryCastState {
         self.underpowered = false;
     }
 
-    /// `advancePrimaryCast`: retain an action on the tick that first crosses progress four;
-    /// the following tick observes the free slot. Active channels instead cap progress at one.
+    /// Advances the action clock. An action is retained on the tick that first crosses
+    /// progress four; the following tick observes the free slot. Active channels instead
+    /// cap progress at one.
     pub fn advance(
         &mut self,
         held: bool,

@@ -1,10 +1,11 @@
-//! Readonly match activity from Website `observer-activity.ts`.
-//! Roster order and accepted skill changes come from the session; this projection never
-//! chooses a skill or changes progression.
+//! Read-only skill activity for the match observer: pending level-up choices and the
+//! events that report how each one resolved. Roster order and accepted skill changes come
+//! from the session; this projection never chooses a skill or changes progression.
 
 use crate::profile::{PlayerSkillOffer, PlayerSkillOfferOption, SKILL_CATALOG};
 
-/// The fields the source observer reads from one participant, in session insertion order.
+/// The fields the observer reads from one participant. Rosters list them in session
+/// insertion order.
 #[derive(Clone, Copy, Debug)]
 pub struct ObserverSkillPlayer<'a> {
     pub id: &'a str,
@@ -14,6 +15,7 @@ pub struct ObserverSkillPlayer<'a> {
     pub deferred_choices: usize,
 }
 
+/// One activity-feed entry: a resolved skill choice or a newly offered one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObserverSkillEvent {
     pub detail: String,
@@ -22,6 +24,7 @@ pub struct ObserverSkillEvent {
     pub title: String,
 }
 
+/// A participant's pending level-up choice, with the offered skills named for display.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObserverSkillOfferPresentation {
     pub id: String,
@@ -30,7 +33,7 @@ pub struct ObserverSkillOfferPresentation {
     pub title: String,
 }
 
-/// `observerSkillOffers`: actual pending native choices in participant insertion order.
+/// Every participant's pending skill choice, in participant insertion order.
 #[must_use]
 pub fn observer_skill_offers(
     players: &[ObserverSkillPlayer<'_>],
@@ -49,7 +52,7 @@ pub fn observer_skill_offers(
     offers
 }
 
-/// `deriveObserverSkillEvents`: report resolved choices before their replacement offers.
+/// Reports each resolved choice before the offer that replaces it.
 /// Learned ranks are permanent progression ranks, including choices which equipment might
 /// currently boost. An unchanged offer sequence produces no event.
 #[must_use]
@@ -107,7 +110,7 @@ fn increased_offered_skill(
     previous: &ObserverSkillPlayer<'_>,
     current: &ObserverSkillPlayer<'_>,
 ) -> Option<(usize, u32)> {
-    // The source picks the first increased skill in offer order, rather than rank order.
+    // Report the first increased skill in offer order, rather than rank order.
     for option in &offer.options {
         let before = previous.learned_ranks.get(option.skill_id).copied().unwrap_or(0);
         let after = current.learned_ranks.get(option.skill_id).copied().unwrap_or(0);
@@ -124,9 +127,9 @@ fn option_name(option: &PlayerSkillOfferOption) -> String {
 }
 
 fn skill_name(skill_id: usize) -> String {
-    // Row 82 exists only as the source's extra stat-book row, outside CATALOG.skills.
-    // The Rust table retains it for fixed-size runtime indexing; observer names must
-    // still use the catalog's absent-row fallback rather than its empty stat-book name.
+    // Row 82 is an extra stat-book row, not an offered skill. `SKILL_CATALOG` keeps it
+    // for fixed-size runtime indexing; observer names must still use the absent-row
+    // fallback rather than its empty stat-book name.
     SKILL_CATALOG
         .get(skill_id)
         .filter(|_| skill_id != 82)

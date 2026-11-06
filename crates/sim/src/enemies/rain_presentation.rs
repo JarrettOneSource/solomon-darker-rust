@@ -1,5 +1,5 @@
-//! Rain's private paint-time manager from `renderer/native-rain-cloud.ts` and
-//! `core-kernels/native-faculty-spells.ts::createNativeRainCloudBillow`.
+//! The cloud drawn over a Rain of Bones spell. Its billows are born and aged at paint time by
+//! a private cosmetic RNG, outside the world clock.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemySpriteLayer};
 use super::boss_spell::{BossSpell, BossSpellKind};
@@ -7,6 +7,8 @@ use crate::float;
 use crate::float::fround;
 use crate::{Rng, Vec2};
 
+/// One puff of the Rain of Bones cloud: sprite entry, position, rotation, scale, tint and pulse
+/// phase.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RainCloudBillow {
     pub entry: usize,

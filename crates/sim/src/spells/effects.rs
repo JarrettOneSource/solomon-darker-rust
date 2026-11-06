@@ -1,4 +1,5 @@
-//! Effect births and painter membership from `core-kernels/primary-spells.ts`.
+//! Constructors for primary spell effects (impacts, explosions, embers and debris), their
+//! painter registrations, and the lifetimes of effects that have a fixed duration.
 
 use super::earth_debris::{WeldMeteorDebrisSeed, create_weld_boulder_debris_particle};
 use super::earth_fragments::{
@@ -30,6 +31,7 @@ pub(super) fn transient_base(
     }
 }
 
+/// Inputs for creating one Earth boulder debris bit.
 pub struct CreatePrimarySpellEarthBoulderBitInput<'a> {
     pub debris: WeldMeteorDebrisSeed,
     pub enhanced_effects: bool,
@@ -140,6 +142,8 @@ pub(super) fn fire_explosion(
     }
 }
 
+/// What a fireball's detonation creates: its radial Fire contacts, the impact, explosion
+/// and ember effects, and the next free spell ID.
 pub struct PrimarySpellFireDetonation {
     pub contacts: Vec<FireRadialContact>,
     pub next_id: u64,

@@ -1,5 +1,5 @@
-//! Report 22's independently accepted Website policy, through the real panel
-//! attach/show/update/action boundary. Only the unused OS keyboard subscription
+//! The optional Inventory and Skills navigation policy in `docs/DECISIONS.md`, tested through
+//! the real panel attach/show/update/action boundary. Only the unused OS keyboard subscription
 //! is detached; events are native input fixtures, and stock bundles are real.
 use super::*;
 use solomon_sim::economy::{

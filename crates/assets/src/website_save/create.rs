@@ -1,4 +1,5 @@
-//! Owner-only disk projections from `save/game-save-document.ts`.
+//! Writes save documents from one owner's projection of a session: a full continuation,
+//! a profile-only save, or a retired save that keeps only the profile.
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -15,6 +16,8 @@ use super::contract::{
 use super::projection;
 use super::value::encode;
 
+/// What `create` saves: the session, the owning player, the loaded Boneyard if any, the save
+/// metadata and an optional party rejoin token.
 pub struct CreateSaveOptions<'a> {
     pub state: &'a GameSession,
     pub player_id: &'a str,

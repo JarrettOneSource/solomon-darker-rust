@@ -1,6 +1,6 @@
-//! Bounded HTTP framing for the existing Website supervisor/admin contract.
-//! This module reads and writes bytes only; `host/game-session-supervisor.ts` owns
-//! the JSON routes, bearer authentication and their resulting authority changes.
+//! Bounded HTTP framing for the Website's supervisor/admin contract. This module reads
+//! and writes bytes only; `host::supervisor` owns the JSON routes, bearer authentication
+//! and their resulting authority changes.
 
 use std::io::{self, BufRead, Read, Write};
 use std::net::SocketAddr;
@@ -12,11 +12,13 @@ use std::time::Duration;
 use super::{ServerState, TransportEvent};
 
 const MAX_PROVISION_REQUEST_BYTES: usize = 48 * 1024 * 1024;
-// Source recovery permits a complete browser save in addition to admitted packages.
+// A rejoin request carries a complete JSON-escaped save beside its content package.
 const MAX_REJOIN_REQUEST_BYTES: usize =
     MAX_PROVISION_REQUEST_BYTES + solomon_protocol::MAX_SAVE_BYTES * 2 + 64 * 1024;
 const MAX_HTTP_LINE_BYTES: usize = 16 * 1024;
 
+/// A framed supervisor HTTP request: method, path, authorization and deployment headers,
+/// body and remote address.
 pub struct HostedHttpRequest {
     pub method: String,
     pub path: String,
@@ -27,6 +29,7 @@ pub struct HostedHttpRequest {
     pub remote_addr: SocketAddr,
 }
 
+/// A supervisor HTTP response: status, extra headers and body.
 pub struct HostedHttpResponse {
     pub status: u16,
     pub headers: Vec<(String, String)>,

@@ -1,5 +1,5 @@
-//! Input sequencing from `host/game-host.ts:2005` and `applyQueuedInput` at 7857.
-//! The source keeps cast edges on distinct ticks while coalescing movement at one tick.
+//! Per-connection input sequencing. Inputs queue by target tick within a 200-tick
+//! lookahead; cast edges keep distinct ticks while movement at one tick coalesces.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -10,6 +10,7 @@ use solomon_sim::session::GameSessionInput;
 
 const INPUT_LOOKAHEAD_TICKS: u64 = 200;
 
+/// Why an input was rejected: malformed values or a target too far ahead of the server tick.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputRejection {
     NonFiniteCoordinates,
@@ -33,8 +34,8 @@ impl fmt::Display for InputRejection {
 }
 impl std::error::Error for InputRejection {}
 
-/// The source protocol admits its unit-vector tolerance and does not normalize it again.
-/// JSON decoding has already checked field types; these are the actual numeric contracts.
+/// Movement may exceed unit length by the protocol's 0.001 tolerance and is not normalized
+/// again. JSON decoding has already checked field types; these are the numeric contracts.
 pub fn validate_input(input: &GameSessionInput) -> Result<(), InputRejection> {
     if !input.movement.x.is_finite()
         || !input.movement.y.is_finite()
@@ -58,13 +59,14 @@ pub fn validate_input(input: &GameSessionInput) -> Result<(), InputRejection> {
     Ok(())
 }
 
+/// The outcome of a valid input: ignored as stale, queued for a tick, or neutralized.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputAdmission {
     Ignored,
     Queued {
         target_tick: u64,
     },
-    /// The source acknowledges blocked input immediately and publishes the neutral state.
+    /// Blocked input is acknowledged immediately and the neutral state is published.
     Neutralized,
 }
 
@@ -152,8 +154,8 @@ impl InputQueue {
         self.active
     }
 
-    /// `stopAllClientInputs`: pause/loading surfaces clear held and queued commands. The
-    /// ACK cursor changes only when the source admits or applies an input.
+    /// Pause and loading surfaces clear held and queued commands. The ACK cursor changes
+    /// only when an input is admitted or applied.
     pub fn neutralize(&mut self) {
         self.active = GameSessionInput::default();
         self.queued.clear();

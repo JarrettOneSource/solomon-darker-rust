@@ -1,5 +1,5 @@
-//! Report 109's visible row change must not be mistaken for healing a surviving actor.
-//! The Website's qualified actor/HP receipt is recorded in native-parity ledger 045.
+//! Resummoning a Golem retires the oldest one and births a fresh one at full health.
+//! The visible HUD row change must not be mistaken for healing the surviving Golem.
 #![cfg(feature = "persistence")]
 
 #[path = "support/secondary.rs"]

@@ -1,5 +1,5 @@
-//! Actual provider ownership from `core-server/boneyard-world-light.ts`.
-//! Each factory receives the retained source fields and the owner's real registration.
+//! Light providers owned by world entities: enemies and their projectiles and effects, primary
+//! spells and secondary abilities. Each light is filed under its owner's real registration.
 
 use crate::Vec2;
 use crate::enemies::model::EnemyDeathEffectKind;
@@ -34,6 +34,8 @@ use super::{
     WorldLightScene, WorldMiscLightOwner, primary_view_bounds, region_point_gain,
 };
 
+/// The spell state whose actors also give off world light: primary spells and secondary
+/// abilities.
 #[derive(Clone, Copy, Default)]
 pub struct BoneyardLightEnvironment<'a> {
     pub primary_spells: Option<&'a SpellState>,
@@ -53,8 +55,9 @@ pub struct BoneyardEntityLightPresentation<'a> {
     pub ring_fire_explosion_point_gain: &'a dyn Fn(u64, Vec2) -> f64,
 }
 
-/// Captures the caller's actual simulation phase. In the source movement step, `scene`
-/// retains the incoming camera bounds while lantern/players already hold their new positions.
+/// Captures the caller's actual simulation phase. During the world tick's movement step,
+/// `scene` still holds the incoming camera bounds while the lantern and players already hold
+/// their new positions.
 #[must_use]
 pub fn boneyard_world_light_query(
     scene: WorldLightScene,

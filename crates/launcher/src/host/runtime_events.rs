@@ -1,5 +1,5 @@
-//! Source `host/runtime-event-publisher.ts`: bounded, ordered, best-effort operator
-//! events. Network retries live on one worker, never on the gameplay thread.
+//! Operator runtime events: bounded, ordered and best-effort, posted to a loopback HTTP
+//! endpoint. Network retries live on one worker, never on the gameplay thread.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -13,6 +13,7 @@ const MAXIMUM_QUEUED_EVENTS: usize = 256;
 const MAXIMUM_ATTEMPTS: u8 = 5;
 const RETRY_DELAYS_MS: [u64; 4] = [100, 500, 2_000, 5_000];
 
+/// The loopback endpoint and bearer secret that runtime events are posted with.
 pub struct RuntimeEventConfig {
     endpoint: url::Url,
     secret: String,
@@ -21,8 +22,8 @@ pub struct RuntimeEventConfig {
 impl RuntimeEventConfig {
     pub fn new(endpoint: &str, secret: String) -> Result<Self, String> {
         let endpoint = url::Url::parse(endpoint).map_err(|_| "Invalid URL")?;
-        // Preserve the actual Source URL.hostname check. In particular, WHATWG
-        // serializes IPv6 as "[::1]", which its unbracketed set does not admit.
+        // URL hostnames bracket IPv6 as "[::1]", so the unbracketed "::1" entry never
+        // matches and IPv6 loopback is rejected.
         if endpoint.scheme() != "http"
             || !matches!(endpoint.host_str(), Some("127.0.0.1" | "::1" | "localhost"))
         {
@@ -35,6 +36,7 @@ impl RuntimeEventConfig {
     }
 }
 
+/// One operator event: its component, event name, message, details and time.
 pub struct RuntimeEventEntry {
     pub component: String,
     pub details: LuaObject,
@@ -59,6 +61,7 @@ struct SharedQueue {
     changed: Condvar,
 }
 
+/// A cloneable handle that queues runtime events, dropping the oldest beyond 256.
 #[derive(Clone)]
 pub struct RuntimeEventSink(Arc<SharedQueue>);
 
@@ -74,8 +77,8 @@ impl RuntimeEventSink {
         }
         let queued = Arc::new(QueuedRuntimeEvent { entry, attempts: AtomicU8::new(0) });
         if state.entries.is_empty() {
-            // Source starts fetch synchronously before its first await. Reserve
-            // that first event even if the worker has not received CPU time yet.
+            // An event published into an empty queue counts as already being sent. Reserve
+            // it even if the worker has not received CPU time yet.
             state.first_pending = Some(Arc::clone(&queued));
         }
         state.entries.push_back(queued);
@@ -83,6 +86,7 @@ impl RuntimeEventSink {
     }
 }
 
+/// The runtime event worker thread and the sink that feeds it.
 pub struct RuntimeEventPublisher {
     sink: RuntimeEventSink,
     worker: Option<JoinHandle<()>>,
@@ -111,7 +115,8 @@ impl RuntimeEventPublisher {
         self.sink.clone()
     }
 
-    /// Source stops admission then drains the current retry pump before shutdown.
+    /// Stops accepting events, then waits for the worker to drain the queue, retries
+    /// included.
     pub fn close(&mut self) {
         {
             let mut state = self.sink.0.state.lock().expect("the event queue remains usable");
@@ -156,8 +161,8 @@ fn pump(config: RuntimeEventConfig, queue: &SharedQueue) {
         let accepted = document(&queued.entry)
             .ok()
             .and_then(|body| {
-                // Source fetch rejects URL credentials, even though its constructor
-                // and the endpoint's loopback check accept that URL.
+                // A URL with credentials is never posted, even though parsing and the
+                // endpoint's loopback check accept it.
                 if !endpoint.username().is_empty() || endpoint.password().is_some() {
                     return None;
                 }
@@ -172,8 +177,8 @@ fn pump(config: RuntimeEventConfig, queue: &SharedQueue) {
         let attempts =
             if accepted { 0 } else { queued.attempts.fetch_add(1, Ordering::Relaxed) + 1 };
         if accepted || attempts >= MAXIMUM_ATTEMPTS {
-            // Like Source shift(), this removes the current head even if a burst
-            // already evicted the in-flight entry at the queue's 256-event bound.
+            // This removes the current head even if a burst already evicted the in-flight
+            // entry at the queue's 256-event bound.
             queue.state.lock().expect("the event queue remains usable").entries.pop_front();
         } else {
             thread::sleep(Duration::from_millis(RETRY_DELAYS_MS[usize::from(attempts - 1)]));

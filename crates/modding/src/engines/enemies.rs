@@ -1,4 +1,5 @@
-//! Authored chase/attack/tombstone authority from `mod-enemy-engine.ts`.
+//! Mod enemies: each chases the nearest player, attacks within range on its cooldown, and is
+//! removed 50 ticks after it dies.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use solomon_sim::modding::runtime::{
 use super::{MAXIMUM_SAFE_INTEGER, duration_ticks, validate_tick, validate_tick_rate};
 use crate::json::SourceCollator;
 
+/// The active mod enemies with their health, position, target and attack timing.
 pub struct ModEnemyEngine {
     catalog: Arc<PreparedModContentCatalog>,
     ticks_per_second: u32,

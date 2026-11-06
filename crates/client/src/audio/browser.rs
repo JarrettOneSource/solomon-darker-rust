@@ -9,6 +9,7 @@ use web_sys::{
 
 pub(super) type AudioBuffer = web_sys::AudioBuffer;
 
+/// The browser audio engine: a WebAudio context with master and sound-mix gain nodes.
 #[derive(Clone)]
 pub(super) struct AudioEngine(Rc<Engine>);
 struct Engine {
@@ -131,6 +132,7 @@ impl Drop for Engine {
     }
 }
 
+/// One playing WebAudio buffer source and its gain node.
 pub(super) struct Voice {
     source: AudioBufferSourceNode,
     gain: GainNode,
@@ -152,6 +154,7 @@ impl Voice {
     }
 }
 
+/// A resident, hidden HTML audio element that plays one song.
 pub(super) struct Music {
     raw: HtmlAudioElement,
 }
@@ -182,6 +185,7 @@ struct Activation {
     name: &'static str,
     callback: Closure<dyn FnMut(Event)>,
 }
+/// Window `pointerdown` and `keydown` listeners that unlock audio inside each trusted gesture.
 pub(super) struct ActivationListeners {
     window: web_sys::Window,
     callbacks: Vec<Activation>,
@@ -323,9 +327,10 @@ fn unlock(state: &Rc<RefCell<AudioState>>) -> Result<(), String> {
     }
     Ok(())
 }
-/// Source primes the resident songs in the trusted gesture. The native play call
-/// stays synchronous; completion only touches this still-owned channel and checks
-/// whether a scene/pause transition changed its role while the promise was pending.
+/// Resident songs are primed inside the trusted gesture so that browser autoplay rules
+/// let them start later. The native play call stays synchronous; completion only
+/// touches this still-owned channel and checks whether a scene/pause transition
+/// changed its role while the promise was pending.
 fn play_stock_music_inner(
     state: &Rc<RefCell<AudioState>>,
     index: usize,

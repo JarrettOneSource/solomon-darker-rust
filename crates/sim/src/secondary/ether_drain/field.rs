@@ -1,4 +1,5 @@
-//! Ordered EtherDrain actor epoch from `native-secondary-abilities.ts:3271..3445`.
+//! One Ether Drain actor's tick, in order: grow, hold or shrink, refresh targets and
+//! scenery, then pull targets in. Also the pulse and capture callbacks for that actor.
 
 use super::kernel::inside_broad_ellipse;
 use super::*;

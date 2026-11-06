@@ -1,9 +1,11 @@
-//! Ownership shared by the source Weld world actors in `native-weld-primary-runtime.ts`.
+//! The identity and birth data that every Weld world actor shares.
 
 use crate::Vec2;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::spells::model::PrimarySpellTransientBase;
 
+/// What every Weld world actor shares: its transient identity, birth tick, build,
+/// direction, origin and the build's authored vector.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldActorBase {
@@ -17,7 +19,7 @@ pub struct WeldActorBase {
     pub vector: Vec<f64>,
 }
 
-/// The source's common actor constructor input. Family constructors decide which
+/// The common Weld actor constructor input. Family constructors decide which
 /// manager registrations exist; a plain effect has no logical light provider.
 #[derive(Clone, Copy)]
 pub struct WeldActorBirth<'a> {

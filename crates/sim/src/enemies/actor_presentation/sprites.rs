@@ -1,4 +1,5 @@
-//! Direct bank families from `native-enemy-sprite-presentation.ts`.
+//! Layers for the enemies drawn directly from sprite banks indexed by pose and facing: Imp,
+//! Portal, Wraith, Coffin and Spider.
 
 use super::layers::*;
 use super::model::*;

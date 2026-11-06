@@ -1,6 +1,6 @@
-//! InventoryScreen root 0x0056A7D7..0x0056AD5F: UI77 twice, UI76 multiply,
-//! completed 256-square target, then pulsing UI75. Website RE ledger127 owns
-//! the complete caller census and the corrected native integer-raster oracle.
+//! The Inventory screen's Unforge target, as the original game's InventoryScreen root draws
+//! it at 0x0056A7D7..0x0056AD5F: UI77 twice, UI76 multiply, the completed 256-square
+//! target, then a pulsing UI75.
 
 use egui::{Pos2, Rect, pos2, vec2};
 use solomon_assets::SpriteRecord;
@@ -9,6 +9,8 @@ use super::{StockAtlas, UiFrame, effects};
 
 pub(super) const CAPTURE_SIDE: u32 = 256;
 
+/// One tick of the Unforge animation: the scrolling image centers, the mask clip and the
+/// pulsing marker red.
 #[derive(Clone, Debug)]
 pub(crate) struct Frame {
     pub image_centers: [[f32; 2]; 2],
@@ -37,6 +39,8 @@ impl Frame {
     }
 }
 
+/// A complete Unforge paint: the three stock records, this tick's frame, target and marker
+/// corners, and opacity.
 #[derive(Clone, Debug)]
 pub(crate) struct Paint {
     pub path: String,

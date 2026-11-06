@@ -1,4 +1,5 @@
-//! `native-arena-field.ts`: exact original-page UVs and the f32 tile recurrence.
+//! The Arena ground field: 350-unit tiles on a lattice advanced in f32, textured with exact
+//! UVs on the original atlas page.
 
 use crate::Vec2;
 use crate::boneyard::BoneyardBounds;
@@ -10,6 +11,7 @@ const TILE_SIZE: f64 = 350.0;
 const MAX_AXIS_ENTRIES: usize = 1_000_000;
 const MAX_VISIBLE_TILES: usize = 1_000_000;
 
+/// The atlas record, texel frame and UVs of the field tile for one environment mode.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ArenaFieldDescriptor {
     pub entry: usize,
@@ -17,12 +19,14 @@ pub struct ArenaFieldDescriptor {
     pub uvs: [Vec2; 4],
 }
 
+/// The world x and y coordinates of the field tiles' top-left corners, stepped by 350 in f32.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArenaFieldLattice {
     pub x: Vec<f64>,
     pub y: Vec<f64>,
 }
 
+/// The half-open lattice index ranges of the tiles a view overlaps, and their count.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ArenaFieldRange {
     pub x_start: usize,
@@ -41,8 +45,8 @@ pub const fn arena_field_record(mode: u8) -> usize {
 #[must_use]
 pub fn arena_field_descriptor(mode: u8) -> ArenaFieldDescriptor {
     let entry = arena_field_record(mode);
-    // The original DeadHawg page, as validated by current native-arena-field.ts.
-    // These are atlas texels, never the loose 350px crop or a repeating ground tile.
+    // Tile origins on the original DeadHawg page. These are atlas texels, never the
+    // loose 350px crop or a repeating ground tile.
     let [x, y] = if entry == 11 { [778.0, 859.0] } else { [1399.0, 1069.0] };
     let left = fround((x + 0.5) / 2048.0);
     let top = fround((y + 0.5) / 2048.0);
@@ -68,7 +72,7 @@ pub fn create_arena_field_lattice(bounds: BoneyardBounds) -> Result<ArenaFieldLa
 }
 
 /// Strict primary-view overlap. The shared scenery cull uses different padding
-/// and inclusive edges; it must not be substituted for this source range.
+/// and inclusive edges; it must not be substituted for this range.
 pub fn arena_field_visible_range(
     lattice: &ArenaFieldLattice,
     view: BoneyardBounds,

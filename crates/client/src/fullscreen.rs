@@ -29,6 +29,7 @@ pub(crate) fn fullscreen_active(surface: &Surface) -> bool {
 pub(crate) fn toggle_fullscreen(surface: &Surface) -> Result<FullscreenRequest, String> {
     platform::toggle(surface)
 }
+/// Which screen the fullscreen control is placed for, or `Hidden`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FullscreenPlacement {
     Hidden,
@@ -37,6 +38,7 @@ pub enum FullscreenPlacement {
     DarkCloud,
     Create { frame_scale: f64 },
 }
+/// What the fullscreen control offers on this platform: fullscreen, installation, or nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ControlMode {
     Fullscreen,
@@ -50,6 +52,7 @@ struct FullscreenState {
     error: Option<String>,
     target: Option<egui::Response>,
 }
+/// The fullscreen (or install) button and its help popup, bound to the surface.
 pub struct FullscreenControl {
     surface: Surface,
     state: Rc<RefCell<FullscreenState>>,
@@ -83,7 +86,7 @@ impl FullscreenControl {
         }
         Ok(())
     }
-    /// Source menu.css raises this body root only for the native coarse portrait query.
+    /// The control rises above the orientation guidance only on a portrait touch screen.
     pub fn above_orientation_guidance(&self) -> Result<bool, String> {
         self.surface.portrait_touch()
     }

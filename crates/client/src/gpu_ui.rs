@@ -1,4 +1,4 @@
-//! Shared Rust screen-space interaction and painting for native and browser graphics.
+//! Shared screen-space interaction and painting for native and browser graphics.
 //!
 //! Stock bundle geometry and bitmap text remain the canonical native UI primitives.
 //! egui owns layout, focus and tessellation; this module owns canonical editing,
@@ -63,6 +63,7 @@ pub struct UiCapture {
     pub text: bool,
 }
 
+/// A widget rectangle in UI points, as reported to diagnostics.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct WidgetBounds {
     pub x: f32,
@@ -83,6 +84,7 @@ impl WidgetBounds {
     }
 }
 
+/// The shape inside a widget's bounds that receives pointer hits.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HitShape {
@@ -96,6 +98,7 @@ pub enum HitShape {
     },
 }
 
+/// Where a widget receives pointer hits: its bounds, paint bounds and hit shape.
 #[derive(Clone, Copy, Debug)]
 pub struct HitRegion {
     pub bounds: WidgetBounds,
@@ -169,6 +172,8 @@ impl WidgetGeometry {
     }
 }
 
+/// A frame's UI diagnostics: viewport, mesh and texture counts, image readiness, input
+/// capture and the visible widgets.
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct UiDiagnostics {
     pub frame: u64,
@@ -186,7 +191,8 @@ pub struct UiDiagnostics {
     pub widgets: Vec<WidgetGeometry>,
 }
 
-/// Source `drop-shadow`: offsets and Gaussian sigma in the current UI coordinates.
+/// A drop shadow, as in CSS `drop-shadow`: offset, Gaussian sigma and color in the
+/// current UI coordinates.
 #[derive(Clone, Copy, Debug)]
 pub struct ImageShadow {
     pub offset: Vec2,
@@ -225,7 +231,7 @@ impl UiFrame<'_> {
     pub(crate) fn fail(&self, error: String) {
         self.editor_errors.borrow_mut().push(error);
     }
-    /// Captures only this Rust GPU geometry, then applies filters/shadows/opacity.
+    /// Captures only this group's GPU geometry, then applies filters/shadows/opacity.
     pub fn paint_group(
         &self,
         painter: &Painter,
@@ -235,7 +241,7 @@ impl UiFrame<'_> {
         self.paint_group_output(painter, effect, solomon_graphics::ShadowOutput::Source, paint)
     }
 
-    /// Source outer box-shadow: paint an opaque rounded GPU caster, never its pixels.
+    /// An outer CSS-style box shadow: paint an opaque rounded GPU caster, never its pixels.
     pub fn paint_outer_shadow(
         &self,
         painter: &Painter,
@@ -268,7 +274,7 @@ impl UiFrame<'_> {
         )
     }
 
-    /// Source inset box-shadow: the opaque caster is the rounded padding box.
+    /// An inset CSS-style box shadow: the opaque caster is the rounded padding box.
     pub fn paint_inner_shadow(
         &self,
         painter: &Painter,
@@ -350,7 +356,8 @@ impl UiFrame<'_> {
             *current = Some((layer, scope.to_owned()));
         }
     }
-    /// Current Source status owner, or accepted receipt/event identity for distinct messages.
+    /// Queues a screen-reader announcement. `owner` is the current status owner, or an
+    /// accepted receipt/event identity for distinct messages.
     pub fn announce(&self, owner: &str, text: &str) {
         self.announcements
             .borrow_mut()
@@ -385,7 +392,7 @@ impl UiFrame<'_> {
         frame
     }
 
-    /// Uses Source CSS saturation before brightness, preserving image alpha.
+    /// Applies CSS-style saturation before brightness, preserving image alpha.
     pub fn with_saturation(&self, saturation: f32) -> UiFrame<'_> {
         assert!(saturation.is_finite() && saturation >= 0.0);
         let mut frame = self.with_blend(self.blend);
@@ -393,7 +400,7 @@ impl UiFrame<'_> {
         frame
     }
 
-    /// Applies this view's Source colour filter to direct egui text/solid paint.
+    /// Applies this view's colour filter to direct egui text/solid paint.
     pub fn filtered_color(&self, color: Color32) -> Color32 {
         if self.color_filter == ColorFilter::default() {
             return color;
@@ -917,6 +924,8 @@ impl UiFrame<'_> {
     }
 }
 
+/// The game's GPU UI: the egui context, platform input, image cache, painter, fonts,
+/// accessibility and the last frame's widget geometry.
 pub struct GpuUi {
     ctx: Context,
     surface: crate::platform::Surface,

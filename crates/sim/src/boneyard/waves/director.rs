@@ -1,4 +1,5 @@
-//! Native survival TimeLine execution from `core-kernels/boneyard-wave-director.ts`.
+//! Runs the survival TimeLine: the opening, the compiled wave.txt rows and the generated
+//! Boneyards' boss, Slumpgut, spider and Portal scripts.
 //!
 //! The director emits authored spawn requests. Enemy construction owns their final collision
 //! placement and stats; population feedback comes from living actors, never a local estimate.
@@ -20,6 +21,8 @@ use super::timeline::{
 use super::{CompiledSpawnBurst, CompiledWaveSection, RETAIL_WAVES, WaveDef, survival_programs};
 use crate::boneyard::BoneyardBounds;
 
+/// Where the ordinary wave cycle stands: spawning bursts, waiting for the living population to
+/// fall below a threshold, or counting down to the next wave.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WavePhase {
@@ -49,6 +52,7 @@ impl WavePhase {
     }
 }
 
+/// Progress of the one-time script that summons Slumpgut after more than 75 zombies are alive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SlumpgutPhase {
@@ -70,6 +74,8 @@ impl SlumpgutPhase {
     }
 }
 
+/// Where the Portal script stands: waiting for a phase's start wave, its intro, spawning
+/// Portals, waiting out the bosses, or retired.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum PortalScriptPhase {
@@ -93,13 +99,15 @@ impl PortalScriptPhase {
     }
 }
 
+/// The world facts one director step reads: arena bounds, living enemy, boss and zombie
+/// counts, player positions and the tick.
 #[derive(Clone, Copy, Debug)]
 pub struct WaveTickContext<'a> {
     pub bounds: BoneyardBounds,
     pub live_boss_count: usize,
     pub live_enemy_count: usize,
     pub live_zombie_count: usize,
-    /// Player positions in registration order, matching the source Record insertion order.
+    /// Player positions in registration order; a near-player spawn draws an index into it.
     pub players: &'a [Vec2],
     pub tick: u64,
 }
@@ -153,8 +161,8 @@ pub struct WaveState {
 
 /// Mutable wave authority and the compiled tables that determine its future spawns.
 ///
-/// Old native checkpoints omitted these tables. Their missing fields select the
-/// original package compiler during migration, rather than changing a saved run.
+/// Older native checkpoints omitted these tables. Migration rebuilds missing ones exactly as
+/// those checkpoints' compiler made them, rather than changing a saved run.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WaveCheckpoint {
@@ -183,6 +191,8 @@ pub struct WaveSnapshot<'a> {
     pub opening_release_threshold: Option<usize>,
 }
 
+/// Runs one Boneyard run's waves: the opening, the compiled schedule and the generated
+/// Boneyard's scripts, emitting enemy spawn intents each tick.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WaveDirector {
     pub state: WaveState,
@@ -331,8 +341,8 @@ impl WaveDirector {
         Ok(())
     }
 
-    /// Source saves retain their compiled graphs, including graphs made by an older
-    /// compiler. Replacing the state must therefore replace these tables as well.
+    /// Saved checkpoints carry their compiled graphs, which an older compiler may have
+    /// produced. Replacing the state must therefore replace these tables as well.
     pub fn apply_checkpoint(&mut self, checkpoint: WaveCheckpoint) -> Result<(), String> {
         self.validate_checkpoint(&checkpoint)?;
         self.compiled_schedule = match checkpoint.compiled_schedule {
@@ -386,7 +396,8 @@ impl WaveDirector {
         self.begin_bursts(self.opening_bursts.clone(), WavePhase::Opening);
     }
 
-    /// `canSpawnNextBoneyardWave`: no pending births or native script hold may be skipped.
+    /// A next-wave request may skip waiting phases, but never pending births, a dormant
+    /// director or a script that holds the TimeLine.
     #[must_use]
     pub fn can_spawn_next_wave(&self) -> bool {
         self.state.pending_spawn_budget == 0
@@ -397,7 +408,8 @@ impl WaveDirector {
             && !self.timeline_paused()
     }
 
-    /// `spawnNextBoneyardWave` uses the ordinary signed NEXT edge and native spawn queue.
+    /// Starts the next wave now when allowed: the first schedule row, or the row picked by
+    /// one of the current row's signed NEXT edges.
     pub fn spawn_next_wave(&mut self) {
         if !self.can_spawn_next_wave() {
             return;
@@ -411,13 +423,13 @@ impl WaveDirector {
         }
     }
 
-    /// Script births count for later scripts in the same source tick. A script holding the
+    /// Script births count for later scripts in the same tick. A script holding the
     /// TimeLine before or after its step prevents ordinary waves from advancing this tick.
     pub fn step(&mut self, context: WaveTickContext<'_>) -> Vec<EnemySpawnIntent> {
         let was_paused = self.timeline_paused();
         let heart_births = self.step_generated_bosses(context);
         let slump_births = self.step_slumpgut(count_births(context, &heart_births));
-        // The reference passes only Slumpgut births into this specific script boundary.
+        // The skeleton-boss step counts only Slumpgut's births, not the boss births before it.
         let skeleton_births = self.step_skeletons(count_births(context, &slump_births));
         let mut births = heart_births;
         births.extend(slump_births);
@@ -441,7 +453,7 @@ impl WaveDirector {
     }
 
     /// The encounter's release tick polls Slumpgut only; ordinary TimeLine and other scripts
-    /// begin on the following world tick (`stepBoneyardWorldTick::resolveSpawnIntents`).
+    /// begin on the following world tick.
     pub fn step_run_release(&mut self, context: WaveTickContext<'_>) -> Vec<EnemySpawnIntent> {
         self.step_slumpgut(context)
     }
@@ -1016,8 +1028,8 @@ fn validate_schedule(schedule: &[WaveDef]) {
     }
 }
 
-/// Old native checkpoints had no retained graphs. This is a one-time migration
-/// using their original compiler, not a fallback for missing Source save fields.
+/// Older native checkpoints had no retained graphs. This rebuilds them once, during
+/// migration, with the compiler those checkpoints were written with.
 fn compile_legacy_schedule(seed: &str, schedule: &[WaveDef]) -> Vec<CompiledWaveSection> {
     let mut rng = Rng::new(i64::from(seed_from_text(&format!("{seed}:wave-compiler"))));
     let _ = compile_boneyard_opening(&mut rng);

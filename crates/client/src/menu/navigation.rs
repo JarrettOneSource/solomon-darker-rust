@@ -3,6 +3,8 @@
 
 use egui::{Context, Id};
 
+/// Keyboard and controller focus for one menu scope. It requests the preferred widget's
+/// focus until that widget can hold it, and can capture an initial Enter as confirmation.
 pub(crate) struct MenuNavigation {
     scope: String,
     needs_focus: bool,
@@ -133,7 +135,7 @@ mod tests {
                         responses = Some((first, second));
                     });
                 // Like the fullscreen control: a real focusable widget on a
-                // different root, outside this Source menu's controller scope.
+                // different root, outside this menu's controller scope.
                 egui::Area::new(Id::unique("outside-menu"))
                     .background_interactable(false)
                     .fade_in(false)

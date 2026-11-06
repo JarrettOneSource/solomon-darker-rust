@@ -2,6 +2,8 @@
 
 use solomon_sim::social::party_ui::PartyMenuTab;
 
+/// The Party menu's scroll position and whether a just-copied party code still shows as
+/// copied, which lasts 1.5 seconds.
 #[derive(Default)]
 pub(in crate::social) struct PartyMenuInteraction {
     pub scroll_y: f64,

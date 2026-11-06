@@ -1,4 +1,5 @@
-//! Player resource, concentration, equipment and recovery formulas against Website.
+//! Player resource, concentration, equipment and recovery formulas, against recordings
+//! from the Website client.
 
 #[path = "support/stat_book.rs"]
 mod stat_book;

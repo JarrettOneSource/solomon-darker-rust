@@ -1,4 +1,5 @@
-//! Disk bytes and trust-boundary behavior from the pinned Website save codecs.
+//! Native save disk bytes and trust-boundary behavior, recorded from the Website client's
+//! save codecs at a pinned revision.
 
 #[path = "../../sim/tests/support/mod.rs"]
 mod support;
@@ -22,7 +23,7 @@ fn bytes(value: &Value) -> Vec<u8> {
 }
 
 fn assert_source(actual: Value, expected: &Value, path: &str) {
-    // JSON.stringify writes 50 for a native f32 widened to 50.0. Compare values
+    // The recordings spell a native f32 widened to 50.0 as 50. Compare values
     // exactly, while the shared adapter reports only the first differing field.
     support::assert_website_json(&actual, expected, path, &[]);
 }

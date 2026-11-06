@@ -1,9 +1,9 @@
 //! Deterministic Solomon Dark simulation kernels.
 //!
-//! Every kernel mirrors the Website's native-verified `core-kernels`, including the exact
-//! points at which values are narrowed to 32-bit floats. The kernels use no platform
-//! randomness, time, or floating-point library functions whose rounding differs between
-//! targets, so a native test run and the browser build produce identical state.
+//! The kernels follow the original game, including the exact points at which values are
+//! narrowed to 32-bit floats. They use no platform randomness, time, or floating-point library
+//! functions whose rounding differs between targets, so a native test run and the browser
+//! build produce identical state.
 //! `tests/native_goldens.rs` replays the retail-recorded goldens in `tests/fixtures/native`
 //! and `tests/website_goldens.rs` replays the Website differential fixtures.
 pub mod actor_physics;

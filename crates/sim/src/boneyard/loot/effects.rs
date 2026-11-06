@@ -1,7 +1,8 @@
-//! Loot-owned fades and Goodie fragments from `boneyard-loot-store.ts`.
+//! Pickup fades and Goodie break fragments owned by the loot store.
 //!
-//! These share the enemy effect value model, but retain the loot source's own skip cadence,
-//! collision test and shared-stream bounce draws.
+//! These reuse the enemy effect values (`EnemyDeathEffect`) but keep loot's own rules:
+//! airborne fragments pause on every third tick, a fragment that lands where loot cannot be
+//! placed disappears, and bounce draws come from the shared loot stream.
 
 use crate::Vec2;
 use crate::enemies::model::{

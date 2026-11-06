@@ -1,4 +1,4 @@
-//! Read-only hosted observation from `client/game-observer-session.ts`.
+//! Read-only hosted observation of another player's game.
 //! The observed wizard is a camera target, never a participant owned by this connection.
 
 use super::*;
@@ -7,6 +7,8 @@ use solomon_protocol::ResumeCredentials;
 use solomon_protocol::hosted::HostedWelcome;
 use solomon_sim::social::{GameChatMessage, GameSessionKind};
 
+/// An observer connection: the observed player, the watched run, the deadline for its first
+/// snapshot and the chat received so far.
 pub(in crate::game) struct HostedObserver {
     deadline: Option<f64>,
     run_id: Option<String>,
@@ -145,7 +147,7 @@ impl Game {
         if self.hud.take_actions().iter().any(|action| matches!(action, HudAction::Pause)) {
             return self.exit_hosted_observer();
         }
-        // Source observer callbacks cannot mutate skills, inventory, Game Over or input.
+        // An observer cannot change skills, inventory, Game Over or input.
         self.game_over.take_actions();
         self.panels.take_actions();
         self.input.set_blocked(true)?;

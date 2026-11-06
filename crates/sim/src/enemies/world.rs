@@ -1,5 +1,5 @@
-//! Enemy-store ownership and world callbacks from Website `core-server/boneyard-enemy-store.ts`
-//! and `enemies/model.ts`. `construction.rs` owns materializing authored births.
+//! The enemy world: the store of enemy actors and their random streams, the per-tick step
+//! context and the world callbacks it uses. `construction.rs` owns materializing authored births.
 
 use super::config::EnemyArenaScalars;
 use super::model::{
@@ -19,12 +19,14 @@ use crate::rng::{next_xorshift_random, seed_from_text};
 use crate::{Rng, Vec2};
 use std::collections::BTreeMap;
 
+/// Why the world resolves an enemy movement: an ordinary move or the placement of a new spawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyMovementPurpose {
     Movement,
     SpawnPlacement,
 }
 
+/// One enemy's requested move, passed to the world's collision resolver with the body radius.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyMovementRequest {
     pub actor_id: usize,
@@ -35,6 +37,8 @@ pub struct EnemyMovementRequest {
     pub requested_position: Vec2,
 }
 
+/// A request to place a newly materialized enemy at a collision-safe point that satisfies its spawn
+/// position policy.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemySpawnPlacementRequest {
     pub actor_id: usize,
@@ -45,6 +49,8 @@ pub struct EnemySpawnPlacementRequest {
     pub reachability_radius: f64,
 }
 
+/// A world test for an enemy projectile: whether a line is obstructed, a point collides with
+/// geometry, or a point lies outside the arena bounds or every view by a margin.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EnemyProjectileWorldQuery {
     Line { projectile_id: usize, start: Vec2, end: Vec2, exclusion_mask: u32 },
@@ -53,6 +59,8 @@ pub enum EnemyProjectileWorldQuery {
     View { projectile_id: usize, position: Vec2, margin: f64 },
 }
 
+/// The spell grid cell a target is bound to, and its binding order, which spell queries use to
+/// break ties between targets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyTargetCellBinding {
@@ -61,9 +69,9 @@ pub struct EnemyTargetCellBinding {
     pub order: usize,
 }
 
-/// The source world callbacks, kept outside the deterministic actor state. The default
-/// spawn placement is the source's documented zero-delta movement path when no dedicated
-/// spawn-placement callback exists.
+/// World callbacks for collision, line obstruction, projectile queries and explosion and death
+/// feedback, kept outside the deterministic actor state. Without a dedicated spawn-placement
+/// callback, spawn placement resolves a zero-delta movement.
 pub trait EnemyGeometry: EnemyNavigation {
     fn resolve_movement(&self, request: EnemyMovementRequest) -> Vec2;
     /// Native constraints are direct; the composed world owns player placement.
@@ -96,6 +104,8 @@ pub trait EnemyGeometry: EnemyNavigation {
     }
 }
 
+/// Inputs for materializing spawn requests: the players, the tick, the arena scalars and an
+/// optional loot-seed roller.
 pub struct EnemySpawnContext<'a> {
     pub players: &'a [EnemyTarget],
     pub tick: u64,
@@ -103,6 +113,8 @@ pub struct EnemySpawnContext<'a> {
     pub roll_loot_seed: Option<&'a mut dyn FnMut(u32) -> u32>,
 }
 
+/// Effects of players' secondary abilities on one enemy: its time scale, weakening, and the
+/// remaining disrupt, dazzle and flee ticks.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyAbilityEffect {
     pub time_scale: f64,
@@ -112,6 +124,7 @@ pub struct EnemyAbilityEffect {
     pub flee_ticks: u64,
 }
 
+/// Whether a point is on screen within a light's reach, and the light intensity there.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyVisibility {
     pub admitted: bool,
@@ -135,6 +148,8 @@ impl Default for EnemyAbilityEffect {
     }
 }
 
+/// What enemy movement reads about the view: the arena bounds that clip an untargeted goal, the
+/// player cameras that decide whether an enemy counts as on screen, and the effects setting.
 #[derive(Clone, Copy, Debug)]
 pub struct EnemyMovementView<'a> {
     pub arena_bounds: crate::boneyard::BoneyardBounds,
@@ -142,6 +157,8 @@ pub struct EnemyMovementView<'a> {
     pub enhanced_effects: bool,
 }
 
+/// Everything one enemy world step reads from the rest of the Boneyard: the tick, players,
+/// geometry, ability effects, arena scalars and optional light and view samplers.
 pub struct EnemyStepContext<'a> {
     pub enhanced_effects: bool,
     pub tick: u64,
@@ -193,6 +210,8 @@ impl EnemyStepContext<'_> {
     }
 }
 
+/// State shared by every Demon Skull: the health thresholds that unlock its capabilities, and the
+/// ticks left on its death and scream audio streams.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DemonSkullEncounter {
@@ -203,7 +222,7 @@ pub struct DemonSkullEncounter {
     pub pending_capabilities: u8,
 }
 
-/// The actor store owns each random stream at the same seam as the source. Constructor
+/// Every Boneyard enemy with its projectiles, effects, events and random streams. Constructor
 /// randomness, path decisions, locomotion phases and head facing never share a cursor.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]

@@ -1,4 +1,5 @@
-//! Addressed inventory roots and nested sacks from Website `core-kernels/hub-economy.ts`.
+//! Inventory trees: items addressed by cell in the backpack, storage and nested Sacks, and the
+//! insert, move, equip and validity rules that keep those addresses consistent.
 
 use std::collections::HashSet;
 
@@ -14,10 +15,13 @@ use super::{
     SkillBookDefinition, TransferDirection,
 };
 
-/// Website Sack naming limit, measured in UTF-16 code units. Existing names are retained.
+/// Longest name a Sack rename accepts, in UTF-16 code units. Names a Sack already has are not
+/// checked against it.
 pub const INVENTORY_SACK_NAME_MAX_LENGTH: usize = 32;
 
-/// `normalizeInventorySackName`: reject controls before applying JavaScript trim.
+/// Validates a requested Sack name and returns it trimmed. Any control character rejects it;
+/// leading and trailing whitespace is then trimmed, and an empty, overlong or entirely
+/// invisible result is rejected.
 #[must_use]
 pub fn normalize_inventory_sack_name(value: &str) -> Option<&str> {
     if value.chars().any(char::is_control) {
@@ -33,8 +37,8 @@ pub fn normalize_inventory_sack_name(value: &str) -> Option<&str> {
     Some(name)
 }
 
-/// Source's Unicode 16 `\p{Cf}` gate rejects names made entirely of invisible formatting.
-/// The oracle retains every member of that category, including supplementary characters.
+/// Whether a character is a Unicode 16 format character (`\p{Cf}`); the list includes those
+/// outside the Basic Multilingual Plane. A name made only of these and whitespace is invisible.
 fn unicode_format(character: char) -> bool {
     matches!(
         character,
@@ -77,12 +81,15 @@ impl HubInventoryItem {
     }
 }
 
+/// A root item paired with the cell it occupies.
 #[derive(Clone, Copy, Debug)]
 pub struct ProjectedInventoryRootSlot<'a> {
     pub item: &'a HubInventoryItem,
     pub slot: usize,
 }
 
+/// One item in a depth-first walk of an inventory tree: its cell, nesting depth and the Sack
+/// that holds it.
 #[derive(Clone, Copy, Debug)]
 pub struct ProjectedInventoryItem<'a> {
     pub depth: usize,
@@ -91,7 +98,8 @@ pub struct ProjectedInventoryItem<'a> {
     pub slot: usize,
 }
 
-/// `projectInventoryRootSlots`: old unslotted saves occupy the first unreserved cells.
+/// Root items in cell order. Items without a stored cell, as in older saves, take the first
+/// cells that no other item claims.
 #[must_use]
 pub fn project_inventory_root_slots(
     source: &[HubInventoryItem],
@@ -314,7 +322,7 @@ pub(super) fn materialize(source: &[HubInventoryItem]) -> Vec<HubInventoryItem> 
     items
 }
 
-/// `inventoryItemsShareStack`: the same predicate used by authoritative insert/move.
+/// Whether two items merge into one stack. Inserts and moves use this same test.
 #[must_use]
 pub fn inventory_items_share_stack(left: &HubInventoryItem, right: &HubInventoryItem) -> bool {
     if left.type_id != right.type_id {
@@ -388,7 +396,8 @@ fn insert_at(
     Some(destination)
 }
 
-/// `relocateInventoryRootItem`: an occupied cell swaps addresses unless both items stack.
+/// Moves a root item to another cell. If the cell is occupied the two items swap cells,
+/// unless they stack, in which case their quantities merge.
 fn relocate_root_item(
     source: &[HubInventoryItem],
     item_id: u64,
@@ -427,6 +436,8 @@ fn relocate_root_item(
     Ok(items)
 }
 
+/// An item taken out of an inventory tree, the remaining root items, and the id of the Sack
+/// that held it.
 pub(super) struct RemovedItem {
     pub item: HubInventoryItem,
     pub items: Vec<HubInventoryItem>,
@@ -502,8 +513,8 @@ pub(super) fn consume_tree(
 }
 
 impl HubEconomyState {
-    /// `grantPlayerEntityInventoryItems`: the complete addressed batch commits
-    /// only if insertion and the existing replication limits admit every item.
+    /// Adds a batch of items to the backpack. The batch commits only if every item can be
+    /// inserted and the backpack stays within its replication limits; otherwise nothing changes.
     pub fn grant_inventory_items(&mut self, items: &[HubInventoryItem]) -> bool {
         if items.is_empty() {
             return false;
@@ -523,9 +534,9 @@ impl HubEconomyState {
         true
     }
 
-    /// Source package reconciliation removes only content whose owner is absent,
-    /// including nested sacks, affixes and an unavailable authored Boast. It
-    /// preserves economy revision and both native random streams.
+    /// Removes content whose mod is no longer available: items (including those nested in
+    /// Sacks), equipment affixes and a selected mod Boast. It leaves the economy revision and
+    /// random stream untouched and returns whether anything changed.
     pub fn reconcile_mod_packages(&mut self, available_mod_ids: &[String]) -> bool {
         let available: HashSet<_> = available_mod_ids.iter().map(|id| id.to_lowercase()).collect();
         fn reconcile(item: &mut HubInventoryItem, available: &HashSet<String>) -> bool {
@@ -975,8 +986,8 @@ impl HubEconomyState {
             (7011, EquipmentSlot::Weapon),
             (7003, EquipmentSlot::Amulet),
         ] {
-            // A Staff swap may put the previous Wand back into the Sack. The
-            // current Source admits only the first successful weapon replacement.
+            // A Staff swap may put the previous Wand back into the Sack. Only the first
+            // successful weapon replacement counts, so that Wand is not equipped again.
             if slot == EquipmentSlot::Weapon && weapon_equipped {
                 continue;
             }
@@ -1022,8 +1033,9 @@ impl HubEconomyState {
         self.require_valid_inventory()
     }
 
-    /// Current `equipDirectSackChild` assigns legacy cells before removing the child,
-    /// so equipment replacement preserves the addresses of its siblings.
+    /// Equips a direct child of a Sack; any replaced item goes back into that Sack. Siblings
+    /// without a stored cell get explicit cells before the child is removed, so equipment
+    /// replacement preserves their addresses.
     fn equip_direct_sack_child(
         &mut self,
         sack_id: u64,
@@ -1058,7 +1070,7 @@ impl HubEconomyState {
         Ok(())
     }
 
-    /// `creditLootGold`: gold ownership is local simulation state, independent of the HUD.
+    /// Credits picked-up loot Gold. The balance is simulation state, independent of the HUD.
     pub fn credit_loot_gold(&mut self, amount: u64) {
         assert!(amount > 0, "loot Gold credit must be positive");
         self.gold =

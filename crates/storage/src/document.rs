@@ -2,6 +2,8 @@ use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
+/// A document file on disk with a size limit. Commits replace it atomically while a
+/// separate `.lock` file is held.
 #[derive(Clone)]
 pub struct DocumentFile {
     path: PathBuf,

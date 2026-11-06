@@ -1,4 +1,5 @@
-//! Crow contact duration and Arena_Render opacity from `native-crow-blindness.ts`.
+//! Crow blindness: the contact roll that sets its duration, and the screen cover and
+//! flickering stamp drawn while it lasts.
 
 use crate::float;
 use crate::float::fround;
@@ -22,6 +23,7 @@ pub fn native_crow_blindness(
     fround(fround(duration + 1.0) * 100.0)
 }
 
+/// The screen cover's opacity and the stamp's base opacity for the remaining blindness.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CrowBlindnessOpacity {
     pub cover: f64,
@@ -34,6 +36,8 @@ pub fn crow_blindness_opacity(ticks_remaining: f64) -> CrowBlindnessOpacity {
     CrowBlindnessOpacity { cover, stamp: fround(cover.powf(4.0)) }
 }
 
+/// What crow blindness draws this frame: cover alpha, stamp alpha and the stamp's screen
+/// position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CrowBlindnessFrame {
     pub cover_alpha: f64,
@@ -41,8 +45,8 @@ pub struct CrowBlindnessFrame {
     pub stamp_position: Vec2,
 }
 
-/// `NativeCrowBlindnessView.update` uses a private frame-seeded presentation RNG,
-/// independent of the stream that decided the contact duration.
+/// Uses a private presentation RNG seeded from the frame's application time, independent
+/// of the stream that decided the contact duration.
 #[must_use]
 pub fn crow_blindness_frame(
     ticks_remaining: f64,

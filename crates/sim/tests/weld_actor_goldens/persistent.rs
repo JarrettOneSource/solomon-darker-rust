@@ -250,8 +250,8 @@ fn held_growth_native_rock_assembly_split_and_flight_keep_source_state_and_rng()
     }
 }
 
-// October Website recordings predate retail EBoulder owner recovery (ledger123,
-// Report131). Preserve all held/release/pool/identity/RNG/art assertions. Only the
+// These Website client recordings predate the recovered retail Ethereal Boulder owner
+// behavior. Preserve all held/release/pool/identity/RNG/art assertions. Only the
 // old guidance clock, child turn factor and downstream trajectory are displaced.
 fn compare_recording(actual: &Value, expected: &Value, path: &str) {
     fn qualify(value: &mut Value) {

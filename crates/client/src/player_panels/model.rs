@@ -2,6 +2,7 @@
 //! catalogues refresh only when their accepted revisions change.
 use super::*;
 
+/// An owned copy of the player state the panels paint from, refreshed from each snapshot.
 pub(super) struct PanelModel {
     selection: NewGameSelection,
     book: SkillBookState,

@@ -13,6 +13,7 @@ use crate::courtyard::Camera;
 use crate::spells::SpellView;
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
+/// Ambient Boneyard rain: the presentation-only drops and splashes and the streak ramp.
 pub struct BoneyardWeatherView {
     weather: BoneyardWeather,
     streak_ramp: Texture,
@@ -49,7 +50,7 @@ impl BoneyardWeatherView {
         self.weather.update_lighting(light_at);
     }
 
-    /// Source depth 0.25: ground splashes precede the region-light composite.
+    /// Ground splashes draw in the pre-world pass, before the region-light composite.
     pub fn draw_splashes(&self, renderer: &mut Renderer, camera: &Camera, spells: &SpellView) {
         let mut draw = SpellSprite::new(BONEYARD_WEATHER_SPLASH_ENTRY, 1.0);
         draw.atlas = SpellAtlas::DeadHawg;
@@ -70,7 +71,7 @@ impl BoneyardWeatherView {
         }
     }
 
-    /// Source depth foreground +0.5: streaks paint above the world and retain
+    /// Streaks paint in the foreground above the world and retain
     /// their first-render logical light, independent of subsequent camera moves.
     pub fn draw_streaks(&self, renderer: &mut Renderer, camera: &Camera) {
         for drop in self.weather.drops() {

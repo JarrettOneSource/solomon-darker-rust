@@ -1,4 +1,4 @@
-//! Actual Lua 5.4 definition VM from `web-lua-definition-runtime.ts`.
+//! The Lua 5.4 VM that runs a mod's definition script.
 //! The VM retains reducer/migration functions; its compiled graph and saved
 //! state remain ordinary values owned by the canonical prepared host.
 
@@ -25,6 +25,8 @@ const DEFINITION_TIMEOUT_MS: u64 = 250;
 const CALLBACK_TIMEOUT_MS: u64 = 2;
 const VM_MEMORY_BYTES: usize = 16 * 1_024 * 1_024;
 
+/// What a definition VM is built from: the entry script's path, the mod's identity and its
+/// included scripts.
 #[derive(Clone, Debug)]
 pub struct WebLuaDefinitionRuntimeOptions {
     /// Package entry path, normally `scripts/main.lua`, rather than its text.
@@ -33,6 +35,7 @@ pub struct WebLuaDefinitionRuntimeOptions {
     pub scripts: Vec<(String, String)>,
 }
 
+/// Why a definition run failed: issues in the definition, or a plain runtime message.
 #[derive(Debug)]
 pub enum WebLuaDefinitionRuntimeError {
     Definition(WebLuaDefinitionError),
@@ -50,12 +53,14 @@ impl fmt::Display for WebLuaDefinitionRuntimeError {
 
 impl std::error::Error for WebLuaDefinitionRuntimeError {}
 
+/// What an advanced reducer returned: its next state and the intents it emits.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WebLuaReducerResult {
     pub intents: LuaValue,
     pub state: LuaValue,
 }
 
+/// One mod's definition VM, with the registry of everything its script declared.
 pub struct WebLuaDefinitionRuntime {
     lua: Option<Lua>,
     registry: Rc<RefCell<Registry>>,
@@ -223,7 +228,7 @@ impl WebLuaDefinitionRuntime {
         })
     }
 
-    /// The Source rule host adds one named random function to each context.
+    /// Invoke a reducer with one named random function, `random`, added to its context.
     /// Its owned closure may remain in a Lua upvalue after this invocation.
     pub(crate) fn invoke_reducer_with_random(
         &mut self,

@@ -1,5 +1,5 @@
-//! Source-ordered player visual phases from `core-server/air-water-player-visual-system.ts`.
-//! These actors remain in SpellState; the session calls synchronize before contacts
+//! Per-player Air and Water actors that follow their caster: Hurricane, Water Hail and
+//! Cold Aura. They remain in SpellState; the session calls synchronize before contacts
 //! and finalize afterward so Hail and Aura consume the native combat stream in order.
 use crate::spells::model::PrimarySpellTransient;
 
@@ -17,6 +17,7 @@ use crate::spells::water::{
 use crate::{Rng, Vec2};
 use std::collections::BTreeMap;
 
+/// One player's position, Hurricane charge and Hurricane damage range for this tick.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AirWaterPlayerVisualOwner {
     pub hurricane_contact_charge: f64,

@@ -1,4 +1,5 @@
-//! Enemy-world geometry callbacks from `core-server/boneyard-world.ts`.
+//! The Boneyard geometry that enemies query during a world tick: collision, obstruction,
+//! routes, visibility, projectile blocking and spawn placement.
 //!
 //! Prepared routes use immutable scenery. Direct obstruction, final movement and native
 //! spawn acceptance use current gate collision. These are deliberately different worlds.
@@ -29,6 +30,7 @@ use super::projectile_world::{BoneyardProjectileViewport, BoneyardProjectileWorl
 use super::spawn::{SpawnPlacement, SpawnPolicyContext, boneyard_spawn_position_is_offscreen};
 use super::world_light::{BoneyardWorldLightQuery, primary_view_bounds};
 
+/// Boneyard bounds and collision as the world in which actor physics places and moves bodies.
 pub struct BoneyardPhysicsWorld<'a> {
     pub bounds: BoneyardBounds,
     pub collision: &'a BoneyardCollisionWorld,
@@ -50,6 +52,8 @@ impl ActorPhysicsWorld for BoneyardPhysicsWorld<'_> {
     }
 }
 
+/// The world state an enemy geometry borrows for one tick: bounds, both collision worlds,
+/// navigation, light, spawn policy inputs, projectile viewports and arena shake feedback.
 pub struct BoneyardGeometryInput<'a> {
     pub active_bounds: BoneyardBounds,
     pub spawn_bounds: BoneyardBounds,
@@ -69,8 +73,9 @@ pub struct BoneyardGeometryInput<'a> {
     pub feedback: &'a Cell<EnemyWorldFeedback>,
 }
 
-/// The source callbacks advance one ordered crowd as actors move. Interior mutability is
-/// confined to this per-tick geometry adapter; no handles or caches enter saved world state.
+/// The enemy geometry for one world tick. Its callbacks advance one ordered crowd as actors
+/// move. Interior mutability is confined to this per-tick geometry adapter; no handles or
+/// caches enter saved world state.
 pub struct BoneyardEnemyGeometry<'a> {
     input: BoneyardGeometryInput<'a>,
     dynamic_bodies: RefCell<Vec<ActorPhysicsBody>>,
@@ -113,8 +118,9 @@ impl<'a> BoneyardEnemyGeometry<'a> {
         self.dynamic_bodies.into_inner()
     }
 
-    /// `boneyard-enemy-visibility.ts`: admission uses the actor's native body rectangle
-    /// and a circular light reach, followed by the radial scalar for its intensity.
+    /// An enemy is admitted when its body rectangle overlaps a participant's view and its
+    /// position lies within a light's circular reach; the radial light scalar then sets its
+    /// intensity.
     #[must_use]
     pub fn native_visibility(&self, position: Vec2) -> EnemyVisibility {
         let onscreen = self.views.iter().any(|view| {
@@ -169,8 +175,8 @@ impl EnemyNavigation for BoneyardEnemyGeometry<'_> {
         _clearance: f64,
         _body_radius: f64,
     ) -> bool {
-        // enemies/movement.ts passes radius zero here. Navigation clearance belongs to
-        // route attachment, and must not inflate this source point-obstruction query.
+        // The direct-path test is a point obstruction query with radius zero. Navigation
+        // clearance belongs to route attachment and must not inflate it.
         first_boneyard_path_block_progress(
             start,
             end,

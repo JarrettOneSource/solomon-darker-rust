@@ -1,4 +1,4 @@
-//! Canonical widths, descriptor order and normalization scales from Source `spec.ts`.
+//! The v7 observation schema: canonical widths, descriptor order and normalization scales.
 
 mod observation_names;
 pub use observation_names::OBSERVATION_NAMES;
@@ -220,6 +220,7 @@ pub mod scales {
     pub const WAVE: f64 = 20.0;
 }
 
+/// One lettered block of the observation vector: its key, start offset and length.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotPolicyBlock {
     pub key: char,

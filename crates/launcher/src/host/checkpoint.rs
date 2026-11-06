@@ -7,6 +7,7 @@ use std::path::PathBuf;
 // A host document wraps the escaped complete save plus bounded credential metadata.
 const MAX_HOST_DOCUMENT_BYTES: usize = solomon_protocol::MAX_SAVE_BYTES * 2 + 64 * 1024;
 
+/// The host's checkpoint document on disk, size-bounded and committed atomically.
 pub struct CheckpointFile(DocumentFile);
 
 impl CheckpointFile {

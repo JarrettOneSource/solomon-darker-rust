@@ -1,11 +1,13 @@
-//! Native Silk force handoff into illuminated fade-line segments, from
-//! `native-silk-force.ts` and `enemies/silk-force.ts`.
+//! Silk broken by a channelled spell force: once the force it absorbs passes 1, the strand
+//! becomes fading line fragments along its lit segments, which drift away with the force.
 use super::silk::SilkState;
 use super::world::EnemyWorld;
 use crate::float::{atan2, fround, hypot};
 use crate::spells::targeting::direction_from_heading;
 use crate::{Rng, Vec2};
 
+/// One fading fragment of broken Silk: a three-point line, its drift velocity, opacity and
+/// fade per tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FadeLineState {
@@ -16,6 +18,7 @@ pub struct FadeLineState {
     pub opacity: f64,
     pub opacity_loss_per_tick: f64,
 }
+/// A fading Silk fragment in the enemy world, with its id and spawn tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FadeLineActor {

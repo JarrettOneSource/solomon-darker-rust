@@ -1,4 +1,5 @@
-//! Current `HubInventoryActions.tsx`: send the pure drop plan through real UI owners.
+//! Item drops in the Inventory: the pure drop plan becomes panel actions, belt bindings,
+//! flybys, sounds and notices.
 
 use solomon_sim::audio::AudioCue;
 use solomon_sim::economy::{
@@ -11,7 +12,8 @@ use solomon_sim::player_panels::inventory_drop::{
 
 use super::{PlayerPanel, PlayerPanelAction, PlayerPanelSnapshot, PlayerPanels, Press, Target};
 
-/// The source locks inventory transitions, while footer navigation can still close the book.
+/// Whether a running inventory transition blocks this target. Footer navigation can still
+/// close the book.
 pub(super) fn locks_target(target: Target) -> bool {
     matches!(
         target,

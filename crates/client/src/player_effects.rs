@@ -1,7 +1,6 @@
-//! Source-owned player death views and level-up world sparkles. The borrowed rows
-//! work for local and remote participants; only cosmetic view lifetime is retained.
-//! References: `renderer/player-death-{burst,weapon}-view.ts`,
-//! `world-player-view.ts::updateDeathLayers`, and `level-up-world-view.ts`.
+//! Player death effects (weapon, burst and body) and level-up sparkles in the world. The
+//! borrowed rows work for local and remote participants; only cosmetic view lifetime is
+//! retained.
 
 use solomon_sim::float;
 use std::collections::{BTreeMap, BTreeSet};
@@ -22,6 +21,7 @@ use crate::spells::SpellView;
 use solomon_graphics::assets;
 use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 
+/// One participant's accepted state as the death and level-up effects read it.
 pub struct PlayerEffectPlayer<'a> {
     pub id: &'a str,
     pub player: &'a PlayerState,
@@ -30,6 +30,7 @@ pub struct PlayerEffectPlayer<'a> {
     pub level_up: Option<&'a LevelUpPresentationFrame>,
 }
 
+/// Which player effect a painter draws: a death weapon, a death burst or level-up sparkles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayerEffectKind {
     DeathWeapon,
@@ -37,10 +38,11 @@ pub enum PlayerEffectKind {
     LevelUp,
 }
 
+/// A player effect's place in the drawing queue: its own painter row or its owner's depth.
 pub struct PlayerEffectPainter {
     pub kind: PlayerEffectKind,
     pub owner_id: String,
-    /// Weapons have their own source registration. Bursts and level-up particles
+    /// Weapons have their own painter registration. Bursts and level-up particles
     /// follow their owner's assigned depth by 0 and 0.1 respectively.
     pub layer: Option<PainterLayer>,
     pub owner_depth_offset: f64,
@@ -73,6 +75,7 @@ enum PlayerEffectDraw {
     Sprites(SpellSpritePlan),
 }
 
+/// Retained death bursts and bodies, plus this frame's player effect painters and draws.
 pub struct PlayerEffectsView {
     textures: BTreeMap<String, Texture>,
     run_id: Option<String>,
@@ -214,8 +217,8 @@ impl PlayerEffectsView {
                 self.draws.push(PlayerEffectDraw::Sprites(plan));
             }
         }
-        // Current Source samples these retained actors from one selected snapshot;
-        // it never reconstructs motion from the corpse age or requires a live owner.
+        // Death weapons are drawn as the selected snapshot has them; motion is never rebuilt
+        // from the corpse age, and the owner need not still be present.
         for actor in weapons {
             let position = actor.motion.position;
             self.painters.push(PlayerEffectPainter {

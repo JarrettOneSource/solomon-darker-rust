@@ -1,5 +1,6 @@
-//! Host-connection Flame history from `host/flame-presentation-history.ts`.
-//! Only compact presentation recipes are retained; the Session remains the authority.
+//! Flame presentation history per world scope, from which each connection's snapshots take
+//! their Flame frames. Only compact presentation recipes are retained; the Session remains
+//! the authority.
 
 use std::collections::BTreeMap;
 
@@ -17,6 +18,7 @@ struct CommittedWorld {
     births: Vec<FlamePresentationBirth>,
 }
 
+/// Flame presentation histories keyed by world scope, with epochs unique across the host.
 #[derive(Default)]
 pub(super) struct HostFlameHistories {
     worlds: BTreeMap<String, CommittedWorld>,
@@ -47,8 +49,8 @@ impl HostFlameHistories {
                 committed.births = births;
                 return Ok(());
             }
-            // Source allocates epochs across every world on this host. A local
-            // History reset must never reuse another party's live epoch number.
+            // Epochs are allocated across every world on this host, so a local history
+            // reset never reuses another party's live epoch number.
         }
         self.next_epoch = self
             .next_epoch

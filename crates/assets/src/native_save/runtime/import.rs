@@ -1,4 +1,4 @@
-//! Settled-Hub conversion from `save/game-save-portability.ts`.
+//! Imports a portable profile as a web game save whose wizard starts in a settled Hub.
 
 use solomon_sim::belt::PlayerBeltComponent;
 use solomon_sim::economy::hagatha_outcome_state_is_valid;
@@ -15,6 +15,8 @@ use solomon_sim::session::{GameSession, GameSessionOptions, PlayerLevelUpBarrier
 use crate::native_save::PortableGameProfile;
 use crate::website_save::{self, CreateSaveOptions, SaveIntegrity, SaveMetadata};
 
+/// A portable profile converted to a web game save: the document, its owner's player ID and
+/// character, and the conversion warnings.
 #[derive(Clone, Debug)]
 pub struct PortableImportResult {
     pub character: NewGameSelection,
@@ -204,8 +206,8 @@ pub fn create_web_game_save_from_portable_profile(
         &progression,
         economy,
     );
-    // Native saves omit the web-only HP/MP bases. Match the source's two fround
-    // operations while transferring only the saved current/maximum ratios.
+    // Native saves omit the web-only HP/MP bases. Transfer only the saved
+    // current/maximum ratios, narrowing the ratio and the product to single precision.
     player.combat.current_health = fround(
         derived.maximum_health
             * fround(profile.wizard.current_health / profile.wizard.maximum_health),

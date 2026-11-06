@@ -1,6 +1,6 @@
-//! The live native prepared owner from `host/prepared-mod-host.ts`.
-//! One real VM/session and one content-runtime collection borrow the canonical
-//! game per operation. No executable state enters a game checkpoint.
+//! The prepared mod host: one mod session with its Lua VMs and one set of content engines,
+//! which borrow the canonical `GameSession` for each operation. No executable Lua state
+//! enters a game checkpoint.
 
 mod lifecycle;
 mod projection;
@@ -26,6 +26,8 @@ use crate::package::MaterializedWebSessionContent;
 use crate::player_control::{ModPlayerControl, uses_player_control_rule};
 use crate::session::{PreparedModSession, PreparedModSource};
 
+/// The mods running in one game: their Lua session, content engines and player control
+/// leases, plus the enemy spawns and presentation intents waiting to be drained.
 pub struct PreparedModHost {
     manifest_sha256: String,
     runtime: PreparedModRuntime,
@@ -40,6 +42,7 @@ pub struct PreparedModHost {
     closed: bool,
 }
 
+/// A player's request to cast a mod spell, with the Lua context passed to its handlers.
 pub struct PreparedModCastInput<'a> {
     pub content_id: &'a str,
     pub context: LuaObject,
@@ -271,8 +274,8 @@ impl PreparedModHost {
             mana,
             Some(cost),
         )?;
-        // Source debits from the original state after its separate underflow
-        // boast producer; retain that exact assignment order.
+        // Mana is debited from the state saved before the mana-underflow Boast failure,
+        // and only after that failure has run; keep this assignment order.
         *game = source.clone();
         game.participants
             .get_mut(input.player_id)

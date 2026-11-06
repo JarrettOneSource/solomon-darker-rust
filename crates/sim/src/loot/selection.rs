@@ -1,5 +1,4 @@
 //! Private eligibility and biased category choice, retail `0x0047C070`.
-//! Reference: Website `core-kernels/native-loot-selection.ts`.
 
 use crate::Rng;
 use crate::float::fround;

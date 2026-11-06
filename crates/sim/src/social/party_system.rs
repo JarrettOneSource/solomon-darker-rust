@@ -1,6 +1,6 @@
-//! Hosted party membership from Website `host/party-system.ts`.
+//! Hosted party membership: parties, invitations and join requests.
 //! Identity generation, deadlines and socket admission remain with the host. Ordered
-//! parties and members retain source insertion order through invites, joins and departure.
+//! parties and members retain insertion order through invites, joins and departure.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,6 +12,7 @@ use super::{
 
 const MAX_PENDING_JOIN_REQUESTS: usize = 16;
 
+/// The host-generated identifiers of a new party: its ID, join code and listing ID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyIdentity {
@@ -20,6 +21,7 @@ pub struct PartyIdentity {
     pub listing_id: String,
 }
 
+/// A pending invitation from one player to another to join the inviter's party.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyInvitation {
@@ -29,6 +31,7 @@ pub struct PartyInvitation {
     pub party_id: String,
 }
 
+/// A pending request from a player to join a party.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartyJoinRequest {
@@ -37,6 +40,8 @@ pub struct PartyJoinRequest {
     pub requester: PartyJoinRequester,
 }
 
+/// Every hosted party with its pending invitations and join requests, and a revision
+/// counter.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartySystem {
@@ -126,7 +131,7 @@ impl PartySystem {
         if source.member_player_ids.len() == 1 {
             return Ok(());
         }
-        // Source leave performs two membership changes, so both revisions are retained.
+        // Leaving performs two membership changes, so both revisions are retained.
         self.remove_player(player_id);
         self.register_player(player_id, identity);
         Ok(())
@@ -281,8 +286,8 @@ impl PartySystem {
         Ok(())
     }
 
-    /// Current Source `setPartyEnhancedEffects`: a leader owns only their party's
-    /// next-run choice; updating it does not change the persistent College's mode.
+    /// A leader owns only their party's next-run choice; updating it does not change the
+    /// persistent College's mode.
     pub fn set_enhanced_effects(
         &mut self,
         leader_id: &str,

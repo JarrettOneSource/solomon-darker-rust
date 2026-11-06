@@ -1,6 +1,6 @@
-//! `game-session-supervisor.ts::handlePartyRejoin`: admitted packages and signed
-//! documents locate a retained run, or seed exactly one replacement after deployment.
-//! Waiting for the first real Hello never blocks the authority or WebSocket framing.
+//! Active-party rejoin: admitted packages and signed documents locate a retained run, or
+//! seed exactly one replacement after deployment. Other members wait for the replacement's
+//! first Hello without blocking the authority or WebSocket framing.
 
 use std::sync::mpsc::SyncSender;
 
@@ -18,11 +18,15 @@ use crate::host::recovery::{
 use crate::host::signing::random_token;
 use crate::transport::{HostedHttpResponse, NativeServer};
 
+/// The College a party recovery ID resolved to, and how long a newly seeded replacement
+/// waits for its first Hello (infinite for a retained run).
 pub(super) struct PartyRecoverySession {
     pub session_id: String,
     pub seed_expires_at_ms: f64,
 }
 
+/// A verified rejoin waiting for its party's replacement College to restore the run, with
+/// its HTTP reply channel.
 pub(super) struct PendingPartyRejoin {
     admission: HostedAdmission,
     claim: PartyRecoveryClaim,

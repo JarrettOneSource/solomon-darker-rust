@@ -1,4 +1,5 @@
-//! The complete standalone tick against the actual pinned public Website Game API.
+//! The complete standalone tick against frozen recordings of the Website client's public
+//! Game API.
 
 #[path = "../../sim/tests/support/player_combat.rs"]
 #[allow(dead_code)] // The shared projection also contains other fixture constructors.
@@ -270,9 +271,9 @@ fn complete_session_tick_matches_public_game_and_restored_continuation() {
                 college_intro_ready_player_ids: ready_players.as_ref(),
                 enemy_spawn_intents: &spawns,
             };
-            // Restore at every retained checkpoint, then drive the next actual input on
+            // Restore at every retained checkpoint, then drive the next recorded input on
             // both states. Compare complete checkpoint debug values to cover owned fields
-            // beyond the deliberately compact source projection.
+            // beyond the deliberately compact recorded projection.
             let mut continuation =
                 if frames[next_snapshot - 1]["frame"].as_u64().unwrap() == index as u64 {
                     let loaded = session.boneyard.as_ref().map(|world| world.loaded.clone());

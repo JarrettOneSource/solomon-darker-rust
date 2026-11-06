@@ -1,9 +1,11 @@
-//! Stock element presentation from Website `element-vfx-native.ts`. These value plans
-//! serve Create, held spells and equipped staffs; no renderer or random state is involved.
+//! Animated element sprites for the five elements and selected welds, as per-tick draw plans.
+//! These value plans serve Create, held spells and equipped staffs; no renderer or random state
+//! is involved.
 
 use crate::float;
 use crate::profile::WizardElement;
 
+/// A sprite family used by element effects; `records` lists its frames.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ElementVfxSprite {
     Air,
@@ -49,12 +51,15 @@ impl ElementVfxSprite {
     }
 }
 
+/// How an element sprite is blended: normally or additively.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ElementVfxBlend {
     Normal,
     Add,
 }
 
+/// One sprite draw in an element effect plan: sprite and frame, offset, scale, rotation, tint,
+/// alpha, blend and an optional anchor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ElementVfxDraw {
     pub alpha: f64,

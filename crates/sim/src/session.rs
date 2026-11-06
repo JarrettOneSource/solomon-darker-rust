@@ -1,5 +1,5 @@
-//! One authoritative game world, composed from the same owned domains as the Website
-//! `core-server/game-simulation.ts`. Browser resources and immutable geometry stay outside.
+//! One authoritative game world: participants, College and Boneyard state, random streams,
+//! spells and run lifecycle. Client resources and immutable geometry stay outside.
 
 mod college;
 mod commands;
@@ -50,7 +50,8 @@ use crate::secondary::SecondarySimulationState;
 use crate::spells::model::SpellState;
 use crate::{HubWizard, Rng};
 
-/// Distinct source RNG owners. Combat must never consume the gameplay/loot stream.
+/// Options for a new session: separate gameplay and combat RNG seeds, Enhanced Effects and
+/// the trader animation seed. Combat must never consume the gameplay/loot stream.
 #[derive(Clone, Copy, Debug)]
 pub struct GameSessionOptions {
     pub gameplay_rng_seed: i64,
@@ -70,7 +71,8 @@ impl Default for GameSessionOptions {
     }
 }
 
-/// `player-lighting.ts`: this state belongs to simulation, including overlay decay.
+/// A player's light registration, overlay effect phase, Crow blindness and death weapon
+/// painter. This state belongs to simulation, including overlay decay.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerLightingState {
@@ -111,6 +113,8 @@ pub struct PlayerLevelUpBarrier {
     pub source_player_id: String,
 }
 
+/// One authoritative game world: participants, College and Boneyard state, random
+/// streams, spells, painter order and run lifecycle.
 #[derive(Clone, Debug)]
 pub struct GameSession {
     /// Painting permission belongs to the open live menu, never a durable save.
@@ -118,7 +122,8 @@ pub struct GameSession {
     pub screen_flashes: crate::screen_flash::ScreenFlashState,
     pub enhanced_effects: bool,
     pub participants: BTreeMap<String, SessionParticipant>,
-    /// Source entity/Record order. Sorted barrier cohorts deliberately use their own order.
+    /// Participant IDs in entity order. Sorted barrier cohorts deliberately use their own
+    /// order.
     pub participant_order: Vec<String>,
     pub next_entity_id: u64,
     pub npcs: HubNpcState,
@@ -192,8 +197,8 @@ impl GameCheckpoint {
 }
 
 impl GameSession {
-    /// Source `game-host.ts` changes this shared setting without advancing the world.
-    /// Party admission chooses its owner; actor constructors sample it at their source phase.
+    /// Changes this shared setting without advancing the world. Party admission chooses
+    /// its owner; actor constructors sample it at their own tick phase.
     pub fn set_enhanced_effects(&mut self, enabled: bool) {
         self.enhanced_effects = enabled;
     }
@@ -299,7 +304,7 @@ fn session_from_checkpoint(
 ) -> GameSession {
     if checkpoint.next_entity_id == 0 {
         // A pre-hosted standalone save has no recoverable removed-ID history. Assign
-        // its retained actors in source enrollment order once, at the restore edge.
+        // its retained actors in participant order once, at the restore edge.
         checkpoint.next_entity_id = 1;
         for id in &checkpoint.participant_order {
             checkpoint.participants.get_mut(id).unwrap().entity_id = checkpoint.next_entity_id;

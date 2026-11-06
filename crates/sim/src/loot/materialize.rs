@@ -1,4 +1,4 @@
-//! Drop constructors and placement from Website `core-kernels/native-loot.ts`.
+//! Loot drop construction for enemies and scripts, and placement of the dropped carriers.
 
 use crate::economy::{DOWSING_EQUIPMENT_RECIPES, HubInventoryItem};
 use crate::float;
@@ -54,7 +54,7 @@ pub fn roll_enemy_loot(
         LootMaterialization::empty(input)
     };
     if input.policies.gold == LootPolicy::GoldScatter && !input.arena.special_suppression {
-        // Source constructs a scatter factor even though Gold construction does not use it.
+        // A scatter factor is drawn even though Gold construction does not use it.
         shared_rng.draw_float_range(0.9_f32 as f64, 1.1_f32 as f64);
         let extra =
             materialize_gold(input, shared_rng, item_ids, Some(1000), LootDropSource::Enemy);
@@ -371,7 +371,7 @@ fn sack_drop(
     drop
 }
 
-/// The source expands an elliptical ring until real geometry accepts a carrier.
+/// Expands an elliptical ring around `source_position` until real geometry accepts a carrier.
 /// Pending Gold participates in the same overlap test before actors are allocated.
 pub fn resolve_loot_placement(
     rng: &mut Rng,

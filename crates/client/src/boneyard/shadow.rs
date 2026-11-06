@@ -1,4 +1,4 @@
-//! Original class shadow meshes from `boneyard-{scenery,scrub}-shadow-presentation.ts`.
+//! Original-class shadow meshes for scenery glyphs, Scrubs and Goodies.
 //! Immutable glyph plans use the owner's existing painter slot. Only Scrub's
 //! private visual clock and lazy surface result survive between display frames.
 
@@ -11,17 +11,20 @@ use solomon_sim::boneyard::shadows::shadow_records;
 
 use super::*;
 
+/// A scenery shadow's image and its native glyph geometry.
 pub(super) struct SceneryShadowGlyph {
     pub image: String,
     pub geometry: NativeSceneryShadowGlyph,
 }
 
+/// A scenery layer's shadow quads with complex shadows off and on.
 #[derive(Default)]
 pub(super) struct SceneryShadowPlans {
     pub off: Vec<SceneryShadowQuad>,
     pub on: Vec<SceneryShadowQuad>,
 }
 
+/// A Scrub's immutable placement: atlas entry, position, main layer and ID.
 pub(super) struct ScrubDocument {
     pub entry: usize,
     pub position: Vec2,
@@ -29,6 +32,7 @@ pub(super) struct ScrubDocument {
     pub id: String,
 }
 
+/// A Scrub's private shadow clock and the quads it produced for the current frame.
 pub(super) struct ScrubView {
     state: ScrubShadowState,
     quads: Vec<SceneryShadowQuad>,
@@ -46,7 +50,7 @@ impl ScrubView {
 impl BoneyardView {
     pub(super) fn update_scrub_shadows(&mut self, frame: &BoneyardFrame<'_>) {
         for (&index, view) in &mut self.scrubs {
-            // The Source advances every resident, including off-camera and retired
+            // Advance every resident, including off-camera and retired
             // owners. This stream is independent of all authoritative random draws.
             view.state.advance_to(frame.stopped_world_tick);
             let layer = &self.document.layers[index];

@@ -21,6 +21,8 @@ pub use font_run::{
 pub use model::{Rules as EditorRules, Selection as TextSelection};
 pub use widget::{NativeEditOutput, NativeTextEdit};
 
+/// How a shaped label is drawn: font, color, opacity, wrapping, spacing, stroke and input
+/// sense.
 #[derive(Clone, Debug)]
 pub struct NativeLabelStyle {
     pub font: FontId,
@@ -121,12 +123,15 @@ fn label(
     Ok(response)
 }
 
+/// An editor's typeface: a regular font, or the wizard-name glyphs drawn at an origin and
+/// scale inside a field.
 #[derive(Clone, Debug)]
 pub(crate) enum EditorFont {
     Browser(FontId),
     NativeName { origin: Pos2, scale: f32, field: Rect },
 }
 
+/// The identity of one mounted editor: its widget ID and mount instance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct EditorOwner {
     pub id: egui::Id,
@@ -155,6 +160,8 @@ pub(super) fn owner(ctx: &egui::Context, id: egui::Id) -> EditorOwner {
     })
 }
 
+/// What the input transport needs about a painted editor: owner, layer, text and model,
+/// rules, flags, bounds and font geometry.
 #[derive(Clone)]
 pub(crate) struct EditorDescriptor {
     pub owner: EditorOwner,
@@ -299,7 +306,7 @@ pub(super) fn begin_native_focus(ctx: &egui::Context, keys: &[super::KeyStroke])
 }
 
 /// Only a genuine native Tab selects a singleline input's value on entry.
-/// Controller bumpers call focus directly in Source and retain its selection.
+/// Controller bumpers focus the field directly and keep its selection.
 pub(super) fn finish_native_focus(ctx: &egui::Context, keys: &[super::KeyStroke]) {
     // Egui intentionally applies Shift+Tab at the next pass's begin. Keep the
     // actual dispatch origin through that existing layout, then retire it.

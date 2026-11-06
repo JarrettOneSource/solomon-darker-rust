@@ -1,4 +1,5 @@
-//! Local rankings, native row/scroll geometry and class names from the pinned Website.
+//! Local rankings, native row/scroll geometry and class names, against recordings from a
+//! pinned build of the Website client.
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::hall_of_fame::presentation::*;

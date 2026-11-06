@@ -1,5 +1,5 @@
-//! The stock 60-kind planner from `native-secondary-presentation.ts`. Renderer
-//! pooling is unnecessary here: each result is a self-contained pure draw plan.
+//! The stock draw planner for 60 secondary actor kinds. Renderer pooling is unnecessary
+//! here: each result is a self-contained pure draw plan.
 
 use super::bursts::*;
 use super::draws::*;
@@ -41,11 +41,11 @@ pub fn secondary_presentation_plan(
     )
 }
 
-/// Samples the same source planner at a display age. Continuous geometry keeps
-/// the fraction; source particle reconstruction still truncates complete steps.
+/// Samples the same planner at a display age. Continuous geometry keeps the fraction;
+/// particle reconstruction still truncates complete steps.
 /// Neither the actor nor its captured gameplay RNG is changed.
 /// The live quality argument is independent of retained actor birth fields;
-/// the ordinary snapshot wrapper uses Source's `actor.enhanced` default.
+/// `secondary_presentation_plan` passes the actor's own `enhanced` flag.
 #[must_use]
 pub fn secondary_presentation_plan_at_age(
     actor: &SecondaryActorState,
@@ -763,7 +763,7 @@ fn acid_rain_plan(actor: &SecondaryActorState, age_ticks: f64) -> SecondaryPrese
         circle.offset = Vec2::new(0.0, fround(-175.0 + scale * -50.0));
         circle.role = "acid-rain-cloud-circle-additive".into();
         circle.rotation_radians = degrees_to_radians(fround(age * -0.5));
-        // Source keeps the center broad even when its random phase is near zero.
+        // Keep the center broad even when its random phase is near zero.
         circle.scale_x = second;
         circle.scale_y = fround(second * (0.8_f32 as f64));
         circle.tint = 0x407326;

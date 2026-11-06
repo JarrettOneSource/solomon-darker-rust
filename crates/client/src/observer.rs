@@ -11,6 +11,7 @@ use solomon_sim::profile::PlayerSkillOffer;
 use solomon_sim::session::GameSession;
 use solomon_sim::social::GameChatMessage;
 
+/// A request from the observer panel: leave, or point the camera at another player.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObserverAction {
     Exit,
@@ -50,6 +51,7 @@ impl PreviousPlayerSkills {
     }
 }
 
+/// The read-only observer panel: roster and camera choice, skill offers and events, and chat.
 pub struct ObserverUi {
     previous: Option<Vec<PreviousPlayerSkills>>,
     events: Vec<ObserverSkillEvent>,

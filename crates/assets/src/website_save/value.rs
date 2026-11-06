@@ -1,5 +1,5 @@
-//! Serde boundary for source field spelling. Struct fields are translated from their
-//! declared Rust names; arbitrary map keys (player IDs and mod state) remain untouched.
+//! Serde boundary for the save document's field spelling. Struct fields are translated from
+//! their declared Rust names; arbitrary map keys (player IDs and mod state) remain untouched.
 
 use serde::de::{self, DeserializeOwned, DeserializeSeed, IntoDeserializer, Visitor};
 use serde_json::{Map, Value};
@@ -26,7 +26,7 @@ impl<'de> de::Deserializer<'de> for SourceValue {
             }
             Value::Number(number) if number.is_f64() => {
                 let value = number.as_f64().expect("JSON numbers are finite");
-                // JavaScript has one number type. A normalized native sign or safe tick
+                // JSON has one number type. A normalized native sign or safe tick
                 // may be written as 1.0 here while the canonical component is an integer.
                 // Preserve negative zero for floating-point geometry and headings.
                 if value.fract() == 0.0
@@ -353,7 +353,7 @@ fn adapt_struct(name: &str, mut value: Value) -> Result<Value, serde_json::Error
     spells::prepare(name, &mut value).map_err(de::Error::custom)?;
     match name {
         "BoneyardLootEvent" => {
-            // Supported source saves use `type`; retain earlier Rust exports as input.
+            // Save documents use `type`; earlier Rust exports wrote `eventType`, still accepted.
             if value.get("type").is_none()
                 && let Some(fields) = value.as_object_mut()
                 && let Some(kind) = fields.remove("eventType")
@@ -412,8 +412,8 @@ fn adapt_struct(name: &str, mut value: Value) -> Result<Value, serde_json::Error
             let fields = value
                 .as_object_mut()
                 .ok_or_else(|| de::Error::custom("enemy world requires an object"))?;
-            // These are per-step output buffers. The Website stores their accepted events
-            // on the Boneyard world and rebuilds these buffers on the next tick.
+            // These are per-step output buffers. The document stores their accepted events
+            // on the Boneyard world, and the next tick rebuilds these buffers.
             for field in [
                 "spawnedActorIds",
                 "events",

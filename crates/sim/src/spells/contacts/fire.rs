@@ -1,5 +1,6 @@
-//! Current Source `spell-combat/fire.ts`. Newborn terminal dispatch calls these
-//! same receiver passes immediately, without replaying older actor contacts.
+//! Fire contacts: newborn explosions, then ember, Good Imp and fire patch contacts.
+//! Newborn terminal dispatch calls these same receiver passes immediately, without
+//! replaying older actor contacts.
 use super::*;
 
 impl ContactWork<'_, '_> {

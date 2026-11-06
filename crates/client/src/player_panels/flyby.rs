@@ -1,5 +1,6 @@
-//! Source inventory flybys. The real swap command leaves at travel completion;
-//! its authority receipt retires the held main icons while afterimages finish.
+//! Inventory flybys: item icons that fly to their destination slots. The real swap command
+//! leaves at travel completion; its authority receipt retires the held main icons while
+//! afterimages finish.
 use super::chrome::PanelCanvas;
 use super::{PlayerPanelAction, PlayerPanelSnapshot, PlayerPanels};
 use solomon_sim::economy::HubInventoryAction;
@@ -11,6 +12,8 @@ use solomon_sim::player_panels::flyby::{
 pub(super) fn layer_id() -> egui::LayerId {
     egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("panel-flybys"))
 }
+/// One flyby: its request, start time, whether its command has been sent, and whether only
+/// afterimages remain.
 pub(super) struct InventoryFlyby {
     request: InventoryFlybyRequest,
     started_at_ms: f64,
@@ -37,8 +40,8 @@ impl PlayerPanels {
             if flyby.trailing || !flyby.action_dispatched {
                 continue;
             }
-            // Root delivers each actual authority receipt once. Source compares its
-            // newer feedback sequence and action kind; it does not require acceptance.
+            // The root delivers each authority receipt once. Only the action kind is
+            // compared; the receipt need not report acceptance.
             if flyby.request.action.as_ref().is_some_and(|pending| {
                 std::mem::discriminant(pending) == std::mem::discriminant(action)
             }) {

@@ -1,5 +1,5 @@
-//! Stock College and run HUD. Simulation `hud`/`mobile_ui` kernels own its geometry
-//! and meter rules; `GameHud.tsx` and `SkillQuickbar.tsx` are the presentation reference.
+//! Stock College and run HUD: health and mana meters, Belt, skill quickbar and menu
+//! buttons. Simulation `hud`/`mobile_ui` kernels own its geometry and meter rules.
 mod quickbar;
 
 use crate::gpu_ui::{StockAtlas, UiFrame};
@@ -13,6 +13,8 @@ use solomon_sim::hud::{
 use solomon_sim::mobile_ui::{MobileUiElementId, MobileUiLayoutState, default_mobile_ui_geometry};
 use std::cell::{Cell, RefCell};
 
+/// A HUD control the player pressed, such as a menu button, Belt slot or quickbar skill,
+/// queued until the game takes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HudAction {
     Pause,
@@ -24,7 +26,8 @@ pub enum HudAction {
     SkillBinding(usize),
 }
 
-/// Website GameHud's `mode`: College shortcuts/help/map are absent from a live run.
+/// Whether the HUD shows the College or a run; College shortcuts, help and map are
+/// absent from a run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HudMode {
     Hub,
@@ -46,7 +49,8 @@ impl HudAccess {
         Self { combat: true, inventory: true, quickbar: true, skills: true, spell: true };
 }
 
-/// Actual CSS-pixel control face and press-time admission retained by gameplay input.
+/// A drawn Belt slot's screen face, rotation and input scale, and whether it could cast
+/// when pressed. Gameplay input hit-tests these.
 #[derive(Clone, Copy, Debug)]
 pub struct HudBeltHit {
     pub slot: usize,
@@ -64,6 +68,8 @@ impl HudBeltHit {
     }
 }
 
+/// The gameplay HUD: its stock atlases, Belt bank controls, diagnostics readout and the
+/// actions pressed since the game last took them.
 pub struct Hud {
     visible: Cell<bool>,
     frame_intervals: u64,

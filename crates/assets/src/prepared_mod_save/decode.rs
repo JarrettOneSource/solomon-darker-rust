@@ -98,8 +98,8 @@ pub fn decode_prepared_mod_save_state(
                 "projectile" => ModSpellEffectKind::Projectile,
                 _ => return Err("mod spell effect kind is invalid".into()),
             };
-            // The content check precedes template validation in the Source object
-            // expression. Preserve that first-error boundary as well as its data.
+            // Check the content before the templates, so a row with both problems
+            // reports the content error first.
             let content_id = content(row.get("content_id"), owner, mods)?;
             let mut effects = Vec::new();
             for value in array(row.get("effects"), "mod spell effect templates")? {

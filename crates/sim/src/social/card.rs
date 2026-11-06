@@ -1,9 +1,9 @@
-//! Hosted PlayerCardDialog admission from Website `MainMenuScene.tsx`.
+//! When the hosted player card offers its College invite action.
 
 use super::{GameChatWorldKind, GameSessionKind};
 
-/// The host still validates the command. The source presents Invite to Party in
-/// a leader's private College when the resolved wizard is also in a Hub.
+/// Invite to Party appears in a leader's private College when the resolved wizard is also
+/// in a Hub. The host still validates the command.
 #[must_use]
 pub fn player_card_college_invite_available(
     session_kind: GameSessionKind,

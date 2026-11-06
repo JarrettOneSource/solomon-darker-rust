@@ -1,4 +1,4 @@
-//! Historical growing effects and settled Bouncers from `game-save-document.ts`.
+//! Migrates saved enemy death effects: historical growing effects and settled Bouncers.
 
 use serde_json::{Value, json};
 use solomon_sim::float::fround;

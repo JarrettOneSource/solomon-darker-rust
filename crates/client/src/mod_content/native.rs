@@ -3,6 +3,7 @@ use solomon_storage::DocumentFile;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Mod content cached as files named by SHA-256 digest in the data directory's `content-v1`.
 #[derive(Clone)]
 pub(super) struct ContentCache(Arc<PathBuf>);
 

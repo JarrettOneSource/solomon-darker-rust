@@ -1,4 +1,4 @@
-//! Offensive damage and mana lanes from `core-kernels/native-offensive-resolution.ts`.
+//! Offensive damage and mana-cost resolution lanes.
 //!
 //! The order matters: Siege Mage scales the completed damage product, while Battle Mage
 //! scales mana before flat equipment costs. `primary-profile-goldens.json` pins both.
@@ -47,6 +47,7 @@ impl OffensiveSpellFactors {
     }
 }
 
+/// The base, flat and multiplier terms that resolve a skill's damage.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DamageResolutionLanes {
     pub actor_base_damage: f64,
@@ -76,6 +77,7 @@ impl Default for DamageResolutionLanes {
     }
 }
 
+/// The base, reduction, flat and multiplier terms that resolve a skill's mana cost.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ManaCostResolutionLanes {
     pub base_mana_cost: f64,

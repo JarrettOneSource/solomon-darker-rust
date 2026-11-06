@@ -1,5 +1,5 @@
-//! Chat text, history, channels and rate limits from `protocol/game-chat.ts`, `game-chat.ts`
-//! and `host/game-host.ts`'s `chatRateRetryAfter`. The host supplies the clock and routing.
+//! Chat text rules, history, channels and rate limits. The host supplies the clock and
+//! routing.
 
 use super::{GameChatWorldKind, LocalPartyState};
 
@@ -8,6 +8,7 @@ pub const GAME_CHAT_MAX_TEXT_BYTES: usize = 512;
 pub const GAME_CHAT_HISTORY_LIMIT: usize = 80;
 pub const GAME_CHAT_INACTIVITY_HOLD_MS: u64 = 5_000;
 
+/// A chat channel: Boneyard, Global, Party or Whisper.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameChatChannel {
@@ -29,6 +30,8 @@ impl GameChatChannel {
     }
 }
 
+/// An automatic activity message: entering the College, searching for Solomon or leaving
+/// the game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameChatActivity {
@@ -48,6 +51,7 @@ impl GameChatActivity {
     }
 }
 
+/// A chat participant's display name, player ID and player reference.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameChatSender {
@@ -56,6 +60,8 @@ pub struct GameChatSender {
     pub player_reference: String,
 }
 
+/// One accepted chat message: channel, sender, any recipient or activity, text and
+/// sequence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameChatMessage {
@@ -67,6 +73,7 @@ pub struct GameChatMessage {
     pub text: String,
 }
 
+/// Why chat text was rejected: empty, too long, a control character or too many bytes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameChatTextError {
     Empty,
@@ -88,7 +95,7 @@ impl GameChatTextError {
 }
 
 pub fn normalize_game_chat_text(value: &str) -> Result<&str, GameChatTextError> {
-    // JavaScript trim includes BOM and excludes U+0085. Rust's Unicode trim differs.
+    // This whitespace set includes BOM and excludes U+0085; Rust's Unicode trim differs.
     let text = value.trim_matches(javascript_whitespace);
     if text.is_empty() {
         return Err(GameChatTextError::Empty);
@@ -122,7 +129,7 @@ pub(crate) fn javascript_whitespace(character: char) -> bool {
     )
 }
 
-/// `availableGameChatChannels` with the actual global service capability. A private
+/// The chat channels available here, given the actual global service capability. A private
 /// direct-join College does not acquire a Global channel merely from its session label.
 #[must_use]
 pub fn available_game_chat_channels(
@@ -187,6 +194,7 @@ pub fn is_game_chat_faded(open: bool, last_activity_at_ms: f64, now_ms: f64) -> 
     !open && now_ms - last_activity_at_ms >= GAME_CHAT_INACTIVITY_HOLD_MS as f64
 }
 
+/// Why a chat send was refused: channel unavailable, rate limited or no such target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum GameChatRejectionReason {
@@ -195,6 +203,7 @@ pub enum GameChatRejectionReason {
     TargetUnavailable,
 }
 
+/// A refused chat send: its channel, reason and retry delay.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameChatRejection {
@@ -220,6 +229,7 @@ impl GameChatRejection {
     }
 }
 
+/// A sender's recently accepted sends; at most five are accepted in any five seconds.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GameChatRateLimiter {
     accepted_at_ms: Vec<u64>,
@@ -227,7 +237,7 @@ pub struct GameChatRateLimiter {
 
 impl GameChatRateLimiter {
     /// Call after channel/recipient admission, once for an attempted accepted send.
-    /// Zero admits and records it; a positive value is the source retry delay.
+    /// Zero admits and records it; a positive value is the retry delay in milliseconds.
     pub fn record(&mut self, now_ms: u64) -> u64 {
         if now_ms >= 5_000 {
             while self.accepted_at_ms.first().is_some_and(|time| *time <= now_ms - 5_000) {

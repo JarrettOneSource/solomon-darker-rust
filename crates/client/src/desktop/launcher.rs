@@ -8,6 +8,7 @@ use model::Model;
 pub use model::{Action, Build, DesktopState, SessionOptions, Update};
 use solomon_graphics::Renderer;
 
+/// The desktop launcher window: its surface, renderer, GPU UI and launcher model.
 pub struct Launcher {
     surface: Surface,
     renderer: Renderer,

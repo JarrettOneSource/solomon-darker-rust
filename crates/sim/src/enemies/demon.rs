@@ -1,5 +1,5 @@
-//! Demon planted-foot controller and bomb action from `enemies/demon.ts` and
-//! `boneyard-demon-articulation.ts`. Its articulation hash does not consume any RNG stream.
+//! Demon movement on planted feet and its bomb attack. The foot articulation uses a
+//! deterministic hash and does not consume any RNG stream.
 use super::combat::attack_marker;
 use super::effects::DeathEffectOwner;
 use super::model::*;

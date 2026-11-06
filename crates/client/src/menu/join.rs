@@ -8,6 +8,8 @@ use solomon_sim::menu::party_directory::{
 };
 mod presentation;
 
+/// The Join Party screen's state: the typed party code, the directory listing, pending
+/// directory and join requests, and their errors.
 pub(super) struct JoinView {
     code: String,
     parties: Vec<PublicGameParty>,
@@ -145,8 +147,8 @@ impl JoinView {
         Ok(true)
     }
 
-    /// Success only ends the request's busy state. Root retains the real resolution
-    /// and chooses the source consent/loading flow; a view never admits membership.
+    /// Success only ends the request's busy state. The hosted game owner keeps the
+    /// resolution and chooses the consent or loading flow; a view never admits membership.
     pub fn complete_join(
         &mut self,
         request_id: u64,

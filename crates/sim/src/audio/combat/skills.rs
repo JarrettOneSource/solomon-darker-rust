@@ -1,5 +1,5 @@
-//! Primary channel, welded-primary and native secondary loop/cast cue ownership.
-//! References: `primary-spell-audio.ts`, `weld-primary-audio-contract.ts` and `air-water-skill-audio.ts`.
+//! Loop and cast cues for channelled primary spells, Welds and secondary spells. Each loop
+//! has a named owner, so the cursor can start and stop it independently.
 
 use crate::audio::{AudioCue, AudioEvent, AudioOptions};
 use crate::profile::WizardElement;

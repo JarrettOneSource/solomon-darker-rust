@@ -1,6 +1,6 @@
 //! Native host admission and accepted-frame installation. The browser keeps presentation
 //! resources; `GameSession::apply_checkpoint` replaces authority without a second tick.
-//! Readiness and modal holds follow `client/game-client-session.ts` and `MainMenuScene.tsx`.
+//! The client reports gameplay pauses, Hub activity and resume readiness to the host.
 
 use super::*;
 use crate::network::{self, NativeSession, NetworkEvent, ReceivedNativeSnapshot};
@@ -24,6 +24,8 @@ enum NativePhase {
     Updating,
 }
 
+/// Which surface awaits a command's receipt: none, an inventory action, the skill picker,
+/// a College intro step, the loadout or social.
 pub(super) enum CommandFeedback {
     None,
     Inventory(HubInventoryAction),
@@ -42,6 +44,8 @@ struct CommandReceipt {
     inventory_result: Option<HubEconomyResult>,
 }
 
+/// The client's connection to the native authority: its phase, resume credentials, pending
+/// snapshots and commands, presentation timeline and the state it reports to the host.
 pub(super) struct NativeGame {
     connection: Option<NativeSession>,
     phase: NativePhase,
@@ -522,7 +526,7 @@ impl Game {
                     // The connection measures these on receipt, including while rAF is suspended.
                     ServerMessage::Pong { .. } => {}
                     ServerMessage::Social { mut snapshot } => {
-                        // Hosted PartyState publishes membership independently of accepted chat.
+                        // Hosted party state publishes membership independently of accepted chat.
                         if self.hosted.is_some()
                             && let Some(previous) = &mut self.native.as_mut().unwrap().social
                         {
@@ -936,8 +940,8 @@ impl Game {
     fn reset_native_world_ui(&mut self) -> Result<(), String> {
         self.panels.reset()?;
         self.book_feedback_scope = None;
-        // The host still commits accepted transactions; old surfaces no longer consume
-        // their feedback after a world switch (the source scene has unmounted).
+        // The host still commits accepted transactions; after a world switch the old
+        // surfaces no longer consume their feedback.
         self.native.as_mut().unwrap().pending_commands.retain(|_, feedback| {
             !matches!(feedback, CommandFeedback::Inventory(_) | CommandFeedback::SkillPicker)
         });
@@ -1230,8 +1234,8 @@ impl Game {
             connection.send(&ClientMessage::HubActivity { activity })?;
             native.hub_activity = activity;
         }
-        // Source MainMenuScene retries readiness for each accepted runtime snapshot.
-        // A new hosted world can reuse a grace sequence on this same connection.
+        // Report readiness again for each accepted runtime snapshot: a new hosted
+        // world can reuse a grace sequence on this same connection.
         if let Some(grace) = &connection.host.resume_grace
             && grace.remaining_ms.is_none()
             && in_boneyard

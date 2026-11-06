@@ -3,6 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// One key press or release: its code, key value, repeat flag and modifiers.
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct KeyStroke {
     pub code: String,
@@ -15,12 +16,15 @@ pub struct KeyStroke {
     pub meta: bool,
 }
 
+/// A key stroke as shortcut handlers see it, with whether a text field has focus and whether an
+/// earlier handler already claimed it.
 pub struct KeyboardEvent<'a> {
     pub stroke: &'a KeyStroke,
     pub editing: bool,
     pub default_prevented: bool,
 }
 
+/// A handler's verdict on a key: let it pass, claim it, or claim it and stop later handlers.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum KeyboardEffect {
     Pass,
@@ -39,6 +43,7 @@ mod browser {
         name: &'static str,
         callback: Closure<dyn FnMut(web_sys::KeyboardEvent)>,
     }
+    /// Capture-phase keydown and keyup listeners on the game's window, removed when dropped.
     pub struct KeyboardListener {
         window: web_sys::Window,
         listeners: Vec<Listener>,
@@ -132,6 +137,7 @@ mod native {
     }
     thread_local! { static SUBSCRIPTIONS: RefCell<Vec<Weak<Subscription>>> = const { RefCell::new(Vec::new()) }; }
 
+    /// A keyboard subscription for one window; dropping it unsubscribes.
     pub struct KeyboardListener {
         _subscription: Rc<Subscription>,
     }

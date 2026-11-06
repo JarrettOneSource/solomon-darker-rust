@@ -1,4 +1,5 @@
-//! Settled portable profile contract (`save/portable-game-profile.ts`).
+//! The portable game profile: a wizard and profile in a settled Hub that can move between
+//! native save files and web game saves, with the native files attached.
 
 use std::collections::BTreeSet;
 
@@ -20,6 +21,8 @@ pub const PORTABLE_GAME_PROFILE_FORMAT: &str = "solomon-dark-portable-profile";
 pub const PORTABLE_GAME_PROFILE_VERSION: u32 = 1;
 pub const MAX_PORTABLE_GAME_PROFILE_BYTES: usize = 16 * 1024 * 1024;
 
+/// The shape of the native Luthacus storage, which stays byte-for-byte in the native
+/// attachment and is not materialized in web play.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortableNativeStorageSummary {
@@ -28,6 +31,7 @@ pub struct PortableNativeStorageSummary {
     pub payload_length: usize,
 }
 
+/// The profile half of a portable profile: gold, NPC and help state, the Boast and storage.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortableGameProfileState {
@@ -42,6 +46,7 @@ pub struct PortableGameProfileState {
     pub tutorial_pending: bool,
 }
 
+/// The wizard half of a portable profile: progression, vitals, skills, perks and quickbar.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortableGameWizardState {
@@ -137,6 +142,7 @@ impl From<&PortableGameProfileState> for NativeProfilePatch {
     }
 }
 
+/// A complete portable profile document, with the native save files attached.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PortableGameProfile {

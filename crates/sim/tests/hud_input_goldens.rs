@@ -1,4 +1,5 @@
-//! Website HUD geometry, meter layering and movement-device contracts.
+//! HUD geometry, meter layering and movement-device contracts, against recordings from the
+//! Website client.
 
 use serde_json::Value;
 use solomon_sim::Vec2;

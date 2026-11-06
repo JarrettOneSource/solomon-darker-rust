@@ -1,7 +1,6 @@
-//! The durable shared College Memorial boundary from
-//! `host/game-memorial-persistence.ts` and `protocol/codecs/hub.ts`.
+//! The durable shared College Memorial document.
 //! The runtime owns the ten slots; this codec validates external documents before
-//! replacing them and preserves Source Number metadata without narrowing it.
+//! replacing them and keeps numeric metadata such as `capturedAtTick` unnarrowed.
 
 use std::collections::BTreeSet;
 
@@ -20,7 +19,7 @@ use solomon_sim::spells::casting::PlayerWeaponKind;
 pub const MAX_GAME_MEMORIAL_BYTES: usize = 256 * 1024;
 pub const MEMORIAL_SIZE_ERROR: &str = "Game memorial state exceeds its bounded document size";
 
-/// The outer envelope deliberately tolerates extra fields, as Source does.
+/// The outer envelope deliberately tolerates extra fields; only `state` is read.
 pub fn decode_memorial_document(document: &str) -> Result<HubMemorialState, String> {
     if document.len() > MAX_GAME_MEMORIAL_BYTES {
         return Err(MEMORIAL_SIZE_ERROR.into());
@@ -30,7 +29,7 @@ pub fn decode_memorial_document(document: &str) -> Result<HubMemorialState, Stri
     decode_memorial_state(source.get("state"), "gameMemorial.state")
 }
 
-/// Returns the exact Source document before its file's final newline.
+/// Returns the exact stored document, without its file's final newline.
 pub fn encode_memorial_document(state: &HubMemorialState) -> Result<String, String> {
     let source = crate::website_save::value::encode(state)?;
     let state: LuaValue = serde_json::from_value(source).map_err(|error| error.to_string())?;

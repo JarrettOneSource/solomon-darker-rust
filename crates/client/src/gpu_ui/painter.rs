@@ -35,6 +35,8 @@ struct ImageCache {
     materials: Materials,
 }
 
+/// The shared UI image cache: loaded stock and remote images, their IDs and this frame's
+/// materials.
 #[derive(Clone, Default)]
 pub(super) struct Images(Rc<RefCell<ImageCache>>);
 
@@ -343,6 +345,8 @@ pub fn clip_scissor(rect: Rect, physical: [i32; 2], logical: [f32; 2]) -> Option
 mod groups;
 mod unforge;
 
+/// Draws egui meshes through the game renderer, owning managed textures, group targets and
+/// the Unforge target.
 pub(super) struct GpuPainter {
     pub gl: GraphicsContext,
     textures: BTreeMap<TextureId, Texture>,

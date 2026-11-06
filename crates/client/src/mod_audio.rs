@@ -1,4 +1,4 @@
-//! Authored world audio and component sound notifications.
+//! Mod audio: authored loops and the sounds of mod enemies, spell effects, powerups and events.
 //! The accepted runtime owns actors/events. This session-scoped observer only remembers
 //! heard IDs and owned audio loops, using the existing GameAudio context.
 
@@ -25,6 +25,7 @@ struct ModAudioSource {
     url: String,
 }
 
+/// The session's verified mod audio files, keyed by content hash.
 pub struct ModAudioSources {
     sources: BTreeMap<String, ModAudioSource>,
 }
@@ -66,6 +67,7 @@ struct DesiredAudio {
     volume: f64,
 }
 
+/// Plays one session's mod audio: owned loops, plus one-shot sounds that each play once.
 pub struct ModAudioDriver {
     audio: GameAssetAudio,
     sources: ModAudioSources,
@@ -94,8 +96,9 @@ impl ModAudioDriver {
         }
     }
 
-    /// Call for actual snapshot/runtime notifications, never the interpolated draw copy.
-    /// Only a new ModRuntime revision triggers Source ModAudio's global effect/loop effect.
+    /// Call for accepted snapshot/runtime notifications, never the interpolated draw copy.
+    /// Global loops and presentation events update only when `runtime_updated` reports a new
+    /// mod runtime revision.
     pub fn update(
         &mut self,
         runtime: Option<&LuaObject>,
@@ -174,8 +177,8 @@ impl ModAudioDriver {
                 volume,
             };
             if let Some(index) = next.iter().position(|entry| entry.owner == owner) {
-                // Map.set keeps the first insertion position and the final source value;
-                // Source volume deliberately comes from the first owner row.
+                // A repeated owner keeps its first position but takes the last row's source
+                // and bus; its volume always comes from the owner's first row.
                 next[index] = wanted;
             } else {
                 next.push(wanted);
@@ -189,7 +192,7 @@ impl ModAudioDriver {
                     && wanted.source.key == current.source.key
                     && wanted.bus == current.bus
             }) {
-                // Source ignores a volume-only update while this same loop remains active.
+                // A volume-only change leaves the running loop untouched.
                 self.active.borrow_mut().push(current);
             } else {
                 stop(&self.audio, &current)?;
@@ -213,7 +216,7 @@ impl ModAudioDriver {
             let desired = self.desired.clone();
             let active = self.active.clone();
             spawn_local(async move {
-                // Source silently ignores individual authored audio decode failures.
+                // A mod audio file that fails to decode is skipped silently.
                 if audio.load_asset(&wanted.source.key, &wanted.source.bytes).await.is_err() {
                     return;
                 }
@@ -222,7 +225,8 @@ impl ModAudioDriver {
                 }) {
                     return;
                 }
-                // The source completion checks the source only, not its bus or volume.
+                // Start the loop if its owner still wants the same audio, even when its bus
+                // or volume changed while it decoded.
                 match audio.start_asset_loop(
                     &wanted.owner,
                     &wanted.source.key,
@@ -268,7 +272,8 @@ impl ModAudioDriver {
             if guard_unload && !active.get() {
                 return;
             }
-            // Enemy/effect components guard unmount. Source global/pickup callbacks do not.
+            // Only enemy and spell-effect sounds are dropped once the driver is gone; global
+            // and powerup sounds still play.
             if let Err(error) = audio.play_asset(&source.key, options(volume)) {
                 report(&error);
             }

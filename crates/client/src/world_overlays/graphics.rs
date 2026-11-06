@@ -1,5 +1,5 @@
-//! The convex paths used by the source's world labels and activity badge.
-//! Rounded paths follow installed Pixi `buildCommands/buildCircle.mjs` exactly.
+//! Filled convex shapes for world labels and the Hub activity badge. Each rounded corner has
+//! `ceil(2.3 * sqrt(2 * radius))` segments, matching the recorded `world-labels-goldens.json`.
 
 use solomon_sim::Vec2;
 

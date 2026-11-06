@@ -1,11 +1,13 @@
-//! Faculty projectile, rain and contact kernels from `native-faculty-spells.ts`, plus
-//! the Dire Fire state from `native-boss-spell.ts`.
+//! Pure Faculty spell rules: Dark Fireball, Rain of Bones and Dire Fire state and steps, and
+//! the Blightning and Tragic Circle contact shapes.
 
 use crate::float;
 use crate::float::fround;
 use crate::spells::targeting::native_point_in_polygon;
 use crate::{Rng, Vec2};
 
+/// A Dark Fireball in flight: age, arc phase and step, heading, position, remaining life and
+/// velocity. A ring fireball cast at a target arcs and lands; others fly flat.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DarkFireballState {
     pub age_ticks: u64,
@@ -17,12 +19,14 @@ pub struct DarkFireballState {
     pub velocity: Vec2,
 }
 
+/// One Dark Fireball step: the advanced state and whether an arcing fireball has landed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DarkFireballStep {
     pub impact: bool,
     pub spell: DarkFireballState,
 }
 
+/// A Rain of Bones storm: its fade, phase, position, remaining ticks, spin direction and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RainOfBonesState {
     pub alpha: f64,
@@ -33,6 +37,7 @@ pub struct RainOfBonesState {
     pub scale: f64,
 }
 
+/// One bone dropped by a Rain of Bones: its sprite record, landing position and rotation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RainBone {
     pub entry: usize,
@@ -40,12 +45,15 @@ pub struct RainBone {
     pub rotation_deg: f64,
 }
 
+/// One Rain of Bones step: the advanced state and the bone it dropped, if any.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RainOfBonesStep {
     pub bone: Option<RainBone>,
     pub state: RainOfBonesState,
 }
 
+/// A Dire Fire on the ground: its fade, flame frame phase, growth ramp, scale and mirroring,
+/// and the two rotating ground layers drawn when it glows.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DireFireState {

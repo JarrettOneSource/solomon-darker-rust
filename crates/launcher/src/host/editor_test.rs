@@ -1,5 +1,6 @@
-//! Disposable native geometry admission from `host/editor-test-boneyard.ts`.
-//! This accepts an editor document, not a published package or saved wizard.
+//! Disposable editor test Boneyards: validates the native Boneyard file in an editor
+//! document and projects it into a private catalog entry. This accepts an editor document,
+//! not a published package or saved wizard.
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;

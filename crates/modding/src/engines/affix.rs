@@ -1,4 +1,5 @@
-//! Content-addressed weighted rolls from `mod-affix-engine.ts`.
+//! Weighted mod affix rolls. Each draw hashes the item seed, the pool's RNG domain and the
+//! roll index, so rolling consumes no shared random stream.
 
 use std::sync::Arc;
 
@@ -7,6 +8,7 @@ use solomon_sim::modding::runtime::RolledModAffix;
 
 use super::MAXIMUM_SAFE_INTEGER;
 
+/// Rolls affixes for an equipment type from the prepared catalog's affix pools.
 pub struct ModAffixEngine {
     catalog: Arc<PreparedModContentCatalog>,
 }
@@ -79,7 +81,7 @@ impl ModAffixEngine {
 }
 
 fn unit_roll(seed: u64, domain: &str, ordinal: u32) -> f64 {
-    // JS's bitwise xor intentionally takes only the low 32 seed bits.
+    // Only the seed's low 32 bits enter the FNV-1a hash; the truncation is deliberate.
     let mut hash = 0x811c_9dc5_u32 ^ seed as u32;
     for byte in format!("{domain}\0{ordinal}").bytes() {
         hash ^= u32::from(byte);

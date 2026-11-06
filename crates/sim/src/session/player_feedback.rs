@@ -1,6 +1,6 @@
-//! Player status particles and hurt voice requests from `boneyard-player-status.ts`
-//! and `enemies/events.ts`. The caller retains returned events at the contact phase;
-//! they do not enter the enemy world's ordinary per-tick event queue.
+//! Player status particles, rescue feedback and hurt voice requests. The caller retains
+//! returned events at the contact phase; they do not enter the enemy world's ordinary
+//! per-tick event queue.
 
 use crate::enemies::model::{
     DeathPresentationOwner, EnemyDeathEffect, EnemyDeathEffectKind, EnemyEffectAtlas,
@@ -11,6 +11,8 @@ use crate::float::fround;
 use crate::spells::targeting::direction_from_heading;
 use crate::{Rng, Vec2};
 
+/// A player's accepted damage result, with where to present the rescue feedback it
+/// triggers.
 pub(crate) struct PlayerRescueFeedbackInput<'a> {
     pub player_id: &'a str,
     pub position: Vec2,
@@ -21,7 +23,7 @@ pub(crate) struct PlayerRescueFeedbackInput<'a> {
 }
 
 /// The contact, poison and direct receivers share one accepted feedback program.
-/// These returned semantic events are retained by the caller at its source phase.
+/// These returned semantic events are retained by the caller at its own tick phase.
 pub(crate) fn materialize_player_rescue_feedback(
     world: &mut crate::boneyard::BoneyardWorld,
     secondary: &mut crate::secondary::SecondarySimulationState,
@@ -72,12 +74,14 @@ pub(crate) fn materialize_player_rescue_feedback(
     events
 }
 
+/// The status a player's particle burst shows: cold or poison.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlayerStatusKind {
     Cold,
     Poison,
 }
 
+/// A cold or poison particle burst to emit around a player.
 pub struct PlayerStatusBurstRequest<'a> {
     pub actor_id: usize,
     pub player_id: &'a str,
@@ -109,7 +113,7 @@ pub fn emit_player_status_burst(
         let radial = direction_from_heading(fround(f64::from(heading) + position_angle));
         let direction = direction_from_heading(fround(f64::from(heading) + velocity_angle));
         let distance = fround(10.0 + radius);
-        // Unlike generic pre-world births, these particles set lastStepTick to
+        // Unlike generic pre-world births, these particles set `last_step_tick` to
         // this contact tick. The first particle step occurs on the next tick.
         world.death_effects.push(EnemyDeathEffect {
             age_ticks: 0,
@@ -174,6 +178,7 @@ pub fn emit_player_status_burst(
     event
 }
 
+/// A hurt sound to emit for a damaged player, with the health that scales it.
 pub struct PlayerDamageSoundRequest<'a> {
     pub actor_id: usize,
     pub current_health: f64,
@@ -182,6 +187,7 @@ pub struct PlayerDamageSoundRequest<'a> {
     pub tick: u64,
 }
 
+/// A player's hurt sound event and the tick when the next hurt sound may play.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerDamageSoundResult {
     pub deadline_tick: u64,
@@ -212,8 +218,8 @@ pub fn emit_boneyard_player_damage_sound(
     event.gain_scale = Some(0.25 + 0.75 * (1.0 - health_scalar));
     event.pitch = Some(1.0);
     event.sound = Some(sound);
-    // Deadline scales the absolute source tick. This intentionally differs from
-    // adding a scaled delay to now, and uses the source's extra f32 health store.
+    // The deadline scales the absolute tick. This intentionally differs from adding a
+    // scaled delay to now, and keeps the extra f32 health store.
     let deadline_tick = fround(
         (request.tick as f64 + 20.0 + f64::from(delay))
             * fround((request.current_health - 25.0) / 20.0).clamp(0.0, 1.0),

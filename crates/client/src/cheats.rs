@@ -20,7 +20,7 @@ use solomon_sim::social::GameSessionKind;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// Borrowed accepted state. `can_open` and `retain_open` are the source scene/modal
+/// Borrowed accepted state. `can_open` and `retain_open` are the scene and modal
 /// admission predicates, supplied by the same owner that admits gameplay input.
 #[derive(Clone, Copy)]
 pub struct CheatViewSnapshot<'a> {
@@ -71,6 +71,7 @@ struct PendingAction {
     label: String,
 }
 
+/// The cheat dialog: its open view, key admission, pending host requests and catalogs.
 pub struct CheatUi {
     view: Option<OpenView>,
     frame: Option<CheatFrame>,

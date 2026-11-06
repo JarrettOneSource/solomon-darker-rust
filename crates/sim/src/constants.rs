@@ -1,12 +1,9 @@
 //! Native tick and kernel constants recovered from the retail executable.
 //!
-//! Sources: the Website kernels that carry the same values (`core-kernels/player-character.ts`
-//! for the tick and the player movement scalars, `hub-collision.ts` for the eight-iteration
-//! sweep, `native-enemy-pathfinding.ts` for the enemy path-factor decay and floor) and the
-//! retail recordings in `tests/fixtures/native/`: `movement-goldens.json` records every player
-//! scalar in its `native_baseline` block (radius at `actor+0x30`, movement scalar at
-//! `actor+0x218`) and replays wall contact and knockback against these tables. The enemy
-//! tables and the sub-step margin wait for the Boneyard port; no fixture replays them yet.
+//! The retail recordings in `tests/fixtures/native/` pin the player values:
+//! `movement-goldens.json` records every player scalar in its `native_baseline` block (radius
+//! at `actor+0x30`, movement scalar at `actor+0x218`) and replays wall contact and knockback
+//! against these tables. No fixture replays the enemy tables or the enemy sub-step margin.
 
 /// The native fixed simulation rate.
 pub const TICK_RATE_HZ: u32 = 100;
@@ -43,6 +40,8 @@ pub const PLAYER_MOVEMENT: PlayerMovementConstants = PlayerMovementConstants {
     controlled_damping: 0.95f32 as f64,
 };
 
+/// Circle collision response constants: actor radii, knockback scale, the enemy sub-step
+/// margin, placement epsilon and the push-out iteration limit.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CollisionResponseConstants {
     pub common_actor_radius: f64,
@@ -64,6 +63,8 @@ pub const COLLISION_RESPONSE: CollisionResponseConstants = CollisionResponseCons
     iteration_limit: 8,
 };
 
+/// Enemy movement constants: the direct step scale and the floor and per-move decay of an
+/// enemy's local speed factor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyMovementConstants {
     pub direct_step_scale: f64,

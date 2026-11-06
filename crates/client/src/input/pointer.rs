@@ -1,8 +1,10 @@
-//! Actual GPU hit ownership and the source pointer lifecycle. UI capture is per
+//! Pointer ownership of GPU UI hits, from press to release. UI capture is per
 //! pointer, so movement and primary touch lanes can run together independently.
 use super::*;
 use crate::gpu_ui::HitRegion;
 
+/// What a pointer press landed on: a Belt slot, a touch joystick, a text field or
+/// another control.
 #[derive(Clone, Copy)]
 pub(super) enum UiHitKind {
     Belt(HudBeltHit),
@@ -16,6 +18,8 @@ struct UiHit {
     kind: UiHitKind,
     z: usize,
 }
+/// This frame's interactive UI hit regions in depth order, and whether the UI holds
+/// text or keyboard capture.
 #[derive(Default)]
 pub(super) struct InputUiState {
     hits: Vec<UiHit>,
@@ -76,6 +80,8 @@ impl InputUiState {
             .map(|hit| hit.kind)
     }
 }
+/// Whether the UI owns a pointer event, and whether the platform should capture or
+/// release that pointer.
 #[derive(Default)]
 pub(super) struct PointerOutcome {
     pub owned: bool,

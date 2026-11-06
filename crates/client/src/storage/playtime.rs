@@ -1,5 +1,6 @@
-//! `playtime-store.ts`: title, loading and settings count toward page/app lifetime.
-//! Every flush adds to the latest committed total from all open instances.
+//! Total playtime, kept in preferences. Title, loading and settings time count toward
+//! the page/app lifetime. Every flush adds to the latest committed total from all open
+//! instances.
 
 use super::{scoped_key, with_preferences};
 use std::cell::Cell;

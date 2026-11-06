@@ -1,4 +1,5 @@
-//! Enemy target eligibility and selection from Website `enemies/targeting.ts`.
+//! Enemy target eligibility and selection, and the rows that enemies, Maggots, Arrows and Silk
+//! offer to spell target queries.
 
 use super::model::EnemyTarget;
 use super::model::{CoffinPhase, EnemyActor, EnemyBrain, EnemyLifeState};
@@ -127,7 +128,7 @@ pub fn nearest_eligible_target(position: Vec2, players: &[EnemyTarget]) -> Optio
     selected
 }
 
-/// `boneyardEnemyActorFlags`: hidden Coffins reserve their row but do not enter hostile
+/// An enemy row's spell query flags: hidden Coffins reserve their row but do not enter hostile
 /// queries. Every dying family has already left the hostile lane.
 #[must_use]
 pub fn boneyard_enemy_actor_flags(actor: &EnemyActor) -> u32 {
@@ -142,8 +143,8 @@ pub fn boneyard_enemy_actor_flags(actor: &EnemyActor) -> u32 {
     0x2
 }
 
-/// `boneyardEnemyCollisionRadius`: Spider attachment and Portal materialization use
-/// their active body radius, rather than the constructor's persistent config radius.
+/// An enemy's current body radius. Spider attachment and Portal materialization use their
+/// active body radius, rather than the constructor's persistent config radius.
 #[must_use]
 pub fn boneyard_enemy_collision_radius(actor: &EnemyActor) -> f64 {
     match &actor.brain {
@@ -166,8 +167,8 @@ pub fn boneyard_enemy_collision_radius(actor: &EnemyActor) -> f64 {
 }
 
 impl EnemyWorld {
-    /// Arrow and Silk rows from `spell-combat/targets.ts::primaryWaterTargetRows`.
-    /// Append these after `spell_targets()` to retain the source's query lane order.
+    /// Target rows for Arrows and Silk, which Water and Weld channel pushes can hit. Append
+    /// these after `spell_targets()` to keep the query lane order.
     #[must_use]
     pub fn projectile_force_targets(&self) -> Vec<PrimarySpellTarget> {
         let mut targets = Vec::new();
@@ -214,8 +215,8 @@ impl EnemyWorld {
         targets
     }
 
-    /// `spell-combat/targets.ts::primaryTargetRows`, in actor order followed by Maggots.
-    /// Cell binding order is retained even when registration order differs after motion.
+    /// Spell target rows for every enemy, in actor order followed by Maggots. Cell binding
+    /// order is retained even when registration order differs after motion.
     #[must_use]
     pub fn spell_targets(&self) -> Vec<PrimarySpellTarget> {
         let mut targets = Vec::with_capacity(self.actors.len() + self.maggots.len());
@@ -258,8 +259,8 @@ impl EnemyWorld {
         targets
     }
 
-    /// `positionBoneyardEnemy`: the caller owns collision resolution; this accepts the
-    /// final spell impulse and rebinds only when the native hundred-unit cell changes.
+    /// Moves a live enemy or combat-active Maggot to where a spell impulse left it. The caller
+    /// owns collision resolution; this rebinds only when the hundred-unit cell changes.
     pub fn position_enemy(&mut self, actor_id: usize, position: Vec2) -> bool {
         assert!(
             position.x.is_finite() && position.y.is_finite(),

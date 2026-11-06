@@ -1,4 +1,5 @@
-//! Attack markers and contact damage from Website `enemies/combat.ts`.
+//! Attack markers and an enemy's direct damage to its target player, including the Zombie
+//! punch's knockback.
 use super::EnemyToken;
 use super::config::EnemyFamilyConfig;
 use super::model::*;

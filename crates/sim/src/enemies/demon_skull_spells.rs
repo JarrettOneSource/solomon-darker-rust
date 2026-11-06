@@ -1,4 +1,5 @@
-//! Discorporeal eye, bite, spit and mouth authority from `enemies/demon-skull-spells.ts`.
+//! The Discorporeal's attacks: eye lasers, the bite, Unholy Spit with its green fire and Imps,
+//! and the mouth beam, with their contacts and per-tick spell steps.
 
 use super::boss_spell::{BossSpell, BossSpellKind};
 use super::demon_skull_attachments::DEMON_SKULL_EYE_ATTACHMENTS;
@@ -544,7 +545,7 @@ fn impact_spit(
     }
 }
 
-#[allow(clippy::too_many_arguments)] // Source GreenFire constructor receives these authored fields.
+#[allow(clippy::too_many_arguments)] // Green Fire takes each of these authored fields.
 pub fn spawn_green_fire(
     world: &mut EnemyWorld,
     owner_actor_id: usize,
@@ -753,7 +754,7 @@ pub fn step_demon_skull_mouth_beam(
     spawn_demon_skull_beam_segments(world, actor, context.tick, distance, power, order);
 }
 
-#[allow(clippy::too_many_arguments)] // The source contact carries both damage lanes and its exact reflector root.
+#[allow(clippy::too_many_arguments)] // Takes both damage lanes and the exact reflector root.
 fn contact(
     world: &mut EnemyWorld,
     actor_id: usize,

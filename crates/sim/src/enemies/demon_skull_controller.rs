@@ -1,4 +1,6 @@
-//! Discorporeal controller and private action construction from `native-demon-skull.ts`.
+//! The Discorporeal's controller: its construction, per-tick speed, body and light clocks,
+//! when it screams or picks a ranged attack, and each action's starting program. A Spit draws
+//! its shot count from a private RNG seeded with the action seed.
 
 use super::model::{
     BossPhase, DemonSkullAction, DemonSkullActionProgram, DemonSkullBrain, DemonSkullRangedAttack,
@@ -9,6 +11,7 @@ use crate::{Rng, Vec2};
 pub const DEMON_SKULL_SCREAM_TICKS: u64 = 275;
 pub const DEMON_SKULL_DEATH_STREAM_TICKS: u64 = 600;
 
+/// An action the Discorporeal can start: scream, bite, eye shots, mouth beam, spit or flair.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DemonSkullActionKind {
     Scream,
@@ -42,6 +45,8 @@ impl From<DemonSkullRangedAttack> for DemonSkullActionKind {
     }
 }
 
+/// What the Discorporeal's controller reads each tick: heading, health, target distance and
+/// line of sight, movement scale, and whether an action or its scream is playing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DemonSkullControllerContext {
     pub alternate_player: bool,
@@ -54,6 +59,8 @@ pub struct DemonSkullControllerContext {
     pub target_distance_squared: Option<f64>,
 }
 
+/// What one controller tick asks of the Discorporeal: an action to start, whether to advance
+/// its attack seed, and whether to play its landing sound or scream camera shake.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DemonSkullControllerStep {
     pub begin_action: Option<DemonSkullActionKind>,

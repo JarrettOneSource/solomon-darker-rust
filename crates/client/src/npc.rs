@@ -1,5 +1,5 @@
-//! Stock Courtyard NPC art from Website `renderer/hub-actors.ts`, `hub-world-scene.ts`,
-//! and `tools/student_art.py`. Layers use the same College and Clothes atlases as the scene.
+//! Courtyard NPCs: Hagatha, Fomentius's potion tent, the Annalist, Luthacus, Skorcha and the
+//! students. Layers use the same College and Clothes atlases as the scene.
 
 use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
@@ -16,7 +16,8 @@ use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
 const WHITE: [f32; 4] = [1.0; 4];
 const STUDENT_PRIMARY: [f32; 4] = [104.0 / 255.0, 130.0 / 255.0, 145.0 / 255.0, 1.0];
 const STUDENT_BOOK: [f32; 4] = [126.0 / 255.0, 87.0 / 255.0, 58.0 / 255.0, 1.0];
-/// Website student_art.py saturates these five native prop colours by 0.85.
+/// Student prop tints: red, orange, yellow, green and cyan, each blended 85% toward its
+/// luminance as the original game does for students.
 const PROP_COLORS: [[u8; 3]; 5] =
     [[105, 67, 67], [171, 152, 133], [237, 237, 199], [132, 170, 132], [150, 188, 188]];
 
@@ -46,6 +47,7 @@ impl HubNpcActor {
     }
 }
 
+/// Draws the Courtyard NPCs and their interaction markers from the College and Clothes atlases.
 pub struct NpcView {
     college_records: Vec<SpriteRecord>,
     clothes_records: Vec<SpriteRecord>,
@@ -172,8 +174,8 @@ impl NpcView {
             HubNpcActor::Annalist => {
                 let root = Vec2::new(895.5, 455.5);
                 self.draw_shadow(renderer, camera, root, 1.25);
-                // The Website crops the two registered 150-cell layers to [9,7,87,96],
-                // then anchors that 78x89 composite at its lower centre plus four pixels.
+                // The two registered 150-cell layers are cropped to [9,7,87,96], and that
+                // 78x89 composite is anchored at its lower centre plus four pixels.
                 for index in [0, 47] {
                     let record = &self.college_records[index];
                     let [left, top] = registered_origin(record);

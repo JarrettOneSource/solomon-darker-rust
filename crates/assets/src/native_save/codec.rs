@@ -1,4 +1,4 @@
-//! Stock SyncBuffer tree and custom XOR/LZ codec (`save/native-save-codec.ts`).
+//! The stock SyncBuffer chunk tree and the custom XOR/LZ codec that wraps `darkdata.cfg`.
 
 use std::collections::BTreeSet;
 
@@ -9,6 +9,7 @@ const DARKDATA_MAX_DECOMPRESSED_BYTES: usize = 32 * 1024 * 1024;
 
 pub const NATIVE_DARKDATA_KEY: &[u8] = b"MagicEncryptionWord=\"SolomonDarkEncryption\"|there$w#st w&187sfj21\t89n4v 1984x98mn12xc39931c87241@@@@@@";
 
+/// One chunk of a native SyncBuffer tree: its payload, child chunks and input offsets.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeChunkNode {
     pub children: Vec<NativeChunkNode>,
@@ -17,6 +18,7 @@ pub struct NativeChunkNode {
     pub payload_offset: usize,
 }
 
+/// A named SyncBuffer nested after another buffer's root chunk.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeNamedBuffer {
     pub buffer: NativeSyncBuffer,
@@ -24,6 +26,7 @@ pub struct NativeNamedBuffer {
     pub name_offset: usize,
 }
 
+/// A parsed native SyncBuffer: its root chunk tree, named nested buffers and input offsets.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NativeSyncBuffer {
     pub end_offset: usize,
@@ -177,7 +180,7 @@ fn push_u32(output: &mut Vec<u8>, value: usize) -> Result<(), String> {
     Ok(())
 }
 
-/// TextDecoder's default BOM handling also applies to native names and ZIP paths.
+/// Native names and ZIP paths drop a leading UTF-8 BOM before strict decoding.
 pub(super) fn utf8(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
     std::str::from_utf8(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes))
 }
@@ -281,7 +284,8 @@ fn compress_darkdata(bytes: &[u8]) -> Vec<u8> {
             marker = value;
         }
     }
-    // The source's two-byte chain order decides which equal-length match wins.
+    // Chains run nearest first and only a longer match replaces the best one, so
+    // the nearest of several equal-length matches wins.
     let mut previous = vec![-1_i32; bytes.len()];
     let mut heads = vec![-1_i32; 65_536];
     for index in 0..bytes.len().saturating_sub(1) {

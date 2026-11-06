@@ -1,6 +1,6 @@
-//! Live prepared content scopes from `host/game-host.ts::ensurePartyModRuntimes`.
-//! A scope owns executable engines, never another authoritative Session. Global
-//! College visitors remain stock; the actual party receives its admitted content.
+//! Live prepared mod content scopes, one per Global College party run. A scope owns executable
+//! engines, never another authoritative Session. Global College visitors remain stock; a
+//! party's run receives the content its members agreed on.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -24,6 +24,8 @@ use crate::host::connection::HostConnection;
 use crate::host::content::HostContent;
 use crate::transport::PeerId;
 
+/// A Global College party's prepared mod runtime, with the content and Boneyard catalog it
+/// was built from and the events waiting for its rules.
 pub(super) struct PartyModRuntimeScope {
     pub party_id: String,
     pub content: Arc<MaterializedWebSessionContent>,
@@ -33,8 +35,8 @@ pub(super) struct PartyModRuntimeScope {
 }
 
 impl HostedGameHost {
-    /// Source restores prepared state after the actual save/profile admission, before
-    /// the first resumed epoch. An ordinary live rejoin must not rewind its owner.
+    /// Saved mod state is restored after the save and profile are admitted and before the
+    /// first resumed tick. An ordinary live rejoin must not rewind its owner.
     pub(super) fn initialize_admitted_mod_world(
         &mut self,
         player_id: &str,
@@ -91,8 +93,8 @@ impl HostedGameHost {
         Ok(())
     }
 
-    /// Source `contentForParty`: durable offline members participate in content
-    /// agreement too. A leader cannot launch a different package behind their back.
+    /// The content every party member agreed on. Durable offline members participate in
+    /// content agreement too, so a leader cannot launch a different package behind their back.
     fn content_for_party(&self, party_id: &str) -> Option<Arc<MaterializedWebSessionContent>> {
         let party = self.worlds.parties().parties.iter().find(|party| party.id == party_id)?;
         let lineage = self.recovery_lineages.iter().find(|lineage| lineage.party_id == party_id);
@@ -398,8 +400,8 @@ impl HostedGameHost {
             }
             HostedWorlds::Private { state, .. } => (state, self.private_mod_host.as_mut()),
         };
-        // Source retains stateBeforeAction only for a consumable transaction. A
-        // rejected content.use restores that actual inventory/resource/RNG epoch.
+        // The state before the command is kept only for a consumable transaction. A
+        // rejected content.use restores that inventory, resource and RNG state.
         let before = (runtime.is_some()
             && matches!(
                 &command,
@@ -435,8 +437,8 @@ impl HostedGameHost {
     }
 }
 
-/// Publish at the source producer boundary using separate borrows of the actual
-/// engine, Session and sockets. No checkpoint or mirrored world is constructed.
+/// Sends the runtime's mod content projection to the world's players and observers, using
+/// separate borrows of the engine, Session and sockets. No checkpoint or mirrored world is made.
 pub(super) fn publish_mod_content(
     runtime: &PreparedModHost,
     state: &solomon_sim::session::GameSession,

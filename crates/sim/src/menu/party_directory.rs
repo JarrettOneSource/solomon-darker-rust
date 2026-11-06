@@ -1,8 +1,9 @@
-//! Party ID editing and directory actions from Website `party-join.ts` and
-//! `party-directory.ts`. The broker still owns actual listings and admission.
+//! Party ID editing and the party directory's rows and actions. The broker still owns actual
+//! listings and admission.
 
 use crate::social::PartyVisibility;
 
+/// What the directory offers for a party: join it, request to join, or wait while it plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DirectoryPartyAction {
     Join,
@@ -10,6 +11,7 @@ pub enum DirectoryPartyAction {
     Wait,
 }
 
+/// A directory row's location, squad size and status text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DirectoryPartyPresentation<'a> {
     pub location: &'a str,
@@ -42,7 +44,8 @@ pub fn directory_party_action(visibility: PartyVisibility, playing: bool) -> Dir
     }
 }
 
-/// The source keeps the final eight admitted characters when pasting a longer ID.
+/// Uppercases a party ID, keeps only admitted characters and adds a dash after the first four.
+/// A longer pasted ID keeps its final eight admitted characters.
 #[must_use]
 pub fn normalize_party_code(value: &str) -> String {
     let characters: Vec<char> = value

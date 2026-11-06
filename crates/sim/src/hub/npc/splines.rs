@@ -1,5 +1,5 @@
-//! The eighteen stock Courtyard QuickSpline routes, from Website
-//! `core-server/hub-student-splines.ts` and `native-natural-spline.ts`.
+//! The eighteen stock Courtyard QuickSpline routes that students walk, compiled as natural
+//! cubic splines.
 
 use crate::Vec2;
 use crate::spline::NaturalSpline;
@@ -236,7 +236,7 @@ impl HubStudentSplines {
         Self { splines }
     }
 
-    /// `evaluateHubStudentSpline`, clamped at both route endpoints.
+    /// The point at `cursor` along route `path_id`, clamped at both route endpoints.
     #[must_use]
     pub fn evaluate(&self, path_id: usize, cursor: f64) -> Vec2 {
         self.splines[path_id].evaluate(cursor)

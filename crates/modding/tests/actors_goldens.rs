@@ -1,4 +1,5 @@
-//! Actual custom actors, pickups and nested scenes retain the Source lifecycle.
+//! Mod enemies, powerups, nested scenes and portals replayed against frozen recordings from
+//! the Website client: each step's output, error and engine checkpoints must match.
 
 mod common;
 

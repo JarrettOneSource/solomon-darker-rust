@@ -1,4 +1,5 @@
-//! Package asset preparation from `modding/assets/mod-asset-compiler.ts`.
+//! Prepares the sprites, sheets, music, sounds, scenes and Boneyards that compiled mods
+//! declare into one immutable catalog, checking each against its packaged file.
 //! Inputs are accepted package bytes and metadata; this module performs no I/O.
 
 use std::collections::BTreeMap;
@@ -18,6 +19,7 @@ const MAXIMUM_IMAGE_DIMENSION: u32 = 4_096;
 const MAXIMUM_SCENE_NODES: usize = 16_384;
 const PNG_SIGNATURE: [u8; 8] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
+/// One mod's packaged files by path, which its compiled asset definitions refer to.
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct ModAssetSource {
     pub files: BTreeMap<String, Vec<u8>>,
@@ -61,7 +63,7 @@ impl PreparedModAssetCatalog {
         }
     }
 
-    /// Source uses the first authored animation when no named animation fits.
+    /// The first authored animation, used when no named animation fits.
     /// Its insertion order comes from the accepted definition, not map sorting.
     pub fn first_animation(&self, image: &PreparedModSpriteAsset) -> Option<&[usize]> {
         let key = self.first_animations.get(&image.identity.id)?;
@@ -270,9 +272,8 @@ fn valid_package_asset_path(path: &str) -> bool {
     let Some((directory, remainder)) = path.split_once('/') else { return false };
     matches!(directory, "art" | "audio" | "levels" | "scenes" | "sprites")
         && !remainder.is_empty()
-        // The source lookahead starts after the directory slash. Its `^`
-        // alternative still means the whole string's start, so it rejects dot
-        // segments only after a later slash. A first dot segment reaches the
+        // Dot segments are rejected only after a later slash. A dot segment
+        // straight after the directory passes this check, reaches the
         // package-map lookup and reports an absent file instead.
         && !remainder.split('/').skip(1).any(|segment| matches!(segment, "." | ".."))
 }

@@ -1,4 +1,4 @@
-//! GPU groups for Source ModEnemies root filters and native text shadows.
+//! GPU groups for mod enemy root filters and native text shadows.
 //! Typed paint markers carry data only; no external callback code is executed.
 
 use egui::{ClippedPrimitive, Rect, epaint::Primitive};
@@ -6,6 +6,7 @@ use solomon_graphics::{BlendMode, ColorFilter, ShadowOutput};
 
 use super::ImageShadow;
 
+/// Opacity and drop shadows applied to a painted group as a whole.
 #[derive(Clone, Debug)]
 pub struct GroupEffect {
     pub opacity: f32,
@@ -19,6 +20,7 @@ impl Default for GroupEffect {
     }
 }
 
+/// A group's complete paint style: its effect, color filter, blend mode and shadow output.
 #[derive(Clone, Debug)]
 pub(super) struct Style {
     pub effect: GroupEffect,
@@ -27,6 +29,8 @@ pub(super) struct Style {
     pub output: ShadowOutput,
 }
 
+/// A marker in the paint stream: begin a styled group, paint an Unforge effect, start the
+/// group's knockout part, or end the group.
 pub(super) enum Boundary {
     Begin(Style),
     Unforge(Box<super::unforge::Paint>),
@@ -34,6 +38,8 @@ pub(super) enum Boundary {
     End,
 }
 
+/// A parsed paint tree node: a mesh, an Unforge paint, or a styled group with its children
+/// and optional knockout.
 pub(super) enum Node {
     Mesh { mesh: egui::Mesh, clip: Rect },
     Unforge { paint: Box<super::unforge::Paint>, clip: Rect },

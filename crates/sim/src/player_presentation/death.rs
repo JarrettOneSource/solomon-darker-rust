@@ -1,5 +1,5 @@
-//! Retained death crossing and cosmetic bouncer samples from
-//! `renderer/player-death-burst-presentation.ts` and `player-death-weapon-presentation.ts`.
+//! Player death presentation: the burst played once a death reaches its final frame, the
+//! dropped weapon's cosmetic bounce and the death hat sockets.
 
 use crate::float;
 use std::collections::{BTreeMap, BTreeSet};
@@ -12,6 +12,7 @@ use crate::spells::casting::PlayerWeaponKind;
 
 use super::{mix, stable_hash, unit};
 
+/// A death burst to play: the run, player and death epoch that seed it, and its position.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerDeathBurstTrigger {
     pub death_epoch: u64,
@@ -20,6 +21,7 @@ pub struct PlayerDeathBurstTrigger {
     pub run_id: String,
 }
 
+/// One of a death burst's eighteen sprites: its alpha, offset from the body and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerDeathBurstLayer {
     pub alpha: f64,
@@ -162,6 +164,8 @@ pub fn player_death_burst_layers(
     layers
 }
 
+/// A dropped-weapon bounce to play for a dead wizard: the run, player and death epoch,
+/// the wizard's facing and the weapon.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerDeathWeaponTrigger {
     pub death_epoch: u64,
@@ -171,6 +175,7 @@ pub struct PlayerDeathWeaponTrigger {
     pub weapon: PlayerWeaponAppearance,
 }
 
+/// The dropped weapon at one age: height, offset, rotation and whether it has settled.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerDeathWeaponSample {
     pub height: f64,
@@ -193,8 +198,8 @@ pub fn player_death_weapon_sample(
     }
 }
 
-/// `save/legacy-death-animations.ts`: historical saves reconstruct the original
-/// seeded display motion without drawing from the live secondary RNG.
+/// The dropped weapon's motion, seeded from its trigger rather than the live secondary
+/// RNG, so historical saves reconstruct the same display motion.
 #[must_use]
 pub fn legacy_player_death_weapon_motion(
     trigger: &PlayerDeathWeaponTrigger,
@@ -269,7 +274,7 @@ pub fn player_death_hat_anchor(frame: usize, facing: usize) -> Vec2 {
     DEATH_HAT_ANCHORS[frame][facing]
 }
 
-// Stock `player-character-death-hat-anchors.json`: frame × six death facings.
+// Stock death hat sockets: four death frames × six death facings.
 const DEATH_HAT_ANCHORS: [[Vec2; 6]; 4] = [
     [
         Vec2::new(0.5, -3.5),

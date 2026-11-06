@@ -1,6 +1,7 @@
-//! Source `web-lua-package-authoring.ts` and the native portions of `tools/sdmod/cli.mjs`.
+//! The native side of the `sdmod` mod authoring CLI in `tools/sdmod`: package checks,
+//! admission, bundling, package tests and editor references.
 //! Filesystem admission, compilation and package tests use the same compiler/VM as hosts.
-//! The existing Node CLI retains its authoring templates, ZIP writer and art tooling.
+//! The Node CLI keeps its authoring templates, ZIP writer and art tooling.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
@@ -26,6 +27,8 @@ use crate::definition::{CompileWebLuaDefinitionOptions, compile_web_lua_definiti
 const MAXIMUM_PACKAGE_FILES: usize = 256;
 const MAXIMUM_PACKAGE_FILE_BYTES: usize = 16 * 1_024 * 1_024;
 
+/// A mod package directory that passed its checks: manifest, files, scripts and compiled
+/// definition.
 pub struct CheckedWebLuaPackage {
     pub compiled: CompiledWebLuaMod,
     pub entry_script: String,
@@ -95,7 +98,7 @@ pub fn check_web_lua_package(
 }
 
 /// The public check/new/pack/test commands use full production-shaped admission.
-/// Source migrate intentionally stops after check_web_lua_package instead.
+/// The CLI's migrate command intentionally stops after `check_web_lua_package` instead.
 pub fn admit_prepared_package(checked: &CheckedWebLuaPackage) -> Result<(), String> {
     let mut descriptors = Vec::with_capacity(checked.files.len());
     for (path, bytes) in &checked.files {
@@ -160,6 +163,7 @@ pub fn bundle_checked_package(checked: &CheckedWebLuaPackage) -> Result<String, 
     Ok(bundled)
 }
 
+/// The printed output and number of Lua test files from running a package's tests.
 pub struct PackageTestResult {
     pub output: Vec<String>,
     pub tests: usize,
@@ -192,8 +196,8 @@ pub fn run_package_tests(checked: &CheckedWebLuaPackage) -> Result<PackageTestRe
         let lua = Lua::new();
         lua.load("io=nil; os=nil; package=nil; require=nil; debug=nil; load=nil; loadfile=nil; dofile=nil")
             .exec().map_err(|error| error.to_string())?;
-        // Source constructs a Lua literal, rather than pushing host JSON numbers.
-        // This retains integer literals and Source string-escape behavior.
+        // Pass the graph as a Lua literal, rather than pushing host JSON numbers.
+        // Whole numbers stay Lua integers and strings keep their JSON escapes.
         lua.load(&graph_assignment)
             .set_name(&graph_assignment)
             .exec()
@@ -216,7 +220,7 @@ pub fn run_package_tests(checked: &CheckedWebLuaPackage) -> Result<PackageTestRe
             .set_name(&code)
             .eval::<MultiValue>()
             .map_err(|error| error.to_string())?;
-        // Wasmoon distinguishes no returns (undefined) from an explicit nil (null).
+        // Returning nothing passes, but an explicit nil fails: tests return true or nothing.
         if !returned.is_empty() && !matches!(returned.front(), Some(Value::Boolean(true))) {
             return Err(format!("{name} must return true or no value"));
         }
@@ -247,7 +251,7 @@ fn lua_literal(value: &LuaValue) -> Result<String, String> {
     }
 }
 
-/// JSON contract for the retained Node authoring frontend, not a second compiler.
+/// JSON contract for the Node authoring frontend in `tools/sdmod`, not a second compiler.
 pub fn checked_package_value(checked: &CheckedWebLuaPackage) -> Result<LuaValue, String> {
     let mut files = LuaObject::new();
     for (path, bytes) in &checked.files {

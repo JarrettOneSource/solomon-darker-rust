@@ -1,6 +1,6 @@
-//! Ordinary death/spectator camera and status from current
-//! `renderer/boneyard-render-contract.ts` and `native-spectator-hud.ts`.
-//! This selects display ownership only; it never changes the local participant.
+//! The camera target, status banner and banner frame shown while the local wizard
+//! spectates after death. This selects display ownership only; it never changes the
+//! local participant.
 
 use super::BoneyardBounds;
 use super::waves::director::WavePhase;
@@ -8,12 +8,14 @@ use crate::Vec2;
 use crate::combat::PlayerLifeState;
 use crate::game_run::GameRunPhase;
 
+/// The player a spectating local wizard watches, and the run that choice belongs to.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BoneyardSpectatorCameraState {
     pub run_id: Option<String>,
     pub target_player_id: Option<String>,
 }
 
+/// One player's ID, display name, position and life state, as spectator selection reads it.
 #[derive(Clone, Copy)]
 pub struct BoneyardSpectatorPlayer<'a> {
     pub id: &'a str,
@@ -22,6 +24,8 @@ pub struct BoneyardSpectatorPlayer<'a> {
     pub life_state: PlayerLifeState,
 }
 
+/// The accepted run state spectator selection reads: players, the IDs that may be
+/// watched, the run phase and the run ID.
 pub struct BoneyardSpectatorSnapshot<'a> {
     pub players: &'a [BoneyardSpectatorPlayer<'a>],
     pub eligible_player_ids: &'a [String],
@@ -29,12 +33,14 @@ pub struct BoneyardSpectatorSnapshot<'a> {
     pub run_id: Option<&'a str>,
 }
 
+/// The player the Boneyard camera follows, if any, and the world position to follow.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardCameraFocus {
     pub player_id: Option<String>,
     pub position: Vec2,
 }
 
+/// Wave progress for the spectator respawn line: wave ordinal, incoming spawns and phase.
 #[derive(Clone, Copy)]
 pub struct BoneyardSpectatorWaves {
     pub pending_spawn_budget: usize,
@@ -42,6 +48,8 @@ pub struct BoneyardSpectatorWaves {
     pub phase: WavePhase,
 }
 
+/// The spectator status banner: title, instruction, respawn line, accessible label and
+/// the enemy and wave counts behind them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoneyardSpectatorStatusPresentation {
     pub accessible_label: String,
@@ -99,7 +107,7 @@ pub fn boneyard_spectator_camera_state(
                 })
         })
         .collect();
-    // Source compares semantic string IDs lexically, not registration ordinals.
+    // Order by player ID, compared as UTF-16 code units, not by registration ordinal.
     living.sort_by(|left, right| left.encode_utf16().cmp(right.encode_utf16()));
     let index = if advance {
         target_id
@@ -221,16 +229,20 @@ fn enemy_count_label(count: usize, state: &str) -> String {
     format!("{count} {state} {}", if count == 1 { "enemy" } else { "enemies" })
 }
 
+/// One tiled edge of the banner frame: its bounds within the panel and the stock UI atlas
+/// record repeated along it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpectatorHudRail {
     pub bounds: BoneyardBounds,
     pub record: usize,
 }
+/// One corner piece of the banner frame: its center within the panel and its UI atlas record.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpectatorHudCorner {
     pub center: Vec2,
     pub record: usize,
 }
+/// The spectator banner panel for one viewport: its surface, text origin, rails and corners.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpectatorHudLayout {
     pub surface: BoneyardBounds,

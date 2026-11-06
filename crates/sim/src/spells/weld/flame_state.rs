@@ -1,4 +1,4 @@
-//! Current Source `native-weld-flame-state.ts` and `native-weld-flame-camera.ts`.
+//! Flame Lash birth samples, fade alpha and the camera displacement a main lash causes.
 //! Birth samples are authoritative data. Rendering never guesses missing legacy
 //! samples or consumes the gameplay stream to reconstruct them.
 
@@ -10,6 +10,7 @@ use crate::{Rng, Vec2};
 /// already owns update one, leaving seven presentation updates to retain.
 pub const FLAME_CAMERA_MAX_PRESENTATION_TICKS: u64 = 7;
 
+/// Whether a Flame Lash ribbon is the main lash or a chained one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "lowercase"))]
@@ -18,6 +19,7 @@ pub enum FlameChannelRole {
     Chain,
 }
 
+/// A ribbon's birth sample: a width factor for a short lash, or a phase for a long one.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "lowercase"))]
@@ -26,6 +28,8 @@ pub enum FlameRibbonBirth {
     Long { phase_degrees: f64 },
 }
 
+/// A lash path's birth samples: light intensity, per-point radius factors and painter
+/// registration.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FlamePathBirth {
@@ -35,6 +39,8 @@ pub struct FlamePathBirth {
     pub misc_append_ordinal: usize,
 }
 
+/// Everything sampled when a Flame Lash ribbon is born: role, path points, width, ribbon
+/// and path samples, and camera displacement.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FlameChannelBirth {
@@ -49,6 +55,8 @@ pub struct FlameChannelBirth {
     pub path: FlamePathBirth,
 }
 
+/// A channel's Flame Lash visual: its birth samples, or suppressed for a legacy record
+/// saved without them.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind"))]
@@ -60,12 +68,15 @@ pub enum FlameChannelVisual {
     Birth(FlameChannelBirth),
 }
 
+/// A Flame Lash fade's birth alpha.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct FlameFadeBirth {
     pub birth_alpha: f64,
 }
 
+/// A Flame Lash fade's visual: its birth alpha, or suppressed for a legacy record saved
+/// without it.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind"))]
@@ -77,6 +88,8 @@ pub enum FlameFadeVisual {
     Birth(FlameFadeBirth),
 }
 
+/// A camera displacement that a recent main Flame Lash proposes for the display, with the
+/// lash's ID, birth tick and world.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FlameCameraProposal {
     pub id: u64,
@@ -111,7 +124,7 @@ pub fn draw_flame_camera_displacement(rng: &mut Rng, underpowered: bool) -> Opti
     }
     let magnitude = rng.draw_scaled_float(4.0, false);
     let angle = rng.draw_scaled_float(360.0, false);
-    // Recovered Math+4, rather than host PI or fround(PI).
+    // Recovered Math+4, rather than double-precision PI or fround(PI).
     let radians = fround(angle * 3.141592502593994 / 180.0);
     Some(Vec2::new(
         fround(magnitude * fround(sin(radians))),

@@ -1,7 +1,6 @@
-//! Stock `NativeUiSprite`, `NativeUiStrip`, `NativeUiNineSlice` and bitmap text.
+//! Stock UI sprites, strips, nine-slice frames and bitmap text, drawn as GPU quads.
 //!
-//! Geometry is the existing `ui.rs` Website projection expressed as GPU quads;
-//! bundle registration and `sim::ui_text` remain their canonical owners.
+//! Bundle registration and `solomon_sim::ui_text` remain their canonical owners.
 
 use egui::{Color32, Painter, Pos2, Rect, Vec2, pos2, vec2};
 use solomon_assets::{SpriteRecord, parse_bundle};
@@ -13,6 +12,7 @@ use super::UiFrame;
 use super::geometry::clip_image_rect;
 use solomon_graphics::assets;
 
+/// A stock UI bundle's sprite records and the path of its atlas image.
 pub struct StockAtlas {
     path: String,
     records: Vec<SpriteRecord>,

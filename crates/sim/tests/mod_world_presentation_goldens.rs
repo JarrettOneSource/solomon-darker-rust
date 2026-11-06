@@ -1,4 +1,5 @@
-//! Accepted runtime rows are projected once, with the Source asset/number/member rules.
+//! Accepted mod runtime rows are projected once; asset, number and member handling is
+//! checked against recordings from the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::modding::assets::GameModAsset;

@@ -208,7 +208,7 @@ pub fn load_boneyard(checkpoint: &GameCheckpoint) -> Result<Option<LoadedBoneyar
         "stock-tutorial" => crate::boneyard::load_tutorial(seed),
         _ => Err("The saved Boneyard is not in this build".into()),
     }?;
-    // Hosted materializeBoneyard draws the run identity separately from its scene seed.
+    // A hosted run draws its identity separately from the scene seed; keep the saved one.
     loaded.run_id.clone_from(&saved.run_id);
     // Reject changed assets before spending time uploading a scene for an incompatible run.
     BoneyardWorld::restore(loaded.clone(), *saved.clone())?;

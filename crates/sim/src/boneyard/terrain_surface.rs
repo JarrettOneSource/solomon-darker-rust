@@ -1,6 +1,6 @@
-//! Arena's style-zero surface grid and bridge subtraction from current
-//! `core-kernels/native-terrain-surface.ts`. This fixed-quarter QuickSpline is
-//! distinct from the natural cubic spline used by Silk and College students.
+//! The Arena's style-zero terrain surface strips and the bridge quads that roads cut out
+//! of them. This fixed-quarter QuickSpline is distinct from the natural cubic spline used
+//! by Silk and College students.
 
 use crate::float::{atan2, cos, fround as f, sin};
 use crate::{Rng, Vec2};
@@ -10,12 +10,16 @@ use super::{BoneyardBounds, BoneyardRoad, BoneyardTerrain};
 pub const GROUND_PI: f64 = 3.141592502593994;
 pub type SurfaceQuad = [Vec2; 4];
 
+/// One terrain patch's surface strip: the spline cursors it was sampled at and the quads
+/// between successive cross-sections.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TerrainSurface {
     pub cursors: Vec<f64>,
     pub quads: Vec<SurfaceQuad>,
 }
 
+/// A bridge where a road crosses a terrain strip: its quad and bounding box. Points on a
+/// bridge are not part of the terrain surface.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BridgeSurface {
     pub quad: SurfaceQuad,
@@ -145,7 +149,7 @@ impl DistanceLookup {
         let low = self.distances.partition_point(|stored| *stored < distance);
         let index = low.saturating_sub(1);
         let span = f(self.distances[index + 1] - self.distances[index]);
-        // Native's short-span branch returns the stored distance, not cursor.
+        // A short span deliberately returns the stored distance, not a cursor.
         if span <= 0.25 {
             return self.distances[index + 1];
         }
@@ -181,7 +185,7 @@ fn sample_cursors(spline: &Spline) -> Vec<f64> {
     cursors
 }
 
-/// `buildNativeTerrainSurface`: style one profiles never enter the style-zero grid.
+/// Builds a style-zero terrain patch's surface strip; any other style has no surface.
 #[must_use]
 pub fn build_terrain_surface(terrain: &BoneyardTerrain) -> TerrainSurface {
     if terrain.style.unwrap_or(0) != 0 {
@@ -290,7 +294,7 @@ fn road_crosses_quad(quad: &SurfaceQuad, a: Vec2, b: Vec2) -> bool {
     if surface_quad_contains(quad, a) || surface_quad_contains(quad, b) {
         return true;
     }
-    // Source visits both triangles, including their shared diagonal twice.
+    // The edges of both triangles, so their shared diagonal is tested twice.
     [(0, 1), (1, 2), (0, 2), (1, 3), (3, 2), (1, 2)]
         .into_iter()
         .any(|(i, j)| segments_cross(a, b, quad[i], quad[j]))

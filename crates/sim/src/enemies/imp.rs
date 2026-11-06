@@ -1,4 +1,4 @@
-//! Hostile Imp flight and bounce contact from `enemies/imp.ts` and `boneyard-imp-flight.ts`.
+//! Hostile Imp bouncing flight, steering toward its target, and the bite when it lands in reach.
 //! Its private xorshift presentation stream differs from the friendly Fire Imp's native RNG.
 use super::combat::{attack_marker, direct_contact_player_damage};
 use super::effects::{DeathEffectOwner, radial_vector};

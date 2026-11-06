@@ -1,6 +1,6 @@
 //! Independent escape trajectories over all retained native scenes and the tutorial.
 //!
-//! The Website oracle records the entire trajectory. No source spatial state is injected
+//! The Website client recorded the entire trajectory. No recorded spatial state is injected
 //! between transitions; this detects the measured template-nine accumulated path divergence.
 
 #[path = "../../sim/tests/support/mod.rs"]
@@ -124,8 +124,8 @@ fn solomon_escape_trajectories_match_without_replacing_their_spatial_state() {
         }
         let records = case["records"].as_array().unwrap();
         compare(&state, &records[0]["state"], initial_tick);
-        // Each result becomes the next input. A source snapshot is an expected output,
-        // never an instruction to overwrite the independently evolving Rust trajectory.
+        // Each result becomes the next input. A recorded snapshot is an expected output,
+        // never an instruction to overwrite the independently simulated trajectory.
         let mut maximum_position_delta: f64 = 0.0;
         let mut maximum_heading_delta: f64 = 0.0;
         for pair in records.windows(2) {

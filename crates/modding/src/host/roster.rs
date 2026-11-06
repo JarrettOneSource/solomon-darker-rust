@@ -1,4 +1,5 @@
-//! Authored initial/wave roster placement from `prepared-mod-host.ts`.
+//! A mod Boneyard's authored enemy roster, placed in rings around its entry anchor when the
+//! Boneyard starts and at each wave. Mod enemies spawn at once; stock enemies are queued.
 
 use solomon_sim::Vec2;
 use solomon_sim::enemies::EnemyToken;
@@ -67,7 +68,7 @@ impl PreparedModHost {
             let token = EnemyToken::from_id(&normalized)
                 .filter(|token| *token != EnemyToken::Portal)
                 .ok_or_else(|| format!("Boneyard stock enemy is unavailable: {value}"))?;
-            // Source evaluates this arithmetic as a JS number before remainder.
+            // The ID arithmetic is done in `f64`, not in integers, before the remainder.
             let id = 0x5000_0000
                 + ((tick as f64 * 131.0 + index as f64 + self.enemy_spawns.len() as f64)
                     % f64::from(0x0fff_ffff_u32)) as usize;

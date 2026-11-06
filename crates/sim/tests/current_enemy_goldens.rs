@@ -1,4 +1,5 @@
-//! Current Website enemy behavior, independently recorded after the original pinned port.
+//! Enemy behavior recorded from a later build of the Website client, independently of the
+//! original enemy fixtures.
 
 use serde::Deserialize;
 use solomon_sim::enemies::model::WraithBrain;

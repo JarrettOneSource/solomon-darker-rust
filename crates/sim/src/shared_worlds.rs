@@ -1,6 +1,6 @@
 //! The persistent Global College and its independent party runs.
-//! Reference: Website `host/shared-game-worlds.ts`. Each world uses the canonical
-//! `GameSession`; party transfer preserves source state instead of making fresh players.
+//! Each world uses the canonical `GameSession`; party transfer preserves each player's
+//! existing state instead of making fresh players.
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
@@ -20,6 +20,7 @@ use crate::session::{
 };
 use crate::social::{PartyActionRejection, PartyIdentity, PartySystem};
 
+/// One party's independent Boneyard run: its party ID, loaded Boneyard and session.
 #[derive(Clone, Debug)]
 pub struct SharedPartyRun {
     pub loaded_boneyard: LoadedBoneyard,
@@ -27,14 +28,17 @@ pub struct SharedPartyRun {
     pub state: GameSession,
 }
 
+/// The shared College session, the party system and every party's running Boneyard.
 #[derive(Clone, Debug)]
 pub struct SharedGameWorlds {
     pub hub: GameSession,
     pub parties: PartySystem,
-    /// The source steps runs in creation order, independently of opaque party IDs.
+    /// Runs step in creation order, independently of opaque party IDs.
     pub runs: Vec<SharedPartyRun>,
 }
 
+/// Why a shared-world action was refused: a party rule, a run already in progress, or no
+/// run available.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SharedWorldActionRejection {
     Party(PartyActionRejection),
@@ -72,7 +76,7 @@ pub trait SharedWorldsTickObserver {
     fn after_run_step(&mut self, state: &GameSession, loaded: &LoadedBoneyard);
 }
 
-/// Host-owned holds and immutable navigation are borrowed for this one source epoch.
+/// Host-owned holds and immutable navigation are borrowed for this one tick.
 #[derive(Default)]
 pub struct SharedWorldsTickContext<'a> {
     pub paused_party_ids: Option<&'a BTreeSet<String>>,
@@ -84,8 +88,10 @@ pub struct SharedWorldsTickContext<'a> {
     pub run_observer: Option<&'a mut dyn SharedWorldsTickObserver>,
 }
 
+/// What one shared tick produced: the College result, each party run's result and whether
+/// the memorial changed.
 pub struct SharedWorldsTickResult {
-    /// An empty College resets to its source initial state and has no actor epoch.
+    /// An empty College resets to its initial state and has no actor epoch.
     pub hub: Option<GameSessionTickResult>,
     pub runs: Vec<(String, GameSessionTickResult)>,
     pub memorial_changed: bool,
@@ -147,8 +153,9 @@ impl SharedGameWorlds {
         Ok(())
     }
 
-    /// Source save projection: an active party already owns its complete world. In the
-    /// College only that party is partitioned out; no unrelated visitor enters its save.
+    /// The session a player's save holds. An active party already owns its complete world;
+    /// in the College only that party is partitioned out, so no unrelated visitor enters
+    /// its save.
     pub fn party_save_state_for_player(
         &self,
         player_id: &str,
@@ -229,7 +236,7 @@ impl SharedGameWorlds {
     }
 
     /// A saved continuation owns exactly one unique actor; its world joins the resident
-    /// College or becomes that actor's independent party run, as the source specifies.
+    /// College or becomes that actor's independent party run.
     pub fn restore_player(
         &mut self,
         restored: GameSession,
@@ -447,7 +454,7 @@ impl SharedGameWorlds {
         Ok(())
     }
 
-    /// One shared source tick: College first, then each unpaused party in creation order.
+    /// One shared tick: College first, then each unpaused party in creation order.
     /// Per-run results retain real contact/reward/audio outputs for their host owner.
     pub fn step(
         &mut self,
@@ -458,8 +465,8 @@ impl SharedGameWorlds {
             .expect("stock shared worlds have finite native mutations")
     }
 
-    /// Source `stepSharedGameWorlds` selects the admitted extension owner separately
-    /// for each party. The College stays stock; a callback error ends this host epoch.
+    /// Selects the admitted extension owner separately for each party. The College stays
+    /// stock; a callback error ends this host epoch.
     pub fn step_with_extensions(
         &mut self,
         inputs: &BTreeMap<String, GameSessionInput>,
@@ -533,8 +540,8 @@ impl SharedGameWorlds {
             if let Some(world) = &run.state.boneyard
                 && previous_run_id.as_deref() == Some(world.loaded.run_id.as_str())
             {
-                // Source Object.keys(...).sort() captures simultaneous completions by
-                // player ID, not actor enrollment order. Eligibility precedes the draw.
+                // Sort simultaneous completions by player ID, not actor enrollment order.
+                // Eligibility precedes the draw.
                 newly_completed.sort();
                 for id in newly_completed {
                     if context

@@ -1,5 +1,4 @@
-//! Marker, falling Meteor and impact programs from `native-weld-meteor.ts` and
-//! the Meteor branch of `native-weld-primary-runtime.ts`.
+//! The Meteor Swarm Weld: target markers, falling Meteors and their impact programs.
 
 use super::model::{WeldActorBase, WeldActorBirth};
 use crate::float;
@@ -9,6 +8,8 @@ use crate::painter::WorldPainterOrder;
 use crate::spells::earth_debris::WeldMeteorDebrisSeed;
 use crate::{Rng, Vec2};
 
+/// A target marker at a Meteor Swarm's aim point: growth, rotation, scale, color and
+/// alpha.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldMeteorMarkerState {
@@ -20,6 +21,8 @@ pub struct WeldMeteorMarkerState {
     pub scale: f64,
 }
 
+/// A Meteor's spawn draws: landing position, fall height, heading and step, body scale,
+/// ticks to impact and private seed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WeldMeteorSpawnProgram {
     pub body_scale: f64,
@@ -31,6 +34,7 @@ pub struct WeldMeteorSpawnProgram {
     pub private_seed: u32,
 }
 
+/// A Meteor's impact draws: debris, camera displacement, radius, rotation and sounds.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldMeteorImpactProgram {
     pub camera_displacement: Vec2,
@@ -41,6 +45,7 @@ pub struct WeldMeteorImpactProgram {
     pub impact_throw_fire_pitch: Option<f64>,
 }
 
+/// Whether a Meteor is still falling or has landed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum WeldMeteorPhase {
@@ -48,6 +53,7 @@ pub enum WeldMeteorPhase {
     Impact,
 }
 
+/// A falling or landed Meteor: its fall, impact and pulse timing, damage and debris.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct WeldMeteorActorState {
@@ -92,7 +98,7 @@ pub fn spawn_weld_meteor_marker(birth: WeldActorBirth<'_>, rng: &mut Rng) -> Wel
     }
 }
 
-/// Returns false exactly on the source retirement tick.
+/// Returns false exactly on the marker's retirement tick.
 pub fn step_weld_meteor_marker(marker: &mut WeldMeteorMarkerState) -> bool {
     marker.alpha = fround(marker.alpha - 0.025_f32 as f64);
     if marker.alpha <= 0.0 {

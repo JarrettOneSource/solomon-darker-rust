@@ -1,4 +1,4 @@
-//! Source `ml-bot-policy/inventory.ts`: addressed potions, equipment and inventory totals.
+//! The bot's inventory observation: addressed potions, equipment and inventory totals.
 
 use crate::economy::{
     HubEquipmentState, HubInventoryItem, HubItemKind, ItemRarity, project_inventory_items,
@@ -13,12 +13,14 @@ use crate::session::GameSession;
 use super::numbers::{count_scaled, signed, unsigned, write};
 use super::spec::scales;
 
+/// A potion the bot can address: its item ID and whether drinking it is legal now.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotPolicyPotionRow {
     pub item_id: u64,
     pub legal: bool,
 }
 
+/// An inventory observation: the encoded blocks O, P and Q, and the potion rows.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyInventoryObservation {
     pub block_o: Vec<f32>,
@@ -55,8 +57,8 @@ pub fn observe_ml_bot_policy_inventory(
                 )
         })
         .collect::<Vec<_>>();
-    // These are the seven fixed lowercase ASCII kind names; localeCompare and
-    // byte ordering agree within this closed Source set.
+    // These are the seven fixed lowercase ASCII kind names; byte order and
+    // locale-aware order agree within this closed set.
     potions.sort_by(|left, right| {
         right
             .quantity
@@ -81,7 +83,7 @@ pub fn observe_ml_bot_policy_inventory(
             item.kind.as_str().to_owned()
         };
         let (hash_a, hash_b) = identity_hashes(&identity);
-        // Source's potion durations are the same canonical progression programs:
+        // Potion durations come from the canonical progression programs:
         // Wizard Chug / Mind Chug 6000 ticks, antidote immunity 1000 ticks.
         let duration = match stock {
             Some(2 | 4) => duration_scaled(6000.0),
@@ -260,8 +262,8 @@ enum ModifierFamily {
 fn family_totals(modifiers: &EquipmentModifiers) -> FamilyTotals {
     use ModifierFamily::*;
     let mut totals = FamilyTotals::default();
-    // Retain closed-unions.ts Object.entries order and each array's own subtotal.
-    // Reassociating the per-family sum changes the deployed Float32 observation.
+    // Keep this contribution order and each array's own subtotal. Reassociating
+    // the per-family sum changes the deployed f32 observation.
     let contributions = [
         (Mobility, modifiers.cast_speed_flat),
         (Mobility, modifiers.cast_speed_multiplier - 1.0),

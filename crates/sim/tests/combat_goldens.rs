@@ -1,4 +1,5 @@
-//! Focused replays of the player combat authority; fixtures are recorded from the Website.
+//! Focused replays of the player combat authority; fixtures were recorded from the
+//! Website client.
 use serde::Deserialize;
 use solomon_sim::combat::{PlayerCombatState, PlayerCombatTickOptions, PlayerLifeState};
 

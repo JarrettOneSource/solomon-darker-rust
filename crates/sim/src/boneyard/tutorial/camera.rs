@@ -1,4 +1,5 @@
-//! Tutorial camera lock and entrance fence from `native-tutorial.ts`.
+//! The Tutorial camera lock, from the full scene to the combat rectangle, and the entrance
+//! fence that bounds where enemies may spawn.
 
 use crate::Vec2;
 use crate::boneyard::BoneyardBounds;
@@ -40,7 +41,8 @@ pub const TUTORIAL_ENTRANCE_FENCE_CHAIN: [Vec2; 17] = [
 const CAMERA_BOUNDS: [BoneyardBounds; TUTORIAL_CAMERA_LOCK_SETTLE_TICKS + 1] =
     build_camera_bounds();
 
-/// The source's immutable camera table is compiled into the program, outside checkpoints.
+/// The locked camera rectangle at the current lock age, or `None` before the lock. The
+/// blend table is computed at compile time, so checkpoints never store it.
 #[must_use]
 pub fn tutorial_camera_bounds(state: &TutorialState) -> Option<BoneyardBounds> {
     if !state.camera_lock_triggered {

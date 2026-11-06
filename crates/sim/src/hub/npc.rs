@@ -1,9 +1,8 @@
-//! Courtyard students and trader presentation, ported from Website
-//! `core-server/hub-students.ts`, `hub-world.ts`, `hub-skorcha.ts`, and
-//! `hub-presentation.ts`. `hub-npc-goldens.json` pins the population and its actor contacts.
+//! Courtyard students and trader presentation. `hub-npc-goldens.json` pins the population and
+//! its actor contacts.
 //!
-//! The pinned Website uses an independent xorshift stream for students, and the native
-//! generator for trader clocks. Keeping those owners separate preserves its draw order.
+//! Students draw from their own xorshift stream and trader clocks from the game's `Rng`.
+//! Keeping those owners separate preserves each stream's draw order.
 
 mod physics;
 mod splines;
@@ -56,7 +55,7 @@ impl HubNpcState {
     }
 
     /// Save restoration constructs the Hub with a live painter allocator. Births that
-    /// retire during its warmup still consume registrations (`restoreGameSaveDocument`).
+    /// retire during its warmup still consume registrations.
     #[must_use]
     pub fn with_live_student_painters(seed: u32, painter_order: &mut WorldPainterOrder) -> Self {
         Self::with_students(seed, HubStudentPopulation::with_live_painters(painter_order))
@@ -150,7 +149,8 @@ pub struct HubStudentState {
 }
 
 impl HubStudentState {
-    /// `createHubStudentState`: draws the complete native appearance and physical profile.
+    /// Creates a student at the start of route `path_id`, drawing its complete appearance and
+    /// physical profile from the xorshift state `source_state`.
     #[must_use]
     pub fn new(
         splines: &HubStudentSplines,
@@ -209,7 +209,7 @@ impl HubStudentState {
         }
     }
 
-    /// `commitHubStudentRoute`: animation advances by the resolved displacement.
+    /// Moves the student to its resolved position; animation advances by the distance moved.
     pub fn commit(&mut self, position: Vec2) {
         let distance = hypot(position.x - self.position.x, position.y - self.position.y);
         self.frame_phase = (self.frame_phase + distance * 0.2) % 5.0;
@@ -226,7 +226,8 @@ pub struct HubStudentRoutePlan {
     pub state: HubStudentState,
 }
 
-/// `hubStudentStaticCollisionEnabled`: courtyard inset minus the four entry doorways.
+/// Whether a student at `position` collides with scenery: inside the courtyard inset and
+/// outside the four entry doorways.
 #[must_use]
 pub fn hub_student_static_collision_enabled(position: Vec2) -> bool {
     let contains = |[x, y, width, height]: [f64; 4]| {
@@ -243,7 +244,7 @@ pub fn hub_student_static_collision_enabled(position: Vec2) -> bool {
         .any(contains)
 }
 
-/// `planHubStudentRoute`: native cursor pursuit, crowd following, turning and wander draws.
+/// Plans one student's route tick: cursor pursuit, crowd following, turning and wander draws.
 #[must_use]
 pub fn plan_hub_student_route<'a>(
     splines: &HubStudentSplines,
@@ -348,7 +349,7 @@ impl HubStudentPopulation {
         population
     }
 
-    /// `createHubStudentPopulation`: advance the already-live courtyard by 900 warmup ticks.
+    /// Creates a population that has already run 900 warmup ticks, so the courtyard starts live.
     #[must_use]
     pub fn new(painter_order: Option<&mut WorldPainterOrder>) -> Self {
         let first_ordinal = painter_order
@@ -359,8 +360,8 @@ impl HubStudentPopulation {
             population.step_routes(None);
         }
         if let Some(order) = painter_order {
-            // The source warms its population before the live world manager exists.
-            // Only survivors enroll after the players; retired warmup births use no slots.
+            // The population warms up before it joins the live painter order, so only
+            // survivors enroll after the players; retired warmup births use no slots.
             for student in population.students.iter_mut() {
                 student.registration_ordinal =
                     order.register(WorldManagerLane::Actor).registration_ordinal;
@@ -385,7 +386,8 @@ impl HubStudentPopulation {
         }
     }
 
-    /// Free route advancement used by the source's pre-presentation warmup and oracle.
+    /// Advances and commits every route without world collision, as the warmup before
+    /// presentation does.
     pub fn step_routes(&mut self, painter_order: Option<&mut WorldPainterOrder>) {
         let mut students = Vec::with_capacity(self.students.len());
         for student in self.students.iter() {
@@ -408,7 +410,7 @@ impl HubStudentPopulation {
             .collect()
     }
 
-    /// `stepHubWorldTick`'s courtyard actor epoch. A courtyard wizard participates even
+    /// One tick of the courtyard actor epoch. A courtyard wizard participates even
     /// during portal walks; `static_collision_enabled` alone controls the doorway bypass.
     /// The caller advances its region transition after this commits the resolved plan.
     pub fn step(
@@ -528,7 +530,8 @@ impl HubStudentPopulation {
     }
 }
 
-/// `hubStudentPropOffset`: independent radial and stack offsets in continuous heading.
+/// A carried prop's draw offset: a radial offset at the continuous heading plus a stack
+/// offset of three units per prop index.
 #[must_use]
 pub fn hub_student_prop_offset(heading: f64, prop: HubStudentProp, index: usize) -> Vec2 {
     let angle = (heading + prop.angle) * std::f64::consts::PI / 180.0;
@@ -538,7 +541,8 @@ pub fn hub_student_prop_offset(heading: f64, prop: HubStudentProp, index: usize)
     )
 }
 
-/// `hubStudentHeadOffset`: unscaled head pass, including small-student registration.
+/// The head's unscaled draw offset from gait and heading, including the registration shift
+/// for small students.
 #[must_use]
 pub fn hub_student_head_offset(student: &HubStudentState) -> Vec2 {
     let gait = student.gait_degrees * std::f64::consts::PI / 180.0;

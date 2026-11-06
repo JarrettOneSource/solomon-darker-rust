@@ -1,4 +1,5 @@
-//! Authored welded-primary actors from `core-kernels/native-weld-primary-runtime.ts`.
+//! The ten authored Welds, builds 1000 to 1009: their casting, world actors, audio and
+//! presentation.
 
 pub mod audio;
 pub mod blizzard;

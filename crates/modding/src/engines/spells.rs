@@ -1,4 +1,4 @@
-//! Mana admission and retained cooldowns from `mod-spell-engine.ts`.
+//! Admission for mod spell casts: the mana check and each player's per-spell cooldown.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -8,12 +8,14 @@ use solomon_sim::modding::runtime::{ModSpellCheckpoint, ModSpellCooldown};
 
 use super::{MAXIMUM_SAFE_INTEGER, duration_ticks, validate_player, validate_tick_rate};
 
+/// Admits mod spell casts and keeps the tick at which each player's spell is ready again.
 pub struct ModSpellEngine {
     catalog: Arc<PreparedModContentCatalog>,
     ticks_per_second: u32,
     state: ModSpellCheckpoint,
 }
 
+/// An admitted mod spell cast: its mana cost, the tick its cooldown ends and its definition.
 pub struct ModSpellAdmission<'a> {
     pub mana_cost: f64,
     pub ready_tick: u64,

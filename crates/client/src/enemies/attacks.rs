@@ -1,4 +1,4 @@
-//! Event-owned flashes use current retained actor sockets, like `NativeEnemyViews::consumeEvent`.
+//! Enemy attack flashes owned by accepted events, placed at each actor's current retained socket.
 
 use solomon_sim::Vec2;
 use solomon_sim::enemies::EnemyToken;
@@ -11,6 +11,7 @@ use solomon_sim::painter::PainterRegistration;
 
 use super::{EnemyDrawGroup, EnemyView, EnemyViewFrame};
 
+/// One attack flash in flight: its kind, position, spawn tick and painter registration.
 pub(super) struct EnemyAttackEffect {
     kind: EnemyAttackEffectKind,
     position: Vec2,
@@ -28,9 +29,8 @@ impl EnemyView {
         let tick =
             frame.presentation.map_or(frame.tick as f64, |metadata| metadata.presentation_tick);
         for event in std::mem::take(&mut self.pending_events) {
-            // BoneyardScene forwards accepted events directly to NativeEnemyViews.consumeEvent.
             // Drain each accepted event against this paint's actor view, even when interpolation
-            // still displays an earlier tick. Constructors paint age zero before normal aging.
+            // still displays an earlier tick. A new effect paints age zero before normal aging.
             let Some(actor) = world.actors.iter().find(|actor| actor.id == event.actor_id) else {
                 continue;
             };
@@ -75,7 +75,7 @@ impl EnemyView {
         let mut expired = Vec::new();
         let mut sorted = Vec::new();
         for (id, effect) in &mut self.auxiliary {
-            // Source constructors draw age zero once, even when an event arrives after its tick.
+            // A new effect draws age zero once, even when its event arrives after its tick.
             let age = if effect.born_this_paint {
                 0.0
             } else {

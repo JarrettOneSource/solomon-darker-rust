@@ -1,9 +1,9 @@
 use super::RESUME_KEY;
 use solomon_protocol::ResumeCredentials;
 
-/// Prefer this tab's admitted wizard, as in `save/game-resume-token.ts`. The native host
-/// also persists its world across launcher exits, so remember the last profile across tabs
-/// for the title's explicit Continue action. A fresh admission does not consume this token.
+/// Prefer this tab's admitted wizard (session storage). The native host also persists its
+/// world across launcher exits, so remember the last profile across tabs (local storage) for
+/// the title's explicit Continue action. A fresh admission does not consume this token.
 pub fn read_resume() -> Result<Option<ResumeCredentials>, String> {
     let window = web_sys::window().ok_or("no window")?;
     let key = crate::storage::scoped_key(RESUME_KEY)?;

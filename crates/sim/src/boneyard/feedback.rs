@@ -1,4 +1,4 @@
-//! Arena shake authority from `core-kernels/native-enemy-world-feedback.ts`.
+//! Arena shake authority: the feedback that explosions and enemy deaths raise.
 //!
 //! Impulses use the preceding accumulator, then increase that accumulator. Projectile and
 //! terminal callbacks must therefore preserve their observed order within the world tick.
@@ -8,6 +8,8 @@ use crate::float::fround;
 
 pub const EXPLOSION_FEEDBACK_INTENSITY: f64 = 4.0;
 
+/// Arena shake state: the shake magnitude, which decays each tick, and the accumulator that
+/// scales the next impulse.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyWorldFeedback {

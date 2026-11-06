@@ -1,6 +1,6 @@
 //! Runtime scenery with live native painter order, lighting, gates and tree fading.
 //!
-//! `boneyard/compile.rs` translates the current Website's static-world compiler.
+//! `boneyard/compile.rs` composes each scene's static world when it loads.
 //! Every scene uses its accepted geometry and one immutable original glyph catalog.
 
 mod canvas;
@@ -68,7 +68,7 @@ impl SceneryMaterial {
     fn rgba(self, scalar: f64) -> [f32; 4] {
         let shade = fround(fround(scalar.clamp(0.0, 1.0)) * 255.0).trunc();
         let channel = |shift| {
-            // Pixi's multiplyHexColors truncates inherited RGB before batching.
+            // Truncate each tinted channel to a whole byte before batching.
             (shade * f64::from((self.tint >> shift) & 255_u32) / 255.0).trunc() as f32 / 255.0
         };
         [
@@ -201,6 +201,8 @@ impl PreparedBoneyardView {
     }
 }
 
+/// A loaded Boneyard's uploaded scenery: textures, Tree fades, shadows, Scrubs and the
+/// light target, drawn each frame in native painter order.
 pub struct BoneyardView {
     document: SceneryDocument,
     textures: BTreeMap<String, Texture>,
@@ -217,6 +219,8 @@ pub struct BoneyardView {
     field_range: Option<ArenaFieldRange>,
 }
 
+/// Borrowed per-frame inputs for drawing scenery: camera, lights, gates, clocks, hits and
+/// settings.
 pub struct BoneyardFrame<'a> {
     pub camera: &'a Camera,
     pub logical_view: Vec2,
@@ -237,11 +241,14 @@ pub struct BoneyardFrame<'a> {
     pub goodies: &'a [BoneyardGoodieShadow<'a>],
 }
 
+/// A live Goodie and the actor painter whose slot draws its shadow.
 pub struct BoneyardGoodieShadow<'a> {
     pub actor_index: usize,
     pub goodie: &'a solomon_sim::boneyard::loot::BoneyardGoodieState,
 }
 
+/// Where the caller draws its own layers within a scenery frame: before the world, at the
+/// light composite, at one actor's row, or after the world.
 #[derive(Clone, Copy, Debug)]
 pub enum BoneyardPass {
     PreWorld,
@@ -275,7 +282,7 @@ impl BoneyardView {
     }
 
     /// Ground and the multiplied light field precede the row queue. Each proxy is admitted
-    /// only when its owning tree or building paints, preserving the source's same-row ties.
+    /// only when its owning tree or building paints, preserving same-row ties.
     pub fn draw(
         &mut self,
         renderer: &mut Renderer,
@@ -366,7 +373,7 @@ impl BoneyardView {
                 proxy,
             });
         }
-        // Gate bodies take their authored fence's registration slot. The exporter omits
+        // Gate bodies take their authored fence's registration slot. Compilation omits
         // the fixed gate body, leaving the two live leaves in its place.
         for (index, gate) in frame.gates.iter().enumerate() {
             let registration = self
@@ -499,8 +506,8 @@ impl BoneyardView {
                         for axis in 0..2 {
                             let device = position[axis] * pixel_scale[axis];
                             let offset = device.ceil() - device - 0.5;
-                            // Source installs a half-device-pixel projection, then
-                            // applies FIELD_COVERAGE_BIT. Its resulting edge is ceil.
+                            // Field coverage snaps each edge up to a whole device pixel. The
+                            // UVs shift half a pixel less, as a half-pixel projection does.
                             position[axis] += (offset + 0.5) / pixel_scale[axis];
                             uv[axis] +=
                                 offset * slopes[axis] / (camera.scale as f32 * pixel_scale[axis]);

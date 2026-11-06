@@ -1,8 +1,10 @@
-//! Typed counterparts of `native-secondary-presentation-types.ts`.
+//! The draw types secondary presentation plans are made of: sprites, quads, meshes,
+//! gradients and composites.
 
 use crate::Vec2;
 use crate::secondary::SecondaryActorState;
 
+/// The atlas a secondary sprite comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryAtlas {
     BadGuys,
@@ -23,16 +25,20 @@ impl SecondaryAtlas {
         }
     }
 }
+/// The blend mode of a secondary draw.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryBlend {
     Normal,
     Add,
 }
+/// Whether a secondary sprite uses its texture colors or only its alpha as a mask.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryColorMode {
     AlphaMask,
     Texture,
 }
+/// The painter queue family a secondary plan joins: ordinary dynamic painters or the
+/// default ZAnim queue.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SecondaryQueueFamily {
     OrdinaryDynamic,
@@ -40,6 +46,8 @@ pub enum SecondaryQueueFamily {
     Zanim,
 }
 
+/// One sprite in a secondary draw plan: atlas entry, offset, rotation, scale, tint, alpha,
+/// blend and optional clip.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondarySpriteDraw {
     pub alpha: f64,
@@ -77,6 +85,7 @@ impl SecondarySpriteDraw {
     }
 }
 
+/// One textured or flat quad in a secondary draw plan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryQuadDraw {
     pub alpha: f64,
@@ -88,6 +97,7 @@ pub struct SecondaryQuadDraw {
     pub vertices: [f64; 8],
     pub tint: u32,
 }
+/// One indexed mesh in a secondary draw plan, with UVs and vertex colors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryMeshDraw {
     pub alpha: f64,
@@ -100,10 +110,12 @@ pub struct SecondaryMeshDraw {
     pub vertex_colors: Vec<u32>,
     pub vertices: Vec<f64>,
 }
+/// The textures a secondary mesh can use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryMeshTexture {
     EtherPlane,
 }
+/// The rectangle and color that clear Leviathan's composite target.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LeviathanCompositeClear {
     pub color: u32,
@@ -112,6 +124,7 @@ pub struct LeviathanCompositeClear {
     pub x: f64,
     pub y: f64,
 }
+/// The mask sprite applied to Leviathan's composite target.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LeviathanCompositeMask {
     pub clip_size: f64,
@@ -119,18 +132,21 @@ pub struct LeviathanCompositeMask {
     pub entry: usize,
     pub scale: f64,
 }
+/// One pass that draws Leviathan's composite back into the world: its alpha and blend.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LeviathanCompositeOutput {
     pub alpha: f64,
     pub blend: SecondaryBlend,
 }
+/// How Leviathan's body is composited: clear, mask, then two output passes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LeviathanCompositePlan {
-    /// Both clear and mask use the source multiply operation.
+    /// Both clear and mask use the multiply operation.
     pub clear: LeviathanCompositeClear,
     pub mask: LeviathanCompositeMask,
     pub outputs: [LeviathanCompositeOutput; 2],
 }
+/// A vertical two-color gradient rectangle in a secondary draw plan.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryGradientDraw {
     pub bottom_alpha: f64,
@@ -142,19 +158,22 @@ pub struct SecondaryGradientDraw {
     pub top_left: Vec2,
     pub width: f64,
 }
+/// The storm weather sprites drawn together with one offset and scale.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StormWeatherComposite {
     pub draws: Vec<SecondarySpriteDraw>,
     pub offset: Vec2,
     pub scale: f64,
 }
-/// The independent ground, burst and snow children from `freezeWaveVisualDraws`.
+/// The independent ground, burst and snow children of a Freeze wave's visual.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct FreezeWaveVisualDraws {
     pub background_draws: Vec<SecondarySpriteDraw>,
     pub draws: Vec<SecondarySpriteDraw>,
     pub underlay_draws: Vec<SecondarySpriteDraw>,
 }
+/// Everything one secondary actor draws in a frame, by layer, with its painter root and
+/// sort bias.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryPresentationPlan {
     pub background_draws: Vec<SecondarySpriteDraw>,
@@ -187,6 +206,7 @@ impl SecondaryPresentationPlan {
         }
     }
 }
+/// The Magic Shield bubble around a player: visibility, alpha, scale and tint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerMagicShieldPlan {
     pub alpha: f64,

@@ -1,4 +1,4 @@
-//! Create's missing-choice finalizer from `core-kernels/native-create-loadout.ts`.
+//! Finalizes a Create screen loadout, drawing any element or discipline left unchosen.
 
 use super::{NewGameSelection, WizardDiscipline, WizardElement};
 use crate::Rng;
@@ -16,6 +16,7 @@ const PRIMARY_POOL: [WizardElement; 5] = [
     WizardElement::Earth,
 ];
 
+/// The Create screen's choices so far: a name and an optional element and discipline.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateLoadoutSelection {
     pub name: String,
@@ -23,7 +24,7 @@ pub struct CreateLoadoutSelection {
     pub discipline: Option<WizardDiscipline>,
 }
 
-/// `finalizeNativeCreateLoadout`: retain explicit choices and draw only missing ones.
+/// Retains explicit choices and draws only missing ones.
 #[must_use]
 pub fn finalize_create_loadout(
     rng: &mut Rng,
@@ -39,7 +40,7 @@ pub fn finalize_create_loadout(
                 pool.push(element);
             }
         }
-        // Integer(0) consumes no word. Source then reads a zero-initialized slot.
+        // Integer(0) consumes no word. An empty pool then reads a zero-initialized slot: Ether.
         let index = rng.draw_integer(pool.len() as i32) as usize;
         pool.get(index).copied().unwrap_or(WizardElement::Ether)
     };

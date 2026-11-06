@@ -1,5 +1,6 @@
-//! Purchased Hagatha effects from Website `core-kernels/native-hagatha-effects.ts`.
-//! Runtime charges and until-hurt flags remain in the canonical progression state.
+//! Effects of purchased Hagatha perks: derived combat factors, Revelation ranks, boss
+//! damage and the potion drinker. Runtime charges and until-hurt flags remain in the
+//! canonical progression state.
 
 use crate::float::fround;
 
@@ -41,6 +42,8 @@ pub const HAGATHA_FACTORS: HagathaFactors = HagathaFactors {
     war_mana: 0.75,
 };
 
+/// The combat factors a wizard's owned Hagatha perks apply to speed, damage, mana, poison,
+/// push strength and recharge.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HagathaDerivedModifiers {
     pub cast_speed_factor: f64,
@@ -73,7 +76,7 @@ pub fn hagatha_derived_modifiers(
         if runtime.serendipity_active { factors.serendipity_damage } else { 1.0 };
     let until_hurt_mana = if runtime.reverie_active { 0.0 } else { 1.0 };
 
-    // Keep the source multiplication order, especially the float32 store after combining
+    // Keep this multiplication order, especially the float32 store after combining
     // Bare Hands, Glass Cannon and the two temporary until-hurt effects.
     HagathaDerivedModifiers {
         cast_speed_factor: speed,

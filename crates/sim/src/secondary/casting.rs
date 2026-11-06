@@ -1,4 +1,5 @@
-//! Every stock secondary constructor and admission/cooldown path, in source RNG order.
+//! Every stock secondary spell's constructor, admission and cooldown path, in RNG draw
+//! order.
 
 use super::context::*;
 use super::dampened::create_dampened_spell;
@@ -18,6 +19,8 @@ use crate::heading::heading_vector;
 use crate::profile::{SKILL_CATALOG, skill_stat, weld_build};
 use crate::{Rng, Vec2};
 
+/// The outcome of one secondary cast: mana spent or recovered, the caster's updated
+/// state, and its effects on targets, projectiles and the caster's position.
 pub(crate) struct SecondaryCastResult {
     pub target_heading_changes: Vec<super::SecondaryTargetHeadingChange>,
     pub dispelled_shield_target_ids: Vec<usize>,
@@ -47,6 +50,7 @@ impl SecondaryCastResult {
     }
 }
 
+/// A Golem's view of the secondary world: movement and foot placement for one owner.
 pub(crate) struct GolemWorld<'a, W> {
     pub world: &'a W,
     pub owner: &'a str,

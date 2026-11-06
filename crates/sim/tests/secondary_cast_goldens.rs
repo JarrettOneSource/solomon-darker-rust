@@ -1,4 +1,5 @@
-//! All current secondary constructors and admission paths against the public Website tick.
+//! All current secondary constructors and admission paths, against recordings of the
+//! Website client's public tick.
 #![cfg(feature = "persistence")]
 
 #[path = "support/secondary_current.rs"]

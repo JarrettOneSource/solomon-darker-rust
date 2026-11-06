@@ -1,6 +1,6 @@
-//! Current Website renderer/hub-inventory-item-text.ts and the contextual hover box
-//! in renderer/hub-inventory/items.ts. Item ownership stays in economy; these are
-//! borrowed display rows and stock glyph geometry.
+//! Inventory item text: info panels, item and Hagatha tooltips, and the contextual hover
+//! box that holds them. Item ownership stays in economy; these are borrowed display rows
+//! and stock glyph geometry.
 
 mod hagatha;
 
@@ -29,6 +29,7 @@ const COMPLETE_SET: u32 = 0x80ff80;
 const GOLD: u32 = 0xd9ba70;
 const SET_NAME: u32 = 0xffbf80;
 
+/// One tooltip row with its font and tint.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HubTooltipLine {
     pub font: UiFontName,
@@ -56,6 +57,8 @@ impl HubTooltipLine {
     }
 }
 
+/// Player context an item tooltip reads: Creativity rank, owned recipes for set progress,
+/// level and any price.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HubTooltipOptions<'a> {
     pub creativity_rank: u32,
@@ -64,6 +67,8 @@ pub struct HubTooltipOptions<'a> {
     pub price: Option<u64>,
 }
 
+/// The inputs of a Hagatha tooltip: the perk selector (`-1` for the Bargain Bundle and its
+/// members), remaining Cheat Death charges and any price.
 #[derive(Clone, Copy, Debug)]
 pub struct HagathaTooltipOptions<'a> {
     pub bundle_selectors: &'a [u32],
@@ -73,6 +78,7 @@ pub struct HagathaTooltipOptions<'a> {
     pub selector: i32,
 }
 
+/// The info panel text for an inventory item: title, description and usage instruction.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HubInventoryItemInfoText {
     pub description: Option<String>,
@@ -80,7 +86,8 @@ pub struct HubInventoryItemInfoText {
     pub title: String,
 }
 
-/// Source service inspection includes nested belongings, storage and worn items.
+/// The recipe index of every owned item, including nested Sack contents, storage and worn
+/// items.
 #[must_use]
 pub fn economy_recipe_indices(economy: &HubEconomyState) -> Vec<usize> {
     fn visit(items: &[HubInventoryItem], recipes: &mut Vec<usize>) {
@@ -343,8 +350,8 @@ pub fn hub_equipment_effect_text(effect: EquipmentEffect) -> String {
         (1..=39).contains(&effect.kind) && effect.magnitude.is_finite() && effect.operator <= 2,
         "native equipment tooltip effect"
     );
-    // Math.round ties toward positive infinity; toFixed(0) instead rounds away from
-    // zero. Negative halves on generated/authored effects must preserve that distinction.
+    // Halves round toward positive infinity rather than away from zero, so -2.5 shows as
+    // -2. Negative halves on generated/authored effects must preserve that distinction.
     let floor = effect.magnitude.floor();
     let rounded_value = if effect.magnitude - floor >= 0.5 { floor + 1.0 } else { floor };
     let rounded = ryu_js::Buffer::new().format(rounded_value).to_owned();
@@ -424,6 +431,7 @@ pub fn hub_equipment_effect_text(effect: EquipmentEffect) -> String {
     }
 }
 
+/// One tooltip row after wrapping: its display lines and measured size.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HubTooltipRenderedLine {
     pub sources: Vec<String>,
@@ -431,6 +439,7 @@ pub struct HubTooltipRenderedLine {
     pub height: f64,
 }
 
+/// A laid-out hover box: its screen rectangle and wrapped rows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HubContextualHoverLayout {
     pub rect: HudRect,
@@ -438,7 +447,7 @@ pub struct HubContextualHoverLayout {
 }
 
 /// Browser Sack names supply actual measured metrics for their one unsupported row.
-/// All stock rows are measured by the canonical atlas, exactly as the source.
+/// All stock rows are measured by the canonical atlas.
 #[must_use]
 pub fn hub_contextual_hover_layout(
     lines: &[HubTooltipLine],

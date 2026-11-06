@@ -1,5 +1,5 @@
 //! Native InventoryScreen: outward stat/equipment panes, column-first backpack and
-//! the stock equipment sinks. Geometry comes from `renderer/hub-inventory-render-contract.ts`.
+//! the stock equipment sinks.
 
 use super::chrome::PanelCanvas;
 use super::{PlayerPanel, PlayerPanelSnapshot, PlayerPanels, Target};
@@ -459,8 +459,8 @@ impl PlayerPanels {
             );
             self.draw_stat_line(&pane, &melee, Some(" / whack"), 285.0, color)?;
         } else if self.stats_page == 1 {
-            // `HUB_INVENTORY_ATTRIBUTES_PAGE` is offset by pageHeight=320 and
-            // the stats viewport's top=89; labels and values use distinct native pens.
+            // The attributes page is offset by the page height (320) and the stats
+            // viewport's top (89); labels and values use distinct native pens.
             for (x, y) in [(64.0, 66.0), (64.0, 133.0), (206.0, 96.0), (64.0, 231.0), (-9.0, 271.0)]
             {
                 pane.art(&self.inventory, 16, [x, y], [1.0, 1.0], 0.0, 0xffffff)?;
@@ -577,12 +577,13 @@ impl PlayerPanels {
         Ok(())
     }
 }
-// Source uses Number.toFixed(1), including binary half cases and large authored values.
+// One decimal place, rounded from the exact binary value with ties away from zero, including
+// large authored values.
 fn inventory_stat_number(value: f64) -> Result<String, String> {
     Ok(ryu_js::Buffer::new().format_to_fixed(value, 1).to_owned())
 }
 
-// `nativeRoundedStat` uses JavaScript Math.round, whose half cases round toward +∞.
+// Halves round toward positive infinity.
 fn rounded_stat(value: f64) -> String {
     format!("{:.0}", (value + 0.5).floor())
 }

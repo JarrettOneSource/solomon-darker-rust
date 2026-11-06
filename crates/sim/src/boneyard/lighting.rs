@@ -1,5 +1,5 @@
-//! Shared logical and visual light rules from `native-boneyard-lighting.ts` and
-//! `native-boneyard-light-model.ts`. Enemy placement and drawing query the same field.
+//! Boneyard light sources, the grid index that accepts them for a camera view, and the
+//! radial and surface light queries. Enemy placement and drawing query the same field.
 
 pub mod enemy;
 pub mod primary;
@@ -25,6 +25,8 @@ const LIGHT_GRID_CELL_SIZE: f64 = 150.0;
 const LIGHT_WORLD_SCALE: f64 = 0.8;
 const LIGHT_BOTTOM_PADDING: f64 = 350.0;
 
+/// One light in the Boneyard light field: position, radius, intensity, whether it casts a
+/// directional shadow, and an optional scale that replaces the radius when it is drawn.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardLightSource {
     pub intensity: f64,
@@ -58,6 +60,8 @@ impl BoneyardLightSource {
     }
 }
 
+/// The player values that shape a wizard's light: ID (which seeds its flicker), position,
+/// facing, drive state and overlay effect phase.
 #[derive(Clone, Copy, Debug)]
 pub struct PlayerLightOwner<'a> {
     pub id: &'a str,
@@ -67,6 +71,7 @@ pub struct PlayerLightOwner<'a> {
     pub overlay_effect_phase: f64,
 }
 
+/// The camera view that light sources are culled against: camera center, zoom and viewport.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardLightManagerView {
     pub camera_position: Vec2,
@@ -74,6 +79,8 @@ pub struct BoneyardLightManagerView {
     pub viewport: Vec2,
 }
 
+/// The size of the region-light render target: its side in logical units, its power-of-two
+/// side in pixels, and the render resolution that relates them.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RegionLightTargetPlan {
     pub logical_side: f64,

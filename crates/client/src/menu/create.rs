@@ -1,5 +1,5 @@
-//! GPU Create art from Website `renderer/create-menu-renderer.ts`. The canonical
-//! native motion, name admission and element VFX plans remain in `solomon-sim`.
+//! GPU art for the Create screen, where a new wizard picks an element and a name.
+//! Motion, name validation and element VFX plans remain in `solomon-sim`.
 
 use super::widgets::{self, Stage};
 use crate::gpu_ui::{ImageShadow, StockAtlas, UiFrame};
@@ -11,6 +11,8 @@ use solomon_sim::menu::{self, CreateHandPose};
 use solomon_sim::profile::create::CREATE_ENTRY_FADE_MS;
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
+/// The Create screen's state: the typed wizard name and message, the selected element,
+/// its stock atlases and animation clocks.
 pub(super) struct CreateView {
     pub name: String,
     pub message: Option<String>,

@@ -1,4 +1,4 @@
-//! The source enemy rows flatten family enums, shared projectile state and boss owners.
+//! The document's enemy rows flatten family enums, shared projectile state and boss owners.
 //! These translations change JSON shape only; the canonical actor/controller types remain
 //! the sole state owners used by the next simulation tick.
 
@@ -98,7 +98,7 @@ pub(super) fn finish(name: &str, value: &mut Value) {
                 if program.as_bool() == Some(true) { json!("miniboss-die") } else { Value::Null },
             );
             // The stock constructor rejects dormant Skeleton policies. Every admitted
-            // canonical configuration therefore retains this source-owned default.
+            // canonical configuration therefore has the default, which the document omits.
             fields.insert("skeletonPolicy".into(), json!("default"));
         }
         "EnemyFamilyConfig" => {

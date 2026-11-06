@@ -1,9 +1,11 @@
-//! Source definition diagnostics from `web-lua-definition-error.ts`.
+//! Mod definition diagnostics: error codes and issues that name a definition path and,
+//! when known, a Lua source location.
 
 use std::fmt;
 
 use solomon_sim::modding::definition::WebLuaDefinitionSource;
 
+/// The category of a definition issue, spelled like `E_SCHEMA` in messages and JSON.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WebLuaDefinitionErrorCode {
@@ -55,6 +57,7 @@ impl WebLuaDefinitionErrorCode {
     }
 }
 
+/// One problem in a mod definition: its code, definition path, message and source location.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WebLuaDefinitionIssue {
     pub code: WebLuaDefinitionErrorCode,
@@ -74,6 +77,7 @@ impl WebLuaDefinitionIssue {
     }
 }
 
+/// A rejected definition with every issue found; it always holds at least one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WebLuaDefinitionError {
     pub issues: Vec<WebLuaDefinitionIssue>,

@@ -1,12 +1,16 @@
-//! The pinned title confirmations retain the stock message art and modal choices.
+//! The title screen's Yes/No confirmations (play the Tutorial, kill the current wizard),
+//! drawn with the stock message frame.
 use super::widgets::{self, Stage};
 use crate::gpu_ui::{StockAtlas, UiFrame, message_frame_scaled};
 use egui::{Align2, Color32, Rect, Ui, Vec2};
+/// Which title confirmation is asked: play the Tutorial, or kill the current wizard to
+/// start a new game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum TitlePromptKind {
     Tutorial,
     KillWizard,
 }
+/// The open title confirmation, if any, and the stock UI atlas it is drawn from.
 pub(super) struct TitlePrompt {
     pub kind: Option<TitlePromptKind>,
     atlas: StockAtlas,

@@ -1,5 +1,5 @@
-//! Combat sound projection from `primary-spell-audio.ts`, `player-footstep-audio.ts`,
-//! `loot-event-audio.ts`, and `BoneyardScene.tsx`.
+//! Combat sound projection: spell sounds and loops, footsteps, enemy, loot and Solomon dig
+//! events, encounter narration and the shared enemy ambience loops.
 //!
 //! The session supplies borrowed accepted state. This cursor retains only sound counters,
 //! actor identities and loop mixes; it never advances gameplay or random streams.
@@ -31,6 +31,7 @@ use crate::spells::staff::PlayerStaffContactEvent;
 
 use super::{AudioCue, AudioEvent, AudioOptions, footstep_cue, hub_audio_attenuation};
 
+/// A looping cue held by one named owner, with its current playback options.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CombatAudioLoop {
     pub cue: AudioCue,
@@ -38,21 +39,26 @@ pub struct CombatAudioLoop {
     pub options: AudioOptions,
 }
 
+/// A loop change for the audio player: start an owner's loop (or change its options), or
+/// stop it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CombatAudioLoopCommand {
     Start(CombatAudioLoop),
     Stop { cue: AudioCue, owner: String },
 }
 
+/// The sound events, loop changes and narration mix produced by one combat audio update.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CombatAudioOutput {
     pub events: Vec<AudioEvent>,
     pub loops: Vec<CombatAudioLoopCommand>,
-    /// The browser's existing narration owner stops Faculty, Solomon and Tutorial streams.
+    /// Asks the audio player to stop the Faculty, Solomon and Tutorial dialogue streams.
     pub stop_encounter_dialogue: bool,
     pub narration_mix: Option<f64>,
 }
 
+/// One player's sound inputs for a frame: identity, world, position, element, selected
+/// primary or Weld, cast counters and latest footstep tick.
 pub struct CombatAudioPlayer<'a> {
     pub id: &'a str,
     pub world_key: &'a str,
@@ -103,6 +109,8 @@ impl From<&CombatAudioPlayer<'_>> for PlayerSoundClock {
     }
 }
 
+/// What the previous combat audio frame already played: sound counters, actor identities
+/// and active loops, so each one-shot plays once.
 pub struct CombatAudioCursor {
     players: BTreeMap<String, PlayerSoundClock>,
     primary: primary::PrimarySoundMemory,
@@ -122,7 +130,7 @@ pub struct CombatAudioCursor {
 
 impl CombatAudioCursor {
     /// Attach to a snapshot without replaying retained one-shots. Calling `update` with this
-    /// same frame starts its live loops, like the source synchronizer's constructor.
+    /// same frame then starts its live loops.
     #[must_use]
     pub fn new(frame: &CombatAudioFrame<'_>) -> Self {
         let mut players = BTreeMap::new();

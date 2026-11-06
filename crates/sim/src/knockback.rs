@@ -1,4 +1,5 @@
-//! Shared Staff/Golem area recurrence from current `native-knockback-area.ts`.
+//! The knockback area shared by the Staff and the Golem: each step pushes its targets up to
+//! ten units away from the origin, and actors they collide with join the area.
 //! The world movement callback commits immediately: new contacts and later position
 //! queries belong to this same update, rather than a deferred displacement batch.
 
@@ -7,9 +8,11 @@ use std::collections::BTreeMap;
 use crate::float::fround;
 use crate::{Rng, Vec2};
 
+/// The world a knockback area pushes through: actor positions, and moves that report the actors
+/// they collide with.
 pub trait KnockbackAreaWorld<T> {
     fn position(&self, id: &T) -> Option<Vec2>;
-    /// Source permits the pure no-movement query. Live world owners override it.
+    /// The default moves nothing, for pure position queries. Live world owners override it.
     fn move_actor(&mut self, _id: &T, _delta: Vec2) -> Vec<T> {
         Vec::new()
     }
@@ -20,21 +23,26 @@ impl<T: Ord> KnockbackAreaWorld<T> for BTreeMap<T, Vec2> {
     }
 }
 
+/// A knockback area before a step: its origin, remaining push distance and current targets.
 pub struct KnockbackArea<'a, T> {
     pub origin: Vec2,
     pub remaining_distance: f64,
     pub target_ids: &'a [T],
 }
+/// The push one target received in a step.
 #[derive(Clone, Debug, PartialEq)]
 pub struct KnockbackAreaDisplacement<T> {
     pub target_id: T,
     pub delta: Vec2,
 }
+/// A random heading change given to a target when the area ends.
 #[derive(Clone, Debug, PartialEq)]
 pub struct KnockbackAreaHeading<T> {
     pub target_id: T,
     pub heading_degrees: f64,
 }
+/// One knockback area step: camera shake, each target's push, the updated targets and distance,
+/// and the final heading changes when the area ends.
 #[derive(Clone, Debug, PartialEq)]
 pub struct KnockbackAreaStep<T> {
     pub camera_displacement: Vec2,

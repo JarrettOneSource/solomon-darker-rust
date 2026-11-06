@@ -27,6 +27,7 @@ void main() {
 }
 ";
 
+/// The shader for plain textured batches: no shadow, blur, colour filter or desaturation.
 pub(super) struct SpriteProgram {
     gl: GraphicsContext,
     program: glow::Program,

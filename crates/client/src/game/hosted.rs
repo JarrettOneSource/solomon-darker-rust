@@ -33,6 +33,8 @@ use presentation::PreparedHostedPresentation;
 use routing::{CompletedRoute, PreparedRoute, RouteRequest};
 use transfer::{TransferCompletion, TransferRequest};
 
+/// The Website-backed state of a browser game: account, active mods, connection and
+/// reconnects, save stream, routing, deployment updates and pending requests.
 pub(super) struct HostedGame {
     api: WebsiteApi,
     endpoint: Option<String>,
@@ -143,6 +145,8 @@ enum HostedRequest {
     CollegeInvitation(solomon_sim::social::GameCollegeInvitation),
 }
 
+/// One hosted job to run asynchronously, a Website request or a save batch, tagged with its
+/// connection generation.
 pub(crate) struct PendingHostedWork {
     api: WebsiteApi,
     generation: u64,
@@ -187,6 +191,7 @@ enum Completion {
     CollegeInvitation { invitation_id: String, result: Result<PartyJoinResolution, String> },
 }
 
+/// A finished hosted job's result, tagged with the connection generation it belongs to.
 pub(crate) struct HostedCompletion {
     generation: u64,
     completion: Completion,
@@ -389,8 +394,8 @@ impl Game {
         } else {
             match api.account().await {
                 Ok(account) => account,
-                // AuthProvider.refresh retires an unavailable account token before opening
-                // the guest menu; it never silently sends that token with guest admission.
+                // An unavailable account token is retired before the guest menu opens;
+                // it is never silently sent with guest admission.
                 Err(_) => {
                     api.logout().map_err(|error| error.to_string())?;
                     None
@@ -592,8 +597,8 @@ impl Game {
         Ok(true)
     }
 
-    /// Source requestGameSettingsUpdate retains accepted settings while Global
-    /// College consent is visible. Developer access never needs the cheat preference.
+    /// Enabling cheats in the Global College keeps the accepted settings while the consent
+    /// prompt is visible. Developer access never needs the cheat preference.
     pub(super) fn request_hosted_settings(
         &mut self,
         requested: &mut solomon_sim::settings::GameSettings,
@@ -927,7 +932,7 @@ impl Game {
                     }
                 }
                 // Social and cheat surfaces consume their own matching responses
-                // above. An unmounted surface ignores a late reply, as Source does.
+                // above. An unmounted surface ignores a late reply.
                 HostedServerMessage::PlayerCard { .. }
                 | HostedServerMessage::CollegeInvitations { .. }
                 | HostedServerMessage::PartyAction { .. }

@@ -1,4 +1,5 @@
-//! Shared layer arithmetic from `renderer/native-enemy-layers.ts`.
+//! Shared arithmetic for enemy layers: facing banks, pose indexes, authored socket points,
+//! packed colors and per-actor visual randomness hashed from the actor's id and spawn tick.
 
 use super::model::*;
 use crate::Vec2;

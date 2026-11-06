@@ -1,8 +1,9 @@
-//! Quickbar cooldown/icon presentation from Website `skill-quickbar.ts`.
+//! Quickbar presentation: key binding labels, icon alpha and the cooldown sector.
 
 use crate::secondary::SECONDARY_GLOBAL_COOLDOWN_TICKS;
 use crate::ui_text::{UiFontName, UiTextLayout, UiTextSpec, layout_ui_text, measure_ui_text};
 
+/// A quickbar key label laid out in the Belt font, with its key backing's left edge and width.
 pub struct BeltBindingLayout {
     pub advance: f64,
     pub backing_left: f64,
@@ -10,8 +11,8 @@ pub struct BeltBindingLayout {
     pub text: UiTextLayout,
 }
 
-/// Source `layoutNativeQuickbarBinding`: the authored Belt font at baseline64,
-/// with a three-piece key backing sized from glyph advance rather than HTML ink.
+/// Lays out a key label in the authored Belt font at baseline 64, with a three-piece
+/// key backing sized from the glyph advance rather than the drawn ink.
 #[must_use]
 pub fn layout_quickbar_binding(text: &str) -> BeltBindingLayout {
     let advance = measure_ui_text(text, UiFontName::Belt, 1.0);
@@ -26,6 +27,7 @@ pub fn layout_quickbar_binding(text: &str) -> BeltBindingLayout {
     }
 }
 
+/// The cooldown a quickbar slot shows: how much remains out of its full capacity.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SkillQuickbarCooldownPresentation {
     pub capacity: f64,
@@ -82,7 +84,8 @@ pub fn cooldown_sector_path(remaining: f64, capacity: f64) -> String {
     path
 }
 
-/// The same square-clipped ray fan used by the Source SVG and the GPU painter.
+/// The cooldown sector's square-clipped ray fan, shared by `cooldown_sector_path` and the GPU
+/// painter.
 #[must_use]
 pub fn native_cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<crate::Vec2> {
     if remaining <= 0.0 || capacity <= 0.0 || remaining.is_nan() || capacity.is_nan() {

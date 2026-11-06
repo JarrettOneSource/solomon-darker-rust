@@ -1,4 +1,4 @@
-//! Pure file-selection routing from `save/game-save-files.ts`; platform I/O stays outside.
+//! Turns the save files a player chose into an import preview; platform I/O stays outside.
 
 use solomon_sim::profile::{WizardDiscipline, WizardElement};
 
@@ -12,18 +12,23 @@ use crate::website_save::{self, CreateSaveOptions, SaveIntegrity};
 
 use super::import::create_web_game_save_from_portable_profile;
 
+/// One file the player chose to import: its name, relative path and bytes.
 pub struct GameSaveInputFile<'a> {
     pub name: &'a str,
     pub relative_path: &'a str,
     pub bytes: &'a [u8],
 }
 
+/// Whether an import came from a game save document (`Game`) or from the original game's
+/// save files (`Stock`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameSaveImportSource {
     Game,
     Stock,
 }
 
+/// The save an import would load: a wizard summary for the player, the converted save
+/// document and any warnings.
 #[derive(Clone, Debug)]
 pub struct GameSaveImportPreview {
     pub discipline: WizardDiscipline,

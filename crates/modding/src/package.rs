@@ -1,5 +1,5 @@
-//! Provisioned package ownership from `host/web-mod-content.ts`.
-//! This native owner retains accepted bytes and definition sources once; the
+//! Mod packages provisioned for a session: validation, definition compilation and the
+//! accepted content. The accepted bytes and definition sources are retained once; the
 //! canonical Session borrows their prepared content rather than owning a VM.
 
 mod definitions;
@@ -18,6 +18,7 @@ use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::definition::{CompiledWebLuaMod, WebLuaModIdentity};
 use solomon_sim::modding::identity::{GameContentManifest, WebSessionContentSummary};
 
+/// One mod's Lua sources: its entry script, its packaged files by path and its identity.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebLuaModSource {
@@ -26,6 +27,8 @@ pub struct WebLuaModSource {
     pub identity: WebLuaModIdentity,
 }
 
+/// A session's validated mod content: its assets, Boneyards, compiled mods, manifest, Lua
+/// sources and summary.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MaterializedWebSessionContent {
     pub assets: Vec<GameModAsset>,

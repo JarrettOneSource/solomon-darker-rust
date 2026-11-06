@@ -1,7 +1,8 @@
-//! The asynchronous Source `host/ml-bot-host-controller.ts` state machine.
+//! The bot's host controller: an asynchronous state machine that requests inference and
+//! turns its results into intents.
 //!
 //! The host owns model execution and real participant admission. This controller
-//! borrows one shared Session and returns the same intents as the Source adapter;
+//! borrows one shared Session and returns intents for the host to apply;
 //! it never steps a second player or retains a copy of the world.
 
 use crate::game_run::GameRunPhase;
@@ -15,16 +16,18 @@ use super::{
     choose_ml_bot_policy_scripted_skill, describe_ml_bot_policy_skill_offer,
 };
 
+/// What the controller reads on a poll: the shared session and the observation context.
 pub struct MlBotHostControllerContext<'a> {
     pub session: &'a GameSession,
     pub observation: MlBotPolicyObservationContext<'a>,
 }
 
+/// Why a controller failed: a policy error or an entrance navigation error.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MlBotHostControllerError {
     Policy(String),
-    /// Points remain typed so the native host can use its existing ECMAScript
-    /// JSON writer when reproducing the Source navigation error text.
+    /// Points remain typed so the native host can format the navigation error text
+    /// with its existing ECMAScript JSON writer.
     Entrance(MlBotEntranceNavigationError),
 }
 
@@ -57,12 +60,14 @@ impl MlBotHostInferenceRequest {
     }
 }
 
+/// A worker's inference result: the chosen action indices or the chosen offer option.
 #[derive(Clone, Copy, Debug)]
 pub enum MlBotHostInferenceResult {
     Actions(MlBotPolicyActionIndices),
     Choice(usize),
 }
 
+/// What one poll produced: an intent for the host to apply, an inference request, or nothing.
 #[derive(Clone, Debug, Default)]
 pub struct MlBotHostPoll {
     pub intent: Option<MlBotHostIntent>,
@@ -85,6 +90,8 @@ struct PendingInference {
     kind: PendingKind,
 }
 
+/// One bot's controller: its character, choice mode, observer, entrance navigator and pending
+/// inference request.
 pub struct MlBotHostController {
     character: NewGameSelection,
     choice_mode: MlBotPolicyChoiceMode,
@@ -141,8 +148,8 @@ impl MlBotHostController {
             self.next_decision_tick = session.ticks;
             self.loadout_key = None;
             self.dispatched_choice_generation = None;
-            // Source does not cancel an in-flight Promise here. Its completion
-            // checks the current world key and finally releases the pending slot.
+            // An in-flight request is not cancelled here. Its completion checks
+            // the current world key and releases the pending slot.
         }
         if session.boneyard.is_none() {
             return Ok(output);
@@ -245,7 +252,7 @@ impl MlBotHostController {
         }
         match (pending.kind, result) {
             (PendingKind::Actions(action), MlBotHostInferenceResult::Actions(indices)) => {
-                // The Source Promise closes over the request-time state/frame.
+                // The decision resolves against the request-time state and frame.
                 // Only admission and the next deadline use the current Session.
                 let decision = match action.context.resolve(&action.frame, indices) {
                     Ok(decision) => decision,

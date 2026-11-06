@@ -1,4 +1,4 @@
-//! Stock Tutorial progression from `core-kernels/native-tutorial.ts`.
+//! Stock Tutorial progression: its twenty stages, narration queue, waves and camera lock.
 //!
 //! Narration owns its PCM-derived clock independently of audio playback. The state retains
 //! all stage, wave, camera and random cursors so a saved Tutorial resumes the same future.
@@ -21,6 +21,7 @@ use crate::{Rng, Vec2};
 
 use super::encounter::SolomonPhase;
 
+/// One of the twenty Tutorial stages, numbered in progression order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -84,6 +85,7 @@ impl TutorialStage {
 
 pub use crate::tutorial_surface::TutorialSurfaceAction;
 
+/// A narration cue being spoken: the cue, its speaker and text, and a unique event ID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct TutorialNarrationEvent {
@@ -93,6 +95,8 @@ pub struct TutorialNarrationEvent {
     pub text: String,
 }
 
+/// The Tutorial's narration queue: the cue being spoken, the cues waiting and the ticks
+/// left on the current cue.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct TutorialNarrationState {
@@ -156,6 +160,8 @@ impl TutorialNarrationState {
     }
 }
 
+/// A Tutorial run's saved progress: its stage, intro and camera-lock clocks, narration,
+/// waves, the screens and instructions the player has seen, and its private RNG.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct TutorialState {
@@ -194,6 +200,8 @@ pub struct TutorialState {
     pub wave_ticks: u64,
 }
 
+/// The player and world facts one Tutorial tick reads: health, items, casts, enemy counts,
+/// Solomon's phase and the tick.
 #[derive(Clone, Copy, Debug)]
 pub struct TutorialTickInput {
     pub acid_rain_cast_sequence: u64,
@@ -215,6 +223,8 @@ pub struct TutorialTickInput {
     pub tick: u64,
 }
 
+/// What one Tutorial tick asks of the session: a forced skill offer, experience to grant
+/// and enemies to spawn.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TutorialTickResult {
     pub force_offer_skill_ids: Option<[usize; 3]>,
@@ -650,7 +660,7 @@ impl TutorialState {
                 };
                 group.member_uids[member]
             };
-            // Even a one-player selection advances the native stream before its angle.
+            // Even a one-player selection draws from the stream before the angle.
             self.rng.draw_integer(1);
             let radians = self.rng.draw_scaled_float(360.0, false) * std::f64::consts::PI / 180.0;
             let position = Vec2::new(

@@ -8,17 +8,19 @@ use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::ui::{ModSkillIcon, project_mod_skill_book, project_mod_skill_picker};
 
+/// The accepted state the mod skill panels read: runtime, player, Skills panel and offer.
 pub struct ModSkillsSnapshot<'a> {
     pub runtime: Option<&'a LuaObject>,
     pub player_id: &'a str,
-    /// Source mounts the learned panel inside the actual native Skills surface.
+    /// Learned mod skills show only while the stock Skills panel is open.
     pub skills_open: bool,
-    /// Source mounts the mod offer panel only beside an actual native offer.
+    /// The pending stock skill offer's sequence; mod choices appear only beside such an offer.
     pub native_offer_sequence: Option<u64>,
     pub assets: &'a [GameModAsset],
     pub images: Option<&'a ModPresentationAssets>,
 }
 
+/// A request from the mod skill panels: bind or clear a quickbar slot, or choose a mod skill.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ModSkillAction {
     QuickbarBind { content_id: String, slot: f64, clear: bool },
@@ -54,6 +56,7 @@ impl SkillRow {
     }
 }
 
+/// The mod skills section of the Skills panel and the mod choices beside a skill offer.
 pub struct ModSkillsUi {
     book: Vec<SkillRow>,
     choices: Vec<SkillRow>,
@@ -474,8 +477,8 @@ fn icon_url(
     snapshot: &ModSkillsSnapshot<'_>,
     icon: ModSkillIcon<'_>,
 ) -> Result<Option<String>, String> {
-    // Source first finds an exact-case image descriptor, then uses the whole
-    // verified asset. These skill icons do not apply custom sprite-sheet crops.
+    // Find the image asset with this exact-case path, then use the whole verified
+    // image. These skill icons do not apply custom sprite-sheet crops.
     let asset = snapshot.assets.iter().find(|asset| {
         asset.mod_id == icon.mod_id && asset.path == icon.path && asset.kind == "image"
     });

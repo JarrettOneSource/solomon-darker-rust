@@ -1,6 +1,6 @@
-//! Ground loot and Goodie GPU binding for `renderer/native-loot-view.ts`.
-//! The store and Puppet feedback are read-only. Only the source view's gold
-//! scatter seed persists here, and it resets when the host installs a new run.
+//! GPU drawing for ground loot actors and Goodies, including mod consumable icons.
+//! The store and Puppet feedback are read-only. Only each loot actor's gold scatter
+//! seed persists here, and it resets when the host installs a new run.
 
 mod messages;
 pub use messages::WorldNotifications;
@@ -21,12 +21,14 @@ use crate::mod_presentation_assets::{ModPresentationAssets, ModSpriteDraw, ModSp
 use crate::secondary::SecondaryView;
 use solomon_graphics::{BlendMode, Renderer, TextureColorMode};
 
+/// Identifies a loot painter: a ground loot actor or a Goodie, by its ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LootPainterId {
     Loot(usize),
     Goodie(usize),
 }
 
+/// A ground loot actor's or Goodie's painter entry: its ID, painter layer and position.
 pub struct LootPainter {
     pub id: LootPainterId,
     pub layer: PainterLayer,
@@ -48,6 +50,7 @@ struct GoldScatter {
     seed: u32,
 }
 
+/// Prepared draw layers for ground loot and Goodies, plus each loot actor's scatter seed.
 #[derive(Default)]
 pub struct LootView {
     scatter: BTreeMap<usize, GoldScatter>,
@@ -56,7 +59,7 @@ pub struct LootView {
 
 impl LootView {
     /// Called at the accepted snapshot presentation cadence, once per update.
-    /// Repeated draw calls do not advance the source's private scatter animation.
+    /// Repeated draw calls do not advance the gold scatter animation.
     #[allow(clippy::too_many_arguments)] // Actual loot, feedback and the session's trusted art catalog.
     pub fn prepare(
         &mut self,
@@ -156,8 +159,8 @@ impl LootView {
             LootLayers::Mod { texture, bounce_height } => {
                 let position = prepared.painter.position;
                 let center = camera.project(position.x, position.y + bounce_height, 0.0, 0.0);
-                // Source updateModPotionLayer ignores the actor's fade, rotation and
-                // stack amount: one ordinary icon follows the accepted bounce height.
+                // Mod loot ignores the actor's fade, rotation and stack amount: one
+                // ordinary icon follows the accepted bounce height.
                 texture.draw(
                     renderer,
                     &ModSpriteDraw {

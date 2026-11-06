@@ -1,4 +1,5 @@
-//! Public player commands from `core-server/game-simulation.ts`.
+//! Public player commands: belt binding, skill selection, inventory actions, belt
+//! activation and Goodie interaction.
 //! Browser and native host share these admission checks and world side effects.
 
 use super::*;

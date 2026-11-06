@@ -10,6 +10,8 @@ use solomon_assets::navigation::CatalogNavigation;
 use solomon_sim::boneyard::navigation::NavigationSet;
 use solomon_sim::boneyard::{BoneyardChoice, BoneyardSource, LoadedBoneyard};
 
+/// The host's Boneyard catalog, stock plus mod entries, with a navigation cache shared by
+/// every catalog derived from it.
 pub struct HostContent {
     catalog: BoneyardCatalog,
     navigation_directory: PathBuf,
@@ -33,9 +35,9 @@ impl HostContent {
     }
 
     /// Each admitted party retains its own catalog identity across successive runs.
-    /// Stock scene objects are module globals in the Website, so derived catalogs
-    /// share their existing lazy graphs. The cache separately keys Mod entries by
-    /// their retained Arc identity; equal bytes never merge fresh Mod owners.
+    /// Derived catalogs share the stock scenes and their lazily prepared navigation
+    /// graphs. The cache separately keys Mod entries by their retained Arc identity;
+    /// equal bytes never merge fresh Mod owners.
     pub fn with_mod_entries(&self, entries: Vec<ModBoneyardEntry>) -> Result<Self, String> {
         Ok(Self {
             catalog: self.catalog.clone().with_mod_entries(entries)?,
@@ -77,7 +79,8 @@ impl HostContent {
         Ok((loaded, navigation))
     }
 
-    /// Retain the source catalog entry's identity across ordinary new runs.
+    /// Reuses the prepared navigation of the catalog entry a run came from, so ordinary
+    /// new runs share it.
     pub fn prepare_catalog_navigation(
         &self,
         loaded: &LoadedBoneyard,

@@ -1,5 +1,5 @@
-//! Accepted host social state projected into the browser surfaces. The source
-//! `MainMenuScene` owns admission; `AllyHud` reads live and retained party health.
+//! Accepted host social state projected into the browser surfaces. The main menu
+//! owns admission; the ally HUD reads live and retained party health.
 
 use super::*;
 use crate::social::SocialUiContext;
@@ -112,7 +112,7 @@ impl Game {
         Ok(())
     }
 
-    /// `HubScene` gives the displayed player actor precedence over an NPC. The
+    /// In the Hub, a displayed player actor takes precedence over an NPC. The
     /// controller selects the nearest actor; pointer selection uses feet depth.
     pub(super) fn open_hub_player(&mut self, point: Option<Vec2>) -> bool {
         let session = self.display_session();

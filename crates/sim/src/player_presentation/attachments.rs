@@ -1,4 +1,5 @@
-//! The staff/wand pose precedence and orb passes in `player-character-presentation.ts`.
+//! Staff, wand and bare-hand pose precedence, the equipped element orb and its draw
+//! passes, and the Damage x4 effect layers.
 
 use crate::float::fround;
 use crate::profile::WizardElement;
@@ -8,12 +9,14 @@ use crate::spells::casting::{
     player_wand_attachment_offset, player_wand_primary_pose, primary_cast_presentation_pose,
 };
 
+/// The secondary cast a wizard is showing: an ordinary cast action or a spin.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PlayerSecondaryCastPresentation {
     Action(SecondaryCastAction),
     Spin,
 }
 
+/// The staff, wand and bare-hand poses for one character frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlayerAttachmentPoses {
     pub staff: usize,
@@ -21,12 +24,15 @@ pub struct PlayerAttachmentPoses {
     pub bare: Option<usize>,
 }
 
+/// Whether the staff orb's base and overlay passes draw in front of the wizard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlayerStaffOrbPasses {
     pub front_base: bool,
     pub front_overlay: bool,
 }
 
+/// Where and how the equipped element orb draws: socket, scale, passes and attachment
+/// offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlayerEquippedElementPlan {
     pub socket: crate::Vec2,
@@ -148,7 +154,7 @@ pub fn player_character_attachment_poses(
 #[must_use]
 pub fn player_character_staff_is_front(heading_index: usize, attachment_pose: usize) -> bool {
     let heading = heading_index % 24;
-    // The four source banks are contiguous ranges, including their boundary facings.
+    // Each pose bank's front facings form one contiguous range, boundary facings included.
     match attachment_pose {
         4..=6 | 9 => (7..=18).contains(&heading),
         7 | 8 => (7..=17).contains(&heading),
@@ -185,7 +191,8 @@ pub fn player_equipped_element_effect_scale(overlay_effect_phase: f64) -> f64 {
     fround(1.0 + 10.0 * overlay_effect_phase)
 }
 
-/// The two BadGuys record-7 passes in `renderer/player-damage-x4-vfx-view.ts`.
+/// One of the two BadGuys record-7 passes drawn around a wizard while Damage x4 lasts.
+/// Both fade out over the final 100 ticks.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DamageX4VfxLayer {
     pub alpha: f64,

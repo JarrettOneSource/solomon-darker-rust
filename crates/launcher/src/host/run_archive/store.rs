@@ -1,5 +1,5 @@
-//! Source `host/run-archive-store.ts`: one ordered worker, atomic non-overwrite
-//! gzip/summary publication, and the same 30-day private-artifact retention policy.
+//! Run archive storage: one ordered worker, atomic non-overwrite gzip/summary publication,
+//! and a 30-day retention policy for these private artifacts.
 
 use std::collections::BTreeSet;
 use std::fs::{self, DirBuilder, OpenOptions};
@@ -20,6 +20,8 @@ const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 const PRUNE_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const TEMPORARY_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
+/// What saving one archive produced: file name, compressed size, SHA-256 and serialization
+/// time.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunArchiveReceipt {
@@ -35,6 +37,7 @@ enum Job {
     Close,
 }
 
+/// A cloneable handle that queues finished archives for the store's worker.
 #[derive(Clone)]
 pub struct RunArchiveSink(Sender<Job>);
 impl RunArchiveSink {
@@ -44,6 +47,7 @@ impl RunArchiveSink {
             .map_err(|_| "The run archive worker is closed".into())
     }
 }
+/// The run archive worker thread and its hourly pruning schedule.
 pub struct RunArchiveStore {
     sink: RunArchiveSink,
     worker: Option<JoinHandle<()>>,
@@ -243,8 +247,8 @@ pub fn write_archive(
 }
 
 pub fn read_run_archive(path: &Path) -> Result<RunArchiveFile, String> {
-    // As in Source, only private operator-owned captures enter this reader; it is
-    // not an upload/import route and cannot become a client continuation.
+    // Only private operator-owned captures enter this reader; it is not an
+    // upload/import route and cannot become a client continuation.
     let compressed = fs::File::open(path).map_err(|error| error.to_string())?;
     let mut bytes = Vec::new();
     GzDecoder::new(compressed).read_to_end(&mut bytes).map_err(|error| error.to_string())?;

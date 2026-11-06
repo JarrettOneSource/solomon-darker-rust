@@ -1,4 +1,4 @@
-//! Source `ml-bot-policy/world-state.ts`: pickups, allies and committed action history.
+//! The bot's world observation: pickups, allies and committed action history.
 
 use crate::Vec2;
 use crate::combat::PlayerLifeState;
@@ -13,6 +13,8 @@ use super::numbers::{count_scaled, distance_squared, normalized, ratio, signed, 
 use super::observer::{MlBotPolicyControllerKind, MlBotPolicyObservationContext};
 use super::spec::scales;
 
+/// The action the bot last committed: its movement, target and ability choices, and whether
+/// the target switched.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotPolicyCommittedAction {
     pub ability_action: usize,
@@ -21,6 +23,8 @@ pub struct MlBotPolicyCommittedAction {
     pub target_switched: bool,
 }
 
+/// World history kept between observations: the last cast and move ticks, enemy count,
+/// health and mana ratios, and the last target and its health ratio.
 #[derive(Clone, Debug, Default)]
 pub struct MlBotPolicyWorldMemory {
     last_cast_tick: Option<u64>,
@@ -32,6 +36,8 @@ pub struct MlBotPolicyWorldMemory {
     last_target_id: Option<usize>,
 }
 
+/// What a world observation reads besides the session: the host's observation context, the
+/// world memory, the previous action and the current target.
 pub struct MlBotPolicyHostContext<'a> {
     pub observation: &'a MlBotPolicyObservationContext<'a>,
     pub memory: &'a MlBotPolicyWorldMemory,
@@ -39,6 +45,7 @@ pub struct MlBotPolicyHostContext<'a> {
     pub target_id: Option<usize>,
 }
 
+/// A world observation: the encoded blocks G, H, I and J, and the next memory.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyWorldObservation {
     pub block_g: Vec<f32>,
@@ -116,7 +123,7 @@ pub fn observe_ml_bot_policy_world_state(
         WizardElement::Ether => 20,
     };
     block_h[element_index] = 1.0;
-    // Source exposes only ordinary discipline flags. An accepted elemental
+    // Only the ordinary disciplines have flags. An accepted elemental
     // second root leaves all three zero without changing the primary flags.
     block_h[21] = if player.selection.discipline == WizardDiscipline::Mind { 1.0 } else { 0.0 };
     block_h[22] = if player.selection.discipline == WizardDiscipline::Body { 1.0 } else { 0.0 };

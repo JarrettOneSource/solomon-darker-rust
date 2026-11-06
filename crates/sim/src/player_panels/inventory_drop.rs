@@ -1,5 +1,6 @@
-//! Source `HubInventoryActions.tsx::dropInventorySource` presentation producer.
-//! Plans preserve gesture order and delayed flybys; every inventory mutation is still a command.
+//! Plans the effects of dropping a dragged inventory item: commands, sounds, flybys and
+//! prompts. Plans preserve gesture order and delayed flybys; every inventory mutation is
+//! still a command.
 
 use crate::Vec2;
 use crate::audio::AudioCue;
@@ -14,12 +15,14 @@ use crate::hud::HudRect;
 use super::flyby::{InventoryFlybyLane, InventoryFlybyRequest};
 use super::{INVENTORY_CAPACITY, equipment_slot_rects, inventory_slot_rect};
 
+/// Where a dragged item came from: a backpack slot or an equipment slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InventoryDropSource {
     Backpack { item_id: u64 },
     Equipment { slot: EquipmentSlot, item_id: u64 },
 }
 
+/// The inventory state and screen targets a drop is resolved against.
 pub struct InventoryDropContext<'a> {
     pub economy: &'a HubEconomyState,
     pub sack_path: &'a [u64],
@@ -30,6 +33,7 @@ pub struct InventoryDropContext<'a> {
     pub reference_drop_rect: Option<HudRect>,
 }
 
+/// One effect of a drop, in the order the gesture produces it.
 #[derive(Clone, Debug, PartialEq)]
 pub enum InventoryDropEffect {
     Action(HubInventoryAction),

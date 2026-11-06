@@ -1,4 +1,5 @@
-//! Live inventory painting lifetime from `core-server/game-simulation.ts`.
+//! The lifetime of live inventory dye sessions: an explicit close, movement, casting or
+//! quickbar input, or the player no longer being alive ends one.
 //! The initiating kit is consumed by the canonical economy transaction only once.
 
 use super::{GameSession, GameSessionInput};

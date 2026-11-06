@@ -1,4 +1,4 @@
-//! Item, wearable and potion preparation from `mod-content-catalog.ts`.
+//! Validation of item, wearable and potion definitions for the prepared mod catalog.
 
 use std::collections::BTreeSet;
 

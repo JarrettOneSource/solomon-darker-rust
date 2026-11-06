@@ -1,4 +1,5 @@
-//! Restored Website scenery must survive the actual tagged native wire envelope.
+//! Scenery restored from recorded Website save documents survives the tagged Welcome and
+//! Snapshot wire envelopes.
 
 use std::collections::BTreeMap;
 use std::io::Read;

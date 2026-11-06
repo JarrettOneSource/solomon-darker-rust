@@ -1,5 +1,5 @@
-//! Current `primary-spells.ts::flameLashMainPresentation` and native view clipping.
-//! Gameplay reserves the main ID here; receiver damage owns its later birth.
+//! The main Flame Lash presentation and its native view clipping. Gameplay reserves the
+//! main ID here; receiver damage owns its later birth.
 use super::{
     FlameChannelRole, FlameLashFactoryBirthInput, FlameLashFactoryInput, WeldActorBirth,
     WeldChannelInput, WeldFlameLashFadeInput, WeldFlameLashFadeVariant, WeldWorldActor,
@@ -16,6 +16,8 @@ use crate::spells::model::{
 use crate::spells::targeting::AIR_PRIMARY_TARGET_Y_OFFSET;
 use crate::{Rng, Vec2};
 
+/// Inputs for the main Flame Lash presentation: its path, target, view bounds, creator
+/// registration and camera displacement.
 pub struct FlameMainPresentationInput {
     pub origin: Vec2,
     pub aim: Vec2,

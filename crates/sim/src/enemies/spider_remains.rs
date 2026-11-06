@@ -1,10 +1,12 @@
-//! Dead Spider slide, decal admission and shared lifetime from `native-dead-spider.ts`.
+//! Dead Spider remains: the body slides backward and slows, then gains a growing decal. Body
+//! and decal share one lifetime.
 use super::world::EnemyWorld;
 use crate::enemies::model::EnemyActor;
 use crate::float::fround;
 use crate::spells::targeting::direction_from_heading;
 use crate::{Rng, Vec2};
 
+/// The decal under dead Spider remains: its sprite entry, position, rotation, scale and alpha.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpiderDecal {
@@ -14,6 +16,8 @@ pub struct SpiderDecal {
     pub scale: f64,
     pub alpha: f64,
 }
+/// Dead Spider remains: position, heading, slide speed, animation frame, remaining life, and
+/// the decal and its growth.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeadSpiderState {
@@ -25,6 +29,7 @@ pub struct DeadSpiderState {
     pub decal_growth: f64,
     pub decal: Option<SpiderDecal>,
 }
+/// Dead Spider remains in the enemy world, with their id and spawn tick.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpiderRemains {

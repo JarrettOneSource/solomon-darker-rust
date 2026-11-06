@@ -1,5 +1,5 @@
-//! Party discovery, external consent requests and one-use reservation capacity.
-//! Source: `game-host.ts` partyTarget/reserveExternalPartyJoin/prunePartyAccess.
+//! Party access from outside a College: party lookup for tickets, the public directory, join
+//! requests that await the leader's consent, and reservations that hold a joining player's place.
 
 use std::collections::BTreeSet;
 
@@ -9,6 +9,7 @@ use solomon_sim::social::{PartyActionRejection, PartyJoinRequester, PartyVisibil
 
 use super::{HostedGameHost, HostedWorlds, PartyReservation};
 
+/// Where a party is: in the Hub, where it can take new members, or playing a run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PartyStatus {
@@ -16,6 +17,7 @@ pub enum PartyStatus {
     Playing,
 }
 
+/// A party that a join ticket can target: its leader, size, status, visibility and content.
 pub struct HostedPartyTarget {
     pub cheats_enabled: bool,
     pub content: WebSessionContentSummary,
@@ -26,6 +28,7 @@ pub struct HostedPartyTarget {
     pub visibility: PartyVisibility,
 }
 
+/// One listed party in the public party directory that the supervisor serves.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicPartyDirectoryEntry {
@@ -42,6 +45,7 @@ pub struct PublicPartyDirectoryEntry {
     pub visibility: &'static str,
 }
 
+/// A request from the directory to join an invite-only party, awaiting the leader's decision.
 pub struct ExternalPartyJoinRequest {
     pub expires_at_ms: f64,
     pub id: String,
@@ -51,6 +55,7 @@ pub struct ExternalPartyJoinRequest {
     pub token: String,
 }
 
+/// Whether the party leader has accepted or denied an external join request yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExternalPartyJoinRequestStatus {
     Pending,

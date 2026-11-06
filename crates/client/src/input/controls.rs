@@ -1,6 +1,7 @@
 //! Keyboard and mouse semantics shared by browser and OS event transports.
 use super::*;
 
+/// Which part of a mouse press an event reports: button down, movement or button up.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum MousePhase {
     Down,
@@ -34,8 +35,8 @@ impl GameplayInputState {
             effect = KeyboardEffect::PreventDefault;
             state.actions.push(GameplayAction::Chat);
         }
-        // The source chat opener remains available over Inventory. Its own
-        // view admission rejects title/pause/Tutorial; movement stays sealed.
+        // The chat key also works over Inventory. The chat view itself refuses the
+        // title, pause and Tutorial states; movement stays blocked.
         if state.world_input_blocked() {
             return effect;
         }

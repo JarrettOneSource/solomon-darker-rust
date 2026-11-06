@@ -1,4 +1,4 @@
-//! Staff actions and contact projections from `core-kernels/native-player-staff-action.ts`.
+//! A wizard's staff attacks: the swing or whirling spin, its contacts and their effects.
 //! The host enrolls these rows in the canonical primary transient queue and owns
 //! target mutation, actor collision and sound delivery.
 
@@ -34,6 +34,8 @@ pub const STAFF_CONTACT_KNOCKBACK_STEP: f64 = 6.0;
 pub const STAFF_PIKE_BREAK_RNG_WORDS: usize = 50;
 pub const STAFF_PIKE_BREAK_LIFETIME_TICKS: u64 = 100;
 
+/// Inputs for starting a staff attack: the attacker's stats, heading, origin, damage lane
+/// and identity.
 pub struct PlayerStaffActionInput<'a> {
     pub derived: &'a PlayerSkillDerivedStats,
     pub heading_degrees: f64,
@@ -147,8 +149,8 @@ pub(super) fn normalized_degrees(value: f64) -> f64 {
     if normalized < 0.0 { normalized + 360.0 } else { normalized }
 }
 
-/// Factory rows begin without enrollment; the host allocates only the source's
-/// actual contact presentation painters, not the invisible action bodies.
+/// Factory rows begin without enrollment; the host allocates painters only for the
+/// contact presentation, not for the invisible action bodies.
 pub(super) fn new_common(id: u64, action: &PlayerStaffAction) -> PrimarySpellTransientBase {
     PrimarySpellTransientBase {
         age_ticks: 0,

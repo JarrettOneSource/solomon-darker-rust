@@ -1,8 +1,9 @@
-//! Cast-time primary spell payloads from `core-kernels/native-primary-skill-profile.ts`.
+//! Cast-time primary spell payloads for each element and Weld, the spell colors, and the
+//! Inventory's spell name, units and summary.
 //!
-//! The retained stat catalog supplies authored ranks. Rounding remains visible where the
-//! Website narrows Water geometry and native weld vectors. The differential fixture covers
-//! every elemental branch, Fire's exclusive ember outcome, and all ten welded builds.
+//! The retained stat catalog supplies authored ranks. Rounding remains visible where Water
+//! geometry and weld vectors are narrowed. The differential fixture covers every elemental
+//! branch, Fire's exclusive ember outcome, and all ten welded builds.
 
 use crate::float::fround;
 
@@ -16,8 +17,8 @@ use super::{
 
 pub const PRIMARY_EARTH_INITIAL_CHARGE: f64 = 0.18_f32 as f64;
 
-/// `native-skill-colors.ts`: unrounded source channels. Different consumers apply
-/// their own authored luminance mix or float32 narrowing before making tint bytes.
+/// Unrounded color channels of the eight skill roots. Different consumers apply their own
+/// authored luminance mix or float32 narrowing before making tint bytes.
 pub const SKILL_ROOT_COLORS: [[f64; 3]; 8] = [
     [1.0, 0.1, 1.0],
     [1.0, 0.35, 0.1],
@@ -29,8 +30,8 @@ pub const SKILL_ROOT_COLORS: [[f64; 3]; 8] = [
     [0.75, 0.75, 0.75],
 ];
 
-/// `native-skill-colors.ts`: Spider's captured wizard outline uses the selected spell
-/// color, independent of clothing dye. Bytes retain the source float32 truncation.
+/// The selected spell's color, which Spider's captured wizard outline uses independent of
+/// clothing dye. Each byte narrows its channel to float32, then truncates.
 #[must_use]
 pub fn primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) -> u32 {
     const WELD_COLORS: [[f64; 3]; 15] = [
@@ -65,6 +66,7 @@ pub fn primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) -> u32 {
     channel(color[0]) << 16 | channel(color[1]) << 8 | channel(color[2])
 }
 
+/// The damage roll, mana cost and rank that every primary spell payload shares.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PrimarySkillProfileBase {
     pub damage_maximum: f64,
@@ -75,6 +77,8 @@ pub struct PrimarySkillProfileBase {
     pub skill_id: u32,
 }
 
+/// Ether's cast payload: bolt quantity, piercing, damage retention, retargeting, speed and
+/// blast charges.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EtherPrimarySkillProfile {
     pub common: PrimarySkillProfileBase,
@@ -95,6 +99,7 @@ pub enum SpentEmber {
     Imp { damage: f64, lifetime_ticks: u64 },
 }
 
+/// Fire's cast payload: burn, ember and explosion damage, and what a spent ember becomes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FirePrimarySkillProfile {
     pub common: PrimarySkillProfileBase,
@@ -106,6 +111,7 @@ pub struct FirePrimarySkillProfile {
     pub spent_ember: SpentEmber,
 }
 
+/// Air's cast payload: arcs, disintegration chance, Hurricane damage and stun slowdown.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AirPrimarySkillProfile {
     pub common: PrimarySkillProfileBase,
@@ -116,6 +122,7 @@ pub struct AirPrimarySkillProfile {
     pub stun_movement_factor: f64,
 }
 
+/// Water's cast payload: cone geometry, cold and slow effects, hail, armor and pushback.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaterPrimarySkillProfile {
     pub common: PrimarySkillProfileBase,
@@ -138,6 +145,7 @@ pub struct WaterPrimarySkillProfile {
     pub widen_half_degrees: f64,
 }
 
+/// Earth's cast payload: boulder growth and maximum charge, Rock Surge and toughness.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthPrimarySkillProfile {
     pub common: PrimarySkillProfileBase,
@@ -148,6 +156,7 @@ pub struct EarthPrimarySkillProfile {
     pub toughness: f64,
 }
 
+/// A welded primary's cast payload: its build, cast kind, damage factor and weld vector.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldPrimarySkillProfile {
     pub common: PrimarySkillProfileBase,
@@ -157,6 +166,7 @@ pub struct WeldPrimarySkillProfile {
     pub vector: WeldPrimaryVector,
 }
 
+/// The complete cast payload of the selected primary spell, by element or Weld.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PrimarySkillProfile {
     Ether(EtherPrimarySkillProfile),
@@ -181,6 +191,7 @@ impl PrimarySkillProfile {
     }
 }
 
+/// Whether an elemental primary fires once per cast or channels continuously.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimaryCastMode {
     Continuous,
@@ -387,6 +398,7 @@ fn weld_profile(
     }
 }
 
+/// The unit the Inventory shows a primary spell's damage in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimarySpellDamageUnit {
     Bolt,
@@ -396,12 +408,14 @@ pub enum PrimarySpellDamageUnit {
     Second,
 }
 
+/// Whether the Inventory shows a primary spell's mana cost per cast or per second.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimarySpellManaUnit {
     Cast,
     Second,
 }
 
+/// The Inventory's name and units for the selected primary spell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PrimarySpellDescriptor {
     pub damage_range: bool,
@@ -448,6 +462,7 @@ pub fn primary_spell_descriptor(
     PrimarySpellDescriptor { damage_range, damage_unit, mana_unit, name }
 }
 
+/// The damage range and mana cost shown for the selected primary spell.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PrimarySpellSummary {
     pub damage_maximum: f64,
@@ -507,7 +522,7 @@ fn primary_mana_cost(
         40 => &[42, 43, 47],
         _ => unreachable!("mana calculation receives an elemental primary"),
     };
-    // The Website sums upgrades separately, then adds the primary. Regrouping these
+    // Sum the upgrades separately, then add the primary. Regrouping these
     // additions changes the final bit for fractional authored mana costs.
     let mut upgrade_cost = 0.0;
     for &upgrade in upgrades {

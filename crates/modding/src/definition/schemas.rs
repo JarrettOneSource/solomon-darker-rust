@@ -1,5 +1,5 @@
-//! Authored definition schemas from `web-lua-definition-schemas.ts`.
-//! Validation appends all source issues in source traversal order.
+//! Schema validation for authored mod definitions: assets, content kinds, rules, effects and
+//! predicates. Validation appends every issue it finds, in traversal order.
 
 use std::collections::HashSet;
 

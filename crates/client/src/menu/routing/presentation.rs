@@ -1,4 +1,4 @@
-//! Source `play-routing-dialog.css` and `game-save-mod-mismatch.css` flow and paint.
+//! Layout and painting for the play-routing and save mod mismatch dialogs.
 //! Admission, request identity and cancellation stay in the parent controller.
 use super::{Prompt, RoutingView};
 use crate::gpu_ui::{FontRunOptions, ImageShadow, NativeFontRun, StockAtlas, UiFrame};
@@ -57,7 +57,8 @@ fn text(ui: &Ui, source: &str, kind: Typography, width: f32, scale: f32) -> Resu
         Typography::GroupHeading => ("Cinzel", 13.0, 0xd7bd78, Some(19.5), 2.08, false),
         Typography::Mono => ("JetBrains Mono", 14.0, 0xeee0bc, None, 0.0, false),
     };
-    // These source blocks have CSS white-space:normal, including external metadata.
+    // Whitespace runs in these blocks collapse to one space, including in external
+    // metadata.
     let source = source
         .split([' ', '\t', '\n', '\r', '\u{000c}'])
         .filter(|part| !part.is_empty())
@@ -726,7 +727,8 @@ fn background(
     );
     Ok(())
 }
-/// Shared Source play-routing panel, also used by CollegeInvitationDialog.
+/// The shared play-routing panel background, also used by the private College
+/// invitation dialog.
 pub(crate) fn consent_frame(frame: &UiFrame<'_>, ui: &Ui, panel: Rect) -> Result<(), String> {
     background(frame, ui, panel, false, 1.0)
 }

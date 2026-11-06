@@ -1,5 +1,5 @@
-//! Logical reception from `protocol/game-welcome-transfer.ts` and
-//! `protocol/game-save-checkpoint-transfer.ts`. Partial strings never reach the game.
+//! Reassembly of chunked welcome and save checkpoint transfers into whole server messages.
+//! Partial strings never reach the game.
 
 use serde::de::DeserializeOwned;
 use solomon_protocol::hosted::{HostedServerMessage, SaveCheckpointReason};
@@ -12,6 +12,7 @@ struct ReceivingCheckpoint {
     total_length: usize,
 }
 
+/// Reassembles chunked welcome and save checkpoint transfers and tracks their acknowledgements.
 pub(super) struct MessageReceiver {
     welcome: GameStringReceiver,
     welcome_pending: bool,
@@ -22,6 +23,8 @@ pub(super) struct MessageReceiver {
     save: Option<ReceivingCheckpoint>,
 }
 
+/// One received server message's result: the complete message, if any, and any acknowledgement
+/// to send.
 pub(super) struct Reception<S> {
     pub message: Option<ServerMessage<S>>,
     pub acknowledgement: Option<ClientMessage>,

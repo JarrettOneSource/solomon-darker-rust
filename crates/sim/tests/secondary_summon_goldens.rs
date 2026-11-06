@@ -1,4 +1,5 @@
-//! Source summon construction, Golem lifetime/combat and articulated stock geometry.
+//! Summon construction, Golem lifetime and combat, and articulated stock geometry, against
+//! recordings from the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::secondary::golem::*;
@@ -19,7 +20,7 @@ fn assert_snapshot(actual: &Value, expected: &Value, path: &str) {
         (Value::Number(actual), Value::Number(expected)) => {
             let actual = actual.as_f64().unwrap();
             let expected = expected.as_f64().unwrap();
-            // Only unrounded trigonometric angles need the established Website tolerance.
+            // Only unrounded trigonometric angles get the usual 1e-9 trigonometry tolerance.
             if path.ends_with("rotationRadians")
                 || path.ends_with("orbitHeadingRadians")
                 || path.ends_with("headingToTarget")
@@ -236,7 +237,8 @@ fn golem_assembly_orbit_contacts_articulation_and_damage_replay_the_website() {
         let actual = read_actor(&case["actor"], case["mode"].as_str() == Some("wall"));
         assert_snapshot(&actor_snapshot(&actual), &case["actor"], "initial articulation");
     }
-    // Current attack contacts are replayed below against the fa08 Source fixture.
+    // Current attack contacts are replayed by a later test, against the newer
+    // `current-golem-contact-goldens.json` recording.
     for case in fixture["damages"].as_array().unwrap() {
         let actor = read_actor(&case["actor"], false);
         let damage = &case["damage"];

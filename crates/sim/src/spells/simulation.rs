@@ -1,5 +1,6 @@
-//! Shared elemental and welded primaries, preserving the Website actor and player order.
-//! Movement commits before this step; damage/contact acceptance belongs to the world.
+//! The shared primary spell tick for elemental and welded primaries, in actor order and
+//! participant insertion order. Movement commits before this step; damage/contact
+//! acceptance belongs to the world.
 
 use crate::spells::model::PrimarySpellTransient;
 use crate::spells::weld::WeldWorldActor;
@@ -23,6 +24,8 @@ use crate::profile::primary::{EarthPrimarySkillProfile, PrimarySkillProfile};
 use crate::profile::weld::WeldCastKind;
 use crate::{Rng, Vec2};
 
+/// The session's casting limits for one player: alive and eligible, available mana, cast
+/// speed factors, Planewalker state, weapon and primary profile.
 #[derive(Clone, Copy)]
 pub struct PrimarySpellCastAuthority<'a> {
     pub weapon_kind: Option<PlayerWeaponKind>,
@@ -36,6 +39,7 @@ pub struct PrimarySpellCastAuthority<'a> {
     pub primary_skill: &'a PrimarySkillProfile,
 }
 
+/// One tick of primary spell input: whether the cast button is down and the aim point.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PrimarySpellInput {
     pub aim: Option<Vec2>,
@@ -79,6 +83,8 @@ pub fn primary_flight_terrain_exclusion_mask(spell: PrimarySpellTraversalActor<'
     }
 }
 
+/// The world as one player's cast sees it: targets, placement, traversal and obstruction
+/// queries, the view range, the tick and painter details.
 #[derive(Clone, Copy)]
 pub struct PrimarySpellWorldContext<'a> {
     pub tick: u64,
@@ -96,7 +102,7 @@ pub struct PrimarySpellWorldContext<'a> {
     pub navigation: Option<&'a dyn EnemyNavigation>,
 }
 
-/// Global old-actor queries, matching the source callbacks rather than borrowing
+/// World queries for actors already in flight, answered per owner instead of borrowing
 /// the first participant's region or homing targets. Departed owners still query
 /// this boundary: Hub placement rejects them; Boneyard actors retain world access.
 pub struct PrimarySpellEpochContext<'a> {
@@ -112,6 +118,7 @@ pub struct PrimarySpellEpochContext<'a> {
 pub type PrimarySpellOwnerObstruction<'a> =
     dyn Fn(&str, Vec2, Vec2, Option<&str>, u32) -> Option<Vec2> + 'a;
 
+/// One participant in a primary spell tick: wizard, cast authority, input and world view.
 pub struct PrimarySpellPlayer<'a> {
     pub wizard: &'a mut HubWizard,
     /// College admission actually omits authority, preserving the old selection.
@@ -120,6 +127,7 @@ pub struct PrimarySpellPlayer<'a> {
     pub context: PrimarySpellWorldContext<'a>,
 }
 
+/// The mana one participant spent this tick and whether it ran short.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrimarySpellPlayerResult {
     pub owner_id: String,
@@ -127,10 +135,12 @@ pub struct PrimarySpellPlayerResult {
     pub mana_underflow: bool,
 }
 
+/// A primary spell tick for all participants: the shared result and each participant's
+/// mana debit.
 #[derive(Default)]
 pub struct PrimarySpellBatchTickResult {
-    /// Shared contacts/emissions in source order. Mana fields sum the actual
-    /// player debits; callers apply each participant's debit from `players`.
+    /// Shared contacts/emissions in the order this tick produced them. Mana fields sum
+    /// the actual player debits; callers apply each participant's debit from `players`.
     pub tick: PrimarySpellTickResult,
     pub players: Vec<PrimarySpellPlayerResult>,
 }
@@ -215,8 +225,8 @@ impl SpellState {
         self.step_primary_players(&mut players, &epoch, rng, painter_order).tick
     }
 
-    /// Source `stepPrimarySpells`: advance the old queue once, cast in participant
-    /// insertion order, then finalize old called rocks and new painter owners once.
+    /// Advances the existing queue once, casts in participant insertion order, then
+    /// finalizes old called rocks and new painter owners once.
     pub fn step_primary_players(
         &mut self,
         players: &mut [PrimarySpellPlayer<'_>],

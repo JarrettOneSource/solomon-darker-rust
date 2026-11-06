@@ -1,4 +1,5 @@
-//! Terminal brain entry from Website `enemies/deaths.ts::deathBrain`.
+//! Puts a dying enemy's controller into its death phase, dropping any pike, lightning target
+//! or boss action it holds.
 
 use super::model::*;
 

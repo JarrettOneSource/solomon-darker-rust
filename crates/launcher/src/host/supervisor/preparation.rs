@@ -1,6 +1,6 @@
-//! `materializeGameAdmission` from `host/game-session-supervisor.ts`.
-//! Package bytes and temporary Lua definition VMs are owned by a worker. Only the
-//! accepted plain content crosses back to the thread that owns rooms and tickets.
+//! Content admission on worker threads. A worker owns the package bytes and temporary Lua
+//! definition VMs; only the accepted plain content crosses back to the thread that owns
+//! rooms and tickets.
 
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
@@ -17,6 +17,8 @@ use super::http::{AdmissionRequest, error, issue_ticket, player_ticket_count, re
 use crate::host::hosted::HostedAdmission;
 use crate::transport::{HostedHttpResponse, NativeServer};
 
+/// What an admission is being prepared for: a private College, an editor preview, the
+/// shared Hub, a party join or an active-party rejoin.
 pub(super) enum AdmissionPurpose {
     PrivateCollege,
     EditorTest,
@@ -25,12 +27,15 @@ pub(super) enum AdmissionPurpose {
     Rejoin { token: String, save: String },
 }
 
+/// An admission whose content a worker thread is still preparing, with the HTTP reply
+/// channel that receives its outcome.
 pub(super) struct AdmissionPreparation {
     purpose: AdmissionPurpose,
     respond: SyncSender<HostedHttpResponse>,
     pub worker: JoinHandle<Result<PreparedAdmission, String>>,
 }
 
+/// A worker's accepted admission, with the projected scene when it is an editor preview.
 pub(super) struct PreparedAdmission {
     admission: HostedAdmission,
     editor_test: Option<ModBoneyardEntry>,
@@ -173,8 +178,8 @@ impl HostedSupervisor {
                     },
                 }
             };
-            // A disconnected HTTP caller does not undo an already issued ticket.
-            // The source retains that ticket until its ordinary unclaimed timeout.
+            // A disconnected HTTP caller does not undo an already issued ticket; it
+            // expires at the ordinary unclaimed timeout.
             if let Some(response) = response {
                 let _ = preparation.respond.send(response);
             }
@@ -189,9 +194,9 @@ fn materialize_admission(request: AdmissionRequest) -> Result<HostedAdmission, S
     }) {
         return Err("leaderboard user id is invalid".into());
     }
-    // Decode the actual JSON value through the source validator. In particular,
+    // Validate the raw JSON value with the package validator. In particular,
     // integer-valued JSON numbers such as 1.0 are valid, while missing nullable
-    // entryScript fields and unknown package fields are rejected there.
+    // `entryScript` fields and unknown package fields are rejected there.
     let content = materialize_web_session_content_value(&request.content)?;
     let content = compile_web_session_content_definitions(content)?;
     Ok(HostedAdmission {

@@ -1,9 +1,12 @@
-//! Source staff rows. Identity, age and enrollment use the existing transient base.
+//! The staff attack's actors and step results. Identity, age and enrollment use the
+//! existing transient base.
 
 use crate::profile::runtime::{PlayerStaffAttackOutcome, PlayerStaffDamageLane};
 use crate::spells::model::PrimarySpellTransientBase;
 use crate::{Rng, Vec2};
 
+/// What every staff attack shares: identity, origin, heading, rolled outcome, contact
+/// count and swoosh pitch.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffActionBase {
@@ -15,6 +18,7 @@ pub struct PlayerStaffActionBase {
     pub swoosh_pitch: f64,
 }
 
+/// A staff swing: its progress, speed and damage lane.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffMeleeAction {
@@ -25,6 +29,7 @@ pub struct PlayerStaffMeleeAction {
     pub progress: f64,
 }
 
+/// A whirling staff spin: the degrees left to turn and the turn direction.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffSpinAction {
@@ -33,6 +38,7 @@ pub struct PlayerStaffSpinAction {
     pub turn_sign: i8,
 }
 
+/// A staff attack in progress: a swing or a spin.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlayerStaffAction {
@@ -66,6 +72,8 @@ impl PlayerStaffAction {
     }
 }
 
+/// The sound of a staff attack's special outcome: a critical hit, a disabling hit, a
+/// knockback or a spin.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StaffProcSound {
@@ -87,6 +95,7 @@ impl StaffProcSound {
     }
 }
 
+/// The moment a staff attack connects: the targets hit, the outcome and its sounds.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffContactEvent {
@@ -101,6 +110,7 @@ pub struct PlayerStaffContactEvent {
     pub target_ids: Vec<String>,
 }
 
+/// A short push on one target from an Ether staff hit's knockback chance.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffContactKnockback {
@@ -110,6 +120,7 @@ pub struct PlayerStaffContactKnockback {
     pub target_id: String,
 }
 
+/// Debris from a pike broken by a staff hit, replayed from a saved presentation RNG.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffPikeBreakVfx {
@@ -127,6 +138,7 @@ fn pike_break_shadow_default() -> bool {
     true
 }
 
+/// A turning puff of smoke from a staff contact that fades out.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffSmokeVfx {
@@ -140,6 +152,7 @@ pub struct PlayerStaffSmokeVfx {
     pub scale: f64,
 }
 
+/// A tinted staff contact particle that moves, slows and fades out.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffMoveFadeVfx {
@@ -155,6 +168,7 @@ pub struct PlayerStaffMoveFadeVfx {
     pub velocity_factor: f64,
 }
 
+/// A tinted staff contact sprite that stays in place and fades out.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffPerspectiveVfx {
@@ -168,6 +182,7 @@ pub struct PlayerStaffPerspectiveVfx {
     pub tint: u32,
 }
 
+/// One staff contact particle: smoke, a moving fade or a stationary fade.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlayerStaffVfx {
@@ -195,6 +210,7 @@ impl PlayerStaffVfx {
     }
 }
 
+/// A staff knockback in progress: its origin, arc, remaining push distance and targets.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffKnockbackActor {
@@ -205,6 +221,7 @@ pub struct StaffKnockbackActor {
     pub target_ids: Vec<String>,
 }
 
+/// A staff actor in the shared primary transient queue.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum PlayerStaffTransient {
@@ -256,6 +273,8 @@ impl PlayerStaffTransient {
     }
 }
 
+/// One staff action tick: the action if it continues, whether it made contact this tick,
+/// and the stepped action even when it retires.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlayerStaffActionStep {
@@ -264,6 +283,7 @@ pub struct PlayerStaffActionStep {
     pub sample: PlayerStaffAction,
 }
 
+/// A body a staff attack can hit: ID, position, collision radius and registration order.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffTarget {
@@ -279,6 +299,7 @@ impl AsRef<StaffTarget> for StaffTarget {
     }
 }
 
+/// A staff target that takes physical hits, and whether it carries a pike.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffPhysicalTarget {
@@ -292,6 +313,7 @@ impl AsRef<StaffTarget> for StaffPhysicalTarget {
     }
 }
 
+/// The attacking wizard's position, heading and collision radius.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StaffPlayer {
@@ -300,6 +322,8 @@ pub struct StaffPlayer {
     pub position: Vec2,
 }
 
+/// One physical staff hit: the target, sound pitch, vertical velocity, knockback and any
+/// pike-break debris stream.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffPhysicalImpact {
@@ -310,6 +334,7 @@ pub struct StaffPhysicalImpact {
     pub vertical_velocity: f64,
 }
 
+/// What a staff contact presents: its contact event and particles, plus the next free ID.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffContactPresentation {
@@ -318,6 +343,7 @@ pub struct StaffContactPresentation {
     pub vfx: Vec<PlayerStaffVfx>,
 }
 
+/// A staff knockback's push on one target.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffDisplacement {
@@ -325,6 +351,7 @@ pub struct StaffDisplacement {
     pub target_id: String,
 }
 
+/// A staff knockback's new heading for one target.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffHeadingPerturbation {
@@ -332,6 +359,8 @@ pub struct StaffHeadingPerturbation {
     pub target_id: String,
 }
 
+/// One staff knockback tick: pushes, heading changes, dazzled targets, camera
+/// displacement and the actor if it continues.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffKnockbackStep {
@@ -342,6 +371,7 @@ pub struct StaffKnockbackStep {
     pub heading_perturbations: Vec<StaffHeadingPerturbation>,
 }
 
+/// One contact knockback tick: the push and the actor if it continues.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaffContactKnockbackStep {

@@ -14,12 +14,15 @@ use crate::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind, primary_circle_targets,
 };
 
+/// A Fire or Electric burn queued during a step: the burning actor, its damage and target.
 pub(super) struct BurnRequest {
     pub actor: SecondaryActorState,
     pub damage: f64,
     pub target: SecondaryTarget,
 }
 
+/// The working state of one secondary tick: simulation, context, world and output, plus
+/// per-tick caches such as source actors and queued burns.
 pub(super) struct StepEngine<'state, 'context, 'player, W> {
     pub state: &'state mut SecondarySimulationState,
     pub context: &'context SecondaryTickContext<'player>,
@@ -234,7 +237,7 @@ impl SecondarySimulationState {
     ) -> SecondaryTickResult {
         assert!(context.tick <= MAX_TICKS, "secondary tick is a non-negative safe integer");
         self.camera_displacements.clear();
-        // Source retains identity before both decay and final-tick pulses. A health
+        // Check target identity before both decay and final-tick pulses. A health
         // query cannot replace this: dying and emerging actors still own modifiers.
         self.target_effects
             .retain(|effect| world.target_exists(&effect.world_key, effect.target_id));

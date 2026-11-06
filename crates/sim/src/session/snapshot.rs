@@ -3,6 +3,7 @@
 use super::*;
 use crate::boneyard::world::BoneyardSnapshot;
 
+/// A borrowed view of the session in the checkpoint schema, for sending over the network.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct GameSnapshot<'a> {
     pub inventory_dye_sessions:
@@ -67,7 +68,7 @@ impl GameSession {
 
     /// Apply only completed, validated authority. Same-world updates retain the
     /// scenery collision and compiled schedules; a changed world requires its
-    /// exact immutable source. Failure leaves the live session unchanged.
+    /// exact immutable `LoadedBoneyard`. Failure leaves the live session unchanged.
     pub fn apply_checkpoint(
         &mut self,
         mut checkpoint: GameCheckpoint,

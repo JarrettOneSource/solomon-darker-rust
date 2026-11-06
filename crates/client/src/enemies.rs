@@ -27,23 +27,25 @@ use crate::beam_mesh::MeshVertex;
 use crate::courtyard::Camera;
 use solomon_graphics::{Renderer, Texture};
 
+/// A participant as enemy presentation sees them: ID, position and primary tint.
 pub struct EnemyViewPlayer<'a> {
     pub id: &'a str,
     pub position: Vec2,
     pub primary_tint: u32,
 }
 
+/// An enemy's shadow records for this frame and the light scalar applied to them.
 pub struct EnemyViewShadow {
     pub records: Vec<ShadowRecord>,
     pub light_scalar: f64,
 }
 
-/// Accepted world facts used by the source presenters; no gameplay state is reconstructed.
+/// Accepted world facts used by the enemy presenters; no gameplay state is reconstructed.
 pub struct EnemyViewFrame<'a> {
     pub(crate) presentation: Option<&'a crate::presentation::EnemyPresentationMetadata>,
     /// Already sampled at the fractional display tick; do not age these values again.
     pub puppet_hit_alphas: Option<&'a BTreeMap<String, f64>>,
-    /// Loot deaths use the same source effect presenter and painter ownership as enemy deaths.
+    /// Loot deaths use the same death-effect presenter and painter ownership as enemy deaths.
     pub extra_death_effects: &'a [EnemyDeathEffect],
     pub tick: u64,
     pub application_tick: u64,
@@ -58,6 +60,7 @@ pub struct EnemyViewFrame<'a> {
     pub actor_tint: &'a dyn Fn(&EnemyActor) -> u32,
 }
 
+/// An enemy root's painter-queue entry and its region-light sample point.
 pub struct EnemyPainter {
     pub layer: PainterLayer,
     pub region_light_point: Option<Vec2>,
@@ -114,6 +117,8 @@ enum EnemyDraw {
     },
 }
 
+/// The Boneyard enemy view: stock atlases, prepared draw groups per depth band, and
+/// paint-time effects such as rain clouds, tendrils and attack flashes.
 pub struct EnemyView {
     art: art::EnemyAtlases,
     green_plasma: Texture,

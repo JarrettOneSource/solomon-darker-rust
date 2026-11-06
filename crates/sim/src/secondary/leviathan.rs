@@ -1,5 +1,5 @@
-//! Complete appendage construction and articulated Leviathan geometry from Website
-//! `core-kernels/native-secondary-leviathan.ts`.
+//! Leviathan: its birth with every appendage, its growth and phases, and its articulated
+//! geometry.
 
 use crate::float;
 use crate::float::{atan2, fround};
@@ -11,6 +11,8 @@ pub const LEVIATHAN_LIFETIME_TICKS: u64 = 1664;
 pub const LEVIATHAN_TARGET_RANGE: f64 = 300.0;
 pub const ETHER_BOLT_LIFETIME_TICKS: u64 = 200;
 
+/// One Leviathan appendage as born: sprite bank, base offset, firing countdown, heading,
+/// spin and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LeviathanAppendageBirth {
     pub bank: u32,
@@ -22,6 +24,7 @@ pub struct LeviathanAppendageBirth {
     pub sprite_scale: f64,
 }
 
+/// A new Leviathan: its appendages, maximum scale, quantity and rotation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LeviathanBirth {
     pub appendages: Vec<LeviathanAppendageBirth>,

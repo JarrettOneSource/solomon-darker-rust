@@ -1,5 +1,5 @@
-//! Native private run diagnostics, following Source recorder/store lifecycles.
-//! The gzip payload uses a documented Rust checkpoint table rather than V8 objects.
+//! Private run diagnostics for operators. A recorder keeps each active run's notable
+//! checkpoints, and a store writes finished runs as gzip archives of a checkpoint table.
 mod encoding;
 mod recorder;
 mod store;
@@ -32,6 +32,7 @@ struct PendingObservation {
     behind_ms: f64,
 }
 
+/// A host's run archiving: the recorder, the store's sink and the tick being observed.
 pub(super) struct HostRunArchives {
     recorder: RunArchiveRecorder,
     sink: RunArchiveSink,
@@ -119,8 +120,8 @@ impl SharedWorldsTickObserver for HostRunArchives {
             .recorder
             .loaded_for_run(&loaded.run_id)
             .unwrap_or_else(|| Arc::new(loaded.clone()));
-        // Retention/copy overhead is outside the kernel timing, like Source's
-        // immutable pre-step reference. Wall-time lag still exposes that overhead.
+        // Retention and copy overhead stay outside the tick timing, which starts after the
+        // pre-step capture. Wall-time lag still exposes that overhead.
         let started = Instant::now();
         let behind_ms = self.deadline.map_or(0.0, |deadline| {
             started.saturating_duration_since(deadline).as_secs_f64() * 1000.0

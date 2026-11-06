@@ -1,4 +1,5 @@
-//! Whole current secondary ownership, damage and status transactions against Website.
+//! Whole current secondary ownership, damage and status transactions, against recordings
+//! from the Website client.
 #![cfg(feature = "persistence")]
 
 #[path = "support/secondary_current.rs"]
@@ -15,7 +16,7 @@ use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::golem::*;
 use solomon_sim::secondary::*;
 
-// Shared source projections are intentionally used in different subsets by host fixtures.
+// Each test crate uses a different subset of these shared row projections.
 #[allow(dead_code)]
 #[path = "support/secondary.rs"]
 mod support;

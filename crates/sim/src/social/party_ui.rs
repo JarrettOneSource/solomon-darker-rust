@@ -1,6 +1,5 @@
-//! Stock Party layout from `native-ui/native-ui-party-menu.ts` and
-//! `native-ui/native-ui-party-chip.ts`. Accepted membership
-//! remains in LocalPartyState; this plan owns only measured text, clips and hit regions.
+//! Stock Party menu and invitation layout. Accepted membership remains in LocalPartyState;
+//! this plan owns only measured text, clips and hit regions.
 
 use crate::hud::HudRect;
 use crate::ui_text::{UiFontName, UiTextAlign, is_javascript_whitespace, measure_ui_text, ui_font};
@@ -16,8 +15,8 @@ pub const PARTY_INVITATION_TITLE: &str = "PARTY INVITATION";
 pub const PARTY_VISIBILITIES: [PartyVisibility; 3] =
     [PartyVisibility::Public, PartyVisibility::InviteOnly, PartyVisibility::Private];
 
-/// `nativeUiPartyInvitationActionBounds`: the two stock message actions use the
-/// Party footer's 125px bottom offset and 36px gap, rather than the default footer.
+/// The invitation's two stock message actions use the Party footer's 125px bottom offset
+/// and 36px gap, rather than the default footer.
 #[must_use]
 pub const fn party_invitation_action_bounds() -> [HudRect; 2] {
     [HudRect::new(590.0, 505.0, 192.0, 69.0), HudRect::new(818.0, 505.0, 192.0, 69.0)]
@@ -28,6 +27,7 @@ pub fn party_invitation_body(inviter: &str) -> String {
     format!("{inviter} invited you to their party.")
 }
 
+/// A tab of the Party menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PartyMenuTab {
     Members,
@@ -57,6 +57,7 @@ impl PartyMenuTab {
     }
 }
 
+/// A tag shown beside a member's name: You, Leader or Offline.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PartyMenuTag {
     You,
@@ -75,6 +76,7 @@ impl PartyMenuTag {
     }
 }
 
+/// A member row in the Party menu: name, tags and whether the leader can remove them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PartyMenuMember {
     pub id: String,
@@ -83,12 +85,15 @@ pub struct PartyMenuMember {
     pub tags: Vec<PartyMenuTag>,
 }
 
+/// A pending join request row in the Party menu.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PartyMenuRequest {
     pub id: String,
     pub name: String,
 }
 
+/// What the Party menu layout depends on: tab, members, requests, code, visibility, scroll
+/// and messages.
 pub struct PartyMenuSpec<'a> {
     pub code: Option<&'a str>,
     pub copied: bool,
@@ -103,6 +108,8 @@ pub struct PartyMenuSpec<'a> {
     pub visibility_options: &'a [PartyVisibility],
 }
 
+/// One measured text run in the Party menu plan: label, font, alignment, scale, tint,
+/// position and clipping.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PartyMenuText {
     pub label: String,
@@ -116,6 +123,7 @@ pub struct PartyMenuText {
     pub clipped: bool,
 }
 
+/// A clickable Party menu control: bounds, ID, label and whether it is disabled.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PartyMenuAction {
     pub bounds: HudRect,
@@ -124,6 +132,7 @@ pub struct PartyMenuAction {
     pub label: String,
 }
 
+/// One scrolling Party menu row and its visible part, if any.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PartyMenuRow {
     pub bounds: HudRect,
@@ -131,6 +140,7 @@ pub struct PartyMenuRow {
     pub visible_bounds: Option<HudRect>,
 }
 
+/// A button inside a Party menu row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PartyMenuRowAction {
     pub bounds: HudRect,
@@ -139,6 +149,7 @@ pub struct PartyMenuRowAction {
     pub row_id: String,
 }
 
+/// The laid-out Party menu: rows, settings rows, actions, texts and scroll range.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PartyMenuPlan {
     pub content_height: f64,
@@ -148,7 +159,7 @@ pub struct PartyMenuPlan {
     pub settings_rows: Vec<HudRect>,
     /// Every row action remains addressable by keyboard, even outside the clip.
     pub row_actions: Vec<PartyMenuRowAction>,
-    /// Visible hit regions, in the source plan's order.
+    /// Visible hit regions, in layout order.
     pub actions: Vec<PartyMenuAction>,
     pub texts: Vec<PartyMenuText>,
 }

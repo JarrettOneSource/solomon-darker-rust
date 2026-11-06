@@ -1,5 +1,6 @@
-//! Source host identities and signed leaderboard receipts. These use OS entropy and
-//! standard cryptographic crates, independently of every gameplay random stream.
+//! Host identities (tokens, party IDs and join codes) and signed leaderboard receipts. These
+//! use OS entropy and standard cryptographic crates, independently of every gameplay random
+//! stream.
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -16,8 +17,8 @@ use super::authority::random_bytes;
 
 const JOIN_CODE_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const LEADERBOARD_DOMAIN: &str = "solomon-dark-leaderboard-v1.";
-// Node Buffer's decoder accepts nonzero unused trailing bits. Claim syntax separately
-// restricts the alphabet/length, so retain that source behavior without relaxing framing.
+// This decoder accepts nonzero unused trailing bits. Claim syntax separately restricts the
+// alphabet and length, so the leniency does not relax framing.
 pub(super) const SOURCE_BASE64URL: GeneralPurpose =
     GeneralPurpose::new(&base64::alphabet::URL_SAFE, NO_PAD.with_decode_allow_trailing_bits(true));
 
@@ -39,8 +40,8 @@ pub(super) fn random_party_identity() -> Result<PartyIdentity, String> {
     Ok(PartyIdentity { id, join_code, listing_id: format!("listing-{}", random_token::<18>()?) })
 }
 
-/// Source `credentialsEqual`: length is public; equal-length bytes use a constant-time
-/// comparison. This also avoids accidentally treating a Unicode character count as bytes.
+/// Length is public; equal-length bytes use a constant-time comparison. This also avoids
+/// accidentally treating a Unicode character count as bytes.
 pub(super) fn credentials_equal(left: &str, right: &str) -> bool {
     left.len() == right.len() && bool::from(left.as_bytes().ct_eq(right.as_bytes()))
 }
@@ -60,8 +61,8 @@ pub(super) fn signature_matches(secret: &str, bytes: &[u8], signature: &str) -> 
     mac.verify_slice(&signature).is_ok()
 }
 
-/// `host/game-leaderboard-receipt.ts`: preserve field order and ECMAScript numeric
-/// spelling before signing. The existing Website backend verifies this exact envelope.
+/// Preserve field order and ECMAScript numeric spelling before signing: the Website
+/// backend verifies this exact envelope.
 pub(super) fn leaderboard_receipt(
     secret: &str,
     user_id: u64,

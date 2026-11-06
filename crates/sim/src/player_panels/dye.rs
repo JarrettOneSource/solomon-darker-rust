@@ -1,4 +1,4 @@
-//! Fabric Dye presentation from `renderer/hub-inventory-render-contract.ts`.
+//! Fabric Dye panel presentation: swatch positions, modal fade and the selection pulse.
 //! Session admission and color mixing remain in the canonical inventory owner.
 
 use crate::hud::HudRect;

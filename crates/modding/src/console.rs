@@ -1,7 +1,6 @@
-//! Enabled game Console from `host/lua/web-lua-runtime.ts` and `web-lua-api.ts`.
-//! The actual Lua 5.4 VM retains globals, callbacks and timers. Host operations
-//! borrow the canonical authority only during a call; queued game mutations use
-//! `sim::modding::console::apply_web_lua_commands`.
+//! The game Console's Lua runtime. Its Lua 5.4 VM keeps globals, callbacks and timers
+//! between requests. Host operations borrow the canonical authority only during a call;
+//! queued game mutations use `sim::modding::console::apply_web_lua_commands`.
 
 mod api;
 mod scheduler;
@@ -23,32 +22,37 @@ use values::{bounded_error, json_value, object};
 const PROVIDER: &str = "solomon.console.host";
 const VM_MEMORY_BYTES: usize = 16 * 1_024 * 1_024;
 
+/// The discipline and element of a bot that Console code asks to summon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WebLuaBotConfig {
     pub discipline: WizardDiscipline,
     pub element: WizardElement,
 }
+/// The display name and player ID of a summoned bot, returned to Console code.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct WebLuaBotResult {
     pub display_name: String,
     pub player_id: String,
 }
 
-/// Source's live frame/authority readers and optional developer operation.
+/// What a Console call can ask of the host: the authority player, the current frame and
+/// the developer bot summon.
 /// The developer namespace is installed only when its capability is enabled.
-/// A bot summon may change the actual roster before the first lazy frame read.
+/// A bot summon may change the roster before the first lazy frame read.
 pub trait WebLuaRuntimeBindings {
     fn authority_player_id(&self) -> Option<String>;
     fn frame(&self) -> WebLuaFrameState;
     fn summon_bot(&mut self, config: WebLuaBotConfig) -> Result<WebLuaBotResult, String>;
 }
 
+/// A player's request to run a chunk of Console code.
 #[derive(Clone, Debug)]
 pub struct WebLuaExecutionRequest {
     pub request_id: u64,
     pub player_id: String,
     pub code: String,
 }
+/// The outcome of running Console code: its printed output and returned values, or an error.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct WebLuaExecutionResult {
     pub error: Option<String>,
@@ -56,18 +60,21 @@ pub struct WebLuaExecutionResult {
     pub output: Vec<String>,
     pub values: Vec<LuaValue>,
 }
+/// An execution result together with the ID of the request it answers.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebLuaExecutionCompletion {
     pub request_id: u64,
     pub result: WebLuaExecutionResult,
 }
+/// A log entry recorded by the runtime for the host to drain.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct WebLuaRuntimeLog {
     pub level: &'static str,
     pub event: &'static str,
     pub detail: String,
 }
+/// Diagnostic counters for one runtime: callbacks, timers, memory, state size and tick work.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebLuaRuntimeMetrics {
@@ -82,6 +89,7 @@ pub struct WebLuaRuntimeMetrics {
     pub timer_count: usize,
 }
 
+/// One Console Lua VM with its runtime state, queued execution requests and completions.
 pub struct WebLuaRuntime {
     lua: Option<Lua>,
     state: Rc<RefCell<RuntimeState>>,
@@ -335,8 +343,8 @@ impl WebLuaRuntime {
         let mut state = self.state.borrow_mut();
         state.clear_state();
         for (key, value) in source.iter() {
-            // Source restore clears first and may retain a valid prefix if a
-            // later entry fails. Validate keys before visiting their values.
+            // Restore clears first, so a later invalid entry leaves the valid prefix
+            // in place. Validate keys before visiting their values.
             if key.is_empty() || key.len() > 128 {
                 return Err("state key must be nonempty text of at most 128 bytes".into());
             }

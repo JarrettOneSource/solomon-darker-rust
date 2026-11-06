@@ -1,5 +1,5 @@
-//! Website `mobile-ui-layout.ts`: the complete device-layout document and its
-//! authored default geometry. The editor and browser storage use this one model.
+//! The mobile touch layout: the complete device-layout document and its authored
+//! default geometry. The editor and browser storage use this one model.
 
 mod geometry;
 
@@ -18,7 +18,7 @@ pub const MOBILE_UI_LAYOUT_VERSION: u32 = 2;
 pub const MOBILE_UI_SCALE_MIN: f64 = 0.4;
 pub const MOBILE_UI_SCALE_MAX: f64 = 3.0;
 
-/// Source `TouchJoystick.update` removes the rotated square's expanded DOM bounds
+/// The joystick's input radius: the rotated square's expanded bounds are removed
 /// before sampling input. Rotation changes the control art, not the movement direction.
 #[must_use]
 pub fn mobile_ui_joystick_input_radius(bounds: MobileUiSize, rotation: f64) -> f64 {
@@ -28,7 +28,7 @@ pub fn mobile_ui_joystick_input_radius(bounds: MobileUiSize, rotation: f64) -> f
 }
 
 /// The knob counter-rotates within the control so it still points toward the actual
-/// screen-space input vector. `render_size` is the untransformed DOM offset size.
+/// screen-space input vector. `render_size` is the control's untransformed size.
 #[must_use]
 pub fn mobile_ui_joystick_knob_offset(
     movement: Vec2,
@@ -45,6 +45,8 @@ pub fn mobile_ui_joystick_knob_offset(
     )
 }
 
+/// An element of the mobile touch layout: pause, diagnostics, meters, joysticks, belt slots,
+/// Inventory, skill book, XP meter and potions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -157,6 +159,8 @@ impl MobileUiElementId {
     }
 }
 
+/// An element's placement: its center as a percentage of the viewport, its scale and its
+/// rotation in degrees.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(deny_unknown_fields))]
@@ -173,12 +177,14 @@ impl Default for MobileUiElementTransform {
     }
 }
 
+/// An element's on-screen width and height.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MobileUiSize {
     pub height: f64,
     pub width: f64,
 }
 
+/// The placement of all 18 layout elements, indexed by `MobileUiElementId`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobileUiLayout {
     pub elements: [MobileUiElementTransform; 18],
@@ -195,12 +201,14 @@ impl MobileUiLayout {
     }
 }
 
+/// A layout together with each element's size, computed for one viewport.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobileUiGeometry {
     pub layout: MobileUiLayout,
     pub sizes: [MobileUiSize; 18],
 }
 
+/// The active mobile layout and whether the player has customized it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobileUiLayoutState {
     pub customized: bool,
@@ -221,8 +229,8 @@ impl Default for MobileUiLayoutState {
     }
 }
 
-/// Only the two source root fields and the closed element IDs deserialize. The
-/// version reader also accepts JSON `2.0`, which JavaScript parses as number 2.
+/// The stored layout document. Only its two root fields and the closed element IDs
+/// deserialize. The version reader also accepts JSON `2.0`, the same number as `2`.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(deny_unknown_fields))]
@@ -279,7 +287,7 @@ fn read_transforms(document: &MobileUiLayoutDocument, legacy: bool) -> Option<Mo
             return None;
         }
         // Admission retains +180 and signed zero exactly. Normalization happens
-        // when an editor/set operation writes a new document, as in the source.
+        // when an editor/set operation writes a new document.
         layout.elements[id as usize] = transform;
     }
     Some(layout)
@@ -425,8 +433,8 @@ fn finite_or(value: f64, fallback: f64) -> f64 {
 }
 
 fn source_clamp(value: f64, minimum: f64, maximum: f64) -> f64 {
-    // Math.max(0, -0) chooses positive zero. A Rust comparison-only clamp
-    // otherwise retains -0 and writes a different normalized document.
+    // A value equal to the minimum becomes the minimum itself, so -0 clamps to +0.
+    // A comparison-only clamp retains -0 and writes a different normalized document.
     if value <= minimum {
         minimum
     } else if value >= maximum {

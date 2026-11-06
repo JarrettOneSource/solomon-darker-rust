@@ -1,7 +1,8 @@
-//! Native natural cubic spline compilation/evaluation from `native-natural-spline.ts`.
-//! The axis arithmetic was first ported for Hub students and is shared with Spider Silk.
+//! Native natural cubic splines through a list of points: compiled once, then evaluated
+//! at a cursor. Hub student routes, the College intro and Spider Silk share them.
 use crate::Vec2;
 
+/// One axis of a natural cubic spline: its points and per-segment coefficients.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct NaturalSplineAxis {
@@ -49,6 +50,7 @@ impl NaturalSplineAxis {
     }
 }
 
+/// A natural cubic spline through 2D points, evaluated at a cursor along its extent.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct NaturalSpline {

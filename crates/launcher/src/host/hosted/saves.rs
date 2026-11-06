@@ -1,6 +1,6 @@
-//! Browser-owned source saves. A checkpoint is the actual schema-37 owner document;
-//! the server never acknowledges a disk/cloud write on behalf of the client.
-//! Source: `game-host.ts::publishSaveCheckpointForClient`.
+//! Save checkpoints for hosted players, whose clients own their saves. A checkpoint is the
+//! player's complete Website save document; the server never acknowledges a disk/cloud write
+//! on behalf of the client.
 
 use std::borrow::Cow;
 
@@ -12,6 +12,8 @@ use super::{HostedGameHost, HostedWorlds};
 use crate::host::connection::HostConnection;
 use crate::host::recovery::{PartyRecoveryClaim, create_party_recovery_claim};
 
+/// How to publish one player's save checkpoint: the recovery target revision, whether to send
+/// an unchanged document, and whether a terminal profile save is wanted.
 pub(in crate::host) struct PlayerSaveRequest<'a> {
     pub target_revision: Option<&'a str>,
     pub force: bool,
@@ -32,9 +34,9 @@ impl HostedGameHost {
             let active = self
                 .active_run(&slot.party_id, &slot.run_id)
                 .ok_or("The staged saved wizard lost its active run")?;
-            // Disk/cloud publication is infrequent. Source projects that one detached
-            // participant into its retained world; this owned save copy never ticks or
-            // replaces the authoritative world (ordinary snapshots remain borrowed).
+            // Disk/cloud publication is infrequent. The staged member's detached participant
+            // is projected into a copy of its retained world; this owned save copy never ticks
+            // or replaces the authoritative world (ordinary snapshots remain borrowed).
             let mut state = active.clone();
             state.rejoin_participant(slot.detached.as_ref().unwrap().clone(), None)?;
             Cow::Owned(state)
@@ -120,8 +122,8 @@ impl HostedGameHost {
         let save = match self.owner_save(id, request.target_revision) {
             Ok(save) => save,
             Err(reason) => {
-                // Source checkpoint_failed is a logged save failure/sequence0, not a
-                // fatal game epoch. Actual execution/filter errors still fail the host.
+                // A failed checkpoint is logged and reports sequence 0; it is not fatal to the
+                // tick. Errors after the document is built still fail the host.
                 eprintln!("save.checkpoint_failed player={id}: {reason}");
                 return Ok(0);
             }

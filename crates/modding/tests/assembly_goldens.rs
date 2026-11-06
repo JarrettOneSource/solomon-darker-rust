@@ -1,4 +1,5 @@
-//! Creation identity, shorthand inference and free rules match the source assembly.
+//! Friendly definition lowering (creation identity, shorthand inference and free rules)
+//! checked against frozen recordings from the Website client.
 
 use serde::Deserialize;
 use solomon_modding::definition::WebLuaDefinitionIssue;

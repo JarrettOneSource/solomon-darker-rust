@@ -1,8 +1,7 @@
 //! Loads retained stock Boneyards and decodes authored binary scene geometry.
 //!
-//! Reference: `Website/frontend/src/game/host/boneyard-catalog.ts`. The Website selects
-//! a template by the seed's first big-endian word. The JSON is copied without changing its
-//! geometry by `tools/website-oracle/boneyard-goldens.mjs`; no JavaScript runs at game time.
+//! The embedded bank `web/assets/boneyards.json` holds the stock templates and the Tutorial.
+//! A random run selects its template by the seed's first big-endian word.
 
 mod binary;
 mod source_value;
@@ -23,8 +22,8 @@ use solomon_sim::boneyard::{
 
 const EMBEDDED_BANK: &str = include_str!("../../../web/assets/boneyards.json");
 
-/// One accepted authored scene from `host/boneyard-catalog.ts`. Catalog entry
-/// identity also owns the source navigation cache lifetime, independently of hashes.
+/// One admitted Mod Boneyard in the catalog: its choice, scene and content hashes. The
+/// entry's identity, not its hashes, also decides how long its navigation graph is retained.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModBoneyardEntry {
     pub choice: BoneyardChoice,
@@ -59,8 +58,8 @@ impl BoneyardCatalog {
         Ok(Self { templates, tutorial, mod_entries: BTreeMap::new(), mod_entry_order: Vec::new() })
     }
 
-    /// `createBoneyardCatalog`: a replacement creates fresh entry identities;
-    /// cloning this retained catalog shares the same admitted entries.
+    /// Replaces the Mod Boneyards, rejecting duplicate or reserved IDs. A replacement
+    /// creates fresh entry identities; cloning this catalog shares the same admitted entries.
     pub fn with_mod_entries(mut self, entries: Vec<ModBoneyardEntry>) -> Result<Self, String> {
         let mut by_id = BTreeMap::new();
         let mut order = Vec::new();
@@ -103,7 +102,7 @@ impl BoneyardCatalog {
     }
 
     /// The authoritative host supplies its fresh run identity separately from
-    /// the scene-selection seed, as `materializeBoneyard` does in the Website.
+    /// the scene-selection seed.
     #[must_use]
     pub fn materialize_choice(
         &self,
@@ -131,7 +130,7 @@ impl BoneyardCatalog {
         })
     }
 
-    /// Matches `seedBytes.readUInt32BE(0) % NATIVE_GENERATED_BONEYARDS.length`.
+    /// Selects a stock template by the seed's first big-endian word, modulo the template count.
     #[must_use]
     pub fn materialize(&self, seed: [u8; 16]) -> LoadedBoneyard {
         let first_word = u32::from_be_bytes([seed[0], seed[1], seed[2], seed[3]]);

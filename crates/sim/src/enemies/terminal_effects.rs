@@ -1,4 +1,5 @@
-//! Terminal family presentation from `enemies/deaths.ts` and `death-effects.ts`.
+//! Death effects for the Portal, Zombie, Wraith and Coffin families, and the shared Unbind
+//! star, sprite arrays and fragment shuffle that other deaths reuse.
 
 use super::EnemyToken;
 use super::config::EnemyFamilyConfig;
@@ -71,7 +72,7 @@ impl EnemyWorld {
         );
     }
 
-    #[allow(clippy::too_many_arguments)] // The source array constructor keeps its authored bank and clock together.
+    #[allow(clippy::too_many_arguments)] // Sprite arrays keep their bank and frame clock together.
     pub(super) fn spawn_sprite_array(
         &mut self,
         owner: DeathEffectOwner,

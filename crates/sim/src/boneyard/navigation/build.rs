@@ -1,7 +1,8 @@
-//! Mesh construction from `core-server/boneyard-enemy-navigation.ts::buildNativeNavMesh`.
+//! NavMesh construction: clearance constraints around collision primitives and a sampling
+//! lattice give the points, and an incremental Delaunay triangulation connects them.
 //!
 //! Constraint, point and triangle order are observable through endpoint attachment and A*.
-//! The source uses its own incremental triangulator; an alternate Delaunay library would
+//! The mesh uses its own incremental triangulator; an alternate Delaunay library would
 //! not preserve its tie-breaking or directed adjacency order.
 
 use crate::float;
@@ -16,7 +17,8 @@ use super::{
     NavigationMesh, NavigationTriangle, TRIANGLE_EPSILON, cross, float_point, path_is_clear,
 };
 
-// The source's authored NavMesh sampling and collision-membership constants.
+// NavMesh sampling constants, and the collision mask bit that keeps a primitive out of
+// navigation.
 const COLLISION_EXCLUSION_MASK: u32 = 0x80;
 const CIRCLE_SEGMENTS: usize = 8;
 const LATTICE_STEP: f64 = 500.0;
@@ -270,8 +272,8 @@ fn unique_navigation_points(candidates: &[Vec2]) -> Vec<Vec2> {
 }
 
 fn rounded_key(value: f64) -> u64 {
-    // Math.round ties toward positive infinity. Comparing the fractional part avoids
-    // a premature value+0.5 rounding; JS string keys also identify -0 with +0.
+    // Ties round toward positive infinity. Comparing the fractional part avoids the
+    // rounding error of computing value + 0.5 first; -0 and +0 produce the same key.
     let lower = value.floor();
     let rounded = if value - lower < 0.5 { lower } else { lower + 1.0 };
     if rounded == 0.0 { 0 } else { rounded.to_bits() }
@@ -330,7 +332,7 @@ fn delaunay_triangles(source: &[Vec2]) -> Vec<[usize; 3]> {
             index += 1;
             retained
         });
-        // The JS Map iterates first-seen edges, not sorted edge keys.
+        // Boundary edges are visited in first-seen order, not sorted by edge key.
         for (edge, count) in boundary {
             if count == 1 {
                 let triangle = oriented_triangle(edge[0], edge[1], point_index, &points);
@@ -418,7 +420,7 @@ fn connect_triangles(
                 owner_by_edge.insert(key, index);
                 continue;
             };
-            // Source adjacency is deliberately directed: this edge is appended before
+            // Adjacency is deliberately directed: this edge is appended before
             // the clearance check; only its reverse edge depends on that check.
             retained[index].neighbors.push(owner);
             if path_is_clear(
@@ -484,7 +486,7 @@ fn connect_visible_triangle_centers(
             }
         }
     }
-    // Stable order on equal distances is inherited from source candidate enumeration.
+    // The stable sort keeps candidate enumeration order for equal distances.
     links.sort_by(|left, right| left.0.total_cmp(&right.0));
     for (_, left, right) in links {
         if component_count <= 1 {

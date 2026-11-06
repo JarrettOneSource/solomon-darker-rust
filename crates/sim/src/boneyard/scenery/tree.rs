@@ -1,6 +1,6 @@
-//! Scenery-query membership and secondary foliage positions from
-//! `renderer/boneyard-tree-{actors,occlusion}.ts`. These are view inputs;
-//! physical collision, health and visibility do not replace native membership.
+//! Which actors make Tree canopies fade, the canopy scan clock, and the position of a
+//! Tree's secondary foliage. These are view inputs; physical collision, health and
+//! visibility do not replace native membership.
 
 use std::collections::BTreeMap;
 
@@ -11,6 +11,8 @@ use crate::enemies::EnemyToken;
 use crate::enemies::actor_presentation::{EnemyAnimationState, EnemyCoffinState};
 use crate::float::fround as f;
 
+/// Actors that may fade a Tree canopy: players, enemies, Maggots and Solomon's position and
+/// phase during the encounter.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TreeActorPoses {
     pub players: Vec<TreePlayerPose>,
@@ -19,12 +21,15 @@ pub struct TreeActorPoses {
     pub encounter: Option<(Vec2, SolomonPhase)>,
 }
 
+/// A player's ID and position for Tree canopy scans.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreePlayerPose {
     pub id: String,
     pub position: Vec2,
 }
 
+/// An enemy's position and the type, animation and coffin state that decide whether it
+/// counts in Tree canopy scans.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TreeEnemyPose {
     pub id: usize,
@@ -35,6 +40,7 @@ pub struct TreeEnemyPose {
     pub coffin_state: EnemyCoffinState,
 }
 
+/// A Maggot's position and whether it currently counts in Tree canopy scans.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TreeMaggotPose {
     pub id: usize,
@@ -42,14 +48,15 @@ pub struct TreeMaggotPose {
     pub tree_query_member: bool,
 }
 
+/// One tick's Tree scan inputs: the positions of counted actors and the camera bounds.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TreeOcclusionFrame {
     pub actor_positions: Vec<Vec2>,
     pub camera_bounds: BoneyardBounds,
 }
 
-/// `BoneyardTreeOcclusionPresentation`: one view-owned clock for the loaded Trees.
-/// Missing delivered history never supplies a guessed occupant to an earlier scan.
+/// One view-owned clock for the loaded Trees' canopy fades. A scan on a tick that has no
+/// delivered frame keeps the previous target rather than guessing an occupant.
 pub struct TreeOcclusionPresentation {
     trees: BTreeMap<String, TreeOcclusion>,
     last_tick: u64,

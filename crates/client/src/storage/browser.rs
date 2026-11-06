@@ -1,4 +1,6 @@
-//! The original IndexedDB slot and localStorage transports.
+//! Browser save slots in IndexedDB and preferences in localStorage. Hosted guests use the
+//! `solomon-dark-game-saves` database; other browser play uses this client's own. Both
+//! names are scoped to the configured Website mount.
 use super::StoredSave;
 use js_sys::Promise;
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
@@ -9,6 +11,8 @@ const DATABASE: &str = "solomon-darker-rust-saves";
 const SOURCE_DATABASE: &str = "solomon-dark-game-saves";
 const STORE: &str = "slots";
 
+/// An open IndexedDB save database: this client's own, or the hosted guest database when
+/// `source` is set.
 #[derive(Clone)]
 pub struct LocalSaveStore {
     database: IdbDatabase,
@@ -174,6 +178,7 @@ pub(crate) async fn transaction_done(transaction: &IdbTransaction) -> Result<(),
     result
 }
 
+/// The browser's localStorage, which holds preferences.
 pub struct Preferences(web_sys::Storage);
 
 impl Preferences {

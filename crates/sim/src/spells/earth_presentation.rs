@@ -1,6 +1,6 @@
-//! The native boulder's projected rock shell from `renderer/earth-boulder-presentation.ts`.
-//! Ordinary Earth and welded Ethereal Boulder share this geometry before choosing
-//! their own stock sprite layers.
+//! The boulder's projected rock shell: rocks placed on a sphere, turned by the boulder's
+//! orientation and sorted by depth. Ordinary Earth and welded Ethereal Boulder share
+//! this geometry before choosing their own stock sprite layers.
 
 use super::earth::{EarthBoulderVector3, earth_boulder_transform_point};
 use super::model::{
@@ -11,6 +11,7 @@ use super::visual::visual_unit_random;
 use crate::Vec2;
 use crate::float;
 
+/// The boulder state its drawing depends on: age, charges, orientation and phase.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthBoulderPresentationState {
     pub age_ticks: f64,
@@ -38,6 +39,7 @@ impl From<&PrimarySpellEarthProjectile> for EarthBoulderPresentationState {
     }
 }
 
+/// The glow sprite behind a boulder.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthBoulderAuraPlan {
     pub alpha: f64,
@@ -45,6 +47,7 @@ pub struct EarthBoulderAuraPlan {
     pub scale: f64,
 }
 
+/// The additive flash over a newly formed boulder, which fades as the boulder ages.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthBoulderOpeningFlashPlan {
     pub alpha: f64,
@@ -53,6 +56,8 @@ pub struct EarthBoulderOpeningFlashPlan {
     pub scale: f64,
 }
 
+/// One rock of the shell: its local and rotated positions, projected offset, atlas
+/// record, rotation and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthBoulderRockPlan {
     pub local: EarthBoulderVector3,
@@ -65,6 +70,8 @@ pub struct EarthBoulderRockPlan {
     pub transformed: EarthBoulderVector3,
 }
 
+/// A boulder's full drawing: aura, opening flash, shell rocks in depth order, jitter
+/// and sort bias.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EarthBoulderPresentationPlan {
     pub aura: EarthBoulderAuraPlan,
@@ -158,7 +165,7 @@ pub fn earth_boulder_sprite_plan(
     earth_boulder_sprite_plan_at_age(state, render_tick, state.common.age_ticks as f64)
 }
 
-/// The source opening flash reads fractional presentation age; cosmetic jitter reads render time.
+/// The opening flash reads fractional presentation age; cosmetic jitter reads render time.
 #[must_use]
 pub fn earth_boulder_sprite_plan_at_age(
     state: &PrimarySpellEarthProjectile,

@@ -42,6 +42,7 @@ fn file(name: &str, limit: usize) -> Result<DocumentFile, String> {
     })
 }
 
+/// A native save slot: one JSON document file in the configured data directory.
 #[derive(Clone)]
 pub struct LocalSaveStore(DocumentFile);
 
@@ -112,6 +113,8 @@ fn decode(text: Option<String>) -> Result<Option<StoredSave>, String> {
     .transpose()
 }
 
+/// The preference values loaded from `preferences.json` and whether this transaction
+/// changed them.
 pub struct Preferences {
     values: BTreeMap<String, String>,
     changed: bool,

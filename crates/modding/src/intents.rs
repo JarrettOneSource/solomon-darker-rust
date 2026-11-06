@@ -1,8 +1,10 @@
-//! Atomic game-adapter transactions from `mod-intent-executor.ts`.
+//! All-or-nothing execution of a batch of mod intents: the batch is checked, prepared against
+//! the game through an adapter, then committed or rolled back as a whole.
 
 use solomon_sim::modding::LuaObject;
 use solomon_sim::modding::runtime::{ModIntent, ModStateScope};
 
+/// The Lua context, scope and tick that a batch of mod intents runs in.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ModIntentExecutionContext {
     pub context: LuaObject,
@@ -10,12 +12,13 @@ pub struct ModIntentExecutionContext {
     pub tick: u64,
 }
 
+/// A prepared batch of mod intents, committed or rolled back as a whole.
 pub trait ModIntentTransaction {
     fn commit(&mut self) -> Result<(), String>;
     fn rollback(&mut self, reason: &str) -> Result<(), String>;
 }
 
-/// A transaction borrows the actual game and prepared content for one batch.
+/// A transaction borrows the game and prepared content for one batch.
 /// The executor never retains that borrow or creates another game authority.
 pub trait ModIntentAdapter {
     fn prepare<'a>(
@@ -25,6 +28,7 @@ pub trait ModIntentAdapter {
     ) -> Result<Box<dyn ModIntentTransaction + 'a>, String>;
 }
 
+/// Whether a batch of mod intents was accepted, the error that rejected it, and its size.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModIntentExecutionResult {
@@ -60,7 +64,7 @@ pub fn execute_mod_intents(
         Err(error) => return reject(error),
     };
     if let Err(error) = transaction.commit() {
-        // Source deliberately keeps the commit error if rollback also fails.
+        // If rollback also fails, the commit error is still the one reported, deliberately.
         let _ = transaction.rollback(&error);
         return reject(error);
     }

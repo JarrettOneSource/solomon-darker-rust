@@ -1,4 +1,6 @@
-//! Ordered outer-host epochs from `host/prepared-mod-host.ts::step/tick`.
+//! The prepared mod host's lifecycle: activating a mod Boneyard's roster, passing game events
+//! to the mods, and each tick's fixed order of statuses, shops, powerups, enemies, spell
+//! effects, pickups and enemy damage events.
 
 use solomon_sim::boneyard::collision::resolve_boneyard_movement;
 use solomon_sim::combat::PlayerLifeState;
@@ -100,8 +102,8 @@ impl PreparedModHost {
         self.runtime.shops.tick(tick)?;
         self.runtime.powerups.tick(tick)?;
 
-        // Source samples living player positions once, before custom attacks.
-        // Effects and pickups use that same sample even if an attack is lethal.
+        // Living player positions are sampled once, before mod enemy attacks. Spell
+        // effects and pickups use the same sample even if an attack kills a player.
         let mut players = Vec::new();
         for id in &game.participant_order {
             let participant = &game.participants.get(id).expect("participant exists");
@@ -142,8 +144,8 @@ impl PreparedModHost {
                     Vec::new()
                 };
             if !attacks.is_empty() {
-                // Source writes the full attack group only after every filter
-                // succeeds. Never leave a partial damage batch on an error.
+                // Attacks land on a copy that replaces the game only after every damage
+                // filter succeeds, so an error never leaves part of the batch applied.
                 let mut attacked = game.clone();
                 for attack in attacks {
                     let participant = attacked
@@ -194,7 +196,7 @@ impl PreparedModHost {
                     spawns: &mut self.enemy_spawns,
                     presentation: &mut self.presentation,
                 };
-                // A prepare failure is fatal in Source. Only a failed commit
+                // A failed prepare fails the whole tick. Only a failed commit
                 // retires this effect and logs its rejected transaction.
                 let mut transaction = adapter.prepare(&batch.intents, &context)?;
                 match transaction.commit() {
@@ -246,7 +248,8 @@ impl PreparedModHost {
                 spawns: &mut self.enemy_spawns,
                 presentation: &mut self.presentation,
             };
-            // Source pickup actions intentionally do not use report().
+            // Pickups call the session directly on purpose, so their errors are not
+            // added to the host log.
             let result = self.session.act(&input, &mut adapter)?;
             if result.accepted {
                 self.runtime.powerups.collect(instance.id, &player_id, tick)?;

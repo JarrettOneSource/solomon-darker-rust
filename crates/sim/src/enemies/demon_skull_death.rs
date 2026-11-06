@@ -1,4 +1,5 @@
-//! Discorporeal death stream and banishment birth from `enemies/demon-skull-death.ts`.
+//! The Discorporeal's death: its death audio stream, camera shake and green branch effects
+//! while it dies, then the Ultra Banish spell once the stream ends.
 
 use super::boss_spell::BossSpellKind;
 use super::demon_skull_controller::DEMON_SKULL_DEATH_STREAM_TICKS;

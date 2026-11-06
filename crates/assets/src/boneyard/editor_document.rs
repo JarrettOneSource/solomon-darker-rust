@@ -1,13 +1,13 @@
-//! Complete `editor/format/boneyard.ts::parseBoneyard` documents for the GPU
-//! Shelf's native-file import. The existing container reader owns framing/limits;
+//! The editor's complete JSON document for an authored Boneyard file, used when the
+//! Boneyard library imports a native file. The shared container reader owns framing/limits;
 //! this projection preserves all native state for the Website-owned editor.
 use super::{header, is_placeable, manager, read_envelope, read_f32, read_u32, validate_manager};
 use crate::native_save::NativeChunkNode;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
 
-/// Source `parseBoneyard`, before editor asset hydration. Native bytes and opaque
-/// records remain attached; this value never substitutes a playable scene.
+/// Parses the file into the editor document, before the editor hydrates its assets. Native
+/// bytes and opaque records remain attached; this value never substitutes a playable scene.
 pub fn parse_editor_boneyard(bytes: &[u8]) -> Result<Value, String> {
     let root = read_envelope(bytes)?;
     let arena = &root.children[0];

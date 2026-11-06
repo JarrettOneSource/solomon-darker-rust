@@ -3,6 +3,7 @@ use js_sys::{Array, Intl, Object, Reflect};
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
+/// A 2D canvas context set to the Sack name font, used to measure and draw names.
 pub(super) struct FontCanvas {
     canvas: HtmlCanvasElement,
     context: CanvasRenderingContext2d,
@@ -71,7 +72,7 @@ pub(super) fn graphemes(text: &str) -> Result<Vec<String>, String> {
     let constructor =
         Reflect::get(&intl, &JsValue::from_str("Segmenter")).map_err(|_| "Sack name Segmenter")?;
     if !constructor.is_function() {
-        // Source uses code points on browsers without Intl.Segmenter.
+        // Browsers without Intl.Segmenter split names into code points instead.
         return Ok(text.chars().map(|character| character.to_string()).collect());
     }
     let segmenter = Intl::Segmenter::new(&Array::new(), &Object::new());

@@ -1,4 +1,4 @@
-//! Saved action receipts use the current `protocol/codecs/economy.ts` contract.
+//! Validation of a saved action receipt: the result of the latest economy action.
 
 use serde_json::Value;
 

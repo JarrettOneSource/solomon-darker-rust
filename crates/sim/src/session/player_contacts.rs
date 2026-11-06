@@ -1,6 +1,6 @@
-//! Enemy-to-player orchestration from `core-server/player-contact-system.ts`.
-//! Reflections and adjusted status rows are returned for the session's later
-//! source phases. Immediate resources, facing, web ownership and births live here.
+//! Enemy-to-player contacts: damage, deflection, reflection, status effects and webs.
+//! Reflections and adjusted status rows are returned for the session's later tick
+//! phases. Immediate resources, facing, web ownership and births live here.
 
 use std::collections::BTreeMap;
 
@@ -54,6 +54,8 @@ pub struct PlayerContactPlayer<'a> {
     pub lighting: &'a mut PlayerLightingState,
 }
 
+/// What applying enemy contacts reads and writes: the players, Boneyard world, secondary
+/// state, tick, painter order and screen flashes.
 pub struct PlayerContactContext<'a> {
     pub enhanced_effects: bool,
     pub players: &'a mut [PlayerContactPlayer<'a>],
@@ -64,6 +66,7 @@ pub struct PlayerContactContext<'a> {
     pub screen_flashes: &'a mut crate::screen_flash::ScreenFlashState,
 }
 
+/// Damage a player reflects back to an enemy.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReflectedEnemyDamage {
     pub actor_id: usize,
@@ -71,6 +74,8 @@ pub struct ReflectedEnemyDamage {
     pub player_id: String,
 }
 
+/// What enemy contacts leave for later phases: Harden chips, applied and reflected damage,
+/// Deflect pitches and damage sounds.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PlayerContactResult {
     pub harden_chips: Vec<PendingPlayerHardenChip>,
@@ -562,7 +567,7 @@ impl ContactStep<'_, '_> {
                 position,
                 velocity_per_tick: Vec2::ZERO,
             };
-            // The source keeps the birth/counter changes but discards spawn-event publication.
+            // Keep the birth and counter changes but discard the spawn event.
             drop(self.world.enemies.add_cocoon(
                 self.participant.player_id,
                 position,

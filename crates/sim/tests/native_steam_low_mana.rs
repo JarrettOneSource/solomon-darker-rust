@@ -1,5 +1,5 @@
 //! Instruction-derived contract: retail 0x00543266 grants normal Steam contacts
-//! independently of the low-mana byte. Retained Website ledger123/report133 catalog.
+//! independently of the low-mana byte.
 
 use solomon_sim::spells::weld::*;
 use solomon_sim::{Rng, Vec2};

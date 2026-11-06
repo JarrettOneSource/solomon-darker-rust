@@ -1,4 +1,4 @@
-//! Ether Drain's saved target cursors and animation owners from `codecs/secondary-actors.ts`.
+//! Validation of Ether Drain's saved target cursors and animation owners.
 
 use std::collections::BTreeSet;
 

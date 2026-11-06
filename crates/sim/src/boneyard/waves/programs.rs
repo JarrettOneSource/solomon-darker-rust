@@ -1,9 +1,10 @@
-//! Generated-Boneyard survival scripts from `native-survival-boss-encounter.ts`,
-//! `native-survival-skeleton-bosses.ts` and `native-spider-wave-program.ts`.
+//! The generated Boneyards' survival scripts (bosses, skeleton bosses, spiders and Portals)
+//! and the state machines that run the boss and spider scripts.
 
 use crate::enemies::config::AuthoredEnemyRecipe;
 use crate::enemies::{EnemyFlag, EnemyToken, SpawnPositionPolicy};
 
+/// The three scripted boss encounters of a generated Boneyard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BossKind {
@@ -23,6 +24,8 @@ impl BossKind {
     }
 }
 
+/// An authored boss encounter: the wave it starts on, the boss recipes it spawns and how many
+/// completion skeletons follow once no boss is alive.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BossDefinition {
     pub kind: BossKind,
@@ -31,12 +34,15 @@ pub struct BossDefinition {
     pub recipes: Vec<AuthoredEnemyRecipe>,
 }
 
+/// A skeleton boss (Ironmaw or Foulshaft): the wave it appears on and its authored recipe.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkeletonBossDefinition {
     pub wave_ordinal: u64,
     pub recipe: AuthoredEnemyRecipe,
 }
 
+/// One phase of the Portal script: its start wave, how many Portals it spawns, their
+/// placement and their authored recipe.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct PortalDefinition {
@@ -52,6 +58,7 @@ pub struct PortalDefinition {
     pub recipe: AuthoredEnemyRecipe,
 }
 
+/// One command of an authored spider wave script.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub enum SpiderCommand {
@@ -69,6 +76,7 @@ pub enum SpiderCommand {
     Jump { next: usize },
 }
 
+/// One phase of the spider wave script: its start wave and command list.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct SpiderDefinition {
@@ -79,7 +87,8 @@ pub struct SpiderDefinition {
     pub commands: Vec<SpiderCommand>,
 }
 
-/// Exact per-source authored programs. This is generated data; execution below is Rust.
+/// The authored survival programs of one generated Boneyard, identified by its `source_sha256`.
+/// The data is generated; this module and the wave director execute it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurvivalPrograms {
     pub source_sha256: String,
@@ -92,6 +101,8 @@ pub struct SurvivalPrograms {
     pub portals: Vec<PortalDefinition>,
 }
 
+/// Where a boss encounter stands: waiting for its wave, waiting until no boss is alive, the
+/// delay before its completion skeletons, spawning them, or retired.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum BossPhase {
@@ -115,18 +126,22 @@ impl BossPhase {
     }
 }
 
+/// What a boss encounter step spawns: the boss itself or one completion skeleton.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BossBirth {
     Boss,
     Skeleton,
 }
 
+/// One boss encounter step's result: an optional birth and whether the next wave starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BossStep {
     pub birth: Option<BossBirth>,
     pub release_wave: bool,
 }
 
+/// Saved progress of one boss encounter. It holds the TimeLine from the boss's birth until
+/// its last completion skeleton spawns.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BossEncounter {
@@ -190,6 +205,8 @@ impl BossEncounter {
     }
 }
 
+/// Where the Foulshaft fight stands: waiting for its wave, archer reinforcements, waiting
+/// for the bosses to die, or retired.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum FoulshaftPhase {
@@ -212,6 +229,7 @@ impl FoulshaftPhase {
     }
 }
 
+/// Saved progress of the Ironmaw and Foulshaft skeleton bosses.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SkeletonBossState {
@@ -221,6 +239,7 @@ pub struct SkeletonBossState {
     pub ironmaw_spawned: bool,
 }
 
+/// One enemy the skeleton-boss script asks the director to spawn.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkeletonBirth {
     pub enemy_token: EnemyToken,
@@ -229,6 +248,7 @@ pub struct SkeletonBirth {
     pub archer_strafing: bool,
 }
 
+/// One skeleton-boss step's births and whether the next wave starts.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SkeletonStep {
     pub births: Vec<SkeletonBirth>,
@@ -318,6 +338,8 @@ fn opening_archer() -> SkeletonBirth {
     }
 }
 
+/// Saved progress of the spider wave script: its phase, command cursor, repeat and sleep
+/// counters, TimeLine hold and spawn placement.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpiderState {
@@ -346,12 +368,14 @@ impl Default for SpiderState {
     }
 }
 
+/// One spider the script spawns, with its flags and placement policy.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpiderBirth {
     pub flags: Vec<EnemyFlag>,
     pub position_policy: SpawnPositionPolicy,
 }
 
+/// One spider script step's births and whether it asked for the next wave.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpiderStep {
     pub advance_wave: bool,
@@ -359,8 +383,9 @@ pub struct SpiderStep {
 }
 
 impl SpiderState {
-    /// ScriptCall executes at most ten commands, stopping early on sleep. Spawns affect
-    /// later IF MONSTERS commands in this same tick before the enemy store receives them.
+    /// Like the original game's ScriptCall, a step executes at most ten commands, stopping
+    /// early on sleep. Spawns affect later IF MONSTERS commands in this same tick before the
+    /// enemy store receives them.
     pub fn step(
         &mut self,
         definitions: &[SpiderDefinition],

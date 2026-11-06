@@ -35,6 +35,7 @@ impl EnemyAtlas {
     }
 }
 
+/// The six enemy atlas banks: BadGuys, DeadHawg, Demon, Faculty, Heartmonger and Unholy.
 pub(super) struct EnemyAtlases {
     banks: [EnemyAtlas; 6],
 }

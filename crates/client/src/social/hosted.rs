@@ -1,4 +1,4 @@
-//! Website `MainMenuScene` player-card resolution and `CollegeInvitationDialog`.
+//! Hosted-session social features: player card lookups and private College invitations.
 //! The borrowed host records are presentation data. Website resolution and session
 //! replacement leave through this queue and remain with the Game coordinator.
 
@@ -7,6 +7,8 @@ use solomon_sim::social::{GameCollegeInvitation, GamePlayerCardProfile};
 
 use super::{SocialUi, Surface};
 
+/// A social request for the hosted game: a hosted command to send, or a College
+/// invitation to resolve.
 #[derive(Clone, Debug)]
 pub enum HostedSocialAction {
     Command(Box<HostedCommand>),

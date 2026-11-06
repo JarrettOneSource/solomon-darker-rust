@@ -1,4 +1,5 @@
-//! Portal materialization and recurring Imp ejections from `native-survival-portal.ts`.
+//! The enemy Portal: it settles into place over its first ten ticks, then ejects an Imp at
+//! random intervals set by its frequency.
 use super::config::EnemyFamilyConfig;
 use super::effects::DeathEffectOwner;
 use super::model::*;

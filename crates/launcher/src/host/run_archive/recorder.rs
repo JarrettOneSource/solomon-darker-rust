@@ -1,4 +1,6 @@
-//! Source `host/run-archive.ts`. Checkpoint retention is separate from serialization/I/O.
+//! Run archive recording. Each active run keeps its last living checkpoints, overall and
+//! per player, its slowest tick, its final state and tick timing. Checkpoint retention is
+//! separate from serialization/I/O.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -31,6 +33,8 @@ impl ArchivedState {
     }
 }
 
+/// A state captured around one tick, with that tick's inputs, enemy spawn intents and
+/// duration.
 #[derive(Clone)]
 pub struct RunArchiveCheckpoint {
     pub state: Arc<ArchivedState>,
@@ -49,6 +53,8 @@ impl RunArchiveCheckpoint {
     }
 }
 
+/// Tick timing over a window of up to 100 ticks: mean and maximum duration, the largest
+/// lag behind schedule, and the ticks over the 10 ms budget.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RunArchivePerformanceWindow {
@@ -59,6 +65,7 @@ pub struct RunArchivePerformanceWindow {
     pub maximum_behind_ms: f64,
     pub over_budget_ticks: u64,
 }
+/// A run's tick timing: totals plus its 60 most recent windows.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RunArchivePerformance {
@@ -68,6 +75,7 @@ pub struct RunArchivePerformance {
     pub recent: Vec<RunArchivePerformanceWindow>,
 }
 
+/// Why a run's archive was finished.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RunArchiveEndReason {
@@ -77,6 +85,8 @@ pub enum RunArchiveEndReason {
     ServerError,
 }
 
+/// A finished run's diagnostic archive: identity, content, scene, retained checkpoints and
+/// tick timing.
 pub struct RunArchive {
     pub run_id: String,
     pub session_id: String,
@@ -87,7 +97,7 @@ pub struct RunArchive {
     pub content: GameContentManifest,
     pub loaded_boneyard: Arc<LoadedBoneyard>,
     pub last_alive: Option<RunArchiveCheckpoint>,
-    /// Source Map insertion order, independent of participant IDs.
+    /// In the order players were first seen alive, independent of participant IDs.
     pub last_alive_by_player: Vec<(String, RunArchiveCheckpoint)>,
     pub worst_tick: RunArchiveCheckpoint,
     pub final_state: Arc<ArchivedState>,
@@ -104,6 +114,7 @@ struct ActiveRun {
     performance: RunArchivePerformance,
 }
 
+/// Tracks each active run on a host and turns it into a `RunArchive` when it ends.
 pub struct RunArchiveRecorder {
     runs: Vec<ActiveRun>,
     session_id: String,

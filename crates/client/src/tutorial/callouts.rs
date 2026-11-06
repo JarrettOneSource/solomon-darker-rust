@@ -1,6 +1,8 @@
 //! Tutorial callouts over visible GPU control geometry, including compact scroll.
 use super::{PointerPlan, TutorialPointerView, TutorialViewSnapshot};
 use solomon_sim::{Vec2, hud::HudRect};
+/// A visible control's screen rectangle and its scale relative to the authored size,
+/// used to place Tutorial callouts.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Anchor {
     rect: HudRect,
@@ -13,6 +15,8 @@ impl Anchor {
     }
 }
 
+/// The visible controls a Tutorial callout can point at, measured from this frame's GPU
+/// widgets.
 #[derive(Default)]
 pub(super) struct TutorialTargets {
     pub secondary: Option<Anchor>,
@@ -88,6 +92,7 @@ impl TutorialTargets {
         targets
     }
 }
+/// One Tutorial callout to draw: its ID, text, center and scale.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct CalloutPlan {
     pub id: &'static str,

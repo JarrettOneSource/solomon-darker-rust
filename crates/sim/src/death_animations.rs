@@ -1,5 +1,5 @@
-//! Retained death fragments and dropped weapons from `native-death-animations.ts`.
-//! Their shared motion is `native-bouncer.ts`, driven by the actual secondary RNG.
+//! Retained Golem death fragments and the weapons dropped by dying players. Both bounce with
+//! `step_bouncer_motion`, drawing from the secondary simulation's RNG.
 
 use crate::appearance::equipment::PlayerWeaponAppearance;
 use crate::float::{cos, fround, sin};
@@ -12,6 +12,7 @@ pub const GOLEM_DEATH_FRAGMENT_COUNT: usize = 30;
 pub const GOLEM_DEATH_PAINTER_COUNT: usize = GOLEM_DEATH_FRAGMENT_COUNT + 1;
 pub const GOLEM_DEATH_STAR_TICKS: u64 = 15;
 
+/// A bouncing object's ground position, height, velocities and spin.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BouncerMotion {
@@ -24,8 +25,8 @@ pub struct BouncerMotion {
     pub vertical_velocity: f64,
 }
 
-/// The native motion kernel borrows its actual owner's stream. Enemy world effects
-/// use xorshift; Golem fragments and player weapons use the secondary native RNG.
+/// The random stream a bouncing object's owner lends to its motion. Enemy world effects
+/// use xorshift; Golem fragments and player weapons use the secondary simulation's `Rng`.
 pub trait BouncerRandom {
     fn float(&mut self, maximum: f64) -> f64;
     fn integer(&mut self, maximum: u32) -> u32;
@@ -39,8 +40,8 @@ impl BouncerRandom for Rng {
     }
 }
 
-/// Returns whether airborne motion skipped this application-parity tick. A grounded
-/// fragment still runs its owner's lifetime subtraction, without another random draw.
+/// Returns whether airborne motion skipped this tick; it pauses on every third tick. A
+/// grounded fragment still runs its owner's lifetime subtraction, without another random draw.
 pub fn step_bouncer_motion(
     motion: &mut BouncerMotion,
     tick: u64,
@@ -80,6 +81,7 @@ pub fn step_bouncer_motion(
     false
 }
 
+/// One Golem death fragment: its remaining life and bouncing motion.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeathFragment {
@@ -88,6 +90,7 @@ pub struct DeathFragment {
     pub motion: BouncerMotion,
 }
 
+/// A dead Golem's fragments (`None` once expired) and the rotation of its star.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct GolemDeathAnimation {
@@ -159,6 +162,8 @@ pub fn step_golem_death_animation(animation: &mut GolemDeathAnimation, tick: u64
     }
 }
 
+/// The weapon a dying player drops: its owner, death epoch, painter registration, appearance
+/// and bouncing motion.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DeathWeaponActor {
@@ -173,6 +178,8 @@ pub struct DeathWeaponActor {
     pub weapon: PlayerWeaponAppearance,
 }
 
+/// The dying player's values needed to create a dropped weapon: identity, heading, position,
+/// painter registration and weapon appearance.
 pub struct DeathWeaponBirth<'a> {
     pub death_epoch: u64,
     pub heading_index: usize,

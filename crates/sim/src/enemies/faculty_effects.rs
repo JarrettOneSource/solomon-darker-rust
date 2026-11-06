@@ -1,5 +1,5 @@
-//! Faculty smoke and spell particles from `enemies/faculty-effects.ts` and the shared
-//! smoke constructor in `enemies/faculty-death.ts`.
+//! The Faculty's smoke and spell particles: body smoke while it lives and dies, projectile
+//! trails and impacts, Blightning smoke, and the Tragic Circle's rings and smoke.
 
 use super::config::desaturate_color;
 use super::effects::{
@@ -15,6 +15,8 @@ use crate::float;
 use crate::float::{fround, hypot};
 use crate::painter::WorldPainterOrder;
 
+/// When Faculty body smoke is emitted: while it lives, as it starts dying, through its dying
+/// interval, or in its final burst.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FacultySmokePhase {
     Living,
@@ -23,6 +25,8 @@ pub enum FacultySmokePhase {
     Terminal,
 }
 
+/// Which Faculty projectile smoke to spawn: a Skull Missile or Dark Fireball trail, or the
+/// burst from a skull, fireball or arcing ring-fireball impact.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FacultyProjectileSmoke {
     SkullTrail,
@@ -393,7 +397,7 @@ pub fn spawn_tragic_circle_effects(
     }
 }
 
-#[allow(clippy::too_many_arguments)] // Mirrors the one smoke constructor shared by source profiles.
+#[allow(clippy::too_many_arguments)] // One smoke constructor shared by every smoke profile.
 fn smoke(
     world: &mut EnemyWorld,
     owner: DeathEffectOwner,

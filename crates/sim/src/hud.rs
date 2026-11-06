@@ -1,5 +1,5 @@
-//! Screen-space HUD rules from Website `native-hud-layout.ts` and
-//! `native-hud-presentation.ts`. `tests/hud_input_goldens.rs` replays their oracle.
+//! Screen-space HUD rules: control layout, health and mana bars, and belt entry art.
+//! `tests/hud_input_goldens.rs` replays recorded HUD geometry and meter layering.
 
 pub mod belt_pull_off;
 pub mod mobile;
@@ -9,6 +9,7 @@ pub mod skill_selector;
 pub const HUD_BASE_HEALTH: f64 = 50.0;
 pub const HUD_BASE_MANA: f64 = 100.0;
 
+/// A screen-space HUD rectangle: its top-left corner and size.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HudRect {
     pub x: f64,
@@ -24,6 +25,7 @@ impl HudRect {
     }
 }
 
+/// Where the backpack, the tome and the eight belt slots sit on screen.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HudControlLayout {
     pub backpack: HudRect,
@@ -31,6 +33,7 @@ pub struct HudControlLayout {
     pub tome: HudRect,
 }
 
+/// The health bar's track, core and fill widths, and its health and shield fill fractions.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HudHealthPresentation {
     pub core_width: f64,
@@ -41,6 +44,7 @@ pub struct HudHealthPresentation {
     pub track_width: f64,
 }
 
+/// The mana bar's track, core and fill widths, and its mana and reserve fill fractions.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HudManaPresentation {
     pub core_width: f64,
@@ -51,12 +55,14 @@ pub struct HudManaPresentation {
     pub track_width: f64,
 }
 
+/// Which fill a health bar layer draws: health or shield.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HudHealthLayerKind {
     Health,
     Shield,
 }
 
+/// One health bar fill layer: its kind, fill fraction and sprite record.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HudHealthLayer {
     pub kind: HudHealthLayerKind,
@@ -64,6 +70,7 @@ pub struct HudHealthLayer {
     pub record: usize,
 }
 
+/// What a belt slot shows: a skill, a potion stack or an inventory item.
 #[derive(Clone, Debug, PartialEq)]
 pub enum HudBeltEntry {
     Skill { record: usize, unavailable: bool },
@@ -94,8 +101,8 @@ impl HudItemIcon {
     }
 }
 
-/// `NativeBeltItemIcon` keeps explicit garment colors before recipe and element
-/// defaults. A missing tint lane is untinted texture, including Combinator trim.
+/// An item icon's two tints. Hats and robes keep explicit garment colors before recipe and
+/// element defaults. A missing tint lane is untinted texture, including Combinator trim.
 #[must_use]
 pub fn inventory_item_icon_tints(
     item: &crate::economy::HubInventoryItem,
@@ -118,8 +125,8 @@ pub fn inventory_item_icon_tints(
         .map(|tint| tint.unwrap_or(0xffffff))
 }
 
-/// Inventory icon transforms from Website `HUB_ITEM_ICON_TRANSFORMS`, shared by
-/// the gameplay belt, Inventory and its companions, and the mobile HUD preview.
+/// An item icon's offset and rotation by equipment type, shared by the gameplay belt,
+/// Inventory and its companions, and the mobile HUD preview.
 #[must_use]
 pub const fn inventory_item_icon_transform(
     equipment_type: Option<crate::economy::EquipmentType>,
@@ -153,8 +160,8 @@ pub struct HudState {
 }
 
 impl HudState {
-    /// Website `createPlayerCombat`, `createPlayerSkillBook` (Ether), `createNativePlayerBelt`
-    /// and `createHubEconomy`: level one, Magic Missile/Call Leviathan, one potion of each, 500 gold.
+    /// The HUD of a new Ether wizard: level one, Magic Missile and Call Leviathan, one potion
+    /// of each, 500 gold.
     #[must_use]
     pub const fn new_game() -> Self {
         Self {
@@ -184,8 +191,8 @@ impl HudState {
     }
 }
 
-/// `nativeHudControlLayout` and `nativeHudModalSlideLayout`. `None` is the resting writer;
-/// a modal writer at progress zero starts the belt half a pixel lower than the resting HUD.
+/// The HUD controls at rest (`None`) or sliding with a modal (`Some(progress)`). A modal
+/// layout at progress zero starts the belt half a pixel lower than the resting HUD.
 #[must_use]
 pub fn hud_control_layout(
     width: f64,

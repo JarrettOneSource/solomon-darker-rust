@@ -1,4 +1,4 @@
-//! Source sprite transforms from `renderer/primary-spell-air-water-native.ts`.
+//! Sprite transforms for drawing Hurricane, Cold Aura and Water Hail.
 use crate::Vec2;
 use crate::cold_aura::{ColdAuraVisualInput, cold_aura_visual_state};
 use crate::float::fround;
@@ -6,12 +6,15 @@ use crate::spells::model::{
     PrimarySpellAirHurricane, PrimarySpellWaterAura, PrimarySpellWaterHail,
 };
 
+/// The part of a Hurricane a sprite draws: its core, an orbiting lane, or the second
+/// copy of a lane that enhanced effects add.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HurricaneSpriteRole {
     Core,
     Lane,
     LaneCopy,
 }
+/// One Hurricane sprite: its alpha, blend, offset, rotation, scale and tint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HurricaneSpritePlan {
     pub alpha: f64,
@@ -60,6 +63,7 @@ pub fn hurricane_visual_plan(state: &PrimarySpellAirHurricane) -> Vec<HurricaneS
     plans
 }
 
+/// How to draw a Cold Aura this frame: alpha, rotation, scale and tint.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaterAuraVisualPlan {
     pub alpha: f64,
@@ -83,6 +87,7 @@ pub fn water_aura_visual_plan(state: &PrimarySpellWaterAura) -> WaterAuraVisualP
     }
 }
 
+/// How to draw one Water Hail stone: alpha, height offset, rotation and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HailVisualPlan {
     pub alpha: f64,

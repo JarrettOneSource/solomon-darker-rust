@@ -1,10 +1,12 @@
-//! Gameplay viewport from `renderer/game-viewport.ts`. Small windows scale the
-//! native minimum down; larger windows reveal more world instead of enlarging UI.
+//! The gameplay viewport: how a window maps to the logical view and world zoom. Small
+//! windows scale the native minimum down; larger windows reveal more world instead of
+//! enlarging UI.
 
 use crate::Vec2;
 
 pub const GAME_VIEWPORT_MIN_SIZE: Vec2 = Vec2::new(1600.0, 900.0);
 
+/// A window's logical size, display scale and world zoom.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameViewport {
     pub display_scale: f64,

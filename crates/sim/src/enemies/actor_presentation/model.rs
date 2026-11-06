@@ -1,7 +1,9 @@
-//! Stock enemy draw values from `renderer/native-enemy-presentation-model.ts`.
+//! Enemy draw values: art atlases and records, sprite and segment layers, and the plan each
+//! actor hands to the renderer.
 
 use crate::Vec2;
 
+/// The stock sprite atlas an enemy layer draws from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyArtAtlas {
     BadGuys,
@@ -31,6 +33,7 @@ pub trait EnemyArtPoints {
     fn points(&self, atlas: EnemyArtAtlas, entry: usize) -> &[Vec2];
 }
 
+/// A registered art frame's anchor and size.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyArtRecord {
     pub anchor_x: f64,
@@ -44,18 +47,22 @@ pub trait EnemyArtRecords: EnemyArtPoints {
     fn record(&self, atlas: EnemyArtAtlas, entry: usize) -> EnemyArtRecord;
 }
 
+/// The blend mode of an enemy art layer: normal or additive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyArtBlend {
     Normal,
     Add,
 }
 
+/// Two points a layer's sprite is stretched between: the sprite is centred between them, turned to
+/// face along them and scaled to their distance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyArtStretch {
     pub start: Vec2,
     pub end: Vec2,
 }
 
+/// One sprite an enemy paints: atlas entry, offset, rotation, scale, tint, blend and role.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemySpriteLayer {
     pub alpha: f64,
@@ -132,6 +139,8 @@ impl From<crate::enemies::presentation::EnemyProjectileLayer> for EnemySpriteLay
     }
 }
 
+/// A line segment an enemy paints, such as a flail chain, drawn just before the sprite layer whose
+/// role is `before_role`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemySegmentLayer {
     pub alpha: f64,
@@ -144,6 +153,8 @@ pub struct EnemySegmentLayer {
     pub width: f64,
 }
 
+/// One family's layers before compositing: layers before and after the body, the body, the body
+/// copy used for hit flashes, and segments.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EnemyFamilyPresentation {
     pub before: Vec<EnemySpriteLayer>,
@@ -159,12 +170,15 @@ impl EnemyFamilyPresentation {
     }
 }
 
+/// The target whose position and primary tint drive a nearby exposed Spider's outline.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemySpiderOutlineTarget {
     pub position: Vec2,
     pub primary_tint: u32,
 }
 
+/// Per-frame inputs for drawing an enemy: the simulation and application ticks, the lighting mode,
+/// Spider outline inputs and a pike target override.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyActorAppearanceContext {
     pub tick: u64,
@@ -175,6 +189,8 @@ pub struct EnemyActorAppearanceContext {
     pub pike_target_position: Option<Vec2>,
 }
 
+/// What the renderer draws for one enemy: facing, root scale, sprite and segment layers, spawn age
+/// and the origin of its attack effect.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyActorPresentationPlan {
     pub attack_effect_origin: Option<Vec2>,

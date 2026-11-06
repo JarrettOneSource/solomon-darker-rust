@@ -1,4 +1,5 @@
-//! Registered lit-rock fragment programs from `core-kernels/primary-spell-earth.ts`.
+//! The lit rock fragments an Earth impact scatters. Each fragment has its own painter
+//! registration, and its motion replays deterministically from the impact's seed.
 
 use super::earth::earth_visual_random_int;
 use super::visual::visual_unit_random;
@@ -6,6 +7,8 @@ use crate::Vec2;
 use crate::float;
 use crate::float::fround;
 
+/// What an Earth impact's fragments replay from: its ID, birth tick, charge and
+/// effects setting.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthImpactSeed {
     pub birth_tick: u64,
@@ -14,6 +17,8 @@ pub struct EarthImpactSeed {
     pub id: u64,
 }
 
+/// One impact fragment's frame: position, height, velocities, rotation, scale, alpha
+/// and atlas record.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthFragmentState {
     pub alpha: f64,

@@ -1,6 +1,6 @@
-//! Current Website save interchange (`save/game-save-document.ts`).
+//! The Website save document, the interchange format for web game saves.
 //! Native host checkpoints remain their own durable format; this boundary translates
-//! the Website's component rows into the existing simulation owners.
+//! the document's component rows into the existing simulation owners.
 
 mod contract;
 mod create;

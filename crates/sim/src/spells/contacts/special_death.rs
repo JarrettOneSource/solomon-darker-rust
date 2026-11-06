@@ -1,5 +1,6 @@
-//! Current Source `spell-combat/special-death.ts`. Only the admitted newborn's
-//! receiver contacts run here, before the caller resumes its native factory.
+//! Contacts for a special death's Fire or Steam detonation at its victim. Only the
+//! admitted newborn's receiver contacts run here, before the caller resumes its native
+//! factory.
 use super::*;
 use crate::spells::fire::{
     FireProjectilePayload, begin_fire_detonation, fire_ember_contact, step_fire_ember,

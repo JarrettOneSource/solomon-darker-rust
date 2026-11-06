@@ -1,4 +1,4 @@
-//! Archer volleys, elemental Mage births and lightning pulses from `projectile-emission.ts`.
+//! Enemy projectile births: Archer volleys, elemental Mage casts and Mage lightning pulses.
 use super::config::{ArrowType, EnemyFamilyConfig, MageElement};
 use super::effects::{DeathEffectOwner, radial_vector};
 use super::mage_attachments::MAGE_LIGHTNING_ATTACHMENTS;
@@ -13,6 +13,8 @@ use crate::float;
 use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
+/// Optional settings for an enemy projectile birth; unset fields take the projectile kind's
+/// defaults.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SpawnEnemyProjectileOptions {
     pub cold_slow_ticks: Option<u64>,
@@ -28,7 +30,7 @@ pub struct SpawnEnemyProjectileOptions {
     pub visual_phase_deg: Option<f64>,
 }
 
-#[allow(clippy::too_many_arguments)] // Source birth receives the current work policy.
+#[allow(clippy::too_many_arguments)] // Each birth also receives the enhanced-effects setting.
 pub fn spawn_projectile(
     world: &mut EnemyWorld,
     actor: &EnemyActor,
@@ -275,6 +277,7 @@ pub fn emit_archer_volley(
     }
 }
 
+/// The player a Lightning Mage's cast locks onto, and that player's position at the cast.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MageLightningDispatch {
     pub target_player_id: String,

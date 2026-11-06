@@ -1,4 +1,6 @@
-//! Game mutations from `prepared-mod-host.ts::applyIntent` and its target helpers.
+//! How each mod intent changes the game (damage, resources, item grants, statuses, spawns,
+//! spell effects, stored state and presentation), with helpers that resolve targets and
+//! validate fields.
 //! The caller prepares these against one canonical Session candidate, then
 //! commits the complete batch. This module never owns or steps another world.
 
@@ -22,6 +24,8 @@ use crate::engines::effects::ModSpellEffectSpawn;
 use crate::host_runtime::PreparedModRuntime;
 use crate::intents::ModIntentExecutionContext;
 
+/// What applying one mod intent produced besides its game changes: an enemy spawn or a
+/// presentation intent to queue.
 #[derive(Default)]
 pub struct AppliedModGameIntent {
     pub spawn: Option<EnemySpawnIntent>,
@@ -445,8 +449,8 @@ fn damage_enemy_target(
     Ok((id, custom))
 }
 
-/// A borrowed validation view over an intent field. Source only requires these
-/// two strings here; creation-site/key metadata belongs to the compiled catalog.
+/// A borrowed view of the resolved content reference in an intent field. Only these two
+/// strings are needed here; creation-site and key metadata stay in the compiled catalog.
 pub struct IntentContentReference<'a> {
     pub content_id: &'a str,
     pub target_kind: &'a str,

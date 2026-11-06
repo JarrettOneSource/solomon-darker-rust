@@ -1,5 +1,5 @@
-//! Scalar/cycle and stable-member projection from `client/presentation-math.ts`
-//! and `client/hub-presentation-timeline.ts::lerpCycle`.
+//! Interpolation helpers for display sampling: scalars, vectors, wrapping cycles,
+//! angles, and member lists matched by ID.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -50,7 +50,7 @@ pub(super) fn lerp_option(first: Option<f64>, second: Option<f64>, blend: f64) -
     }
 }
 
-/// Existing members keep their source order through a bracket. New members are
+/// Existing members keep the older snapshot's order through a bracket. New members are
 /// admitted, and retired members removed, only at the newer endpoint.
 #[must_use]
 pub(super) fn interpolate_members<'a, T: Clone + 'a, K: Clone + Ord>(

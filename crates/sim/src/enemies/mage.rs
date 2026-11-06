@@ -1,4 +1,4 @@
-//! Mage cast scheduling, elemental dispatch and ally shielding from `skeleton-family.ts`.
+//! Mage cast scheduling and body poses, elemental attack dispatch and ally shielding.
 use super::EnemyToken;
 use super::combat::attack_marker;
 use super::config::{EnemyFamilyConfig, MageElement};

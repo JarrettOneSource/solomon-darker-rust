@@ -1,6 +1,5 @@
-//! College NPC geometry, dialogue, selectors and markers, from Website
-//! `hub-inventory-presentation.ts`, `hub-npc-dialogue.ts`, `native-hub-npc.ts`, and
-//! `renderer/hub-npc-marker-presentation.ts`. Stock authored rows live in `catalog.rs`.
+//! College NPC interaction: range checks, dialogue, list selectors, boast rules, markers and
+//! onboarding hints. Stock authored rows live in `catalog.rs`.
 
 mod catalog;
 mod presentation;
@@ -117,6 +116,7 @@ impl HubInteractionId {
     }
 }
 
+/// What an NPC command opens: a trader's shop or one of the list selectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubNpcSelector {
     Boast,
@@ -163,6 +163,7 @@ impl HubNpcSelector {
     }
 }
 
+/// A list an NPC offers to choose from: boasts, Librarian books or the Teacher's spells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubNpcListSelector {
     Boast,
@@ -181,6 +182,7 @@ impl HubNpcListSelector {
     }
 }
 
+/// A command in an NPC's choice list: its label, command name and the selector it opens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HubNpcCommand {
     pub label: &'static str,
@@ -188,6 +190,7 @@ pub struct HubNpcCommand {
     pub selector: HubNpcSelector,
 }
 
+/// Where an NPC stands: position, body radius, optional service-range radius and region.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubNpcGeometry {
     pub position: Vec2,
@@ -196,6 +199,7 @@ pub struct HubNpcGeometry {
     pub region: HubRegion,
 }
 
+/// An NPC's authored interaction: geometry, intro, commands, questions, dismissals and eulogy.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubInteractionDefinition {
     pub id: HubInteractionId,
@@ -209,6 +213,7 @@ pub struct HubInteractionDefinition {
     pub service_title: Option<&'static str>,
 }
 
+/// An authored dialogue entry: its key, choice label, spoken lines and whether it is said once.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HubDialogueRecord {
     pub key: &'static str,
@@ -217,6 +222,7 @@ pub struct HubDialogueRecord {
     pub one_shot: bool,
 }
 
+/// A book the Librarian offers: its ID, title and text. A one-shot book leaves the list once read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LibrarianBook {
     pub id: u32,
@@ -226,6 +232,7 @@ pub struct LibrarianBook {
     pub title: &'static str,
 }
 
+/// An advanced spell the Teacher sells: its skill, price, short description and explanation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TeacherSpell {
     pub explanation_label: &'static str,
@@ -237,6 +244,7 @@ pub struct TeacherSpell {
     pub skill_id: usize,
 }
 
+/// The kind of player action that fails a boast.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -247,6 +255,8 @@ pub enum BoastFailureProducer {
     SecondaryCast,
 }
 
+/// A stock boast made to the Annalist: its label, statement, response key, icon and the action
+/// that fails it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoastDefinition {
     pub failure_producer: Option<BoastFailureProducer>,
@@ -268,6 +278,8 @@ pub struct BoastRules<'a> {
     pub success_wave: u32,
 }
 
+/// Conditional NPC state that changes interactions: Skorcha's position and variant while present,
+/// and whether the story Office is active.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct HubInteractionAvailability {
     pub skorcha_position: Option<Vec2>,
@@ -365,12 +377,14 @@ fn squared_distance(left: Vec2, right: Vec2) -> f64 {
     dx * dx + dy * dy
 }
 
+/// What follows a speech: the NPC's choice list or closing the chat.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubNpcChatNext {
     Choices,
     Close,
 }
 
+/// What an NPC chat shows: the choice list, a list selector or lines of speech.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HubNpcChatContent {
     Choices,
@@ -378,12 +392,14 @@ pub enum HubNpcChatContent {
     Speech { key: String, lines: Vec<String>, next: HubNpcChatNext },
 }
 
+/// One entry in an NPC's choice list: a command or a question.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubNpcChatChoice {
     Command { label: &'static str, selector: HubNpcSelector },
     Question { key: &'static str, label: &'static str },
 }
 
+/// One stock row of an NPC list selector: its ID, label, detail, price and boast icon.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HubNpcSelectorRow {
     pub id: u32,
@@ -733,16 +749,19 @@ pub fn boast_rules_for_selection(
     })
 }
 
+/// Which side of an NPC its marker appears on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubNpcMarkerSide {
     Left,
     Right,
 }
+/// Which marker an NPC shows: help or talk.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubNpcMarkerStyle {
     Help,
     Talk,
 }
+/// The UI surface open over the College. Markers show only with no surface or in dialogue.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubNpcMarkerSurface {
     Dialogue,
@@ -751,6 +770,8 @@ pub enum HubNpcMarkerSurface {
     Service,
 }
 
+/// An NPC's authored marker: sprite record, side, style, region, whether its phase advances, its
+/// seed type ID and the profile help flag that hides it while set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HubNpcMarkerDefinition {
     pub interaction_id: HubInteractionId,
@@ -763,6 +784,7 @@ pub struct HubNpcMarkerDefinition {
     pub type_id: u32,
 }
 
+/// A marker sampled at one tick: its position, alpha, phase, sprite record and visibility.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubNpcMarkerFrame {
     pub alpha: f64,
@@ -871,6 +893,8 @@ impl NativeHubNpcState {
     }
 }
 
+/// An onboarding hint over the College: the walk-to-talk arrow and text, or a directional arrow
+/// toward an NPC.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum HubNpcOnboardingPlan {
     WalkToTalk {

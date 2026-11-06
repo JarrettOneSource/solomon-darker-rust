@@ -1,4 +1,5 @@
-//! Shared factory meshes, independent coronas, light lifetime and actual Pixi painter rows.
+//! Electric Burn's shared factory meshes, independent coronas, light lifetime and the
+//! painter rows recorded from the Website client's view.
 use super::{fixture, native_bits, support};
 use serde_json::{Value, json};
 use solomon_sim::Vec2;

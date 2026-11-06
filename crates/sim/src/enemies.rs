@@ -1,8 +1,8 @@
-//! Native Boneyard enemy identities and construction requests.
+//! Boneyard enemies: their identities, authored wave flags and spawn requests. The submodules
+//! hold each enemy family's behavior, effects and presentation.
 //!
-//! Reference: Website `core-kernels/boneyard-wave-schema.ts`, `boneyard-wave-types.ts`
-//! and `boneyard-enemy-config-model.ts`. Spawn requests retain the authored wave fields;
-//! gameplay configuration is evaluated once when an actor materializes.
+//! Spawn requests retain the authored wave fields; gameplay configuration is evaluated once
+//! when an actor materializes.
 
 use crate::Vec2;
 
@@ -84,6 +84,7 @@ pub mod zombie;
 
 use config::AuthoredEnemyRecipe;
 
+/// An enemy kind, with its numeric type id and authored identifier such as `"COFFIN"`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyToken {
@@ -164,6 +165,7 @@ impl EnemyToken {
     }
 }
 
+/// An authored wave flag such as `FLAG_HPUP` that modifies an enemy's stats, gear or behavior.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyFlag {
@@ -324,6 +326,8 @@ impl EnemyFlag {
     }
 }
 
+/// Where a wave picks a spawn point: anywhere in the arena bounds, or 100 units from a randomly
+/// chosen player.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpawnLocationPolicy {
@@ -332,6 +336,8 @@ pub enum SpawnLocationPolicy {
     NearPlayer,
 }
 
+/// Which candidate spawn points placement accepts: unlit, lit, off every participant's view,
+/// outside the policy bounds, or the point as given.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SpawnPositionPolicy {
@@ -354,7 +360,7 @@ pub struct PortalEjection {
     pub vertical_velocity: f64,
 }
 
-/// `BoneyardEnemySpawnIntent`: one consumed authored wave/group member.
+/// A spawn request for one authored wave or group member; construction turns it into an actor.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemySpawnIntent {

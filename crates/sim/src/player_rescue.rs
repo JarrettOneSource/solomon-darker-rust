@@ -1,5 +1,5 @@
-//! Accepted protection and retained Sparkles from `native-player-rescue.ts` and
-//! `native-sparkle.ts`. Births use the shared secondary RNG and world painter owner.
+//! Rescue protection, which reduces a wizard's damage by a fading fraction, and the
+//! Sparkles it births each tick. Births use the shared secondary RNG and world painter owner.
 
 use crate::float::{fround, sin};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
@@ -7,6 +7,7 @@ use crate::{Rng, Vec2};
 
 pub const SPARKLE_TIMER: f64 = 180.0;
 
+/// One rising Sparkle: its position, fade timer and painter registration.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct SparkleState {
@@ -38,6 +39,7 @@ pub fn sparkle_scale(timer: f64) -> f64 {
     sin(timer * std::f64::consts::PI / 180.0)
 }
 
+/// A wizard's rescue protection: the damage fraction it absorbs and its live Sparkles.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerRescueProtection {

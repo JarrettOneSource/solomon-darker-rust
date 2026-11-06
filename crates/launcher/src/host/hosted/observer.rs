@@ -1,6 +1,5 @@
 //! Developer observation borrows an existing match. An observer has a socket cursor,
 //! never a participant, party member, save profile, input queue owner or collision body.
-//! Source: `game-host.ts::observationWorld` and observer Hello branch.
 
 use serde::Serialize;
 use solomon_protocol::hosted::HostedWelcome;
@@ -18,6 +17,7 @@ use crate::transport::PeerId;
 
 type AdmissionError = (HostErrorCode, String);
 
+/// A developer watching an active match: the observed run and the account that asked.
 pub struct HostedObserver {
     pub run_id: String,
     pub observer_id: String,
@@ -25,6 +25,7 @@ pub struct HostedObserver {
     pub requested_by_username: String,
 }
 
+/// An active match that a developer can observe, as the supervisor lists it.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostedObservationTarget {

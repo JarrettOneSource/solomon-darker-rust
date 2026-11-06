@@ -1,5 +1,5 @@
-//! Native enemy/loot requests and the ten shared enemy ambience loops.
-//! References: `game-audio-native.ts`, `boneyard-enemy-ambient-audio.ts`, `BoneyardScene.tsx`.
+//! Sound requests for enemy, loot and Solomon dig events, encounter narration, and the ten
+//! shared enemy ambience loops.
 
 use crate::Vec2;
 use crate::boneyard::encounter::{SolomonDigCue, SolomonDigEvent};
@@ -15,6 +15,8 @@ use super::{
 };
 use crate::audio::{AudioCue, AudioEvent, AudioOptions};
 
+/// One sound requested by an enemy, loot or Solomon dig event: cue, pitch, volume and, for
+/// spatial sounds, the world position that sets its gain.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemyEventSoundRequest {
     pub cue: AudioCue,
@@ -96,6 +98,7 @@ pub const BONEYARD_ENEMY_AMBIENT_CUES: [AudioCue; 10] = [
     AudioCue::LowFireLoop,
 ];
 
+/// The gain of one shared enemy ambience loop this tick; zero leaves the loop stopped.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardEnemyAmbientRequest {
     pub cue: AudioCue,
@@ -144,8 +147,8 @@ pub fn boneyard_enemy_ambient_requests(
                     .maggots
                     .iter()
                     .filter(|maggot| {
-                        // The source projector gives its six-tick bite precedence over death.
-                        // A recently biting terminal row therefore still contributes here.
+                        // A bite within the last six ticks takes precedence over death, so a
+                        // recently biting dying Maggot still contributes here.
                         let biting = maggot
                             .last_attack_tick
                             .is_some_and(|attack| tick.saturating_sub(attack) < 6);
@@ -249,8 +252,8 @@ impl CombatAudioCursor {
     ) {
         let changed_listener = self.listener_id != frame.listener_id;
         if self.run_id.is_some() && (self.run_id.as_deref() != frame.run_id || changed_listener) {
-            // `subscribeRunCharmLossAudio` releases its owner-local stream on
-            // run/player teardown, independently of the shared narration streams.
+            // The listener's charm-loss stream stops when the run or the listener changes,
+            // independently of the shared narration streams.
             output.events.push(AudioEvent::StopStream(AudioCue::LoseReverie));
         }
         if self.run_id.as_deref() != frame.run_id {
@@ -282,8 +285,8 @@ impl CombatAudioCursor {
             if event.kind == EnemyEventKind::PlayerCheatDeath {
                 let position = event.source_position.expect("accepted rescue has its player root");
                 let gain = (frame.point_gain)(position);
-                // `nativePlayerCheatDeathSoundRequests` shares one point gain
-                // across its four ordered cues; peer rescues are audible too.
+                // A cheat-death rescue plays four ordered cues at one shared point
+                // gain; peer rescues are audible too.
                 for (cue, rate) in [
                     (AudioCue::FlashSpell, 1.0),
                     (AudioCue::FlashSpell, 0.8_f32 as f64),

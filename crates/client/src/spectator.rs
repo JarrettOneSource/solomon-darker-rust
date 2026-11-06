@@ -8,6 +8,8 @@ use solomon_sim::boneyard::spectator::{
 use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec};
 use solomon_sim::viewport::GameViewport;
 
+/// The spectator status panel: its stock UI atlas and the last status and viewport it
+/// received.
 pub struct SpectatorStatusView {
     atlas: StockAtlas,
     previous: Option<(BoneyardSpectatorStatusPresentation, GameViewport)>,

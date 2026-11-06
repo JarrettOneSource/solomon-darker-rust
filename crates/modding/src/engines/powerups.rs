@@ -1,4 +1,5 @@
-//! Ordered pickup candidates and short collection events from `mod-powerup-engine.ts`.
+//! Mod powerups lying in the world: spawning, pickup candidates in spawn order, and recent
+//! collection events, which expire after 50 ticks.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -11,12 +12,14 @@ use solomon_sim::modding::runtime::{
 
 use super::{MAXIMUM_SAFE_INTEGER, validate_tick};
 
+/// The active mod powerups and the events for those collected recently.
 pub struct ModPowerupEngine {
     catalog: Arc<PreparedModContentCatalog>,
     state: ModPowerupCheckpoint,
     collections: Vec<ModPowerupCollectionEvent>,
 }
 
+/// A powerup within pickup range, paired with the first player in range.
 pub struct ModPowerupCandidate<'a> {
     pub instance: &'a ActiveModPowerup,
     pub player_id: &'a str,

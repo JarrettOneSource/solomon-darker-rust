@@ -1,9 +1,10 @@
-//! Stock Dark Cloud scene, panels, list and tab artwork from
-//! `NativeDarkCloudPresentation.tsx`; all coordinates are actual GPU quads.
+//! Stock Dark Cloud scene, panels, list and tab artwork, painted as GPU quads from the
+//! stock UI and ControlPanel atlases.
 use super::super::widgets;
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, Rect, Ui, Vec2};
 use solomon_sim::ui_text::{UiFontName, UiTextAlign};
+/// The stock UI and ControlPanel atlases that Dark Cloud artwork is drawn from.
 pub(super) struct CloudArt {
     pub ui: StockAtlas,
     pub controls: StockAtlas,
@@ -305,7 +306,7 @@ impl CloudArt {
         );
         Ok(())
     }
-    // This stock control keeps its semantic action and source geometry together.
+    // This stock control keeps its semantic action and authored geometry together.
     #[allow(clippy::too_many_arguments)]
     pub fn tool(
         &self,

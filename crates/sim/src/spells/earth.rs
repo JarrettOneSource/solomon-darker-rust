@@ -1,5 +1,5 @@
-//! Boulder growth, contact pool, orientation and called rocks from `native-earth-boulder.ts`,
-//! `primary-spell-earth-orientation.ts` and the Earth helpers in `primary-spells.ts`.
+//! The Earth boulder: charge growth, released damage, the contact damage pool, its
+//! tumbling orientation, and the rocks that rise and spiral into it while it is held.
 
 use super::model::PrimarySpellTransientBase;
 use super::model::{
@@ -21,6 +21,8 @@ pub const EARTH_BOULDER_IDENTITY_ORIENTATION: EarthBoulderOrientation =
     [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
 pub const EARTH_BOULDER_TRAVERSAL_POOL_THRESHOLD: f64 = 0.001;
 
+/// Inputs to one boulder contact: the boulder's release damage, charge, remaining pool
+/// and toughness, and the target's health.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthBoulderContactInput {
     pub release_base_damage: f64,
@@ -29,6 +31,8 @@ pub struct EarthBoulderContactInput {
     pub target_health: f64,
     pub toughness: f64,
 }
+/// The outcome of one boulder contact: damage dealt, the pool and charge left, and
+/// whether the boulder keeps traveling.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthBoulderContactResult {
     pub charge: f64,
@@ -37,6 +41,7 @@ pub struct EarthBoulderContactResult {
     pub depleted: bool,
     pub remaining_pool: f64,
 }
+/// A three-dimensional point or rotation axis of the boulder's rock shell.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EarthBoulderVector3 {
     pub x: f64,
@@ -95,7 +100,7 @@ pub fn consume_earth_boulder_contact(input: EarthBoulderContactInput) -> EarthBo
     let remaining_pool = fround(input.remaining_pool - consumed).max(0.0);
     let diminished_charge =
         input.release_charge * (1.0 - (1.0 - remaining_pool / input.release_base_damage) * 0.35);
-    // Math.min propagates the source's 0/0 at an empty release pool; Rust min ignores NaN.
+    // An empty release pool gives 0/0 and the charge stays NaN; `f64::min` would drop it.
     let charge = if diminished_charge.is_nan() {
         f64::NAN
     } else {

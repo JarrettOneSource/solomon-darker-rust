@@ -1,5 +1,5 @@
-//! GPU Hall of Fame from `HallOfFameScene` and `HallOfFamePrimitives`.
-//! Ranking, authored geometry, scroll easing and highlights remain canonical simulation plans.
+//! The GPU Hall of Fame screen with its local and global boards. Ranking, authored
+//! geometry, scroll easing and highlights remain simulation plans.
 use super::create::paint_vfx;
 use super::widgets::Stage;
 use super::{HostedMenuAction, widgets};
@@ -14,6 +14,7 @@ use solomon_sim::profile::{skill_root, wizard_class_title};
 use solomon_sim::skill_picker::SKILL_PICKER_ROOT_TINTS;
 use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, measure_ui_text};
 use std::collections::BTreeMap;
+/// The local Hall of Fame entries and the current run's ID, lent by the game each frame.
 #[derive(Clone, Copy)]
 pub struct HallSnapshot<'a> {
     pub entries: &'a [HallOfFameEntry],
@@ -30,6 +31,8 @@ struct GlobalHallResult {
     entries: Vec<HallOfFameEntry>,
     error: Option<String>,
 }
+/// The Hall of Fame screen's state: local and global entries, the selected board and
+/// scope, the pending global request, expanded rows and scrolling.
 pub(super) struct HallView {
     local_entries: Vec<HallOfFameEntry>,
     entries: Vec<HallOfFameEntry>,
@@ -116,8 +119,8 @@ impl HallView {
         std::mem::take(&mut self.hosted_actions)
     }
 
-    /// A board/scope change invalidates the previous request exactly as the source effect
-    /// cleanup does. Late data never appears below another board's heading.
+    /// A board or scope change invalidates the previous request, so late data never
+    /// appears below another board's heading.
     pub fn complete_global(
         &mut self,
         request_id: u64,

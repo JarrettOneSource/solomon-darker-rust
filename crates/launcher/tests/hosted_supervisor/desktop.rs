@@ -76,8 +76,8 @@ fn welcome_row(client: &mut Client, case: &str) -> Value {
         panic!("The desktop endpoint requires an ordinary hosted welcome");
     };
     let id = credentials.player_id;
-    // Native wire enums keep their Rust spelling; compare the Source projection
-    // using its public labels without changing the canonical transport schema.
+    // Wire enums keep their Rust spelling; compare against the recording's public labels
+    // without changing the canonical transport schema.
     let kind = match hosted.session_kind {
         GameSessionKind::Standalone => "standalone",
         GameSessionKind::PrivateCollege => "private-college",
@@ -149,7 +149,7 @@ fn desktop_authority_retains_source_bootstrap_console_save_and_owner_lifetimes()
     );
     owner.close();
     owner.finish_close();
-    // The guest's next accepted snapshot proves the source close callback ran;
+    // The guest's next accepted snapshot proves the host handled the owner's close;
     // no arbitrary delay or test-only world mutation advances ownership.
     guest.until(|message| {
         matches!(message, ServerMessage::Snapshot { frame }
@@ -159,7 +159,7 @@ fn desktop_authority_retains_source_bootstrap_console_save_and_owner_lifetimes()
         "result":execute_lua(&mut guest,2,"return counter == nil, 23")}));
     guest.close();
     guest.finish_close();
-    // The recorded Source journey waits for an empty host after the last close.
+    // The recorded journey waits for an empty host after the last close.
     // A socket close alone does not acknowledge authority membership removal.
     events.until_empty_after_disconnect("Guest");
     let mut fresh = connect_desktop(&host, "Fresh", DESKTOP_CREDENTIAL, None);

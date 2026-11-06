@@ -1,7 +1,8 @@
 //! Prepared NavMesh loading for the exact shipped Boneyard catalog.
 //!
-//! Build-time preparation is `tools/website-oracle/navigation-goldens.mjs`. Runtime queries
-//! live in Rust `sim::boneyard::navigation`; the asset identity must match the loaded scene.
+//! Stock meshes are prepared ahead of time in `web/assets/navigation/`, one file per source
+//! hash. Runtime queries live in `solomon_sim::boneyard::navigation`; the asset identity must
+//! match the loaded scene.
 
 mod catalog;
 
@@ -59,8 +60,8 @@ pub fn decode_navigation(json: &str, loaded: &LoadedBoneyard) -> Result<Navigati
             mesh: NavigationMesh { points, triangles },
         });
     }
-    // Install only the domains the source eagerly prepares. Other domains retain
-    // their actual first-query collision, including moving gates, in the runtime cache.
+    // Install only the eagerly prepared domains. The runtime cache builds any other domain
+    // on its first query from the collision at that moment, including moving gates.
     let mut prepared = Vec::new();
     for (bounds, clearance) in boneyard_world_navigation_preparations(loaded) {
         let Some(index) =

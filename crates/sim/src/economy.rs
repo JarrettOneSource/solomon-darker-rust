@@ -1,4 +1,5 @@
-//! Stock inventory and College services from Website `core-kernels/hub-economy.ts`.
+//! Each participant's inventory, equipment and Gold, and the College services that use them:
+//! Fomentius's shop, Hagatha's perks, Luthacus's storage, Shlorio's dowsing, dye and Unforge.
 //!
 //! Items preserve their addressed cells and nested sack ownership. Commands are atomic:
 //! rejected moves retain the original inventory and native random stream.
@@ -46,6 +47,7 @@ pub const LOOT_BACKPACK_REPLICATION_LIMIT: usize = 2048;
 pub const HUB_SACK_CHILD_REPLICATION_LIMIT: usize = LOOT_BACKPACK_REPLICATION_LIMIT + 7;
 pub const HUB_SACK_REPLICATION_DEPTH_LIMIT: usize = 32;
 
+/// The kind of equipment an item is; staffs and wands are both weapons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EquipmentType {
@@ -71,6 +73,7 @@ impl EquipmentType {
     }
 }
 
+/// A wizard's equipment slot: amulet, hat, three rings, robe and weapon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EquipmentSlot {
@@ -112,6 +115,7 @@ impl EquipmentSlot {
     }
 }
 
+/// A College NPC who runs an economy service.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubTraderId {
     Fomentius,
@@ -132,6 +136,7 @@ impl HubTraderId {
     }
 }
 
+/// The category of an inventory item, such as a potion, equipment, a Sack or a mod item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HubItemKind {
@@ -171,6 +176,7 @@ impl HubItemKind {
     }
 }
 
+/// The rarity of special equipment: Rare or Epic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum ItemRarity {
@@ -178,7 +184,8 @@ pub enum ItemRarity {
     Rare,
 }
 
-/// One stock item. `None` preserves the source's absent native-effects/contents fields.
+/// One item in an inventory, Sack, equipment slot or shop. `None` in `contents` or
+/// `native_effects` means the field is absent, which is not the same as an empty list.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubInventoryItem {
@@ -209,6 +216,7 @@ pub struct HubInventoryItem {
     pub recipe_index: Option<usize>,
 }
 
+/// An item in Fomentius's shop and its price.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubShopItem {
@@ -216,7 +224,8 @@ pub struct HubShopItem {
     pub price: u64,
 }
 
-/// Authored dowsing recipe in the stock source-index order.
+/// An authored named equipment item, offered by dowsing and dropped as loot. `source_index` is
+/// its position in `DOWSING_EQUIPMENT_RECIPES`; items store it as `recipe_index`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EquipmentRecipe {
     pub icon_records: &'static [usize],
@@ -230,6 +239,8 @@ pub struct EquipmentRecipe {
     pub equipment_type: EquipmentType,
 }
 
+/// An authored row of Fomentius's shop: the item, its price, and how a restock rolls the
+/// number to stock.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FomentiusStockDefinition {
     pub gate_value: Option<u32>,
@@ -243,6 +254,7 @@ pub struct FomentiusStockDefinition {
     pub roll_bound: u32,
 }
 
+/// An authored Book of Skill item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SkillBookDefinition {
     pub icon_records: &'static [usize],
@@ -252,6 +264,7 @@ pub struct SkillBookDefinition {
     pub type_id: u32,
 }
 
+/// An authored charm, curse or Tonic that Hagatha sells, identified by its selector.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HagathaPerkDefinition {
     pub base_price: u64,
@@ -261,6 +274,8 @@ pub struct HagathaPerkDefinition {
     pub selector: u32,
 }
 
+/// One of Hagatha's current offers: a single perk, or the Bargain Bundle (selector `-1`) of
+/// several, with its price.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HagathaOffer {
     pub selector: i32,
@@ -270,6 +285,7 @@ pub struct HagathaOffer {
     pub price: u64,
 }
 
+/// An equipment recipe that Shlorio's dowsing found, offered for sale at a price.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct DowsingOffer {
@@ -278,6 +294,7 @@ pub struct DowsingOffer {
     pub recipe_index: usize,
 }
 
+/// The items a wizard has equipped, one per equipment slot.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubEquipmentState {
@@ -325,7 +342,8 @@ impl HubEquipmentState {
     }
 }
 
-/// Stock numeric selections and authored selections share the source state cell.
+/// A selected Boast: a stock Boast by number or a mod-authored one. Both forms share one
+/// serialized field.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(untagged))]
@@ -350,6 +368,8 @@ impl From<u32> for BoastSelection {
     }
 }
 
+/// The wizard's selected Boast, whether it has failed or succeeded, and a sequence number
+/// that advances on each failure.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoastState {
@@ -359,6 +379,8 @@ pub struct BoastState {
     pub succeeded: bool,
 }
 
+/// A wizard's College NPC state: the Boast, which onboarding hints are still pending, and
+/// whether the Librarian's one-time book has been read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct NativeHubNpcState {
@@ -373,6 +395,8 @@ impl Default for NativeHubNpcState {
     }
 }
 
+/// Permanent stat bonuses won by unforging items, and the count of recipe-backed attempts,
+/// which changes the odds of later attempts.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnforgeBonuses {
@@ -384,6 +408,7 @@ pub struct UnforgeBonuses {
     pub recipe_attempt_count: u32,
 }
 
+/// What unforging an item produced.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum UnforgeOutcomeKind {
@@ -415,6 +440,8 @@ impl UnforgeOutcomeKind {
     }
 }
 
+/// The result of unforging one item: the outcome, its amount if it has one, and the item's
+/// name.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnforgeOutcome {
@@ -423,10 +450,12 @@ pub struct UnforgeOutcome {
     pub kind: UnforgeOutcomeKind,
 }
 
+/// One participant's economy: backpack, storage, equipment and Gold, the College services'
+/// state, and the random stream those services draw from.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubEconomyState {
-    /// Old direct native checkpoints predate the source feedback owner.
+    /// Receipt of the latest inventory or service command. Older native checkpoints lack it.
     #[cfg_attr(feature = "persistence", serde(default))]
     pub action_feedback: Option<HubActionFeedback>,
     pub backpack: Vec<HubInventoryItem>,
@@ -453,6 +482,7 @@ pub struct HubEconomyState {
     pub unforge_bonuses: UnforgeBonuses,
 }
 
+/// Why an economy command was rejected.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HubEconomyRejection {
@@ -496,6 +526,8 @@ impl HubEconomyRejection {
     }
 }
 
+/// The result of one economy command: acceptance or the rejection reason, and any dowsing
+/// pitch, dye session or Unforge outcome it produced.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubEconomyResult {
@@ -529,12 +561,14 @@ impl HubEconomyResult {
     }
 }
 
+/// Which way a storage transfer moves an item: into the backpack or into storage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransferDirection {
     ToBackpack,
     ToStorage,
 }
+/// Which of a hat's or robe's two colours a dye paints: the cloth or the trim.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum DyeLayer {
@@ -551,7 +585,7 @@ pub struct InventoryDyeSession {
     pub kit_consumed: bool,
 }
 
-/// Local commands corresponding to the stock service and inventory action union.
+/// An inventory or College service command applied to one participant's economy.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HubInventoryAction {
@@ -652,7 +686,8 @@ impl HubInventoryAction {
         }
     }
 
-    /// `hubServiceAvailable` belongs to the world owner; it checks Hub phase and transition.
+    /// Whether the command needs a College service. The session admits such commands only in
+    /// the Hub phase, with no Boneyard and no doorway transition in progress.
     #[must_use]
     pub fn requires_hub_service(&self) -> bool {
         self.trader().is_some()
@@ -666,6 +701,8 @@ impl HubInventoryAction {
     }
 }
 
+/// The wizard's current and maximum health and mana. Early Unforge attempts reroll a Full
+/// Rejuvenation when both are already full.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnforgeVitals {
     pub current_health: f64,
@@ -700,8 +737,8 @@ impl Default for HubEconomyContext {
 }
 
 impl HubEconomyState {
-    /// `createHubEconomy`: appearance and shop construction begin from the same seed,
-    /// independently, as the source does; appearance draws do not advance the shop stream.
+    /// A fresh profile's economy. The starter appearance and the shop stream each start from
+    /// `seed`, independently; appearance draws do not advance the shop stream.
     #[must_use]
     pub fn new(seed: i64, element: WizardElement) -> Self {
         let appearance = roll_starter_equipment_appearance(&mut Rng::new(seed), element.into());

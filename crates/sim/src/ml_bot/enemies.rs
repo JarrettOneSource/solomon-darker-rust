@@ -1,4 +1,4 @@
-//! Source `ml-bot-policy/enemies.ts`: ordered visible enemies and observation history.
+//! The bot's enemy observation: ordered visible enemies and their observation history.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,6 +12,7 @@ use crate::float::hypot;
 use super::numbers::{distance_squared, heading_vector, ratio, signed, unsigned, write};
 use super::spec::scales;
 
+/// The enemy species the bot policy distinguishes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MlBotPolicyEnemySpecies {
     Spider,
@@ -51,12 +52,15 @@ impl MlBotPolicyEnemySpecies {
     }
 }
 
+/// Where an enemy row came from: its index among the enemy actors or among the maggots.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum EnemySource {
     Actor(usize),
     Maggot(usize),
 }
 
+/// One live enemy as the bot sees it: identity, species, health, position, velocity, heading,
+/// radius and target.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyEnemyRow {
     pub current_health: f64,
@@ -73,12 +77,16 @@ pub struct MlBotPolicyEnemyRow {
     pub(super) source: EnemySource,
 }
 
+/// Enemy history kept between observations: each enemy's last position and tick, and the
+/// current target.
 #[derive(Clone, Debug, Default)]
 pub struct MlBotPolicyEnemyMemory {
     previous_positions: BTreeMap<usize, (Vec2, u64)>,
     pub target_id: Option<usize>,
 }
 
+/// Inputs to an enemy observation: the previous memory, the bot's position and primary range,
+/// the tick, and the enemies its own minions target.
 pub struct MlBotPolicyEnemyObservationOptions<'a> {
     pub memory: &'a MlBotPolicyEnemyMemory,
     pub own_minion_target_ids: &'a BTreeSet<usize>,
@@ -87,6 +95,7 @@ pub struct MlBotPolicyEnemyObservationOptions<'a> {
     pub tick: u64,
 }
 
+/// An enemy observation: the encoded blocks D, E and L, the visible rows and the next memory.
 #[derive(Clone, Debug)]
 pub struct MlBotPolicyEnemyObservation {
     pub block_d: Vec<f32>,

@@ -1,4 +1,5 @@
-//! Run lifecycle checks at the public session boundary, using unmodified Website output.
+//! Run lifecycle checks at the public session boundary, using unmodified recordings from
+//! the Website client.
 
 use serde_json::{Value, json};
 use solomon_sim::game_run::GameRunLifecycle;

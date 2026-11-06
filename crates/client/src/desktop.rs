@@ -25,6 +25,8 @@ struct ControlState {
     dismissed_update: Option<String>,
 }
 
+/// The shared handle between the desktop application and the game UI: desktop state,
+/// pending requests, the invite and status messages.
 #[derive(Clone)]
 pub struct DesktopControls(Rc<RefCell<ControlState>>);
 
@@ -102,6 +104,7 @@ pub fn request(action: launcher::Action) -> Result<(), String> {
     })
 }
 
+/// The in-game desktop overlay: the update notice, desktop controls and the close-error prompt.
 pub struct DesktopUi {
     controls: DesktopControls,
     close_prompt_visible: bool,

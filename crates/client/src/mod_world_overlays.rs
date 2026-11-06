@@ -1,5 +1,6 @@
-//! GPU authored enemies, spell effects, powerups and shop NPCs from `mod-ui`.
-//! Accepted projections own actor state. Birth clocks retain the source's keyed CSS animation lifetimes.
+//! Mod-authored enemies, spell effects, powerups and shop NPCs drawn over the game world.
+//! Accepted projections own actor state. Birth clocks time each keyed actor's looping animation
+//! from when it first appeared.
 
 mod scene;
 pub use scene::{ModSceneOverlay, ModSceneOverlayFrame, ModScenePartyMember, ModViewAction};
@@ -13,6 +14,7 @@ use solomon_sim::modding::assets::GameModAsset;
 use solomon_sim::modding::presentation::*;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Maps world positions to the screen around the local player for the mod overlays.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModWorldProjection {
     pub location: ModWorldLocation,
@@ -29,6 +31,7 @@ impl ModWorldProjection {
         )
     }
 }
+/// The mod runtime, assets and world projection the overlays refresh from.
 pub struct ModWorldOverlayFrame<'a> {
     pub runtime: Option<&'a LuaObject>,
     pub assets: &'a [GameModAsset],
@@ -72,6 +75,8 @@ struct Shop {
     name: String,
     center: Pos2,
 }
+/// Mod enemies, spell effects, powerups, pickups and shop NPCs drawn over the world, plus the
+/// authored room map.
 pub struct ModWorldOverlays {
     enemies: Vec<Enemy>,
     effects: Vec<Effect>,
@@ -139,7 +144,7 @@ impl ModWorldOverlays {
                 });
             }
         }
-        // CSS stacks enemies by rounded screen y; insertion order resolves ties.
+        // Enemies stack by rounded screen y; the stable sort keeps insertion order for ties.
         self.enemies.sort_by(|left, right| {
             (left.sprite.center.y + 0.5).floor().total_cmp(&(right.sprite.center.y + 0.5).floor())
         });
@@ -463,7 +468,8 @@ impl ModWorldOverlays {
                                     Ok(())
                                 },
                             )?;
-                            // CSS's circle gradient ends at the padding box's farthest corner.
+                            // The fill fades out at 68% of the distance to the corner of the
+                            // square inside the border.
                             let fade_radius =
                                 (radius - border_width).max(0.0) * std::f32::consts::SQRT_2 * 0.68;
                             let mut gradient = egui::Mesh::default();

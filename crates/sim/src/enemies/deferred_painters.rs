@@ -1,12 +1,14 @@
-//! The session's deferred projectile producer from `native-world-manager-order.ts`.
+//! Deferred painter registration for enemy projectiles.
 //!
-//! The Website returns an unresolved registration object whose ordinal getter throws
-//! until commit. Rust keeps its unresolved identities private to the enemy epoch and
-//! replaces every copied reference when the session commits the one shared allocator.
+//! While registration is deferred, each new projectile painter gets a placeholder token
+//! counting down from `usize::MAX`, and reading its ordinal panics until commit. The tokens
+//! stay private to the enemy step; when the session commits the one shared world painter
+//! order, every copied placeholder is replaced with its real registration.
 
 use super::world::EnemyWorld;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
+/// The painter lanes requested while projectile registration is deferred, in request order.
 #[derive(Clone, Debug)]
 pub(super) struct DeferredEnemyPainterRegistrations {
     pub lanes: Vec<WorldManagerLane>,
@@ -32,8 +34,8 @@ impl EnemyWorld {
         );
     }
 
-    /// Matches the source registration object's ordinal getter. Queries may inspect
-    /// older committed rows during a deferred epoch, but cannot read a new birth.
+    /// Returns a registration's ordinal, panicking on an uncommitted placeholder. Queries may
+    /// inspect older committed rows during a deferred step, but cannot read a new birth.
     #[must_use]
     pub fn painter_registration_ordinal(&self, registration: PainterRegistration) -> usize {
         if let Some(pending) = &self.deferred_projectile_painters {

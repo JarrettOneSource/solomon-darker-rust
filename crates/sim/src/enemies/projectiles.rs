@@ -1,7 +1,9 @@
-//! Enemy projectile identities and persistent state from `enemies/model.ts`.
+//! Enemy projectiles, their trail and impact effects, Mage lightning pulses and projectile
+//! knockbacks: their kinds and the persistent state each keeps.
 use super::model::EnemyPainterRegistration;
 use crate::Vec2;
 
+/// The five enemy projectile kinds, with their identifiers and numeric type ids.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyProjectileKind {
     Arrow,
@@ -32,6 +34,7 @@ impl EnemyProjectileKind {
         }
     }
 }
+/// The damage payload an enemy projectile carries: cold, fire, poison, normal or none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyProjectilePayload {
@@ -54,6 +57,8 @@ impl EnemyProjectilePayload {
     }
 }
 
+/// State every enemy projectile keeps: motion, damage, lifetime, owner, target and painter
+/// registrations.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyProjectileState {
@@ -93,6 +98,7 @@ pub struct EnemyProjectileState {
     pub visual_scale: f64,
 }
 
+/// A live enemy projectile; an arrow also keeps its velocity.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyProjectile {
@@ -134,12 +140,15 @@ impl EnemyProjectile {
     }
 }
 
+/// Where a Mage lightning bolt ends: at a world point, or at an offset attached to the target
+/// player.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum MageLightningContact {
     World { position: Vec2 },
     TargetAttached { local_offset: Vec2, target_player_id: String },
 }
+/// One Mage lightning bolt, kept with its light and painters for five ticks.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct MageLightningPulse {
@@ -157,6 +166,8 @@ pub struct MageLightningPulse {
     pub tick: u64,
 }
 
+/// State every enemy projectile effect keeps: its sprite, motion, fade, lifetime and painter
+/// registration.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyProjectileEffectState {
@@ -183,6 +194,7 @@ pub struct EnemyProjectileEffectState {
     pub velocity: Vec2,
 }
 
+/// Which trail, impact, explosion or fire effect an enemy projectile left behind.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum EnemyProjectileEffectKind {
@@ -215,6 +227,7 @@ impl EnemyProjectileEffectKind {
         }
     }
 }
+/// A trail, impact, explosion or fire effect left by an enemy projectile.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyProjectileEffect {
@@ -222,6 +235,8 @@ pub struct EnemyProjectileEffect {
     pub kind: EnemyProjectileEffectKind,
 }
 
+/// A push an enemy projectile or spell applies to one player each tick until its remaining ticks
+/// run out.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnemyProjectileKnockback {

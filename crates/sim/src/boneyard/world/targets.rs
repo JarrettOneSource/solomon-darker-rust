@@ -1,4 +1,5 @@
-//! World-owned Puppet/Goodie projections from `boneyard-world-targets.ts`.
+//! The world's spell and enemy-mouth targets (scenery, Goodies, Weld Meteors and
+//! Leviathans) and the scenery targets a restored run still retains.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,9 +14,10 @@ use crate::spells::weld::WeldWorldActor;
 use super::super::world_light::BoneyardLightEnvironment;
 use super::BoneyardWorld;
 
-/// Saved membership of the three source scenery tables, independent of immutable geometry.
-/// Native worlds use `None` for the complete authored tables; old Website saves can retain
-/// a nonrectangular subset after their versioned target-ID migration.
+/// Saved membership of the three scenery target tables (Earthquake, primary-spell and
+/// scenery-spell targets), independent of immutable geometry. New worlds use `None` for the
+/// complete authored tables; old Website saves can retain a nonrectangular subset after
+/// their versioned target-ID migration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardSceneryTargetRetention {
@@ -153,8 +155,9 @@ pub fn boneyard_mouth_world_targets(
                 Some(EnemyPuppetHitKind::Meteor),
                 PrimarySpellQueryLane::Grid,
             );
-            // Source Meteor registers its Puppet grid cell at the origin even while its
-            // actual body falls elsewhere. Retain both positions for the native query order.
+            // A Weld Meteor registers its Puppet grid cell at the origin even while its
+            // actual body falls elsewhere. Keep both positions: grid membership and query
+            // order use the origin cell.
             target.target.grid_position = Some(Vec2::ZERO);
             targets.push(target);
         }

@@ -1,6 +1,5 @@
 //! The Website supervisor contract over Rust College authorities. One thread owns the
 //! Colleges, tickets and social broker; transport workers own bytes and heartbeat only.
-//! Reference: `host/game-session-supervisor.ts` and `game-host.ts`.
 
 pub(in crate::host) mod http;
 mod preparation;
@@ -30,6 +29,8 @@ const MAXIMUM_EVENTS_PER_POLL: usize = 64;
 const MAXIMUM_CATCH_UP_TICKS: u32 = 25;
 const JOIN_INTENT_TIMEOUT_MS: f64 = 600_000.0;
 
+/// Supervisor settings: asset directory, admin secret, revision, capacities, deadlines and
+/// the optional ML bot policy, Memorial file and runtime event endpoint.
 pub struct HostedSupervisorConfig {
     pub asset_directory: PathBuf,
     pub admin_secret: String,
@@ -135,10 +136,13 @@ struct DeploymentRestart {
     respond: SyncSender<HostedHttpResponse>,
 }
 
+/// The hosted game supervisor: every College authority with its tickets, plus join intents,
+/// the social broker, admission workers and any deployment restart.
 pub struct HostedSupervisor {
     config: HostedSupervisorConfig,
     standalone_credential: Option<String>,
-    // Vec retains the source Map's creation order, including publication/broker order.
+    // Kept in creation order, the order in which ticks, publication and admin listings
+    // visit Colleges.
     colleges: Vec<CollegeRecord>,
     broker: GameSocialBroker,
     join_intents: BTreeMap<String, JoinIntent>,
@@ -258,8 +262,8 @@ impl HostedSupervisor {
         self.run_when_ready(server, stop, |_| {})
     }
 
-    /// Readiness is published only after the actual socket route is registered.
-    /// Desktop's parent can connect as soon as it receives its JSON-ready line.
+    /// Calls `ready` only after the socket route is registered, so a desktop parent can
+    /// connect as soon as it receives the ready line.
     pub fn run_when_ready(
         mut self,
         mut server: NativeServer,
@@ -507,8 +511,9 @@ impl HostedSupervisor {
             }
             for (index, college) in self.colleges.iter_mut().enumerate() {
                 for (peer_id, connection) in &mut college.host.connections {
-                    // Hub observers are outside restartForDeployment's client set.
-                    // Private College closure also owns its observers and pending sockets.
+                    // In the Hub only players sent a deployment checkpoint close here, so Hub
+                    // observers stay. A private College closes every connection, including
+                    // observers and pending sockets.
                     if index != 0 || restart.checkpoints.contains_key(peer_id) {
                         connection.planned_disconnect =
                             Some(("deployment-restart", "game updating".into()));
@@ -530,7 +535,7 @@ impl HostedSupervisor {
             }
         }
         // Transport close callbacks, including the bounded forced-close path, have now
-        // completed. Source replies only after all private authorities/routes are gone.
+        // completed. The reply waits until every private College and its route are gone.
         for index in (1..self.colleges.len()).rev() {
             self.close_college(index, server, "deployment-restart")?;
         }

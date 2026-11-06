@@ -1,4 +1,4 @@
-//! Native profile/wizard disk fields from Website `save/native-save-bridge.ts`.
+//! Profile fields of a native `darkdata.cfg` and wizard fields of a `gamestate.sav`.
 //! The tree retains every unknown sibling; only named disk members are interpreted.
 
 mod patch;
@@ -19,6 +19,7 @@ pub const NATIVE_HAGATHA_OWNERSHIP_COUNT: usize = 50;
 pub const NATIVE_FIRST_MIX_COUNT: usize = 30;
 pub const NATIVE_SOURCE_ATTACHMENT_MAX_BYTES: usize = 8 * 1024 * 1024;
 
+/// Profile fields read from a native `darkdata.cfg`, with the decoded buffer they came from.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeDarkdataProfile {
@@ -36,6 +37,7 @@ pub struct NativeDarkdataProfile {
     pub tutorial_pending: bool,
 }
 
+/// One skill's saved progression row: its permanent and effective rank and its cooldown.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeProgressionRow {
@@ -46,6 +48,8 @@ pub struct NativeProgressionRow {
     pub permanent_rank: u16,
 }
 
+/// The Boast saved in a native `gamestate.sav`: the selected boast, if any, and whether it
+/// failed or succeeded.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeGameBoastState {
@@ -54,6 +58,7 @@ pub struct NativeGameBoastState {
     pub succeeded: bool,
 }
 
+/// Profile fields written back into a native `darkdata.cfg`; all other bytes are kept.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeProfilePatch {
@@ -66,6 +71,8 @@ pub struct NativeProfilePatch {
     pub tutorial_pending: bool,
 }
 
+/// A wizard's progression read from a native `gamestate.sav`: level, experience, vitals,
+/// skill rows, perks and quickbar.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeWizardProgression {
@@ -107,6 +114,7 @@ pub struct NativeWizardProgression {
     pub weld_effect: f64,
 }
 
+/// Wizard fields written back into a native `gamestate.sav`; all other bytes are kept.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeWizardPatch {

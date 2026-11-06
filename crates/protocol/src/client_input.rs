@@ -1,8 +1,9 @@
-//! Outbound input ordering from `client/game-client-session.ts::sendInput`.
+//! Outbound input ordering: the sequence number and target tick of each input a client sends.
 //!
 //! Movement changes may replace the pending input for a tick. A primary or quickbar edge
 //! gets a later tick so a press and release between snapshots both reach the authority.
-//! `client-input-goldens.mjs` records the unchanged source method and its acknowledgements.
+//! The `website/client-input-goldens.json` fixture replays inputs and acknowledgements
+//! recorded from the Website client.
 
 use solomon_sim::belt::PLAYER_BELT_SLOT_COUNT;
 use solomon_sim::float::hypot;
@@ -16,6 +17,8 @@ struct PendingInput {
     target_tick: u64,
 }
 
+/// A client's outbound input state: the last input sent, its sequence number and the
+/// inputs the host has not yet acknowledged.
 #[derive(Default)]
 pub struct ClientInputSequence {
     sequence: u64,

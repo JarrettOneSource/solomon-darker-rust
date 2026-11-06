@@ -1,5 +1,5 @@
-//! Real terminal epochs, child births and rewards from `enemies/deaths.ts` and
-//! `construction.ts::spawnTerminalChildren`.
+//! A dying enemy's terminal sequence: its timed death presentation, then terminal output,
+//! death sounds and effects, split-off Imps, the kill reward and retirement.
 
 use super::config::EnemyFamilyConfig;
 use super::demon_skull_death::step_dying_demon_skull;

@@ -1,10 +1,13 @@
-//! Ephemeral native +0x88 terminal context from `native-special-death-payload.ts`.
-//! It is consumed by the admitted death dispatcher, never persisted as status.
+//! The detonation a damage contact can carry into the death it causes. This ephemeral
+//! native +0x88 terminal context is consumed by the admitted death dispatcher, never
+//! persisted as status.
+/// Whether a special death detonates as Fire or as Steam.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpellSpecialDeathKind {
     Fire,
     Steam,
 }
+/// A special death's explosion and ember damage, radius, fragment count and private seed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpellSpecialDeathPayload {
     pub kind: SpellSpecialDeathKind,

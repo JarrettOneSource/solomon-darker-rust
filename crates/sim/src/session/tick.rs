@@ -1,5 +1,5 @@
-//! The authoritative shared tick from `core-server/game-simulation.ts`.
-//! Global actor epochs surround participant phases in source entity order.
+//! The authoritative shared tick. Global actor epochs surround participant phases in
+//! entity order.
 
 use super::*;
 use crate::Vec2;
@@ -16,7 +16,7 @@ use crate::spells::model::PrimarySpellTickResult;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Immutable navigation is identity-checked on loading. `None` readiness is the
-/// source's unspecified set: every participant's College renderer is ready.
+/// unspecified set: every participant's College renderer is ready.
 #[derive(Default)]
 pub struct GameSessionTickContext<'a> {
     pub navigation: Option<&'a NavigationSet>,
@@ -24,6 +24,8 @@ pub struct GameSessionTickContext<'a> {
     pub enemy_spawn_intents: &'a [EnemySpawnIntent],
 }
 
+/// What one session tick produced: whether it advanced, the Boneyard, primary, secondary
+/// and contact results, and audio events.
 pub struct GameSessionTickResult {
     pub advanced: bool,
     pub tick: u64,
@@ -64,7 +66,7 @@ impl GameSession {
         extensions: Option<&dyn GameSimulationExtensions>,
     ) -> Result<GameSessionTickResult, String> {
         self.close_dye_sessions_for_inputs(inputs);
-        // Source expiry happens before terminal and level-up early returns, against
+        // Mod effects expire before terminal and level-up early returns, against
         // the retained tick rather than the tick about to advance.
         self.mod_effects.retain(|effect| effect.expires_tick > self.ticks);
         if self.run.phase == GameRunPhase::GameOver {

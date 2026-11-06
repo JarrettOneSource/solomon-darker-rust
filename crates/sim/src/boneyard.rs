@@ -1,7 +1,8 @@
-//! Offline Boneyard scene data retained from the stock generator.
+//! Offline Boneyard scene data retained from the stock generator, and the modules that run
+//! and present a Boneyard.
 //!
-//! Reference: `Website/frontend/src/game/core-kernels/boneyard.ts`. Scene geometry is data;
-//! `solomon_assets::boneyard` decodes the pinned bank for both browser and native hosts.
+//! Scene geometry is data; `solomon_assets::boneyard` decodes the pinned bank for both browser
+//! and native hosts.
 
 pub mod arena;
 pub mod collision;
@@ -38,10 +39,10 @@ pub use world::{
 
 use crate::Vec2;
 
-/// The stock browser Arena projection (`boneyard-render-contract.ts`).
+/// The stock Boneyard camera zoom, in logical view units per world unit.
 pub const BONEYARD_CAMERA_SCALE: f64 = 1.35;
 
-/// A Boneyard's world rectangle (`BoneyardBounds`).
+/// A Boneyard's world rectangle.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct BoneyardBounds {
@@ -135,7 +136,7 @@ impl BoneyardFence {
     }
 }
 
-/// Shared endpoint order in `core-kernels/boneyard-fence-posts.ts`.
+/// Fence post positions in their shared endpoint order.
 /// Main-layer registrations and primary Puppet targets use this same prefix.
 #[must_use]
 pub fn boneyard_fence_post_positions(fences: &[BoneyardFence]) -> Vec<Vec2> {
@@ -194,7 +195,8 @@ pub struct BoneyardTemplate {
     pub scene: BoneyardScene,
 }
 
-/// The source `BoneyardChoice.source` decides ownership of the retail encounter.
+/// Whether a Boneyard choice is stock (`Default`) or comes from a mod. Only a stock scene
+/// with a Solomon dig owns the retail Solomon encounter.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
@@ -204,6 +206,8 @@ pub enum BoneyardSource {
     Mod,
 }
 
+/// A selectable Boneyard: its ID, display name and source, plus the mod's ID and name for a
+/// mod scene.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "camelCase"))]
@@ -217,7 +221,7 @@ pub struct BoneyardChoice {
     pub mod_name: Option<String>,
 }
 
-/// Geometry and identity of one admitted run (`LoadedBoneyard`).
+/// Geometry and identity of one admitted run.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct LoadedBoneyard {

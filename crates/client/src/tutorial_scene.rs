@@ -21,6 +21,8 @@ use crate::tutorial::{
     TutorialViewSnapshot,
 };
 
+/// One frame's Tutorial inputs from the accepted world: the Boneyard, the local player
+/// and wizard, the camera, settings and pointer kind.
 pub struct TutorialFrame<'a> {
     pub world: &'a BoneyardWorld,
     pub player: &'a PlayerState,
@@ -30,6 +32,7 @@ pub struct TutorialFrame<'a> {
     pub coarse_pointer: bool,
 }
 
+/// The run whose Tutorial is shown and the last narration event already played.
 #[derive(Default)]
 pub struct TutorialScene {
     run_id: Option<String>,
@@ -190,7 +193,8 @@ fn stop_narration(audio: &GameAudio) -> Result<(), String> {
     Ok(())
 }
 
-/// `boneyardTutorialDigIndicatorLayout`: keep the edge arrow below the lesson text.
+/// Places the dig indicator 36 units short of an on-screen target, or otherwise on the
+/// screen edge toward it; the edge arrow stays below the lesson text.
 fn tutorial_dig_pointer(player: Vec2, target: Vec2, viewport: Vec2) -> Vec2 {
     let delta = Vec2::new(target.x - player.x, target.y - player.y);
     let distance = delta.x.hypot(delta.y);

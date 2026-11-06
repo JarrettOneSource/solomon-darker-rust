@@ -1,8 +1,8 @@
 //! Authored Boneyard collision and swept circle movement.
 //!
-//! Reference: `Website/frontend/src/game/core-server/boneyard-collision.ts`. This is its
-//! ordered all-pairs narrow phase: polygons, fence segments, then circles. The Website's
-//! broadphase is an optimization of that same solver, so it is not needed for correctness.
+//! Contacts come from an ordered all-pairs narrow phase: polygons, fence segments, then
+//! circles. A broadphase would only speed up that same solver, so it is not needed for
+//! correctness.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -21,8 +21,8 @@ const fn rectangle(left: f64, top: f64, right: f64, bottom: f64) -> [Vec2; 4] {
     [Vec2::new(left, bottom), Vec2::new(left, top), Vec2::new(right, top), Vec2::new(right, bottom)]
 }
 
-// Exact native actor footprints retained by boneyard-collision.ts. Object scale and rotation
-// dress the art; the collision owner intentionally translates these authored points only.
+// Exact native actor footprints. Object scale and rotation dress the art; collision
+// intentionally translates these authored points only.
 const MONUMENT_POLYGONS: [&[Vec2]; 21] = [
     &rectangle(-51.0, -27.0, 50.0, 22.0),
     &rectangle(-51.0, -27.0, 50.0, 22.0),
@@ -103,6 +103,8 @@ const GRAVE_POLYGON: [Vec2; 4] = [
 ];
 const GOODIE_POLYGON: [Vec2; 4] = rectangle(-25.125, -8.625, 25.875, 16.875);
 
+/// A solid polygon in world coordinates, such as a monument, building or grave, with its
+/// line-query mask and owning scenery ID, if any.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionPolygon {
     pub points: Vec<Vec2>,
@@ -110,6 +112,8 @@ pub struct CollisionPolygon {
     pub source_id: Option<String>,
 }
 
+/// A solid circle, such as a fence post or tree trunk, with its line-query mask and owning
+/// scenery ID, if any.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionCircle {
     pub center: Vec2,
@@ -118,6 +122,8 @@ pub struct CollisionCircle {
     pub source_id: Option<String>,
 }
 
+/// A fence or gate-leaf segment with an optional thickness radius, its line-query mask and
+/// owning scenery ID, if any.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionSegment {
     pub start: Vec2,
@@ -296,8 +302,8 @@ pub fn can_place_boneyard_body(
     can_place_boneyard_body_ignoring(position, bounds, world, radius, &[])
 }
 
-/// Native MovementCollision omits arena bounds; projectile point and bounds queries are
-/// separate source operations, so an otherwise clear point outside the arena stays clear.
+/// Tests scenery and gate collision without arena bounds. Projectile point and bounds
+/// queries are separate operations, so an otherwise clear point outside the arena stays clear.
 #[must_use]
 pub fn boneyard_body_collides(position: Vec2, world: &BoneyardCollisionWorld, radius: f64) -> bool {
     first_contact(position, world, radius, position, &[]).is_some()
@@ -462,7 +468,7 @@ pub fn boneyard_body_collision_source_ids(
     ids
 }
 
-/// `resolveBoneyardMovement`: clamp the destination, sweep to contact, then retain its tangent.
+/// Clamp the destination, sweep to contact, then retain its tangent.
 #[must_use]
 pub fn resolve_boneyard_movement(
     start: Vec2,
@@ -550,7 +556,7 @@ fn first_contact(
 }
 
 fn polygon_contact(center: Vec2, radius: f64, points: &[Vec2], previous: Vec2) -> Option<Vec2> {
-    // Source's empty loop retains infinite distance and returns no contact.
+    // An empty polygon has no edge to measure and returns no contact.
     let mut nearest = *points.first()?;
     let mut nearest_distance_squared = f64::INFINITY;
     for (index, start) in points.iter().enumerate() {

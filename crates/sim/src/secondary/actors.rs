@@ -1,5 +1,6 @@
 //! Secondary actor records and native painter/light enrollment.
-//! Field meanings and registration order mirror native-secondary-abilities.ts.
+//! Painters register before any extra light-only owners, and every registration keeps its
+//! manager lane.
 
 use std::collections::BTreeMap;
 
@@ -7,6 +8,7 @@ use super::golem::SecondaryGolemState;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::{Rng, Vec2};
 
+/// Every kind of secondary effect actor, from spell bodies to their particles and debris.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum SecondaryActorKind {
@@ -241,7 +243,7 @@ pub struct SecondaryActorState {
     pub golem: Option<SecondaryGolemState>,
     /// Set on Golem deaths.
     pub golem_death: Option<crate::death_animations::GolemDeathAnimation>,
-    /// This source field holds both enemy IDs and parent secondary actor IDs.
+    /// Holds both enemy IDs and parent secondary actor IDs.
     pub hit_target_ids: Vec<u64>,
     pub id: u64,
     pub kind: SecondaryActorKind,
@@ -269,7 +271,7 @@ pub struct SecondaryActorState {
 }
 
 impl SecondaryActorState {
-    /// The exact `actorSeed` defaults; ability constructors overwrite their authored fields.
+    /// An actor with default fields; ability constructors overwrite their authored fields.
     #[must_use]
     pub fn new(
         id: u64,
@@ -316,6 +318,8 @@ impl SecondaryActorState {
     }
 }
 
+/// A target secondary abilities can affect: its family and ID, light registration,
+/// position, size and shield health.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryTarget {
     pub family: String,
@@ -329,6 +333,7 @@ pub struct SecondaryTarget {
     pub shield_health: f64,
 }
 
+/// The damage element of a secondary hit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryDamageKind {
     Acid,
@@ -339,6 +344,8 @@ pub enum SecondaryDamageKind {
     Physical,
 }
 
+/// One secondary damage hit on a target: amount, kind, owner, source actor and hit
+/// reaction options.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SecondaryDamageContact {
     pub amount: f64,
@@ -353,6 +360,7 @@ pub struct SecondaryDamageContact {
     pub target_id: usize,
 }
 
+/// One secondary knockback on a target: its displacement and source actor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryKnockbackContact {
     pub delta: Vec2,
@@ -360,6 +368,7 @@ pub struct SecondaryKnockbackContact {
     pub target_id: usize,
 }
 
+/// A secondary effect turning a target, to an absolute heading or by a relative amount.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryTargetHeadingChange {
     pub degrees: f64,
@@ -367,12 +376,15 @@ pub struct SecondaryTargetHeadingChange {
     pub target_id: usize,
 }
 
+/// Whether a heading change sets the heading or adds to it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryHeadingMode {
     Absolute,
     Relative,
 }
 
+/// How a secondary actor takes part in lighting: as an actor or transient light provider,
+/// as a miscellaneous light, or not at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SecondaryLightDisposition {
     ActorProvider,
@@ -442,7 +454,7 @@ pub fn enroll_secondary_light_owners(
 ) {
     let mut retained_order = retained_world_manager_order(actors);
     let order = order.unwrap_or(&mut retained_order);
-    // Source registers every painter first, then allocates any extra light-only owners.
+    // Register every painter first, then allocate any extra light-only owners.
     enroll_secondary_painter_owners(actors.iter_mut(), order);
     let mut next_modifier_ordinal: BTreeMap<(String, usize), usize> = BTreeMap::new();
     for actor in actors.iter_mut() {

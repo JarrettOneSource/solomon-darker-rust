@@ -1,5 +1,5 @@
-//! Bounded transport recovery retains the one live participant and its actual world.
-//! It never imports a checkpoint or grants fresh gameplay/account permissions.
+//! Transport recovery: for a bounded lease, a disconnected player's live wizard and world wait
+//! for a reconnect. It never imports a checkpoint or grants new gameplay or account permissions.
 use solomon_protocol::hosted::HostedHello;
 use solomon_protocol::{ClientMessage, HostErrorCode, PROTOCOL_VERSION, ResumeGraceReason};
 use solomon_sim::game_run::GameRunPhase;
@@ -14,6 +14,8 @@ use crate::transport::{PeerId, TransportClose};
 
 const RECONNECT_LEASE_MS: f64 = solomon_protocol::hosted::GAME_RECONNECT_LEASE_MS as f64;
 
+/// A live wizard's bounded wait for a replacement connection, and how far that replacement
+/// has been admitted.
 pub(super) struct ReconnectLease {
     connection: Option<HostConnection>,
     expires_at_ms: f64,

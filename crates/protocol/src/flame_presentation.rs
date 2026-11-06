@@ -1,4 +1,4 @@
-//! Current Source `protocol/flame-presentation.ts` and its connection history.
+//! Flame Lash presentation births sent with snapshots, and their connection history.
 //! These records replay presentation births; they never advance gameplay or RNG.
 
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,7 @@ pub use history::{
 pub const MAX_FLAME_PRESENTATION_BIRTHS: usize = 16_384;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
+/// Whether a presentation birth is a Flame Lash ribbon or a fade.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FlamePresentationKind {
@@ -30,6 +31,7 @@ pub enum FlamePresentationKind {
     Fade,
 }
 
+/// The visual parameters a client needs to redraw one Flame Lash ribbon or fade.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
@@ -71,6 +73,7 @@ impl FlamePresentationRecipe {
     }
 }
 
+/// One Flame Lash presentation birth: its identity, owner, world, tick interval and recipe.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FlamePresentationBirth {
@@ -115,6 +118,8 @@ impl FlamePresentationBirth {
     }
 }
 
+/// The history epoch and world tick a client has acknowledged; the next frame carries
+/// only births after it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FlamePresentationBaseline {
@@ -122,6 +127,8 @@ pub struct FlamePresentationBaseline {
     pub world_tick: u64,
 }
 
+/// The Flame births sent with a snapshot: a reset that starts a new epoch, or every birth
+/// changed after the client's acknowledged tick.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",

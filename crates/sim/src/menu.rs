@@ -1,5 +1,6 @@
-//! Title, Create and pause presentation from Website `renderer/title-menu-render-contract.ts`,
-//! `create-menu-motion.ts` and `pause-menu-contract.ts`. Time is supplied by the browser.
+//! Title, Create and pause menu presentation: the title screen's scrolling graves and backdrop,
+//! the Create menu's hand and element motion, and the pause menu reveal. Time is supplied by
+//! the caller.
 
 pub mod cheats;
 pub mod create_name;
@@ -18,6 +19,7 @@ use crate::rng::Rng;
 pub const CREATE_ENTRY_ANIMATION_MS: f64 = 2330.0;
 pub const CREATE_SELECTION_ANIMATION_MS: f64 = 2630.0;
 
+/// A Create menu hand's pose: fist, cupped or raised.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreateHandPose {
     Fist,
@@ -25,6 +27,8 @@ pub enum CreateHandPose {
     Raised,
 }
 
+/// The Create menu's hands at one moment: each hand's offset, impulse and pose, which choices
+/// are visible, and whether the motion has settled.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CreateMotion {
     pub disciplines_visible: bool,
@@ -38,18 +42,21 @@ pub struct CreateMotion {
     pub settled: bool,
 }
 
+/// An element choice's opacity and position while it is revealed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CreateElementReveal {
     pub opacity: f64,
     pub position: Vec2,
 }
 
+/// The selected element's position and scale as it moves to its chosen spot.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CreateSelectedElementMotion {
     pub position: Vec2,
     pub scale: f64,
 }
 
+/// One gravestone in a title screen row: its image, rotation and horizontal position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TitleGrave {
     pub image_index: usize,
@@ -57,6 +64,8 @@ pub struct TitleGrave {
     pub x: f64,
 }
 
+/// One scrolling row of title screen gravestones: its baseline, gray, scale and speed, its
+/// graves and the next grave image.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TitleGraveRow {
     pub baseline: f64,
@@ -67,6 +76,7 @@ pub struct TitleGraveRow {
     pub next_image_index: usize,
 }
 
+/// The title screen's three gravestone rows, cloak phase and tick count.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TitleState {
     pub rows: [TitleGraveRow; 3],
@@ -125,8 +135,8 @@ fn step_title_grave_row(
             < 1700.0
     });
     if spawn {
-        // The title helper scales a double directly; Rng's float API would add
-        // single-precision stores that this presentation reference does not perform.
+        // The rotation is scaled as a double; `Rng`'s float API would add
+        // single-precision stores that this presentation does not make.
         let magnitude = f64::from(random.draw_integer(100_001)) / 100_000.0 * 10.0;
         let rotation = if random.draw_integer(2) == 1 { -magnitude } else { magnitude };
         let image_index = row.next_image_index;
@@ -389,8 +399,8 @@ fn element_start(element: WizardElement) -> Vec2 {
     }
 }
 
-/// `native-natural-spline.ts` specialized to Create's three authored control points.
-/// Its two segments have natural (zero-curvature) endpoints; operation order is preserved.
+/// The natural cubic spline specialized to Create's three authored control points. Its two
+/// segments have natural (zero-curvature) endpoints; it keeps `NaturalSpline`'s operation order.
 fn natural_path_at(points: [Vec2; 3], cursor: f64) -> Vec2 {
     if cursor <= 0.0 {
         return points[0];

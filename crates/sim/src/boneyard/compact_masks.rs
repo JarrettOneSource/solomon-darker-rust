@@ -1,4 +1,5 @@
-//! Compact ground-mask admission from `renderer/native-compact-mask-view.ts`.
+//! Compact ground masks: the authored glyphs and Spider decals admitted near each player,
+//! and the ground-surface query they share with terrain and bridges.
 //! The masks use whole MagicGrid cells and unscaled record bounds, even when
 //! their actual stamp is rotated or stretched. Their RNG is presentation-only.
 
@@ -21,6 +22,8 @@ pub const COMPACT_MASK_COMPOSITE_SCALE: f64 = 2.0250000953674316;
 pub const COMPACT_MASK_COMPOSITE_ANCHOR: f64 = 128.5;
 pub const DIRECT_ENVIRONMENT_LIGHT_ENTRY: usize = 18;
 
+/// One ground mask to stamp: an authored compact glyph or a Spider decal (`dynamic`), with
+/// its atlas entry, transform and alpha.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompactMask {
     pub id: String,
@@ -32,6 +35,7 @@ pub struct CompactMask {
     pub dynamic: bool,
 }
 
+/// The masks near one player and the flickering alpha they are drawn with.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompactMaskPlayerPlan {
     /// Actual participant insertion order, including players with no candidates.
@@ -41,20 +45,22 @@ pub struct CompactMaskPlayerPlan {
     pub mask_indices: Vec<usize>,
 }
 
+/// One frame's masks inside the world bounds, and each player's selection from them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CompactMaskPlan {
     pub masks: Vec<CompactMask>,
     pub players: Vec<CompactMaskPlayerPlan>,
 }
 
+/// A scene's authored compact glyphs and MagicGrid extent, used to plan each frame's masks.
 pub struct CompactMasks {
     authored: Vec<CompactMask>,
     maximum_column: i64,
     maximum_row: i64,
 }
 
-/// Arena's separate surface query. Terrain wins before compact/Spider glyphs;
-/// a bridge subtracts even an overlapping authored or dynamic stain.
+/// Arena's separate surface query. Terrain is checked before compact and Spider glyphs;
+/// a bridge over terrain removes the surface even where a glyph overlaps it.
 pub struct CompactGroundSurface {
     terrain: BTreeMap<(i64, i64), Vec<SurfaceQuad>>,
     bridges: Vec<BridgeSurface>,
@@ -182,7 +188,8 @@ fn stored_point(point: Vec2) -> Vec2 {
     Vec2::new(fround(point.x), fround(point.y))
 }
 
-/// The five compact glyph contours from `native-ground-auxiliary.ts`.
+/// Whether `point`, relative to the glyph's position, lies inside one of the five compact
+/// glyph contours, selected by atlas entry 25 to 29.
 #[must_use]
 pub fn compact_surface_contains(selector: usize, point: Vec2) -> bool {
     const CONTOURS: [&[[f64; 2]]; 5] = [
@@ -345,7 +352,7 @@ impl CompactMasks {
     }
 }
 
-/// The source's 0.95 base and remaining range are already single-precision.
+/// The 0.95 base and remaining range are already single-precision.
 #[must_use]
 pub fn compact_mask_alpha(presentation_frame: f64, slot: usize) -> f64 {
     let seed = (presentation_frame.trunc() as i64 as u32) ^ slot as u32;
@@ -353,8 +360,8 @@ pub fn compact_mask_alpha(presentation_frame: f64, slot: usize) -> f64 {
     fround(fround(0.95) + rng.draw_scaled_float(0.050000011920928955, false))
 }
 
-/// `boneyard-environment-light-plan.ts`: this direct aperture is separate from
-/// the logical light provider and the multiplied region-light render target.
+/// This direct aperture is separate from the logical light provider and the
+/// multiplied region-light render target.
 #[must_use]
 pub fn direct_environment_light_alpha(now_ms: f64, player_index: usize) -> f64 {
     let flicker = (float::sin(now_ms * 0.017 + player_index as f64 * 2.399) + 1.0) / 2.0;

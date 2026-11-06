@@ -1,4 +1,5 @@
-//! Caster disable calls and continuing hand smoke from `enemies/dampen.ts`.
+//! Dampen's effect on enemy casters: it interrupts Skeleton Mages and the Faculty, disables
+//! their primary spell for a time, and trails smoke from a dampened Mage's hands.
 
 use super::effects::{DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec};
 use super::mage_attachments::{MAGE_LIGHTNING_ATTACHMENTS, MAGE_SECOND_HAND_ATTACHMENTS};

@@ -1,11 +1,13 @@
-//! Detached skill transactions from the public Game API. Only one participant
-//! is staged; enemies, scenery, spells and the running party remain borrowed.
+//! Skill transactions for a detached participant. Only one participant is staged;
+//! enemies, scenery, spells and the running party remain borrowed.
 
 use super::membership::{import_detached_character, synchronize_detached_player};
 use super::snapshot::GameSnapshotParticipants;
 use super::*;
 use crate::profile::{PlayerSkillChoice, SharedPlayerLevelMilestone};
 
+/// A detached participant staged with copies of the session state its skill transaction
+/// can change: entity IDs, gameplay RNG, painter order, run and level-up barrier.
 pub struct DetachedSessionProjection {
     pub participant: SessionParticipant,
     pub(super) next_entity_id: u64,

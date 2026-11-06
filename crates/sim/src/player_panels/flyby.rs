@@ -1,5 +1,5 @@
-//! Website `hub-inventory-render-contract.ts` InventoryFlyby: twenty discrete steps
-//! and ten independently fading copies. These are display clocks, not inventory authority.
+//! The inventory flyby that carries items between slots: twenty discrete steps and ten
+//! independently fading copies. These are display clocks, not inventory authority.
 
 use crate::Vec2;
 use crate::economy::{HubInventoryAction, HubInventoryItem};
@@ -7,6 +7,7 @@ use crate::economy::{HubInventoryAction, HubInventoryItem};
 pub const INVENTORY_FLYBY_TRAVEL_MS: f64 = 200.0;
 pub const INVENTORY_FLYBY_AFTERIMAGE_BIRTH_TICKS: [u64; 10] = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
 
+/// One item's flight between two inventory screen positions.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InventoryFlybyLane {
     pub from: Vec2,
@@ -14,13 +15,15 @@ pub struct InventoryFlybyLane {
     pub item: HubInventoryItem,
 }
 
+/// A flyby to play, and the inventory action to send once its travel completes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InventoryFlybyRequest {
-    /// Source delays only Move/Unequip swaps; a restoration has no action.
+    /// Only Move and Unequip swaps are delayed; a restoration has no action.
     pub action: Option<HubInventoryAction>,
     pub lanes: Vec<InventoryFlybyLane>,
 }
 
+/// One fading copy left along the flight path.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InventoryFlybyAfterimageFrame {
     pub alpha: f64,
@@ -28,6 +31,7 @@ pub struct InventoryFlybyAfterimageFrame {
     pub spawn_tick: u64,
 }
 
+/// A flyby at one display time: the main item's progress and its fading copies.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InventoryFlybyFrame {
     pub afterimages: Vec<InventoryFlybyAfterimageFrame>,
@@ -47,7 +51,7 @@ pub fn hub_inventory_flyby_frame(started_at_ms: f64, now_ms: f64) -> InventoryFl
         if spawn_tick > tick {
             continue;
         }
-        // Source rounds each copy's alpha to a tenth with JavaScript Math.round.
+        // Round each copy's alpha to a tenth, with halves rounding up.
         let alpha = (((1.0 - (tick - spawn_tick) as f64 * 0.1) * 10.0) + 0.5).floor() / 10.0;
         if alpha > 0.0 {
             afterimages.push(InventoryFlybyAfterimageFrame {

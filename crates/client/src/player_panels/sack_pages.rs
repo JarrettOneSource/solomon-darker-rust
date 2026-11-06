@@ -1,5 +1,5 @@
-//! Stock Sack page navigation. Accepted items keep their addresses while the
-//! source's stationary clip exposes incoming and outgoing GPU-painted pages.
+//! Stock Sack page navigation. Accepted items keep their addresses while a
+//! stationary clip exposes incoming and outgoing GPU-painted pages.
 use super::chrome::PanelCanvas;
 use super::{PlayerPanel, PlayerPanelSnapshot, PlayerPanels, Target};
 use solomon_sim::audio::AudioCue;
@@ -11,6 +11,7 @@ use solomon_sim::player_panels::sack_pages::{
     SACK_PAGE_CLIP, SACK_PAGE_DURATION_MS, SackPageDirection, hub_sack_page_offsets,
 };
 use solomon_sim::player_panels::{INVENTORY_CAPACITY, inventory_slot_rect};
+/// A page slide between two Sack paths: its direction, both paths and start time.
 pub(super) struct SackPageTransition {
     direction: SackPageDirection,
     from_path: Vec<u64>,

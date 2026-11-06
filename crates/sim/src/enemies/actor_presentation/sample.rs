@@ -1,4 +1,4 @@
-//! Flat draw samples from `host/project-boneyard-enemies.ts::projectAnimation`.
+//! Flat per-tick animation samples of enemies and Maggots for drawing.
 //! The client interpolates these outputs, rather than advancing an enemy brain.
 
 use super::layers::radians;
@@ -7,6 +7,7 @@ use crate::Vec2;
 use crate::enemies::model::*;
 use crate::float;
 
+/// The animation an enemy is in: idle, moving, acting or dying.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum EnemyAnimationState {
     #[default]
@@ -16,6 +17,7 @@ pub enum EnemyAnimationState {
     Death,
 }
 
+/// The action animation an enemy is playing, such as a Skeleton claw or a Demon Skull bite.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnemyAction {
     SkeletonClawA,
@@ -64,6 +66,7 @@ impl EnemyAction {
     }
 }
 
+/// How a Coffin draws: hidden, closed, opening or open.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum EnemyCoffinState {
     Hidden,
@@ -73,6 +76,7 @@ pub enum EnemyCoffinState {
     Open,
 }
 
+/// Spider draw values: body heading and the alpha and tint of its target outline.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EnemySpiderInput {
     pub body_heading_deg: f64,
@@ -80,6 +84,7 @@ pub struct EnemySpiderInput {
     pub outline_tint: u32,
 }
 
+/// An extra sprite drawn on an enemy, such as its shield, keyed by a stable effect id.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyEffectInput {
     pub id: usize,
@@ -370,6 +375,7 @@ fn action(actor: &EnemyActor) -> Option<EnemyAction> {
     }
 }
 
+/// The animation a Maggot is in: biting, dying, emerging or crawling.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaggotState {
     Bite,
@@ -378,6 +384,7 @@ pub enum MaggotState {
     Crawl,
 }
 
+/// One Maggot's per-tick draw values.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MaggotPresentationInput {
     pub alpha: f64,

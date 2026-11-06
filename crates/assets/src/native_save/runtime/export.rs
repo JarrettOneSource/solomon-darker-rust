@@ -15,6 +15,8 @@ use serde_json::json;
 
 use super::import::starting_skills;
 
+/// A web save exported for the original game: the archive bytes, the portable profile and
+/// the conversion warnings.
 #[derive(Clone, Debug)]
 pub struct PortableExportResult {
     pub archive: Vec<u8>,
@@ -201,7 +203,7 @@ pub fn create_portable_game_profile_from_web_save(
         retained_files: source_bytes.retained_files,
         run_name: portable.native_source.run_name.clone(),
     })?;
-    // DataView writes wrap integer disk words, but the final source parser still
+    // Disk words wrap oversized integers, but the final parse still
     // validates the original web values. Retain them so an oversized saved value
     // cannot wrap into an apparently valid portable profile.
     let mut candidate = serde_json::to_value(&portable).map_err(|error| error.to_string())?;

@@ -1,4 +1,4 @@
-//! Stock Harden chips and breakup shards from `native-harden-effects.ts`.
+//! Stock Harden chips and breakup shards: their creation, flight and sprites.
 //! Their presentation draws share the gameplay stream and precede armor reduction.
 
 use crate::float;
@@ -8,6 +8,8 @@ use crate::spells::model::PrimarySpellTransientBase;
 use crate::spells::presentation::{SpellBlend, SpellDrawQueue, SpellSprite, SpellSpritePlan};
 use crate::{Rng, Vec2};
 
+/// One Harden shard's flight: position, height, bounce, spin, remaining life and sprite
+/// record.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HardenShardBody {
@@ -24,6 +26,7 @@ pub struct HardenShardBody {
     pub vertical_velocity: f64,
 }
 
+/// The transient fields every Harden effect shares, and the tick that sets its age.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HardenEffectOwner {
@@ -48,6 +51,7 @@ impl HardenEffectOwner {
     }
 }
 
+/// A live Harden transient: a flying shard, or the fading burst where the coating broke.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum HardenEffect {
@@ -70,6 +74,7 @@ impl HardenEffect {
     }
 }
 
+/// A shard a hit chips off the Harden coating, and the pitch of its shatter sound.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HardenChip {
@@ -77,6 +82,8 @@ pub struct HardenChip {
     pub shard: HardenShardBody,
 }
 
+/// What breaking a Harden coating needs: the coating it had, where and when it broke, its
+/// owner and world, the first free effect ID and whether enhanced effects are on.
 pub struct HardenBreakupInput<'a> {
     pub coating: f64,
     pub position: Vec2,
@@ -87,6 +94,8 @@ pub struct HardenBreakupInput<'a> {
     pub enhanced_effects: bool,
 }
 
+/// The shards and burst a broken Harden coating spawns, the next free effect ID and the
+/// pitch of its shatter sound.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HardenBreakup {
@@ -235,7 +244,7 @@ pub fn step_harden_effect(
     !blocked
 }
 
-/// Exact stock sprite and painter queue from `renderer/player-harden-effect-view.ts`.
+/// The exact stock sprites and painter queue for a Harden shard or burst.
 #[must_use]
 pub fn harden_effect_plan(effect: &HardenEffect) -> SpellSpritePlan {
     let (position, sort_bias, draw) = match effect {

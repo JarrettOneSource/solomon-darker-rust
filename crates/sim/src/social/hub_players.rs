@@ -1,12 +1,13 @@
-//! College actor selection from Website `hub-player-selection.ts` and the local
-//! `HubScene.tsx` player card. Hosted profile lookup is a separate social route.
+//! Selecting another College player by pointer or controller, and the local player card's
+//! invite. Hosted profile lookup is a separate social route.
 
 use crate::Vec2;
 use crate::hub::regions::HubRegion;
 
 use super::PartyMembership;
 
-/// Borrow actors in the source player insertion order, including the local actor.
+/// One College actor a selection can pick. Callers borrow actors in player insertion
+/// order, including the local actor.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubPlayerSelection<'a> {
     pub player_id: &'a str,
@@ -14,7 +15,7 @@ pub struct HubPlayerSelection<'a> {
     pub region: Option<HubRegion>,
 }
 
-/// `selectHubPlayerAtPoint`: overlapping actors follow feet depth, with the later
+/// Picks the player under a pointer. Overlapping actors follow feet depth, with the later
 /// registered player winning a tie. The visual target includes the whole wizard.
 #[must_use]
 pub fn select_hub_player_at_point<'a>(
@@ -48,7 +49,7 @@ pub fn select_hub_player_at_point<'a>(
     selected.map(|player| player.player_id)
 }
 
-/// `nearestHubPlayer`: controller interaction defaults to 120 world units. Equal
+/// Picks the nearest player; controller interaction defaults to 120 world units. Equal
 /// distances retain the first actor, unlike the pointer's equal-depth ordering.
 #[must_use]
 pub fn nearest_hub_player<'a>(

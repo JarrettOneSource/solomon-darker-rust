@@ -1,5 +1,6 @@
-//! Source per-run portable lineage and per-member retained rejoin ownership. A live
-//! actor stays only in its canonical Session; a detached member retains its real snapshot.
+//! Rejoining an active party run: each run's portable recovery lineage and each member's
+//! retained rejoin slot. A live actor stays only in its canonical Session; a detached member
+//! retains its real snapshot.
 
 use std::sync::Arc;
 
@@ -14,6 +15,8 @@ use crate::host::recovery::{
 };
 use crate::host::signing::credentials_equal;
 
+/// Where a member stands for an active-party rejoin: connected, detached, holding a
+/// reservation, or connected while their saved wizard is staged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostedRejoinStatus {
     Connected,
@@ -22,6 +25,7 @@ pub enum HostedRejoinStatus {
     Staging,
 }
 
+/// The run, party, content and member status that a signed rejoin claim resolves to.
 pub struct HostedRejoinTarget {
     pub content: Arc<MaterializedWebSessionContent>,
     pub party_id: String,
@@ -30,6 +34,7 @@ pub struct HostedRejoinTarget {
     pub status: HostedRejoinStatus,
 }
 
+/// Why a rejoin reservation was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostedRejoinRejection {
     AlreadyReserved,
@@ -37,6 +42,8 @@ pub enum HostedRejoinRejection {
     RunUnavailable,
 }
 
+/// A party member's retained place in an active run: account permissions, content, the
+/// detached participant and any rejoin reservation.
 pub struct HostedRejoinSlot {
     pub connected: bool,
     pub content: Arc<MaterializedWebSessionContent>,
@@ -56,6 +63,8 @@ pub struct HostedRejoinSlot {
     pub token: Option<String>,
 }
 
+/// The signed identity of one recoverable party run: its party, leader, roster, visibility
+/// and content.
 pub struct HostedRecoveryLineage {
     pub content: Arc<MaterializedWebSessionContent>,
     pub party_leader_player_id: String,
@@ -74,8 +83,8 @@ impl HostedGameHost {
             .position(|slot| slot.player_id == id && slot.connected && slot.detached.is_some())
     }
 
-    /// `activePartyRecoveryLineage`: a signed roster identifies one retained run,
-    /// rather than granting authority to recreate an arbitrary browser-held world.
+    /// A signed roster identifies one retained run, rather than granting authority to
+    /// recreate an arbitrary client-held world.
     fn active_recovery_lineage(
         &self,
         claim: &PartyRecoveryClaim,

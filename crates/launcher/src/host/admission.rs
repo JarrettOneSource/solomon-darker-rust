@@ -1,5 +1,5 @@
-//! Native direct-join admission and connection-generation ownership. Source counterpart:
-//! `host/game-host.ts` hello/resume, input, pause and disconnect branches.
+//! Direct-join admission and message dispatch for the native authority. Hello joins or
+//! resumes a wizard; later messages apply only from the participant's current connection.
 
 use solomon_protocol::{
     ClientMessage, HostErrorCode, MAX_SAVE_BYTES, PROTOCOL_VERSION, ResumeCredentials,
@@ -144,7 +144,8 @@ impl NativeAuthority {
             }
             ClientMessage::Input { sequence, target_tick, input } => {
                 if self.staged_detached(&id).is_some() {
-                    // The source stages only offer/ACK/save controls before rejoin.
+                    // A staged rejoin has no actor yet, so its gameplay input is ignored;
+                    // its commands are limited to skill offers until it rejoins.
                     return Ok(());
                 }
                 let session = self.session.as_ref().expect("an admitted connection has a session");
@@ -622,7 +623,7 @@ pub(super) fn server_error(reason: String) -> AdmissionError {
 }
 
 pub(super) fn validate_selection(selection: &NewGameSelection) -> Result<(), AdmissionError> {
-    // The source decoder measures JavaScript string length (UTF-16 code units).
+    // The 64 limit counts UTF-16 code units, not bytes or `char`s.
     if selection.name.is_empty() || selection.name.encode_utf16().count() > 64 {
         return Err(invalid("A wizard name must contain from one through sixty-four characters"));
     }

@@ -1,8 +1,9 @@
-//! Owned Boneyard state and source-ordered scene phases.
+//! A running Boneyard's owned state and its scene phases, stepped in a fixed order: player
+//! movement and gates, ground loot, the Solomon encounter and arena, then enemies, wave
+//! births and rewards.
 //!
-//! Reference: `core-server/boneyard-world.ts`, `boneyard-world-construction.ts` and
-//! `boneyard-world-placement.ts`. Session owns identity/profile, vitals and the active painter
-//! allocator. Static geometry and prepared navigation reconstruct outside checkpoints.
+//! The session owns identity/profile, vitals and the active painter allocator. Static
+//! geometry and prepared navigation reconstruct outside checkpoints.
 
 mod ether_drain;
 mod impulses;
@@ -55,6 +56,8 @@ use super::waves::director::{WaveCheckpoint, WaveDirector, WavePhase, WaveTickCo
 use super::world_geometry::{BoneyardPhysicsWorld, boneyard_lantern_body, enemy_collision_body};
 use super::{BoneyardBounds, BoneyardScene, BoneyardSource, LoadedBoneyard};
 
+/// A player's ID and the flags world phases read: alive, eligible to take part, collision
+/// enabled, and movement scale.
 #[derive(Clone, Copy, Debug)]
 pub struct BoneyardPlayerStatus<'a> {
     pub id: &'a str,
@@ -64,6 +67,8 @@ pub struct BoneyardPlayerStatus<'a> {
     pub movement_scale: f64,
 }
 
+/// One player's movement request for a world tick, with the pauses and facing rule that
+/// apply to it.
 #[derive(Clone, Copy, Debug)]
 pub struct BoneyardMovementInput<'a> {
     pub player: BoneyardPlayerStatus<'a>,
@@ -86,12 +91,15 @@ pub struct BoneyardPlayerBody<'a> {
     pub position: Vec2,
 }
 
+/// A body a player's movement ran into, and whether staff contact counts it as hostile.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoneyardMovementContact {
     pub body_id: String,
     pub staff_hostile: bool,
 }
 
+/// One player's movement result: whether movement was active, the bodies it touched, and
+/// the camera bounds logical lights captured.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BoneyardMovementStep {
     pub movement_active: bool,
@@ -101,6 +109,8 @@ pub struct BoneyardMovementStep {
     pub light_camera_bounds: BoneyardBounds,
 }
 
+/// The result of the encounter and arena phase: whether waves started this tick, and the
+/// current active and spawn bounds.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardEncounterStep {
     pub waves_started: bool,
@@ -108,6 +118,8 @@ pub struct BoneyardEncounterStep {
     pub spawn_bounds: BoneyardBounds,
 }
 
+/// A running Boneyard: its loaded scene, collision, gates, arena entrance, Solomon
+/// encounter, waves or Tutorial, enemies, loot and lantern.
 #[derive(Clone, Debug)]
 pub struct BoneyardWorld {
     pub loaded: LoadedBoneyard,
@@ -121,8 +133,8 @@ pub struct BoneyardWorld {
     pub encounter: Option<SolomonEncounter>,
     pub waves: Option<WaveDirector>,
     pub tutorial: Option<TutorialState>,
-    /// Immutable scenery targets reconstruct from the scene; native cleanup permanently
-    /// filters their bounds even if a later Tutorial safety check releases its camera lock.
+    /// Immutable scenery targets reconstruct from the scene; the cleanup rectangle filters
+    /// them permanently, even if a later Tutorial safety check releases its camera lock.
     pub scenery_retained_bounds: Option<BoneyardBounds>,
     /// Website saves retain the actual three target tables, including legacy subsets
     /// that cannot be reconstructed from one cleanup rectangle. `None` keeps all targets.
@@ -514,7 +526,7 @@ impl BoneyardWorld {
     }
 
     /// Ground items advance after player movement and before Solomon/arena safety. The
-    /// placement query uses only current world bounds and scenery, as in the source.
+    /// placement query uses only the current world bounds and scenery.
     pub fn step_ground_loot(
         &mut self,
         participants: &[BoneyardLootParticipant<'_>],
@@ -566,7 +578,7 @@ impl BoneyardWorld {
     }
 
     /// Called once by the enemy store after its live actors/projectiles step. External births
-    /// are consumed in the same native batch before wave births, including while paused.
+    /// come first in the batch, ahead of wave births, and still pass through while paused.
     pub fn resolve_spawn_intents(
         &mut self,
         context: WaveTickContext<'_>,
@@ -712,7 +724,7 @@ impl BoneyardWorld {
                     maggot.position,
                     maggot.collision_radius,
                 );
-                // Both airborne and grounded native Maggots can move as roots,
+                // Both airborne and grounded Maggots can move as roots,
                 // but never participate as another body's collision recipient.
                 body.collision_recipient = false;
                 bodies.push(body);
@@ -789,7 +801,7 @@ fn enemy_registration_base(scene: &BoneyardScene) -> usize {
             continue;
         }
         for point in fence.points.iter().take(2) {
-            // JavaScript string keys identify both signed zeros as the same endpoint.
+            // Count each shared post once; -0 and +0 are the same endpoint.
             let x = if point.x == 0.0 { 0 } else { point.x.to_bits() };
             let y = if point.y == 0.0 { 0 } else { point.y.to_bits() };
             posts.insert((x, y));
@@ -798,7 +810,8 @@ fn enemy_registration_base(scene: &BoneyardScene) -> usize {
     scene.objects.len() + posts.len()
 }
 
-/// `renderer/boneyard-render-contract.ts::boneyardCamera`, as a top-left logical origin.
+/// The camera's top-left logical origin: centered on `position` and clamped inside
+/// `bounds`, or centered on `bounds` along an axis the view already covers.
 #[must_use]
 pub fn boneyard_camera_origin(
     position: Vec2,

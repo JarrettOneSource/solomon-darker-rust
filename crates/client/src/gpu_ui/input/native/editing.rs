@@ -4,6 +4,7 @@ use crate::gpu_ui::edit::{EditorFont, EditorOwner, native_shape};
 use solomon_graphics::text::parley::{editing::Cursor, layout::Affinity};
 use unicode_segmentation::UnicodeSegmentation;
 
+/// Native caret movement state: the visual caret kept between key presses on one line.
 #[derive(Default)]
 pub(super) struct Editing {
     caret: Option<VisualCaret>,

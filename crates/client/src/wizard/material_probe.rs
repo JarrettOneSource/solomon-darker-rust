@@ -26,6 +26,8 @@ struct BareRow {
     effect_point1: [f64; 2],
 }
 
+/// One probe comparison: the production painter's pixels, the reference pixels, and how many
+/// channels differ and by how much at most.
 pub struct MaterialProbeCase {
     pub name: String,
     pub actual: Vec<u8>,

@@ -3,18 +3,21 @@
 
 use crate::Vec2;
 
+/// The texture atlas that a spell sprite's record refers to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpellAtlas {
     BadGuys,
     DeadHawg,
 }
 
+/// How a spell sprite blends: normally or additively.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpellBlend {
     Normal,
     Add,
 }
 
+/// When a spell sprite is drawn: in the world painter order, before it or after it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpellDrawQueue {
     World,
@@ -22,6 +25,8 @@ pub enum SpellDrawQueue {
     PostWorld,
 }
 
+/// One spell sprite draw: atlas record, offset, rotation, scale, tint, alpha, blend and
+/// queue.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpellSprite {
     pub alpha: f64,
@@ -52,6 +57,8 @@ impl SpellSprite {
     }
 }
 
+/// A spell's sprite draws around one position, with the world Y and sort bias that order
+/// it among painters and the optional point where region light is sampled.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SpellSpritePlan {
     pub position: Vec2,

@@ -13,6 +13,7 @@ use rodio::Source;
 
 type Reader = PacketReader<Cursor<Arc<[u8]>>>;
 
+/// A streaming Ogg Opus decoder that yields stereo samples and can loop.
 pub(super) struct OpusSource {
     bytes: Arc<[u8]>,
     reader: Reader,

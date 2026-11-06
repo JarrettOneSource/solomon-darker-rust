@@ -1,5 +1,5 @@
-//! GPU binding for `renderer/native-secondary-world-view.ts`. Canonical sim plans
-//! own geometry, clocks and colors; this view owns stock textures and render targets.
+//! GPU drawing for secondary spell actors. Canonical sim plans own geometry, clocks
+//! and colors; this view owns stock textures and render targets.
 
 mod composites;
 mod draws;
@@ -22,19 +22,21 @@ use crate::spells::{SpellView, StockAtlas};
 use solomon_graphics::assets;
 use solomon_graphics::{RenderTarget, Renderer, Texture};
 
+/// Secondary spell display state kept across frames.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SecondaryPresentationMemory {
-    /// The source samples Ring of Fire explosion gain once, at view birth.
+    /// Ring of Fire explosion gain, sampled once when each explosion first appears.
     pub fire_explosion_point_gains: BTreeMap<u64, f64>,
 }
 
+/// A secondary spell's painter entry: its painter layer and optional region light point.
 pub struct SecondaryPainter {
     pub layer: PainterLayer,
     pub region_light_point: Option<Vec2>,
 }
 
-/// Projection of the canonical puppet feedback at its fixed tick. The host uses
-/// native_puppet_hit_alpha/native_puppet_hit_tint; the view owns no feedback clock.
+/// Projection of the canonical puppet feedback at its fixed tick. The caller samples
+/// the feedback alpha and uses `native_puppet_hit_tint`; the view owns no feedback clock.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SecondaryPuppetHit {
     pub alpha: f64,
@@ -191,7 +193,7 @@ impl SecondaryView {
                 Some(build_air_lightning_plan(AirLightningInput {
                     chained: false,
                     enhanced_effects: true,
-                    // native-air-presentation.ts explicitly floors this input.
+                    // The lightning plan takes whole ticks, so the display age is floored.
                     age_ticks: age_ticks.floor().max(0.0) as u64,
                     birth_tick: actor.phase as u64,
                     endpoint: Vec2::new(
@@ -384,7 +386,7 @@ impl SecondaryView {
         }
     }
 
-    /// Source `background` roots have depth zero, before the pre-world queue.
+    /// Background roots have depth zero and draw before the pre-world queue.
     /// Their registered owner still participates in the ordinary painter planner.
     pub fn draw_background(&self, renderer: &mut Renderer, camera: &Camera) {
         for &index in &self.background {

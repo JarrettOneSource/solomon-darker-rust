@@ -1,9 +1,12 @@
-//! Camera attenuation from `core-kernels/native-region-point-gain.ts`.
-//! The hit lane has different inner/outer distances and alternate-player rules.
+//! Region point gain: how strongly an event at a world point reaches the viewer, from its
+//! distance to the camera center relative to the visible world width. The hit lane has
+//! different inner/outer distances and alternate-player rules.
 
 use crate::Vec2;
 use crate::float::{fround, hypot};
 
+/// How distance weakens a camera shake: not at all, by point gain, by hit gain, or by hit
+/// gain squared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RegionCameraShakeAttenuation {
     Fixed,
@@ -12,6 +15,7 @@ pub enum RegionCameraShakeAttenuation {
     HitSquared,
 }
 
+/// A camera shake request: its displacement and how distance attenuates it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RegionCameraShake {
     pub attenuation: RegionCameraShakeAttenuation,

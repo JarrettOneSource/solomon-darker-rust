@@ -1,5 +1,6 @@
-//! Enemy display samples from `client/boneyard-enemy-samples.ts`.
-//! Only the retained presentation clone is written. Brains, RNG and authority are never stepped.
+//! Enemy display samples for actors, projectiles, effects, Spider silk and crows between
+//! accepted snapshots. Only the retained presentation clone is written. Brains, RNG and
+//! authority are never stepped.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::f64::consts::{PI, TAU};
@@ -19,13 +20,13 @@ use solomon_sim::enemies::world::EnemyWorld;
 
 use super::math::{interpolate_members, interpolate_projected_members, lerp, lerp_cycle, lerp_vec};
 
-// The source sample module imports these stock frame/lifetime counts.
+// Stock frame and lifetime counts used by these samples.
 const IMP_UPPER_EFFECT_FRAME_COUNT: f64 = 10.0;
 const MAGE_LIGHTNING_MAX_PULSE_AGES: f64 = 5.0;
 const ENEMY_GAIT_POSE_COUNT: f64 = 8.0;
 const GUIDED_MISSILE_VISUAL_PHASE_PERIOD: f64 = 720.0;
 
-/// Fractional source snapshot fields that cannot be stored in the simulation's whole ticks.
+/// Fractional snapshot fields that cannot be stored in the simulation's whole ticks.
 #[derive(Clone, Debug, Default)]
 pub struct EnemyPresentationMetadata {
     pub presentation_tick: f64,
@@ -41,7 +42,7 @@ pub struct EnemyPresentationMetadata {
     pub crows: Vec<EnemyCrowPresentationInput>,
 }
 
-/// Crows join the source death-effect snapshots after normal effects, with discrete art/tint.
+/// Crows join the death-effect samples after normal effects, with discrete art/tint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyCrowPresentationInput {
     pub id: usize,
@@ -113,7 +114,7 @@ pub(super) fn from_world(
 }
 
 /// `output` is the timeline's selected endpoint clone. Matched residents keep older order;
-/// births and removals occur only at the newer endpoint, exactly like the source snapshots.
+/// births and removals occur only at the newer endpoint.
 #[must_use]
 #[allow(clippy::too_many_arguments)] // Both endpoint worlds and their sampled animation belong to one bracket.
 pub(super) fn interpolate(
@@ -573,7 +574,8 @@ fn interpolate_spiders(
     blend: f64,
     metadata: &mut EnemyPresentationMetadata,
 ) {
-    // The Spider source returns the newer collection verbatim at the endpoint, including order.
+    // At the endpoint, Spider silk, fragments and remains are the newer collections
+    // verbatim, including order.
     if blend >= 1.0 {
         output.silks.clone_from(&newer.silks);
         output.silk_fragments.clone_from(&newer.silk_fragments);

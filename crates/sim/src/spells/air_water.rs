@@ -1,4 +1,5 @@
-//! Shared Air/Water draw domains from `core-kernels/air-water-spell-actors.ts`.
+//! Air and Water actors that follow their caster (Hurricane, Water Hail and Cold Aura),
+//! and the random damage and Disintegrate draws the two elements share.
 
 mod actors;
 mod host;

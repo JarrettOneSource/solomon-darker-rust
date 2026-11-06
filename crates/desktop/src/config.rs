@@ -3,6 +3,7 @@
 use crate::updates::Build;
 use std::{ffi::OsString, path::PathBuf};
 
+/// Where the desktop app finds its assets and profile, and the build it checks updates for.
 pub struct Config {
     pub assets: PathBuf,
     pub profile: PathBuf,

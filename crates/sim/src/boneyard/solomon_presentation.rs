@@ -1,7 +1,5 @@
 //! Solomon's body, mask and private dirt paint state.
 //!
-//! References: `renderer/boneyard-solomon-render.ts`,
-//! `boneyard-solomon-dirt-presentation.ts`, and `boneyard-solomon-view.ts`.
 //! The encounter owns animation and dialogue; this module only projects its retained state.
 
 use crate::Vec2;
@@ -15,6 +13,7 @@ use super::encounter::{SolomonDigCue, SolomonDigEvent, SolomonEncounter, Solomon
 pub const SOLOMON_DIRT_DRAW_PASSES: usize = 2;
 pub const SOLOMON_DIRT_VISIBLE_TICKS: u64 = 29;
 
+/// The sprite bank Solomon's body draws from: digging, dialogue or walking.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SolomonBodyBank {
     Dig,
@@ -33,6 +32,7 @@ impl SolomonBodyBank {
     }
 }
 
+/// A world-space rectangle that Solomon's body sprite is clipped to.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolomonClipRect {
     pub x: f64,
@@ -41,6 +41,8 @@ pub struct SolomonClipRect {
     pub height: f64,
 }
 
+/// How Solomon looks on one tick: body bank, pose and atlas record, facing, mouth, clip
+/// rectangle, vertical offset, and whether he and his grave mark are visible.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolomonVisualState {
     pub body_bank: SolomonBodyBank,
@@ -55,12 +57,15 @@ pub struct SolomonVisualState {
     pub visible: bool,
 }
 
+/// Whether a Solomon set-piece painter draws the lantern or Solomon himself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SolomonPainterKind {
     Lantern,
     Actor,
 }
 
+/// A painter for the Solomon set piece: what it draws, its painter registration and the
+/// world y of its row.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolomonPainter {
     pub kind: SolomonPainterKind,
@@ -68,6 +73,7 @@ pub struct SolomonPainter {
     pub world_y: f64,
 }
 
+/// Packed RGB tints for Solomon's body, his thrown dirt and his lantern.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SolomonSetPieceLighting {
     pub body_tint: u32,
@@ -221,6 +227,7 @@ fn clip_rect(position: Vec2, x: f64, y: f64, width: f64, height: f64) -> Solomon
     SolomonClipRect { x: position.x - x, y: position.y - y, width, height }
 }
 
+/// A clump of thrown dirt at a given age: its alpha, heading, position and speed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolomonDirtState {
     pub age_ticks: u64,
@@ -284,6 +291,7 @@ pub fn solomon_dirt_event_delta(
     (last_id.max(latest_id), events)
 }
 
+/// A dirt clump thrown by one dig event, replayed by age from its birth tick and position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolomonDirtParticle {
     pub event_id: u64,

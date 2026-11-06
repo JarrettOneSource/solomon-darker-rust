@@ -1,8 +1,8 @@
-//! Differential replays of the Website's TypeScript kernels.
+//! Differential replays of frozen recordings from the Website client.
 //!
-//! `scripts/record-website-goldens.sh` runs the reference kernels under Node through the
-//! `tools/website-oracle/*-goldens.mjs` scripts and records what they produce. These tests
-//! replay the same inputs through the Rust port and require the same numbers, bit for bit;
+//! Each fixture in `fixtures/website/` holds inputs and the outputs the Website client
+//! produced for them; `docs/REFERENCE-DATA.md` describes their provenance. These tests
+//! replay the same inputs through the Rust game and require the same numbers, bit for bit;
 //! only trigonometry is allowed a last-bit tolerance.
 
 use serde::Deserialize;
@@ -319,7 +319,7 @@ fn actor(actor: &HubFixedActor) -> ([f64; 2], f64, f64) {
     ([actor.position.x, actor.position.y], actor.radius, actor.sort_bias)
 }
 
-/// Sine and cosine are the one place the port may differ from V8 in the last bit.
+/// Sine and cosine are the one place the game may differ from the recordings in the last bit.
 const TRIG_TOLERANCE: f64 = 1e-9;
 
 fn assert_close(actual: Vec2, expected: [f64; 2], context: &str) {
@@ -517,7 +517,7 @@ fn hub_regions_doorways_and_scripted_walks_replay_the_website_kernels() {
         assert_eq!(placement.scripted_target, vec2(record.scripted_target), "{context}: target");
     }
 
-    // The oracle swept a grid across and just outside every region; walk it in the same order.
+    // The recording swept a grid across and just outside every region; walk it in order.
     let mut hits = goldens.portal_hits.iter();
     let mut misses = 0;
     for (region_index, region) in regions.iter().copied().enumerate() {
@@ -2416,7 +2416,7 @@ fn party_ui_goldens() {
     }
     fn javascript_numbers(value: &mut Value) {
         match value {
-            // JSON stores integer and float spellings separately; Source numbers
+            // JSON stores integer and float spellings separately; the recorded numbers
             // are all doubles. Normalize representation, preserving exact values.
             Value::Number(number) => *value = json!(number.as_f64().unwrap()),
             Value::Array(values) => values.iter_mut().for_each(javascript_numbers),

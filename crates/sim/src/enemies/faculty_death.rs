@@ -1,4 +1,5 @@
-//! Faculty dying interval and final bone/scrap burst from `enemies/faculty-death.ts`.
+//! The Faculty's death: smoke and smoking bones during its dying interval, then the final
+//! burst of bones, skull, scraps and smoke.
 
 use super::config::EnemyFamilyConfig;
 use super::effects::*;

@@ -1,4 +1,4 @@
-//! Authoritative enemy stock-art plans from the pinned Website's enemy presenters.
+//! Draw plans for enemy actors in stock art: the sprite and segment layers each family paints.
 //! These consume actual family state and registered art sockets; no rendering clock
 //! or gameplay random stream is hidden in the view.
 
@@ -136,7 +136,7 @@ pub fn enemy_actor_plan_with_input(
             hit_segments.push(segment);
         }
     }
-    // Source segments retain the original pass first, then all hit segments.
+    // The normal segments come first, then all hit-flash copies.
     segments.extend(hit_segments);
     let attack_effect_origin = attack_effect_origin(actor, &layers, art);
     EnemyActorPresentationPlan {
@@ -257,8 +257,8 @@ pub fn maggot_plan_with_input(
     layers
 }
 
-/// `nativeEtherDrainCapturedImage`: the pre-hit family art survives terminal
-/// dispatch. Families without a capturable image still flush the field manager.
+/// The pre-hit family art that an Ether Drain capture keeps after terminal dispatch.
+/// Families without a capturable image still flush the field manager.
 #[must_use]
 pub fn ether_drain_captured_image(
     actor: &EnemyActor,

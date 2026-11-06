@@ -1,5 +1,5 @@
-//! Admitted learned bots from `game-host.ts::queueMlBotSummon` through
-//! `drainBotIntents`. Controllers own policy memory; actual actors live in Session.
+//! Learned bots in the Global Hub: summons, admission, delayed invitation acceptance and the
+//! intents their controllers queue. Controllers own policy memory; bot actors live in Session.
 
 mod worker;
 
@@ -23,6 +23,8 @@ use super::{HostedGameHost, HostedWorlds};
 use crate::host::signing::{random_party_identity, random_token};
 use worker::{BotInferenceWorker, InferenceJob};
 
+/// A learned bot playing as a participant: its identity, current input, policy controller and
+/// queued intents.
 pub(super) struct HostedBot {
     pub id: String,
     pub character: NewGameSelection,
@@ -43,6 +45,8 @@ struct PendingBotInvitation {
     player_id: String,
 }
 
+/// This College's bots, their inference worker, and the summons, invitations and failures
+/// waiting to be processed.
 #[derive(Default)]
 pub(super) struct HostedBots {
     pub rows: Vec<HostedBot>,
@@ -136,8 +140,8 @@ impl HostedGameHost {
         }
     }
 
-    /// Source processes asynchronous completions between epochs, then failures,
-    /// actual admission, delayed invitations, controller polls and queued intents.
+    /// Runs before each tick: apply finished inferences, then remove failed bots, admit
+    /// summoned bots, accept due invitations, poll controllers and apply their queued intents.
     pub(super) fn step_ml_bots(&mut self, now_ms: f64) -> Result<(), String> {
         let completions = self.bots.worker.as_ref().map_or_else(Vec::new, |worker| worker.drain());
         for completed in completions {

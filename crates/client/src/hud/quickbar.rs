@@ -1,5 +1,5 @@
-//! Source `SkillQuickbar.tsx`: live accepted player fields become display-only
-//! labels, cooldowns and active flags. Mana formulas stay in the simulation owner.
+//! The skill quickbar: accepted player fields become display-only labels, cooldowns
+//! and active flags. Mana formulas stay in the simulation.
 
 use solomon_sim::belt::{
     BELT_SLOT_COUNT, BeltPotionKind, NativeBeltEntry, belt_entry_item, belt_potion_projection,
@@ -17,6 +17,8 @@ use solomon_sim::settings::{GameControlBindings, game_binding_label};
 
 use super::Hud;
 
+/// One quickbar slot as drawn: its label, key binding, cooldown, mana cost and
+/// availability flags.
 #[derive(Clone, PartialEq)]
 pub(super) struct QuickbarSlot {
     pub label: String,

@@ -1,4 +1,4 @@
-//! Current Website five-field HandCast1 continuation and legacy absence.
+//! The save document's five-field HandCast1 continuation, and its absence in legacy saves.
 use serde_json::{Value, json};
 use solomon_assets::website_save::{self, CreateSaveOptions, SaveIntegrity, SaveMetadata};
 use solomon_sim::modding::LuaObject;

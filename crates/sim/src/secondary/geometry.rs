@@ -1,5 +1,5 @@
-//! Native Teleport candidate search and collision legalization from
-//! `core-server/native-secondary-world.ts`, plus the authored Phase probe sequence.
+//! Teleport candidate search and collision legalization, plus the authored Phase probe
+//! sequence.
 
 use crate::boneyard::BoneyardBounds;
 use crate::boneyard::collision::{BoneyardCollisionWorld, can_place_boneyard_body};
@@ -10,12 +10,14 @@ use crate::{Rng, Vec2};
 pub const TELEPORT_COLLISION_RADIUS: f64 = 40.0;
 pub const GOLEM_PLACEMENT_RADIUS: f64 = 25.0;
 
+/// A body a Teleport destination must avoid: its position and radius.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BoneyardTeleportBody {
     pub position: Vec2,
     pub radius: f64,
 }
 
+/// The Boneyard a Teleport destination is chosen in: its bodies, bounds and collision.
 pub struct BoneyardTeleportWorld<'a> {
     pub bodies: &'a [BoneyardTeleportBody],
     pub bounds: BoneyardBounds,
@@ -56,7 +58,7 @@ pub fn resolve_boneyard_teleport(world: BoneyardTeleportWorld<'_>, rng: &mut Rng
         }
     }
     let selected = selected.unwrap_or_else(|| {
-        // Y precedes X in the source fallback, including an empty candidate grid.
+        // The fallback draws Y before X, including for an empty candidate grid.
         let y = rng.draw_scaled_float(world.bounds.height, false);
         let x = rng.draw_scaled_float(world.bounds.width, false);
         Vec2::new(fround(world.bounds.x + x), fround(world.bounds.y + y))
@@ -79,7 +81,7 @@ pub fn resolve_boneyard_teleport(world: BoneyardTeleportWorld<'_>, rng: &mut Rng
     })
 }
 
-/// Source legalization searches expanding, vertically compressed rings and returns
+/// Legalization searches expanding, vertically compressed rings and returns
 /// the first legal probe. The host supplies the real hub/Boneyard static predicate.
 pub fn resolve_collision_adjusted_position(
     requested: Vec2,

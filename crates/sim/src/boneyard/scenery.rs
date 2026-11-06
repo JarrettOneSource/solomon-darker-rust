@@ -1,6 +1,6 @@
-//! Native static placement from `editor/native-render-plan.ts` and
-//! `renderer/boneyard-native-static-art.ts`. Both stock and authored scenes
-//! compile through this plan; glyph pixels remain immutable catalog assets.
+//! Static scenery placement: the atlas entry, painter row and registration order of every
+//! object, fence post and fence body, plus Tree and roof proxies. Both stock and authored
+//! scenes compile through this plan; glyph pixels remain immutable catalog assets.
 
 mod fence;
 mod shadow;
@@ -20,6 +20,8 @@ pub use tree::*;
 use crate::Vec2;
 use crate::float::{cos, sin};
 
+/// What a scenery layer draws: an object's atlas entry, a fence post, or one piece of a
+/// fence body with its broken half, if any.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ScenerySource {
     Object { index: usize, entry: usize },
@@ -27,6 +29,8 @@ pub enum ScenerySource {
     FenceBody { index: usize, piece: usize, broken: Option<BrokenFenceHalf> },
 }
 
+/// One planned scenery drawable: what it draws, its world position, the painter row inputs
+/// and its registration order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SceneryLayer {
     pub source: ScenerySource,
@@ -36,6 +40,8 @@ pub struct SceneryLayer {
     pub source_order: usize,
 }
 
+/// A scene's static scenery: underlays, compact ground sprites, main-layer drawables, Tree
+/// and roof proxies, walls and the shared fence posts.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SceneryPlan {
     pub underlays: Vec<(usize, usize)>,
@@ -205,7 +211,8 @@ pub fn scenery_object_entry(object: &BoneyardObject) -> Option<usize> {
     Some(start + object.variant.unwrap_or(0) as usize)
 }
 
-/// Original glyph transform, also used for strict off-camera source membership.
+/// Original glyph transform. The bounds of these corners also decide which scenery the
+/// strict off-camera cleanup retires.
 #[must_use]
 pub fn scenery_art_corners(
     position: Vec2,

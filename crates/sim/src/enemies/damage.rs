@@ -1,4 +1,5 @@
-//! Enemy-owned hit acceptance from Website `enemies/damage.ts` and `enemies/cocoon.ts`.
+//! Enemy-owned hit acceptance, including Maggots and Cocoons, and the state player attacks
+//! set on enemies: staff effects, Hurricane cooldowns, pike release and Blizzard pushes.
 //! Shields and armor consume an entire hit; ordinary deaths enter their terminal brain
 //! without collapsing the actor's presentation interval or changing its registration.
 
@@ -107,7 +108,8 @@ impl EnemyWorld {
         true
     }
 
-    /// `releaseBoneyardSkeletonPike`: Hail releases the existing restraint before movement.
+    /// Releases a Skeleton's pike restraint. Hail and other forces that move an enemy call
+    /// this before the movement.
     pub fn release_skeleton_pike(&mut self, actor_id: usize) -> bool {
         let Some(actor) = self.actors.iter_mut().find(|actor| actor.id == actor_id) else {
             return false;
@@ -115,7 +117,7 @@ impl EnemyWorld {
         detach_skeleton_pike(actor)
     }
 
-    /// `setBoneyardEnemyBlizzardPushState` also addresses independently registered Maggots.
+    /// Records Blizzard push state on an enemy, including Maggots, which live in their own list.
     pub fn set_blizzard_push_state(
         &mut self,
         actor_id: usize,
