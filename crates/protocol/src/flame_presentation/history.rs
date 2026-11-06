@@ -417,13 +417,13 @@ impl FlamePresentationReplay {
         self.retained_floor = self.retained_floor.max(oldest_tick);
         let retained_end_tick = self.retained_end_tick;
         self.births.retain(|birth| {
-            birth.maximum_native_end_tick().max(retained_end_tick.map_or(0, |end| end(birth)))
+            birth.maximum_end_tick().max(retained_end_tick.map_or(0, |end| end(birth)))
                 > oldest_tick
         });
         Ok(())
     }
     fn retained_until(&self, birth: &FlamePresentationBirth) -> u64 {
-        birth.maximum_native_end_tick().max(self.retained_end_tick.map_or(0, |end| end(birth)))
+        birth.maximum_end_tick().max(self.retained_end_tick.map_or(0, |end| end(birth)))
     }
 }
 

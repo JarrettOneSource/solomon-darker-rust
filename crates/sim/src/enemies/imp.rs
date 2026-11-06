@@ -157,8 +157,8 @@ fn move_imp(
             target_heading_deg: target_heading,
             target_position: target.map(|target| target.position),
         };
-        let goal = native_enemy_steering_goal(&path, &request);
-        let routed = resolve_native_enemy_path_goal(
+        let goal = enemy_steering_goal(&path, &request);
+        let routed = resolve_enemy_path_goal(
             path,
             EnemyPathGoalRequest {
                 actor_position: actor.position,
@@ -167,9 +167,7 @@ fn move_imp(
                 navigation_clearance: enemy_navigation_clearance(actor),
                 raw_goal: goal,
                 target_position: target.map(|target| target.position),
-                target_refresh_ticks: native_enemy_target_refresh_ticks(
-                    actor.config.pathfinding_mode,
-                ),
+                target_refresh_ticks: enemy_target_refresh_ticks(actor.config.pathfinding_mode),
             },
             context.geometry,
         );
@@ -178,7 +176,7 @@ fn move_imp(
             request.actor_heading_deg = positive_modulo(request.actor_heading_deg + 180.0, 360.0);
         }
         request.goal_position = Some(routed.goal);
-        let steering = build_native_enemy_steering(path, request);
+        let steering = build_enemy_steering(path, request);
         path = steering.state;
         (steering.delta, steering.heading_deg)
     };

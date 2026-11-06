@@ -9,9 +9,7 @@ use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
 use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
-use crate::spells::fire::{
-    CreateNativeFirePatchOptions, create_native_fire_patch, step_native_fire_patch,
-};
+use crate::spells::fire::{CreateFirePatchOptions, create_fire_patch, step_fire_patch};
 use crate::spells::model::FirePatchType;
 
 pub fn spawn_demon_fire_handoff(
@@ -72,8 +70,8 @@ fn create_enemy_fire_patch(
     phase: f64,
     sign: f64,
 ) -> crate::spells::model::PrimarySpellFirePatch {
-    create_native_fire_patch(
-        CreateNativeFirePatchOptions {
+    create_fire_patch(
+        CreateFirePatchOptions {
             atlas_phase_step: None,
             burn_damage: 0.0,
             damage,
@@ -104,7 +102,7 @@ pub fn step_demon_fires(world: &mut EnemyWorld, context: &EnemyStepContext<'_>, 
         let EnemyProjectileEffectKind::DemonFire { fire } = &mut effect.kind else {
             return true;
         };
-        let (retained, contact) = step_native_fire_patch(fire, tick);
+        let (retained, contact) = step_fire_patch(fire, tick);
         if let Some(contact) = contact {
             for player in context.players {
                 if !target_eligible(player) {
@@ -143,8 +141,7 @@ pub fn spawn_poison_pool_bubble(
     tick: u64,
     order: &mut WorldPainterOrder,
 ) {
-    if native_poison_pool_alpha(pool.age_ticks) <= 0.75 || world.steering_rng.draw_integer(20) != 3
-    {
+    if poison_pool_alpha(pool.age_ticks) <= 0.75 || world.steering_rng.draw_integer(20) != 3 {
         return;
     }
     let growth = fround(fround(0.05) + world.steering_rng.draw_scaled_float(0.05, false));

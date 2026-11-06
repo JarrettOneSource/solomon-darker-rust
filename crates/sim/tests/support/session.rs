@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use solomon_sim::game_run::GameRunLifecycle;
 use solomon_sim::hub::regions::HubTransitionPhase;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::score::NativeHallOfFameRunState;
+use solomon_sim::score::HallOfFameRunState;
 use solomon_sim::session::{PlayerLightingState, SessionParticipant};
 
 pub fn registration(value: PainterRegistration) -> Value {
@@ -52,7 +52,7 @@ pub fn run(run: &GameRunLifecycle) -> Value {
         "nextGameOverEventId":run.next_game_over_event_id,"phase":run.phase.id(),"runId":run.run_id})
 }
 
-pub fn score(score: &NativeHallOfFameRunState) -> Value {
+pub fn score(score: &HallOfFameRunState) -> Value {
     json!({"awesomeness":score.awesomeness,"awesomestKill":score.awesomest_kill,
         "awesomestKillMaximumHealth":score.awesomest_kill_maximum_health,
         "elapsedTicks":score.elapsed_ticks,"killStreak":score.kill_streak,

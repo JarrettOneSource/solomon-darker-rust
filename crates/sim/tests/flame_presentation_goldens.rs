@@ -12,21 +12,21 @@ mod weld_visual_rows;
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn bounds(value: &Value) -> NativeFlameLashBounds {
-    NativeFlameLashBounds {
+fn bounds(value: &Value) -> FlameLashBounds {
+    FlameLashBounds {
         x: value["x"].as_f64().unwrap(),
         y: value["y"].as_f64().unwrap(),
         width: value["width"].as_f64().unwrap(),
         height: value["height"].as_f64().unwrap(),
     }
 }
-fn bounds_row(value: NativeFlameLashBounds) -> Value {
+fn bounds_row(value: FlameLashBounds) -> Value {
     json!({"x":value.x,"y":value.y,"width":value.width,"height":value.height})
 }
-fn common(state: &Value) -> NativeWeldActorBase {
+fn common(state: &Value) -> WeldActorBase {
     let vector: Vec<_> =
         state["vector"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
-    NativeWeldActorBirth {
+    WeldActorBirth {
         build_id: 1003,
         direction: point(&state["direction"]),
         id: state["id"].as_u64().unwrap(),
@@ -38,16 +38,16 @@ fn common(state: &Value) -> NativeWeldActorBase {
     }
     .actor()
 }
-fn channel_visual(value: &Value) -> NativeFlameChannelVisual {
+fn channel_visual(value: &Value) -> FlameChannelVisual {
     if value["kind"] == "legacy-suppressed" {
-        return NativeFlameChannelVisual::LegacySuppressed;
+        return FlameChannelVisual::LegacySuppressed;
     }
     let path = &value["path"];
-    NativeFlameChannelVisual::NativeBirth(NativeFlameChannelBirth {
+    FlameChannelVisual::Birth(FlameChannelBirth {
         role: if value["role"] == "main" {
-            NativeFlameChannelRole::Main
+            FlameChannelRole::Main
         } else {
-            NativeFlameChannelRole::Chain
+            FlameChannelRole::Chain
         },
         camera_displacement: value["cameraDisplacement"]
             .as_object()
@@ -58,15 +58,15 @@ fn channel_visual(value: &Value) -> NativeFlameChannelVisual {
         offset: point(&value["offset"]),
         width: value["width"].as_f64().unwrap(),
         ribbon: if value["ribbon"]["kind"] == "short" {
-            NativeFlameRibbonBirth::Short {
+            FlameRibbonBirth::Short {
                 width_factor: value["ribbon"]["widthFactor"].as_f64().unwrap(),
             }
         } else {
-            NativeFlameRibbonBirth::Long {
+            FlameRibbonBirth::Long {
                 phase_degrees: value["ribbon"]["phaseDegrees"].as_f64().unwrap(),
             }
         },
-        path: NativeFlamePathBirth {
+        path: FlamePathBirth {
             intensity: path["intensity"].as_f64().unwrap(),
             radius_factors: path["radiusFactors"]
                 .as_array()
@@ -84,10 +84,10 @@ fn channel_visual(value: &Value) -> NativeFlameChannelVisual {
         },
     })
 }
-fn actor(state: &Value) -> NativeWeldWorldActor {
+fn actor(state: &Value) -> WeldWorldActor {
     let common = common(state);
     if state["kind"] == "weld-channel" {
-        return NativeWeldWorldActor::Channel(NativeWeldChannelActorState {
+        return WeldWorldActor::Channel(WeldChannelActorState {
             common,
             enhanced_effects: state["enhancedEffects"].as_bool().unwrap(),
             flame_visual: Some(channel_visual(&state["flameVisual"])),
@@ -98,16 +98,16 @@ fn actor(state: &Value) -> NativeWeldWorldActor {
             variant: state["variant"].as_u64().unwrap() as u32,
         });
     }
-    NativeWeldWorldActor::FlameLashFade(NativeWeldFlameLashFadeState {
+    WeldWorldActor::FlameLashFade(WeldFlameLashFadeState {
         common,
         alpha: state["alpha"].as_f64().unwrap(),
         alpha_step: state["alphaStep"].as_f64().unwrap(),
         base_scale: state["baseScale"].as_f64().unwrap(),
         color_green: state["colorGreen"].as_f64().unwrap(),
         flame_visual: if state["flameVisual"]["kind"] == "legacy-suppressed" {
-            NativeFlameFadeVisual::LegacySuppressed
+            FlameFadeVisual::LegacySuppressed
         } else {
-            NativeFlameFadeVisual::NativeBirth(NativeFlameFadeBirth {
+            FlameFadeVisual::Birth(FlameFadeBirth {
                 birth_alpha: state["flameVisual"]["birthAlpha"].as_f64().unwrap(),
             })
         },
@@ -115,9 +115,9 @@ fn actor(state: &Value) -> NativeWeldWorldActor {
         record: state["record"].as_u64().unwrap() as usize,
         rotation_degrees: state["rotationDegrees"].as_f64().unwrap(),
         variant: match state["variant"].as_str().unwrap() {
-            "chain" => NativeWeldFlameLashFadeVariant::Chain,
-            "source" => NativeWeldFlameLashFadeVariant::Source,
-            "endpoint" => NativeWeldFlameLashFadeVariant::Endpoint,
+            "chain" => WeldFlameLashFadeVariant::Chain,
+            "source" => WeldFlameLashFadeVariant::Source,
+            "endpoint" => WeldFlameLashFadeVariant::Endpoint,
             other => panic!("unexpected Flame fade {other}"),
         },
         wrapper_scalar: state["wrapperScalar"].as_f64().unwrap(),
@@ -132,13 +132,13 @@ fn current_flame_draws_keep_birth_geometry_native_colors_and_region_bands() {
     for case in fixture["cases"].as_array().unwrap() {
         let state = actor(&case["state"]);
         weld_visual_rows::compare(
-            [NativeWeldPresentationState::World(&state)],
+            [WeldPresentationState::World(&state)],
             weld_visual_rows::sample(case, 0).unwrap(),
             case["name"].as_str().unwrap(),
         );
     }
     for case in fixture["bands"].as_array().unwrap() {
-        let bands = build_native_flame_lash_split_bands(
+        let bands = build_flame_lash_split_bands(
             "flame:1",
             bounds(&case["bounds"]),
             case["enhancedEffects"].as_bool().unwrap(),
@@ -158,13 +158,13 @@ fn current_flame_draws_keep_birth_geometry_native_colors_and_region_bands() {
         );
     }
     for input in fixture["errors"].as_array().unwrap() {
-        assert!(build_native_flame_lash_split_bands("flame:1", bounds(input), true, None).is_err());
+        assert!(build_flame_lash_split_bands("flame:1", bounds(input), true, None).is_err());
     }
     assert_eq!(
-        native_flame_region_clipped_band(
-            NativeFlameLashBounds { x: 0.0, y: 10.0, width: 10_000.0, height: 25.0 },
-            Some(NativeFlameLashBounds { x: 100.0, y: 20.0, width: 80.0, height: 100.0 })
+        flame_region_clipped_band(
+            FlameLashBounds { x: 0.0, y: 10.0, width: 10_000.0, height: 25.0 },
+            Some(FlameLashBounds { x: 100.0, y: 20.0, width: 80.0, height: 100.0 })
         ),
-        NativeFlameLashBounds { x: 100.0, y: 20.0, width: 80.0, height: 15.0 }
+        FlameLashBounds { x: 100.0, y: 20.0, width: 80.0, height: 15.0 }
     );
 }

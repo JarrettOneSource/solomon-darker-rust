@@ -2,31 +2,28 @@
 //! native actor order; target effects are applied before later actors query them.
 
 use crate::float;
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorState;
 use std::collections::BTreeSet;
 
 use super::program::*;
 use super::step::{BurnRequest, StepEngine};
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryAudioCue as Cue, NativeSecondaryDamageContact,
-    NativeSecondaryDamageKind as Damage, NativeSecondaryEventKind as Event,
-    NativeSecondaryKnockbackContact, NativeSecondaryTarget,
-    NativeSecondaryTargetEffectPatch as Patch, NativeSecondaryTargetEffectState,
-    NativeSecondaryWorld,
+    SecondaryActorKind as Kind, SecondaryAudioCue as Cue, SecondaryDamageContact,
+    SecondaryDamageKind as Damage, SecondaryEventKind as Event, SecondaryKnockbackContact,
+    SecondaryTarget, SecondaryTargetEffectPatch as Patch, SecondaryTargetEffectState,
+    SecondaryWorld,
 };
 use crate::Vec2;
 use crate::float::{fround, hypot};
-use crate::profile::primary::NativeSpentEmber;
-use crate::spells::air_water::draw_native_spell_damage;
-use crate::spells::fire::{
-    NativeFireProjectilePayload, create_native_fire_detonation, step_native_fire_ember,
-};
+use crate::profile::primary::SpentEmber;
+use crate::spells::air_water::draw_spell_damage;
+use crate::spells::fire::{FireProjectilePayload, create_fire_detonation, step_fire_ember};
 use crate::spells::model::{PrimarySpellFireEmber, PrimarySpellTransientBase};
-use crate::spells::special_death::{NativeSpellSpecialDeathKind, NativeSpellSpecialDeathPayload};
+use crate::spells::special_death::{SpellSpecialDeathKind, SpellSpecialDeathPayload};
 
-pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
+pub(super) fn step_status_pulses<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    effects: &[NativeSecondaryTargetEffectState],
+    effects: &[SecondaryTargetEffectState],
 ) {
     // Read the previous effects, including their final tick. The stored effects
     // have already advanced, which matters for simultaneous Prismatic expiry.
@@ -74,7 +71,7 @@ pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
                         enhanced,
                     );
                 }
-                engine.output.damage.push(NativeSecondaryDamageContact {
+                engine.output.damage.push(SecondaryDamageContact {
                     amount: burn.damage_per_tick * if prism { 2.0 } else { 1.0 },
                     ether_drain: false,
                     hit_strength: Some(hit_strength),
@@ -87,7 +84,7 @@ pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
                     target_id: target.id,
                 });
                 if burn.stun_factor < 1.0 {
-                    super::apply_native_secondary_target_effect(
+                    super::apply_secondary_target_effect(
                         &mut engine.state.target_effects,
                         &effect.world_key,
                         target.id,
@@ -106,15 +103,15 @@ pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
             let hit_strength = fround(0.25 + engine.state.rng.draw_scaled_float(0.5, false));
             // Mod_Steamed samples before submitting every hit, including survivors.
             let special_death_payload =
-                (burn.explode_radius > 0.0).then(|| NativeSpellSpecialDeathPayload {
-                    kind: NativeSpellSpecialDeathKind::Steam,
+                (burn.explode_radius > 0.0).then(|| SpellSpecialDeathPayload {
+                    kind: SpellSpecialDeathKind::Steam,
                     ember_damage: burn.ember_damage,
                     ember_fragments: burn.ember_fragments as u32,
                     explode_damage: burn.explode_damage,
                     explode_radius: burn.explode_radius,
                     private_seed: engine.state.rng.draw_integer(1_000_000) as u32,
                 });
-            engine.output.damage.push(NativeSecondaryDamageContact {
+            engine.output.damage.push(SecondaryDamageContact {
                 amount: burn.damage_per_tick,
                 ether_drain: false,
                 hit_strength: Some(hit_strength),
@@ -140,7 +137,7 @@ pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
         let Some(target) = engine.world.target(&effect.world_key, effect.target_id) else {
             continue;
         };
-        engine.output.damage.push(NativeSecondaryDamageContact {
+        engine.output.damage.push(SecondaryDamageContact {
             amount: effect.frost_burn_damage_per_tick,
             ether_drain: false,
             hit_strength: Some(0.0),
@@ -159,10 +156,10 @@ pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
         let rotation = engine.state.rng.draw_scaled_float(360.0, false);
         let scale = engine.state.rng.draw_scaled_float(0.5, false);
         let radius = engine.state.rng.draw_scaled_float(10.0, false);
-        let offset = native_unit_vector(&mut engine.state.rng);
+        let offset = unit_vector(&mut engine.state.rng);
         let vertical = engine.state.rng.draw_scaled_float(35.0, false);
         let speed = engine.state.rng.draw_scaled_float(1.0, false);
-        let velocity = native_unit_vector(&mut engine.state.rng);
+        let velocity = unit_vector(&mut engine.state.rng);
         let alpha = engine.state.rng.draw_scaled_float(0.5, false);
         let mut child = actor(
             Kind::FrostBurnFlare,
@@ -188,10 +185,10 @@ pub(super) fn step_status_pulses<W: NativeSecondaryWorld>(
     }
 }
 
-pub(super) fn step<W: NativeSecondaryWorld>(
+pub(super) fn step<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     match actor.kind {
@@ -378,9 +375,9 @@ pub(super) fn step<W: NativeSecondaryWorld>(
     }
 }
 
-fn burn<W: NativeSecondaryWorld>(
+fn burn<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    actor: &mut NativeSecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let Some(target) = actor.target_id.and_then(|id| engine.world.target(&actor.world_key, id))
@@ -434,10 +431,10 @@ fn ordered_hit_target_ids(ids: &[u64]) -> Vec<u64> {
     hit
 }
 
-fn wave<W: NativeSecondaryWorld>(
+fn wave<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     assert!(source.quantity > 0.0, "native shockwave retains radius growth");
@@ -486,7 +483,7 @@ fn wave<W: NativeSecondaryWorld>(
                     fround(dy / distance * actor.alpha * source.quantity),
                 )
             };
-            engine.output.knockbacks.push(NativeSecondaryKnockbackContact {
+            engine.output.knockbacks.push(SecondaryKnockbackContact {
                 delta,
                 source_actor_id: actor.id,
                 target_id: target.id,
@@ -495,15 +492,15 @@ fn wave<W: NativeSecondaryWorld>(
     }
 }
 
-fn advance_wave<W: NativeSecondaryWorld>(
+fn advance_wave<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     growth: f64,
     fade_threshold: f64,
 ) -> bool {
-    let wave = super::motion::step_native_expanding_wave(
-        super::motion::NativeExpandingWave {
+    let wave = super::motion::step_expanding_wave(
+        super::motion::ExpandingWave {
             radius: source.radius,
             growth,
             scalar: source.alpha,
@@ -524,23 +521,23 @@ fn advance_wave<W: NativeSecondaryWorld>(
     wave.retain
 }
 
-fn maximum_explosion<W: NativeSecondaryWorld>(
+fn maximum_explosion<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    wave: &NativeSecondaryActorState,
-    target: &NativeSecondaryTarget,
+    wave: &SecondaryActorState,
+    target: &SecondaryTarget,
 ) {
     let seed = engine.state.rng.draw_integer(1_000_001);
     let burn = engine.context.players[&wave.owner_id].fire_burn_damage;
-    let result = create_native_fire_detonation(
+    let result = create_fire_detonation(
         engine.state.next_actor_id + 1,
-        NativeFireProjectilePayload {
+        FireProjectilePayload {
             burn_damage: burn,
             ember_damage: fround(wave.damage / 3.0),
             ember_fragments: 3,
             explode_damage: wave.damage,
             explode_radius: 10.0 + (1.5 - 1.0) / 0.18,
             private_seed: seed,
-            spent_ember: NativeSpentEmber::None,
+            spent_ember: SpentEmber::None,
         },
         target.position,
         &wave.owner_id,
@@ -636,7 +633,7 @@ fn maximum_explosion<W: NativeSecondaryWorld>(
         .retain(|actor| !consumed.contains(&actor.id));
 }
 
-fn step_fragment(source: &NativeSecondaryActorState, actor: &mut NativeSecondaryActorState) {
+fn step_fragment(source: &SecondaryActorState, actor: &mut SecondaryActorState) {
     let mut ember = PrimarySpellFireEmber {
         common: PrimarySpellTransientBase {
             age_ticks: source.age_ticks,
@@ -655,10 +652,10 @@ fn step_fragment(source: &NativeSecondaryActorState, actor: &mut NativeSecondary
         life: source.alpha,
         phase: source.frame,
         position: source.position,
-        spent_ember: NativeSpentEmber::None,
+        spent_ember: SpentEmber::None,
         vertical_velocity: source.slow_factor,
     };
-    if !step_native_fire_ember(&mut ember).retained {
+    if !step_fire_ember(&mut ember).retained {
         *actor = source.clone();
         actor.alpha = 0.0;
         return;
@@ -675,10 +672,10 @@ fn step_fragment(source: &NativeSecondaryActorState, actor: &mut NativeSecondary
     actor.velocity = ember.horizontal_velocity;
 }
 
-fn storm<W: NativeSecondaryWorld>(
+fn storm<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let mut flash = source.frame;
@@ -711,11 +708,10 @@ fn storm<W: NativeSecondaryWorld>(
                 let index = engine.state.rng.draw_integer(targets.len() as i32) as usize;
                 let target = &targets[index];
                 let source_distance = engine.state.rng.draw_scaled_float(100.0, false);
-                let source_direction = native_unit_vector(&mut engine.state.rng);
+                let source_direction = unit_vector(&mut engine.state.rng);
                 let middle_distance = engine.state.rng.draw_scaled_float(200.0, false);
-                let middle_direction = native_unit_vector(&mut engine.state.rng);
-                let damage =
-                    draw_native_spell_damage(&mut engine.state.rng, actor.damage, actor.phase);
+                let middle_direction = unit_vector(&mut engine.state.rng);
+                let damage = draw_spell_damage(&mut engine.state.rng, actor.damage, actor.phase);
                 let origin = Vec2::new(
                     fround(actor.position.x + source_direction.x * source_distance),
                     fround(actor.position.y - 175.0 + source_direction.y * source_distance),
@@ -760,14 +756,14 @@ fn storm<W: NativeSecondaryWorld>(
     }
 }
 
-fn weather_drop<W: NativeSecondaryWorld>(
+fn weather_drop<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    parent: &NativeSecondaryActorState,
+    parent: &SecondaryActorState,
     index: i32,
     acid: bool,
 ) {
     let distance = engine.state.rng.draw_scaled_float(200.0, false);
-    let direction = native_unit_vector(&mut engine.state.rng);
+    let direction = unit_vector(&mut engine.state.rng);
     let mut child = actor(
         if acid { Kind::AcidDrop } else { Kind::StormDrop },
         &parent.owner_id,
@@ -786,10 +782,10 @@ fn weather_drop<W: NativeSecondaryWorld>(
     engine.state.spawn_actor(child);
 }
 
-fn acid<W: NativeSecondaryWorld>(
+fn acid<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let residue = if source.scale >= 1.0 && source.age_ticks < 1500 {
@@ -812,7 +808,7 @@ fn acid<W: NativeSecondaryWorld>(
         let rotation = engine.state.rng.draw_scaled_float(360.0, false);
         let scale = engine.state.rng.draw_scaled_float(0.75, false);
         let distance = engine.state.rng.draw_scaled_float(200.0, false);
-        let direction = native_unit_vector(&mut engine.state.rng);
+        let direction = unit_vector(&mut engine.state.rng);
         let mut child = super::program::actor(
             Kind::AcidSplash,
             &actor.owner_id,
@@ -860,10 +856,10 @@ fn acid<W: NativeSecondaryWorld>(
     actor.scale = scale;
 }
 
-fn comet<W: NativeSecondaryWorld>(
+fn comet<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let brightness = engine.state.rng.draw_scaled_float(0.5, false);

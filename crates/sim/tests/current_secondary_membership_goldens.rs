@@ -13,13 +13,13 @@ use serde_json::{Value, json};
 use solomon_sim::belt::PlayerBeltComponent;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use solomon_sim::secondary::*;
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 
 struct World {
     retained: Value,
-    targets: Vec<NativeSecondaryTarget>,
+    targets: Vec<SecondaryTarget>,
 }
-impl NativeSecondaryWorld for World {
+impl SecondaryWorld for World {
     fn target_exists(&self, key: &str, id: usize) -> bool {
         if self.retained["kind"] != "boneyard"
             || key != format!("boneyard:{}", self.retained["runId"].as_str().unwrap())
@@ -34,8 +34,8 @@ impl NativeSecondaryWorld for World {
                 .any(|row| row["id"].as_u64() == Some(id as u64))
         })
     }
-    fn dampen_candidates(&self, _: &str, _: Vec2) -> NativeSecondaryDampenCandidates {
-        NativeSecondaryDampenCandidates::default()
+    fn dampen_candidates(&self, _: &str, _: Vec2) -> SecondaryDampenCandidates {
+        SecondaryDampenCandidates::default()
     }
     fn phasing_destination(&self, _: &str, _: Vec2, _: Vec2) -> Option<Vec2> {
         None
@@ -43,16 +43,16 @@ impl NativeSecondaryWorld for World {
     fn golem_movement(&self, _: &str, _: &str, _: Vec2, requested: Vec2, _: f64) -> Vec2 {
         requested
     }
-    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut NativeRng) -> Vec2 {
+    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut Rng) -> Vec2 {
         requested
     }
-    fn teleport_destination(&self, _: &str, _: &mut NativeRng) -> Vec2 {
+    fn teleport_destination(&self, _: &str, _: &mut Rng) -> Vec2 {
         Vec2::ZERO
     }
-    fn target(&self, _: &str, id: usize) -> Option<NativeSecondaryTarget> {
+    fn target(&self, _: &str, id: usize) -> Option<SecondaryTarget> {
         self.targets.iter().find(|target| target.id == id).cloned()
     }
-    fn targets(&self, _: &str, center: Vec2, radius: f64) -> Vec<NativeSecondaryTarget> {
+    fn targets(&self, _: &str, center: Vec2, radius: f64) -> Vec<SecondaryTarget> {
         self.targets
             .iter()
             .filter(|target| {
@@ -65,7 +65,7 @@ impl NativeSecondaryWorld for World {
             .collect()
     }
 }
-fn snapshot(state: &NativeSecondarySimulationState) -> Value {
+fn snapshot(state: &SecondarySimulationState) -> Value {
     json!({"effects":state.target_effects.iter().map(support::effect_snapshot).collect::<Vec<_>>(),
         "rng":support::rng_snapshot(&state.rng)})
 }
@@ -80,29 +80,25 @@ fn fixture() -> Value {
 #[test]
 fn modifiers_end_at_actor_destruction_and_world_identity_changes() {
     for case in fixture()["membership"].as_array().unwrap() {
-        let mut state = NativeSecondarySimulationState::new(77);
+        let mut state = SecondarySimulationState::new(77);
         for identity in case["identities"].as_array().unwrap() {
-            apply_native_secondary_target_effect(
+            apply_secondary_target_effect(
                 &mut state.target_effects,
                 identity["worldKey"].as_str().unwrap(),
                 identity["targetId"].as_u64().unwrap() as usize,
-                NativeSecondaryTargetEffectPatch {
+                SecondaryTargetEffectPatch {
                     dazzle_ticks: Some(20),
                     cold_slow_factor: Some(0.75),
                     cold_slow_material: Some(true),
                     cold_slow_ticks: Some(10),
-                    ..NativeSecondaryTargetEffectPatch::default()
+                    ..SecondaryTargetEffectPatch::default()
                 },
             );
         }
         for frame in case["frames"].as_array().unwrap() {
             let tick = frame["tick"].as_u64().unwrap();
             state.step(
-                &NativeSecondaryTickContext {
-                    enhanced_effects: None,
-                    players: &BTreeMap::new(),
-                    tick,
-                },
+                &SecondaryTickContext { enhanced_effects: None, players: &BTreeMap::new(), tick },
                 &mut World { retained: frame["retained"].clone(), targets: Vec::new() },
                 None,
             );
@@ -128,10 +124,10 @@ fn rescue_wave_contacts_follow_native_cells_and_registration_order() {
             "enemies":{"actors":case["targets"],"maggots":[]}}),
             targets,
         };
-        let mut state = NativeSecondarySimulationState::new(91);
+        let mut state = SecondarySimulationState::new(91);
         let mut order = WorldPainterOrder::default();
         state.spawn_player_rescue_shockwave(
-            NativePlayerRescueInput {
+            PlayerRescueInput {
                 light_registration: PainterRegistration {
                     manager_lane: WorldManagerLane::Actor,
                     registration_ordinal: 100,
@@ -151,7 +147,7 @@ fn rescue_wave_contacts_follow_native_cells_and_registration_order() {
             authority.input.quickbar = None;
             let players = BTreeMap::from([("player".into(), authority)]);
             let result = state.step(
-                &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+                &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
                 &mut world,
                 Some(&mut order),
             );

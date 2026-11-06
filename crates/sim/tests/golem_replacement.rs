@@ -10,18 +10,16 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
-use solomon_sim::secondary::golem::NativeGolemIncomingDamage;
-use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondarySimulationState, NativeSecondaryTickContext,
-};
+use solomon_sim::secondary::golem::GolemIncomingDamage;
+use solomon_sim::secondary::{SecondaryActorKind, SecondarySimulationState, SecondaryTickContext};
 use solomon_sim::social::{AllyGolemProjection, AllyHudRow, derive_golem_ally_hud_rows};
 use solomon_sim::{HubWizard, Vec2};
 
-fn health(state: &NativeSecondarySimulationState) -> Vec<(u64, f64, f64)> {
+fn health(state: &SecondarySimulationState) -> Vec<(u64, f64, f64)> {
     state
         .actors
         .iter()
-        .filter(|actor| actor.kind == NativeSecondaryActorKind::Golem)
+        .filter(|actor| actor.kind == SecondaryActorKind::Golem)
         .map(|actor| {
             let golem = actor.golem.as_ref().unwrap();
             (actor.id, golem.current_health, golem.maximum_health)
@@ -29,11 +27,11 @@ fn health(state: &NativeSecondarySimulationState) -> Vec<(u64, f64, f64)> {
         .collect()
 }
 
-fn rows(state: &NativeSecondarySimulationState) -> Vec<AllyHudRow> {
+fn rows(state: &SecondarySimulationState) -> Vec<AllyHudRow> {
     let golems: Vec<_> = state
         .actors
         .iter()
-        .filter(|actor| actor.kind == NativeSecondaryActorKind::Golem)
+        .filter(|actor| actor.kind == SecondaryActorKind::Golem)
         .map(|actor| {
             let golem = actor.golem.as_ref().unwrap();
             AllyGolemProjection {
@@ -64,19 +62,19 @@ fn resummoning_with_or_without_the_set_preserves_the_survivors_health_and_hud_id
     belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 45 });
     let wizard = HubWizard::at(Vec2::ZERO);
     let mut world = support::World { case, targets: Vec::new() };
-    let mut step = |state: &mut NativeSecondarySimulationState, tick, slot, maximum_golem| {
+    let mut step = |state: &mut SecondarySimulationState, tick, slot, maximum_golem| {
         let mut authority = support::authority_from_fixture(declared, &book, &belt, &wizard);
         authority.input.quickbar = slot;
         authority.maximum_golem = maximum_golem;
         let players = BTreeMap::from([("player".to_owned(), authority)]);
         state.step(
-            &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+            &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
             &mut world,
             None,
         );
     };
 
-    let mut state = NativeSecondarySimulationState::new(77);
+    let mut state = SecondarySimulationState::new(77);
     for tick in 1..=3401 {
         step(&mut state, tick, (tick == 1 || tick == 3001).then_some(0), true);
     }
@@ -91,7 +89,7 @@ fn resummoning_with_or_without_the_set_preserves_the_survivors_health_and_hud_id
     for (id, damage) in [(retired_id, 80.0), (survivor_id, 20.0)] {
         let result = state.apply_golem_damage(
             id,
-            NativeGolemIncomingDamage {
+            GolemIncomingDamage {
                 primary_damage: damage,
                 secondary_damage: 0.0,
                 reflectable_physical_source_in_range: false,

@@ -56,7 +56,7 @@ pub(super) fn prepare(name: &str, value: &mut Value) -> Result<(), String> {
             };
             *value = json!({"kind":payload,"state":value});
         }
-        "NativeBossSpell" => {
+        "BossSpell" => {
             *value = json!({"owner":value,"kind":value});
         }
         "DemonSkullAction" => {
@@ -107,7 +107,7 @@ pub(super) fn finish(name: &str, value: &mut Value) {
         "DemonSkullAction" => {
             flatten(value, "program");
         }
-        "NativeBossSpell" => {
+        "BossSpell" => {
             flatten(value, "owner");
             flatten(value, "kind");
         }

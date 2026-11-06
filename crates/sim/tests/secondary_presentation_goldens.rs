@@ -7,13 +7,11 @@ mod native_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::enemies::presentation::*;
-use solomon_sim::secondary::golem::{NativeGolemPhase, NativeSecondaryGolemState};
+use solomon_sim::secondary::golem::{GolemPhase, SecondaryGolemState};
 use solomon_sim::secondary::presentation::*;
-use solomon_sim::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryPlayerState,
-};
+use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState, SecondaryPlayerState};
 use solomon_sim::spells::presentation::{SpellAtlas, SpellBlend};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -21,8 +19,8 @@ fn point(value: &Value) -> Vec2 {
 fn point_snapshot(value: Vec2) -> Value {
     json!({"x":value.x,"y":value.y})
 }
-fn read_rng(value: &Value) -> NativeRng {
-    let mut rng = NativeRng::new(0);
+fn read_rng(value: &Value) -> Rng {
+    let mut rng = Rng::new(0);
     rng.index_a = value["indexA"].as_u64().unwrap() as usize;
     rng.index_b = value["indexB"].as_u64().unwrap() as usize;
     for (word, value) in rng.words.iter_mut().zip(value["words"].as_array().unwrap()) {
@@ -30,15 +28,15 @@ fn read_rng(value: &Value) -> NativeRng {
     }
     rng
 }
-fn rng_snapshot(value: &NativeRng) -> Value {
+fn rng_snapshot(value: &Rng) -> Value {
     json!({"indexA":value.index_a,"indexB":value.index_b,"words":&value.words[..]})
 }
-fn read_actor(value: &Value) -> NativeSecondaryActorState {
-    let kind = NativeSecondaryActorKind::ALL
+fn read_actor(value: &Value) -> SecondaryActorState {
+    let kind = SecondaryActorKind::ALL
         .into_iter()
         .find(|kind| Some(kind.as_str()) == value["kind"].as_str())
         .unwrap();
-    let mut actor = NativeSecondaryActorState::new(
+    let mut actor = SecondaryActorState::new(
         value["id"].as_u64().unwrap(),
         kind,
         value["ownerId"].as_str().unwrap().into(),
@@ -76,13 +74,13 @@ fn read_actor(value: &Value) -> NativeSecondaryActorState {
     actor.velocity = point(&value["velocity"]);
     actor
 }
-fn blend(value: NativeSecondaryBlend) -> &'static str {
+fn blend(value: SecondaryBlend) -> &'static str {
     match value {
-        NativeSecondaryBlend::Normal => "normal",
-        NativeSecondaryBlend::Add => "add",
+        SecondaryBlend::Normal => "normal",
+        SecondaryBlend::Add => "add",
     }
 }
-fn sprite(value: &NativeSecondarySpriteDraw) -> Value {
+fn sprite(value: &SecondarySpriteDraw) -> Value {
     let mut result = json!({
         "alpha": value.alpha,
         "atlas": value.atlas.as_str(),
@@ -97,8 +95,8 @@ fn sprite(value: &NativeSecondarySpriteDraw) -> Value {
     });
     if let Some(mode) = value.color_mode {
         result["colorMode"] = json!(match mode {
-            NativeSecondaryColorMode::AlphaMask => "alpha-mask",
-            NativeSecondaryColorMode::Texture => "texture",
+            SecondaryColorMode::AlphaMask => "alpha-mask",
+            SecondaryColorMode::Texture => "texture",
         });
     }
     if let Some([x, y, width, height]) = value.clip {
@@ -106,7 +104,7 @@ fn sprite(value: &NativeSecondarySpriteDraw) -> Value {
     }
     result
 }
-fn plan(value: &NativeSecondaryPresentationPlan) -> Value {
+fn plan(value: &SecondaryPresentationPlan) -> Value {
     let gradients = value
         .gradients
         .iter()
@@ -146,7 +144,7 @@ fn plan(value: &NativeSecondaryPresentationPlan) -> Value {
         .map(|draw| {
             json!({
                 "alpha": draw.alpha,
-                "atlas": draw.atlas.map(NativeSecondaryAtlas::as_str),
+                "atlas": draw.atlas.map(SecondaryAtlas::as_str),
                 "blend": blend(draw.blend),
                 "entry": draw.entry,
                 "role": draw.role,
@@ -169,8 +167,8 @@ fn plan(value: &NativeSecondaryPresentationPlan) -> Value {
         "meshes": meshes,
         "quads": quads,
         "queueFamily": match value.queue_family {
-            NativeSecondaryQueueFamily::OrdinaryDynamic => "ordinary-dynamic",
-            NativeSecondaryQueueFamily::Zanim => "zanim",
+            SecondaryQueueFamily::OrdinaryDynamic => "ordinary-dynamic",
+            SecondaryQueueFamily::Zanim => "zanim",
         },
         "root": point_snapshot(value.root),
         "sortBias": value.sort_bias,
@@ -179,7 +177,7 @@ fn plan(value: &NativeSecondaryPresentationPlan) -> Value {
         "worldY": value.world_y,
     })
 }
-fn enemy_layer(value: &NativeEnemyProjectileLayer) -> Value {
+fn enemy_layer(value: &EnemyProjectileLayer) -> Value {
     let mut result = json!({
         "alpha": value.alpha,
         "atlas": match value.atlas {
@@ -237,7 +235,7 @@ fn assert_snapshot(actual: &Value, expected: &Value, label: &str) {
 #[test]
 fn fractional_secondary_display_ages_match_source_rounding() {
     use solomon_sim::boneyard::lighting::secondary::{
-        native_secondary_misc_light_source_at_age, native_secondary_provider_light_source_at_age,
+        secondary_misc_light_source_at_age, secondary_provider_light_source_at_age,
     };
 
     let fixture: Value = serde_json::from_str(include_str!(
@@ -246,7 +244,7 @@ fn fractional_secondary_display_ages_match_source_rounding() {
     .unwrap();
     for case in fixture["cases"].as_array().unwrap() {
         let actor = read_actor(&case["actor"]);
-        let actual = native_secondary_presentation_plan_at_age(
+        let actual = secondary_presentation_plan_at_age(
             &actor,
             case["ageTicks"].as_f64().unwrap(),
             case["frame"].as_f64().unwrap(),
@@ -258,14 +256,14 @@ fn fractional_secondary_display_ages_match_source_rounding() {
     for case in fixture["lights"].as_array().unwrap() {
         let actor = read_actor(&case["actor"]);
         let age = case["ageTicks"].as_f64().unwrap();
-        let provider = native_secondary_provider_light_source_at_age(
+        let provider = secondary_provider_light_source_at_age(
             &actor,
             age,
             case["frame"].as_u64().unwrap(),
             true,
             0.75,
         );
-        let misc = native_secondary_misc_light_source_at_age(&actor, age);
+        let misc = secondary_misc_light_source_at_age(&actor, age);
         for (name, source) in [("provider", provider), ("misc", misc)] {
             let actual = match source {
                 Some(source) => json!({
@@ -288,7 +286,7 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
             .unwrap();
     for case in fixture["cases"].as_array().unwrap() {
         let actor = read_actor(&case["actor"]);
-        let actual = native_secondary_presentation_plan(
+        let actual = secondary_presentation_plan(
             &actor,
             case["frame"].as_f64().unwrap(),
             case["pointGain"].as_f64().unwrap(),
@@ -297,20 +295,18 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
     }
     for case in fixture["owners"].as_array().unwrap() {
         let actors = case["actors"].as_array().unwrap().iter().map(read_actor).collect::<Vec<_>>();
-        let entries = native_secondary_composite_owner_entries(
-            actors.iter(),
-            case["worldKey"].as_str().unwrap(),
-        );
+        let entries =
+            secondary_composite_owner_entries(actors.iter(), case["worldKey"].as_str().unwrap());
         assert_eq!(json!(entries), case["entries"], "live composite ownership");
     }
     for case in fixture["shields"].as_array().unwrap() {
         let value = &case["player"];
-        let player = NativeSecondaryPlayerState {
+        let player = SecondaryPlayerState {
             magic_shield_absorb: value["magicShieldAbsorb"].as_f64().unwrap(),
             magic_shield_pulse_ticks: value["magicShieldPulseTicks"].as_u64().unwrap(),
-            ..NativeSecondaryPlayerState::default()
+            ..SecondaryPlayerState::default()
         };
-        let actual = native_player_magic_shield_plan(Some(&player), case["tick"].as_f64().unwrap());
+        let actual = player_magic_shield_plan(Some(&player), case["tick"].as_f64().unwrap());
         assert_snapshot(
             &json!({
                 "alpha": actual.alpha,
@@ -323,7 +319,7 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
         );
     }
     for case in fixture["composites"].as_array().unwrap() {
-        let actual = native_leviathan_composite_plan(case["scale"].as_f64().unwrap());
+        let actual = leviathan_composite_plan(case["scale"].as_f64().unwrap());
         assert_snapshot(
             &json!({
                 "clear": {
@@ -352,7 +348,7 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
     }
     for case in fixture["facing"].as_array().unwrap() {
         assert_eq!(
-            native_golem_facing(case["heading"].as_f64().unwrap()),
+            golem_facing(case["heading"].as_f64().unwrap()),
             case["facing"].as_u64().unwrap() as usize
         );
     }
@@ -377,8 +373,8 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
             "none" => NativeEnemyProjectilePayload::None,
             other => panic!("unknown payload {other}"),
         };
-        let actual = native_enemy_projectile_plan(
-            &NativeEnemyProjectileVisual {
+        let actual = enemy_projectile_plan(
+            &EnemyProjectileVisual {
                 age_ticks: value["ageTicks"].as_u64().unwrap(),
                 heading_degrees: value["headingDeg"].as_f64().unwrap(),
                 id: value["id"].as_u64().unwrap(),
@@ -415,8 +411,8 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
         );
     }
     for case in fixture["deathMagic"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let layers = native_death_magic_layers(
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let layers = death_magic_layers(
             Vec2::new(0.25, -0.5),
             1.25,
             case["phase"].as_f64().unwrap(),
@@ -450,8 +446,8 @@ fn collect_snapshot_failure(
     }
 }
 
-fn golem(value: &Value) -> NativeSecondaryGolemState {
-    NativeSecondaryGolemState {
+fn golem(value: &Value) -> SecondaryGolemState {
+    SecondaryGolemState {
         action_heading_offset_degrees: value["actionHeadingOffsetDegrees"].as_f64().unwrap(),
         action_duration_ticks: value["actionDurationTicks"].as_u64().unwrap(),
         action_tick: value["actionTick"].as_u64().unwrap(),
@@ -472,10 +468,10 @@ fn golem(value: &Value) -> NativeSecondaryGolemState {
         orbit_direction: value["orbitDirection"].as_f64().unwrap(),
         orbit_heading_radians: value["orbitHeadingRadians"].as_f64(),
         phase: match value["phase"].as_str().unwrap() {
-            "active" => NativeGolemPhase::Active,
-            "assembly" => NativeGolemPhase::Assembly,
-            "attack" => NativeGolemPhase::Attack,
-            "provoke" => NativeGolemPhase::Provoke,
+            "active" => GolemPhase::Active,
+            "assembly" => GolemPhase::Assembly,
+            "attack" => GolemPhase::Attack,
+            "provoke" => GolemPhase::Provoke,
             other => panic!("unknown phase {other}"),
         },
         pose_variant: value["poseVariant"].as_u64().unwrap() as u32,

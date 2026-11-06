@@ -2,53 +2,53 @@
 //! from `native-weld-blizzard.ts`, plus the chain constructor in the Weld runtime.
 
 use super::meteor::draw_unit_vector;
-use super::model::{NativeWeldActorBase, NativeWeldActorBirth};
-use super::persistent::NativeWeldFrostFadeActorState;
-use super::projectiles::{native_ground_spark_private_word, native_weld_private_stage};
+use super::model::{WeldActorBase, WeldActorBirth};
+use super::persistent::WeldFrostFadeActorState;
+use super::projectiles::{ground_spark_private_word, weld_private_stage};
 use crate::float;
 use crate::float::{atan2, fround, hypot};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldBlizzardGlowState {
-    pub common: NativeWeldActorBase,
+pub struct WeldBlizzardGlowState {
+    pub common: WeldActorBase,
     pub rotation_degrees: f64,
     pub scale: f64,
     pub variant: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldBlizzardQuad {
+pub struct WeldBlizzardQuad {
     pub record: usize,
     pub vertices: [f64; 8],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldBlizzardBeamPlan {
+pub struct WeldBlizzardBeamPlan {
     pub jitter: Vec2,
-    pub quads: [NativeWeldBlizzardQuad; 2],
+    pub quads: [WeldBlizzardQuad; 2],
     pub tint: u32,
     pub width: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldBlizzardContactPolygon {
+pub struct WeldBlizzardContactPolygon {
     pub beam_width: f64,
     pub half_width: f64,
     pub points: [Vec2; 4],
 }
 
-pub fn create_native_weld_blizzard_source_glows(
-    birth: NativeWeldActorBirth<'_>,
-    rng: &mut NativeRng,
-) -> [NativeWeldBlizzardGlowState; 2] {
+pub fn create_weld_blizzard_source_glows(
+    birth: WeldActorBirth<'_>,
+    rng: &mut Rng,
+) -> [WeldBlizzardGlowState; 2] {
     std::array::from_fn(|index| {
         let scale = rng.draw_scaled_float(0.5, false);
         let rotation = rng.draw_scaled_float(360.0, false);
-        NativeWeldBlizzardGlowState {
-            common: NativeWeldActorBirth { id: birth.id + index as u64, ..birth }.actor(),
+        WeldBlizzardGlowState {
+            common: WeldActorBirth { id: birth.id + index as u64, ..birth }.actor(),
             rotation_degrees: rotation,
             scale: fround(scale + 1.0),
             variant: 24,
@@ -56,17 +56,17 @@ pub fn create_native_weld_blizzard_source_glows(
     })
 }
 
-pub fn create_native_weld_blizzard_contact_glow(
-    birth: NativeWeldActorBirth<'_>,
-    rng: &mut NativeRng,
+pub fn create_weld_blizzard_contact_glow(
+    birth: WeldActorBirth<'_>,
+    rng: &mut Rng,
     painters: &mut WorldPainterOrder,
-) -> NativeWeldBlizzardGlowState {
+) -> WeldBlizzardGlowState {
     let scale = rng.draw_scaled_float(0.5, false);
     let rotation = rng.draw_scaled_float(360.0, false);
     let position = Vec2::new(fround(birth.origin.x), fround(birth.origin.y - 20.0));
-    let mut common = NativeWeldActorBirth { origin: position, ..birth }.actor();
+    let mut common = WeldActorBirth { origin: position, ..birth }.actor();
     common.owner.painter_registrations = painters.register_many(WorldManagerLane::Actor, 1);
-    NativeWeldBlizzardGlowState {
+    WeldBlizzardGlowState {
         common,
         rotation_degrees: rotation,
         scale: fround(scale + 1.0),
@@ -75,12 +75,12 @@ pub fn create_native_weld_blizzard_contact_glow(
 }
 
 #[must_use]
-pub fn native_weld_blizzard_contact_polygon(
+pub fn weld_blizzard_contact_polygon(
     endpoint: Vec2,
     source: Vec2,
     underpowered: bool,
     widen: f64,
-) -> NativeWeldBlizzardContactPolygon {
+) -> WeldBlizzardContactPolygon {
     let dx = fround(endpoint.x - source.x);
     let dy = fround(endpoint.y - source.y);
     let length = hypot(dx, dy);
@@ -104,7 +104,7 @@ pub fn native_weld_blizzard_contact_polygon(
             fround(center.y + fround(perpendicular.y * sign)),
         )
     };
-    NativeWeldBlizzardContactPolygon {
+    WeldBlizzardContactPolygon {
         beam_width,
         half_width,
         points: [point(start, 1.0), point(end, 1.0), point(end, -1.0), point(start, -1.0)],
@@ -112,13 +112,13 @@ pub fn native_weld_blizzard_contact_polygon(
 }
 
 #[must_use]
-pub fn native_weld_blizzard_beam_plan(
+pub fn weld_blizzard_beam_plan(
     birth_tick: u64,
     endpoint: Vec2,
     source: Vec2,
     underpowered: bool,
     widen: f64,
-) -> NativeWeldBlizzardBeamPlan {
+) -> WeldBlizzardBeamPlan {
     let dx = fround(endpoint.x - source.x);
     let dy = fround(endpoint.y - source.y);
     let length = hypot(dx, dy);
@@ -148,7 +148,7 @@ pub fn native_weld_blizzard_beam_plan(
             points[3][1],
         ]
     };
-    let cap = NativeWeldBlizzardQuad {
+    let cap = WeldBlizzardQuad {
         record: 43,
         vertices: vertices([
             point(source_minus.x + perpendicular.x, source_minus.y + perpendicular.y),
@@ -157,7 +157,7 @@ pub fn native_weld_blizzard_beam_plan(
             point(source_plus.x - perpendicular.x, source_plus.y - perpendicular.y),
         ]),
     };
-    let strip = NativeWeldBlizzardQuad {
+    let strip = WeldBlizzardQuad {
         record: 44,
         vertices: vertices([
             point(source_plus.x + perpendicular.x, source_plus.y + perpendicular.y),
@@ -166,7 +166,7 @@ pub fn native_weld_blizzard_beam_plan(
             point(endpoint.x - perpendicular.x, endpoint.y - perpendicular.y),
         ]),
     };
-    NativeWeldBlizzardBeamPlan {
+    WeldBlizzardBeamPlan {
         jitter,
         quads: [cap, strip],
         // The source packRgb truncates .5435550212860107*255 to red byte138.
@@ -177,23 +177,23 @@ pub fn native_weld_blizzard_beam_plan(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldBlizzardChainFrostState {
-    pub common: NativeWeldActorBase,
+pub struct WeldBlizzardChainFrostState {
+    pub common: WeldActorBase,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldBlizzardChainEffects {
-    pub fade: NativeWeldFrostFadeActorState,
-    pub chain_frost: Option<NativeWeldBlizzardChainFrostState>,
+pub struct WeldBlizzardChainEffects {
+    pub fade: WeldFrostFadeActorState,
+    pub chain_frost: Option<WeldBlizzardChainFrostState>,
     pub next_id: u64,
 }
 
-pub fn create_native_weld_blizzard_chain_effects(
-    birth: NativeWeldActorBirth<'_>,
+pub fn create_weld_blizzard_chain_effects(
+    birth: WeldActorBirth<'_>,
     cast_direction: Vec2,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     painters: &mut WorldPainterOrder,
-) -> NativeWeldBlizzardChainEffects {
+) -> WeldBlizzardChainEffects {
     let fade_radius = rng.draw_scaled_float(10.0, false);
     let fade_direction = draw_unit_vector(rng);
     let fade_scale = rng.draw_scaled_float(0.5, false);
@@ -202,9 +202,9 @@ pub fn create_native_weld_blizzard_chain_effects(
         fround(birth.origin.x + fround(fade_direction.x * fade_radius)),
         fround(birth.origin.y - 15.0 + fround(fade_direction.y * fade_radius)),
     );
-    let mut common = NativeWeldActorBirth { origin: fade_position, ..birth }.actor();
+    let mut common = WeldActorBirth { origin: fade_position, ..birth }.actor();
     common.owner.painter_registrations = painters.register_many(WorldManagerLane::Actor, 1);
-    let fade = NativeWeldFrostFadeActorState { common, scale: fround(fade_scale + 1.0) };
+    let fade = WeldFrostFadeActorState { common, scale: fround(fade_scale + 1.0) };
     let mut next_id = birth.id + 1;
     let chaining = rng.draw_integer(2);
     let mut chain_frost = None;
@@ -230,12 +230,12 @@ pub fn create_native_weld_blizzard_chain_effects(
             fround(-float::cos(chain_heading) * 0.5),
         );
         let mut common =
-            NativeWeldActorBirth { direction, id: next_id, origin: position, ..birth }.actor();
+            WeldActorBirth { direction, id: next_id, origin: position, ..birth }.actor();
         common.owner.painter_registrations = painters.register_many(WorldManagerLane::Actor, 1);
-        chain_frost = Some(NativeWeldBlizzardChainFrostState { common });
+        chain_frost = Some(WeldBlizzardChainFrostState { common });
         next_id += 1;
     }
-    NativeWeldBlizzardChainEffects { fade, chain_frost, next_id }
+    WeldBlizzardChainEffects { fade, chain_frost, next_id }
 }
 
 fn blizzard_width(widen: f64, underpowered: bool) -> f64 {
@@ -244,8 +244,8 @@ fn blizzard_width(widen: f64, underpowered: bool) -> f64 {
 }
 
 fn blizzard_jitter(seed: u32) -> Vec2 {
-    let first_stage = native_weld_private_stage(seed);
-    let mixed = native_ground_spark_private_word((first_stage as i32).unsigned_abs());
+    let first_stage = weld_private_stage(seed);
+    let mixed = ground_spark_private_word((first_stage as i32).unsigned_abs());
     let unit = f64::from(mixed % 100_000) / 100_000.0;
     let radius = unit * 5.0;
     let radians = unit * std::f64::consts::PI * 2.0;

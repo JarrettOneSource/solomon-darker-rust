@@ -47,7 +47,7 @@ fn flat(points: &[Vec2]) -> Vec<f64> {
     values
 }
 
-fn mesh(value: &NativeBoneyardSurfaceMesh) -> Value {
+fn mesh(value: &BoneyardSurfaceMesh) -> Value {
     let mut colors = Vec::with_capacity(value.colors.len() * 4);
     for color in &value.colors {
         colors.extend(*color);
@@ -62,13 +62,13 @@ fn current_field_lattice_and_all_road_programs_match_source() {
         serde_json::from_str(include_str!("fixtures/website/boneyard-surface-goldens.json"))
             .unwrap();
     for case in fixture["fields"].as_array().unwrap() {
-        let lattice = create_native_arena_field_lattice(bounds(&case["bounds"])).unwrap();
+        let lattice = create_arena_field_lattice(bounds(&case["bounds"])).unwrap();
         website_rows::compare(
             &json!({"x":lattice.x,"y":lattice.y}),
             &case["lattice"],
             "field recurrence",
         );
-        let range = native_arena_field_visible_range(&lattice, bounds(&case["view"])).unwrap();
+        let range = arena_field_visible_range(&lattice, bounds(&case["view"])).unwrap();
         website_rows::compare(
             &json!({"xStart":range.x_start,"xEnd":range.x_end,"yStart":range.y_start,
                 "yEnd":range.y_end,"tileCount":range.tile_count}),
@@ -76,7 +76,7 @@ fn current_field_lattice_and_all_road_programs_match_source() {
             "strict field range",
         );
         let mode = case["mode"].as_u64().unwrap() as u8;
-        let descriptor = native_arena_field_descriptor(mode);
+        let descriptor = arena_field_descriptor(mode);
         website_rows::compare(
             &json!({"atlas":"DeadHawg","entry":descriptor.entry,
                 "frame":{"x":descriptor.frame[0],"y":descriptor.frame[1],
@@ -87,26 +87,26 @@ fn current_field_lattice_and_all_road_programs_match_source() {
             "original field descriptor",
         );
         website_rows::compare(
-            &mesh(&native_arena_field_mesh_plan(&lattice, range, mode).unwrap()),
+            &mesh(&arena_field_mesh_plan(&lattice, range, mode).unwrap()),
             &case["mesh"],
             "field mesh",
         );
     }
     for case in fixture["roads"].as_array().unwrap() {
         let input = road(&case["input"]);
-        let plan = native_road_mesh_plan(&input).unwrap();
+        let plan = road_mesh_plan(&input).unwrap();
         assert_eq!(plan.style, case["style"].as_u64().unwrap() as usize);
         website_rows::compare(
-            &json!(native_road_endpoint_alphas(input.link_mask)),
+            &json!(road_endpoint_alphas(input.link_mask)),
             &case["endpointAlphas"],
             "road links",
         );
         website_rows::compare(&mesh(&plan.mesh), &case["mesh"], &input.eid);
     }
     for value in fixture["invalidFields"].as_array().unwrap() {
-        assert!(create_native_arena_field_lattice(bounds(value)).is_err());
+        assert!(create_arena_field_lattice(bounds(value)).is_err());
     }
     for value in fixture["invalidRoads"].as_array().unwrap() {
-        assert!(native_road_mesh_plan(&road(value)).is_err());
+        assert!(road_mesh_plan(&road(value)).is_err());
     }
 }

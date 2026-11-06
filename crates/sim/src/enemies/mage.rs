@@ -6,7 +6,7 @@ use super::model::*;
 use super::movement::{move_toward_target, staff_attack_speed};
 use super::path::{RadialDirection, TangentDirection};
 use super::projectile_emission::{emit_mage_attack, step_mage_lightning_pulse};
-use super::ranged::{RangedAttackRange, restore_native_range_easy_after_volley};
+use super::ranged::{RangedAttackRange, restore_range_easy_after_volley};
 use super::targeting::{
     enemy_target_line_of_sight_is_clear, target_distance, track_enemy_action_heading,
 };
@@ -66,7 +66,7 @@ pub fn step_mage(
                 range: brain.attack_range,
                 range_easy_pending: brain.range_easy_pending,
             };
-            restore_native_range_easy_after_volley(&mut range);
+            restore_range_easy_after_volley(&mut range);
             brain.attack_range = range.range;
             brain.range_easy_pending = range.range_easy_pending;
             lightning = emit_mage_attack(world, actor, context, order);

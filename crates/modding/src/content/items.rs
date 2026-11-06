@@ -258,7 +258,7 @@ fn item_icon(asset: &PreparedModSpriteAsset) -> ModItemIcon {
 
 pub(super) fn potion(
     common: PreparedModContentEntry,
-    native_subtype: u32,
+    subtype: u32,
     status_ids: &BTreeSet<String>,
     assets: &PreparedModAssetCatalog,
 ) -> Result<PreparedModPotionDefinition, String> {
@@ -319,7 +319,7 @@ pub(super) fn potion(
         consume_vfx: Some(consume_vfx(common.fields.get("presentation"))?),
         duration_ms,
     };
-    let catalog = ModConsumableCatalogEntry { content, name: common.name.clone(), native_subtype };
+    let catalog = ModConsumableCatalogEntry { content, name: common.name.clone(), subtype };
     Ok(PreparedModPotionDefinition { common, catalog, loot, on_use, status })
 }
 

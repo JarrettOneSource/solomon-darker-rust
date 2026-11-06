@@ -4,15 +4,15 @@ use crate::float::fround;
 use crate::spells::model::{
     PrimarySpellTransientBase, PrimarySpellWaterAura, PrimarySpellWaterHail,
 };
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_HAIL_LIFETIME_TICKS: u64 = 134;
+pub const HAIL_LIFETIME_TICKS: u64 = 134;
 
 /// Retained snapshot Hail omits its life; `nativeWaterHailLifeAtAge` reconstructs
 /// the native single-precision losses before endpoint interpolation.
 #[must_use]
-pub fn native_water_hail_life_at_age(age_ticks: u64) -> f64 {
-    assert!(age_ticks < NATIVE_HAIL_LIFETIME_TICKS, "Hail age is within its native lifecycle");
+pub fn water_hail_life_at_age(age_ticks: u64) -> f64 {
+    assert!(age_ticks < HAIL_LIFETIME_TICKS, "Hail age is within its native lifecycle");
     let mut life = 2.0;
     for _ in 0..age_ticks {
         life = fround(life - 0.015_f32 as f64);
@@ -20,33 +20,33 @@ pub fn native_water_hail_life_at_age(age_ticks: u64) -> f64 {
     life
 }
 
-pub fn create_native_water_aura_actor(
+pub fn create_water_aura_actor(
     common: PrimarySpellTransientBase,
     birth_tick: u64,
     origin: Vec2,
     radius_scale: f64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> PrimarySpellWaterAura {
-    let alpha_decay = crate::cold_aura::native_cold_aura_alpha_decay(radius_scale);
+    let alpha_decay = crate::cold_aura::cold_aura_alpha_decay(radius_scale);
     let rotation_step_degrees = rng.draw_scaled_float(1.0, true);
     let initial_rotation_degrees = rng.draw_scaled_float(360.0, false);
     PrimarySpellWaterAura {
         common,
         alpha_decay,
         birth_tick,
-        duration_ticks: crate::cold_aura::native_cold_aura_lifetime_ticks(alpha_decay),
+        duration_ticks: crate::cold_aura::cold_aura_lifetime_ticks(alpha_decay),
         initial_rotation_degrees,
         origin,
         rotation_step_degrees,
     }
 }
 
-pub fn create_native_water_hail_actor(
+pub fn create_water_hail_actor(
     common: PrimarySpellTransientBase,
     birth_tick: u64,
     emitter: Vec2,
     direction: Vec2,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> PrimarySpellWaterHail {
     let bounce = rng.draw_scaled_float(3.0, false);
     let height = rng.draw_scaled_float(20.0, false);
@@ -86,10 +86,7 @@ pub fn create_native_water_hail_actor(
     }
 }
 
-pub fn step_native_water_hail_actor(
-    actor: &mut PrimarySpellWaterHail,
-    rng: &mut NativeRng,
-) -> bool {
+pub fn step_water_hail_actor(actor: &mut PrimarySpellWaterHail, rng: &mut Rng) -> bool {
     let life = fround(actor.life - 0.015_f32 as f64);
     if actor.height == 0.0 {
         actor.life = life;

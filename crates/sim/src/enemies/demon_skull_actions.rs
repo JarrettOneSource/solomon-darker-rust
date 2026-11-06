@@ -1,7 +1,7 @@
 //! Discorporeal ActionManager ordering from `enemies/demon-skull-actions.ts`.
 
 use super::demon_skull_controller::{
-    DemonSkullActionKind, NATIVE_DEMON_SKULL_SCREAM_TICKS, create_native_demon_skull_action,
+    DEMON_SKULL_SCREAM_TICKS, DemonSkullActionKind, create_demon_skull_action,
 };
 use super::demon_skull_effects::spawn_demon_skull_warmup;
 use super::demon_skull_spells::{
@@ -18,7 +18,7 @@ use crate::float;
 use crate::float::fround;
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::WorldPainterOrder;
-use crate::spells::targeting::native_heading_turn_direction;
+use crate::spells::targeting::heading_turn_direction;
 
 pub fn begin_demon_skull_action(
     world: &mut EnemyWorld,
@@ -35,7 +35,7 @@ pub fn begin_demon_skull_action(
                 target.position.y - actor.position.y,
             )
         });
-    let action = create_native_demon_skull_action(
+    let action = create_demon_skull_action(
         kind,
         actor.heading_deg,
         target_heading,
@@ -47,7 +47,7 @@ pub fn begin_demon_skull_action(
     };
     brain.actions.push(action);
     if matches!(kind, DemonSkullActionKind::Scream | DemonSkullActionKind::Flair) {
-        world.demon_skull_encounter.scream_stream_ticks_remaining = NATIVE_DEMON_SKULL_SCREAM_TICKS;
+        world.demon_skull_encounter.scream_stream_ticks_remaining = DEMON_SKULL_SCREAM_TICKS;
         let mut event = EnemyEvent::new(EnemyEventKind::EnemyStream, actor.id, context.tick);
         event.stream = Some("unholy-scream".to_owned());
         world.emit_event(event);
@@ -344,7 +344,7 @@ fn turn(actor: &mut EnemyActor, brain: &mut DemonSkullBrain, heading: f64, speed
     actor.heading_deg = positive_modulo(
         fround(
             actor.heading_deg
-                + f64::from(native_heading_turn_direction(actor.heading_deg, heading)) * speed,
+                + f64::from(heading_turn_direction(actor.heading_deg, heading)) * speed,
         ),
         360.0,
     );

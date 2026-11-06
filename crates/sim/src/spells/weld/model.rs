@@ -6,7 +6,7 @@ use crate::spells::model::PrimarySpellTransientBase;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldActorBase {
+pub struct WeldActorBase {
     /// Weld actors live in the same ordered transient queue as ordinary effects.
     /// Reuse its owner so ticking, painter enrollment and contact IDs stay shared.
     pub owner: PrimarySpellTransientBase,
@@ -20,7 +20,7 @@ pub struct NativeWeldActorBase {
 /// The source's common actor constructor input. Family constructors decide which
 /// manager registrations exist; a plain effect has no logical light provider.
 #[derive(Clone, Copy)]
-pub struct NativeWeldActorBirth<'a> {
+pub struct WeldActorBirth<'a> {
     pub build_id: u32,
     pub direction: Vec2,
     pub id: u64,
@@ -31,10 +31,10 @@ pub struct NativeWeldActorBirth<'a> {
     pub world_key: &'a str,
 }
 
-impl NativeWeldActorBirth<'_> {
+impl WeldActorBirth<'_> {
     #[must_use]
-    pub fn actor(self) -> NativeWeldActorBase {
-        NativeWeldActorBase {
+    pub fn actor(self) -> WeldActorBase {
+        WeldActorBase {
             owner: PrimarySpellTransientBase {
                 age_ticks: 0,
                 id: self.id,
@@ -52,7 +52,7 @@ impl NativeWeldActorBirth<'_> {
     }
 
     #[must_use]
-    pub fn actor_with_light(self, painters: Option<&mut WorldPainterOrder>) -> NativeWeldActorBase {
+    pub fn actor_with_light(self, painters: Option<&mut WorldPainterOrder>) -> WeldActorBase {
         let registration = if let Some(order) = painters {
             order.register(WorldManagerLane::Actor)
         } else {

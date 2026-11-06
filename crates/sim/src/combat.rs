@@ -12,7 +12,7 @@ pub const PLAYER_HEALTH_RECOVERY_PER_TICK: f64 = 0.001;
 pub const PLAYER_MANA_RECOVERY_PER_TICK: f64 = 0.1;
 pub const PLAYER_LETHAL_HEALTH: f64 = -10.0;
 pub const PLAYER_DEATH_PRESENTATION_DURATION_TICKS: u64 = 500;
-const DEATH_PRESENTATION_NATIVE_TICKS: u64 = 300;
+const DEATH_PRESENTATION_TICKS: u64 = 300;
 const DEATH_PRESENTATION_MAXIMUM_HELD_TICK: u64 = 298;
 const DEATH_FRAME_ONE_TICK: u64 = 153;
 const DEATH_FRAME_TWO_TICK: u64 = 156;
@@ -53,7 +53,7 @@ impl PuppetHitState {
         if self.timer == 0.0 {
             return;
         }
-        self.timer = step_native_puppet_hit_timer(self.timer, elapsed_ticks);
+        self.timer = step_puppet_hit_timer(self.timer, elapsed_ticks);
         self.tick = tick;
     }
 
@@ -79,7 +79,7 @@ impl PuppetHitState {
 /// `stepNativePuppetHitTimer`: visual +0x78 and movement reaction +0x80 use the
 /// same float32 subtraction, but receiving one latch does not imply the other.
 #[must_use]
-pub fn step_native_puppet_hit_timer(mut timer: f64, elapsed_ticks: u64) -> f64 {
+pub fn step_puppet_hit_timer(mut timer: f64, elapsed_ticks: u64) -> f64 {
     for _ in 0..elapsed_ticks.min(20) {
         if timer <= 0.0 {
             break;
@@ -92,7 +92,7 @@ pub fn step_native_puppet_hit_timer(mut timer: f64, elapsed_ticks: u64) -> f64 {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerCombatState {
-    pub rescue_protection: crate::player_rescue::NativePlayerRescueProtection,
+    pub rescue_protection: crate::player_rescue::PlayerRescueProtection,
     pub hit_feedback: PuppetHitState,
     pub circle_slow_ticks_remaining: u64,
     pub cold_slow_ticks_remaining: u64,
@@ -152,7 +152,7 @@ impl PlayerCombatState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            rescue_protection: crate::player_rescue::NativePlayerRescueProtection::default(),
+            rescue_protection: crate::player_rescue::PlayerRescueProtection::default(),
             hit_feedback: PuppetHitState::default(),
             circle_slow_ticks_remaining: 0,
             cold_slow_ticks_remaining: 0,
@@ -371,7 +371,7 @@ impl PlayerCombatState {
         if self.current_health > 0.0 {
             return;
         }
-        self.rescue_protection = crate::player_rescue::NativePlayerRescueProtection::default();
+        self.rescue_protection = crate::player_rescue::PlayerRescueProtection::default();
         self.current_health = self.maximum_health;
         self.current_mana = self.maximum_mana;
         self.death_age_ticks = 0;
@@ -445,7 +445,7 @@ pub fn player_death_frame_at_tick(tick: u64) -> usize {
 #[must_use]
 pub fn player_death_presentation_tick_at_age(age_ticks: u64) -> u64 {
     let age = age_ticks.min(PLAYER_DEATH_PRESENTATION_DURATION_TICKS);
-    (age * DEATH_PRESENTATION_NATIVE_TICKS / PLAYER_DEATH_PRESENTATION_DURATION_TICKS)
+    (age * DEATH_PRESENTATION_TICKS / PLAYER_DEATH_PRESENTATION_DURATION_TICKS)
         .min(DEATH_PRESENTATION_MAXIMUM_HELD_TICK)
 }
 

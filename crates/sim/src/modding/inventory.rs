@@ -5,7 +5,7 @@
 use super::assets::ModSpriteFrame;
 use crate::economy::{EquipmentType, HubInventoryItem, HubItemKind, base_item};
 
-pub const MOD_ITEM_NATIVE_TYPE_ID: u32 = 7013;
+pub const MOD_ITEM_TYPE_ID: u32 = 7013;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -84,7 +84,8 @@ pub struct ModConsumableVfx {
 pub struct ModConsumableCatalogEntry {
     pub content: ModConsumableContent,
     pub name: String,
-    pub native_subtype: u32,
+    #[cfg_attr(feature = "persistence", serde(rename = "nativeSubtype"))]
+    pub subtype: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -152,14 +153,8 @@ pub struct GameSimulationModConsumption {
 /// transaction. Custom potion subtypes begin at six in the prepared catalog.
 #[must_use]
 pub fn mod_consumable_inventory_item(catalog: &ModConsumableCatalogEntry) -> HubInventoryItem {
-    let mut item = base_item(
-        0,
-        HubItemKind::ModPotion,
-        &catalog.name,
-        7001,
-        Some(catalog.native_subtype),
-        &[],
-    );
+    let mut item =
+        base_item(0, HubItemKind::ModPotion, &catalog.name, 7001, Some(catalog.subtype), &[]);
     item.mod_content = Some(catalog.content.clone());
     item
 }
@@ -181,7 +176,7 @@ pub fn mod_item_inventory_item(
         ));
     }
     let kind = if wearable.is_some() { HubItemKind::Equipment } else { HubItemKind::ModItem };
-    let mut item = base_item(0, kind, &catalog.name, MOD_ITEM_NATIVE_TYPE_ID, None, &[]);
+    let mut item = base_item(0, kind, &catalog.name, MOD_ITEM_TYPE_ID, None, &[]);
     item.equipment_type = wearable.map(|wearable| match wearable.slot {
         ModWearableSlot::Hat => EquipmentType::Hat,
         ModWearableSlot::Robe => EquipmentType::Robe,
@@ -201,8 +196,8 @@ pub fn mod_item_inventory_identity_is_valid(item: &HubInventoryItem) -> bool {
     let Some(wearable) = &content.wearable else {
         return item.kind == HubItemKind::ModItem
             && item.equipment_type.is_none()
-            && item.native_type_id == MOD_ITEM_NATIVE_TYPE_ID
-            && item.native_subtype.is_none()
+            && item.type_id == MOD_ITEM_TYPE_ID
+            && item.subtype.is_none()
             && item.icon_records.is_empty()
             && item.quantity <= content.stack_maximum;
     };
@@ -213,14 +208,14 @@ pub fn mod_item_inventory_identity_is_valid(item: &HubInventoryItem) -> bool {
     };
     item.kind == HubItemKind::Equipment
         && item.equipment_type == Some(equipment_type)
-        && item.native_type_id == MOD_ITEM_NATIVE_TYPE_ID
-        && item.native_subtype.is_none()
+        && item.type_id == MOD_ITEM_TYPE_ID
+        && item.subtype.is_none()
         && item.icon_records.is_empty()
         && item.quantity == 1
         && item.rarity.is_none()
         && item.recipe_index.is_none()
         && item.generated_level.is_none()
-        && item.native_selector.is_none()
+        && item.selector.is_none()
         && item.native_effects.is_none()
         && content.stack_maximum == 1
         && mod_wearable_content_is_valid(wearable, content.icon_trim_image_path.as_deref())

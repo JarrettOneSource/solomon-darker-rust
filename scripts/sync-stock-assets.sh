@@ -22,7 +22,7 @@ for name in Memoratorium Office Solomon Storage; do
   cp "$stock/$name.bundle" "$out/$name.bundle"
 done
 # Font glyphs are painted directly from the stock mask atlas; their exact metrics live
-# in sim::native_ui_text, not in the sprite-only bundle parser.
+# in sim::ui_text, not in the sprite-only bundle parser.
 cp "$stock/Fonts.png" "$out/Fonts.png"
 cp "$website/dark-cloud/leather.png" "$out/settings-leather.png"
 # MyLoader's four stock records retain their final native screen orientation.

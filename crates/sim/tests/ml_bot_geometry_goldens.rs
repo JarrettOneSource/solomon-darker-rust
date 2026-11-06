@@ -33,7 +33,7 @@ fn placement_rays_and_nearest_obstacle_rows_match_source() {
             circles.push(CollisionCircle {
                 center: point(&row["center"]),
                 radius: row["radius"].as_f64().unwrap(),
-                native_line_mask: 0,
+                line_mask: 0,
                 source_id: source_id(row),
             });
         }
@@ -42,14 +42,14 @@ fn placement_rays_and_nearest_obstacle_rows_match_source() {
                 start: point(&row["start"]),
                 end: point(&row["end"]),
                 radius: row["radius"].as_f64().unwrap(),
-                native_line_mask: 0,
+                line_mask: 0,
                 source_id: source_id(row),
             });
         }
         for row in case["collision"]["polygons"].as_array().unwrap() {
             polygons.push(CollisionPolygon {
                 points: row["points"].as_array().unwrap().iter().map(point).collect(),
-                native_line_mask: 0,
+                line_mask: 0,
                 source_id: source_id(row),
             });
         }

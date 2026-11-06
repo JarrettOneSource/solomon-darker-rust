@@ -1,42 +1,39 @@
 //! Quickbar cooldown/icon presentation from Website `skill-quickbar.ts`.
 
-use crate::native_ui_text::{
-    NativeUiFontName, NativeUiTextLayout, NativeUiTextSpec, layout_native_ui_text,
-    measure_native_ui_text,
-};
-use crate::secondary::NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS;
+use crate::secondary::SECONDARY_GLOBAL_COOLDOWN_TICKS;
+use crate::ui_text::{UiFontName, UiTextLayout, UiTextSpec, layout_ui_text, measure_ui_text};
 
-pub struct NativeBeltBindingLayout {
+pub struct BeltBindingLayout {
     pub advance: f64,
     pub backing_left: f64,
     pub backing_width: f64,
-    pub text: NativeUiTextLayout,
+    pub text: UiTextLayout,
 }
 
 /// Source `layoutNativeQuickbarBinding`: the authored Belt font at baseline64,
 /// with a three-piece key backing sized from glyph advance rather than HTML ink.
 #[must_use]
-pub fn layout_native_quickbar_binding(text: &str) -> NativeBeltBindingLayout {
-    let advance = measure_native_ui_text(text, NativeUiFontName::Belt, 1.0);
+pub fn layout_quickbar_binding(text: &str) -> BeltBindingLayout {
+    let advance = measure_ui_text(text, UiFontName::Belt, 1.0);
     let backing_width = advance + 6.0;
-    let mut spec = NativeUiTextSpec::new(NativeUiFontName::Belt, text, 26.5, 64.0);
+    let mut spec = UiTextSpec::new(UiFontName::Belt, text, 26.5, 64.0);
     spec.tint = 0x000000;
-    NativeBeltBindingLayout {
+    BeltBindingLayout {
         advance,
         backing_left: (53.0 - backing_width) / 2.0,
         backing_width,
-        text: layout_native_ui_text(&spec),
+        text: layout_ui_text(&spec),
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct NativeSkillQuickbarCooldownPresentation {
+pub struct SkillQuickbarCooldownPresentation {
     pub capacity: f64,
     pub remaining: f64,
 }
 
 #[must_use]
-pub fn native_skill_quickbar_icon_alpha(cooldown: bool, unavailable: bool) -> f64 {
+pub fn skill_quickbar_icon_alpha(cooldown: bool, unavailable: bool) -> f64 {
     if cooldown {
         0.25
     } else if unavailable {
@@ -47,22 +44,22 @@ pub fn native_skill_quickbar_icon_alpha(cooldown: bool, unavailable: bool) -> f6
 }
 
 #[must_use]
-pub fn native_skill_quickbar_cooldown_presentation(
+pub fn skill_quickbar_cooldown_presentation(
     row_remaining: f64,
     row_capacity: f64,
     global_remaining: f64,
-) -> NativeSkillQuickbarCooldownPresentation {
+) -> SkillQuickbarCooldownPresentation {
     if row_capacity <= 0.0 || row_capacity.is_nan() {
-        return NativeSkillQuickbarCooldownPresentation::default();
+        return SkillQuickbarCooldownPresentation::default();
     }
     if row_remaining > 0.0 && global_remaining <= row_remaining {
-        return NativeSkillQuickbarCooldownPresentation {
+        return SkillQuickbarCooldownPresentation {
             capacity: row_capacity,
             remaining: row_remaining,
         };
     }
-    NativeSkillQuickbarCooldownPresentation {
-        capacity: NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS,
+    SkillQuickbarCooldownPresentation {
+        capacity: SECONDARY_GLOBAL_COOLDOWN_TICKS,
         remaining: if global_remaining.is_nan() {
             global_remaining
         } else {
@@ -72,7 +69,7 @@ pub fn native_skill_quickbar_cooldown_presentation(
 }
 
 #[must_use]
-pub fn native_cooldown_sector_path(remaining: f64, capacity: f64) -> String {
+pub fn cooldown_sector_path(remaining: f64, capacity: f64) -> String {
     let points = native_cooldown_sector_points(remaining, capacity);
     if points.is_empty() {
         return String::new();

@@ -3,16 +3,16 @@ use serde_json::{Value, json};
 use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 use solomon_sim::spells::model::{
     PrimarySpellFlameLashPresentation, PrimarySpellTransient, SpellState,
 };
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
 };
-use solomon_sim::spells::weld::{NativeWeldFlameLashFadeVariant, NativeWeldWorldActor};
+use solomon_sim::spells::weld::{WeldFlameLashFadeVariant, WeldWorldActor};
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 #[path = "support/website_rows.rs"]
 mod website_rows;
 #[path = "support/weld_profile.rs"]
@@ -24,7 +24,7 @@ fn registration(value: PainterRegistration) -> Value {
     json!({"managerLane":match value.manager_lane{
     WorldManagerLane::Actor=>"actor",WorldManagerLane::Transient=>"transient"},"registrationOrdinal":value.registration_ordinal})
 }
-fn random(value: &NativeRng) -> Value {
+fn random(value: &Rng) -> Value {
     json!({"indexA":value.index_a,"indexB":value.index_b,"words":value.words.as_slice()})
 }
 fn presentation(value: &PrimarySpellFlameLashPresentation) -> Value {
@@ -42,7 +42,7 @@ fn current_flame_cast_reserves_before_factory_and_clips_the_actual_view() {
         let profile = weld_profile::profile(&case["profile"]);
         let mut wizard = HubWizard::at(Vec2::new(100.0, 200.0));
         let mut spells = SpellState::default();
-        let mut rng = NativeRng::new(731);
+        let mut rng = Rng::new(731);
         let mut order = WorldPainterOrder { next_actor_ordinal: 49, next_transient_ordinal: 3 };
         let targets = if case["targets"].as_array().unwrap().is_empty() {
             Vec::new()
@@ -57,7 +57,7 @@ fn current_flame_cast_reserves_before_factory_and_clips_the_actual_view() {
                 grid_position: None,
                 id: "enemy:1".into(),
                 kind: PrimarySpellTargetKind::Enemy,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: Vec2::new(450.0, 200.0),
                 query_lane: PrimarySpellQueryLane::Grid,
@@ -80,7 +80,7 @@ fn current_flame_cast_reserves_before_factory_and_clips_the_actual_view() {
             let result = spells.step_primary(
                 &mut wizard,
                 PrimarySpellCastAuthority {
-                    weapon_kind: Some(NativePlayerWeaponKind::Staff),
+                    weapon_kind: Some(PlayerWeaponKind::Staff),
                     alive: true,
                     available_mana: case["mana"].as_f64().unwrap(),
                     cast_progress_factor: 1.0,
@@ -145,10 +145,10 @@ fn current_flame_cast_reserves_before_factory_and_clips_the_actual_view() {
                 let PrimarySpellTransient::Weld(actor)=actor else{unreachable!()};
                 let common=actor.common();
                 let (kind,variant)=match actor{
-                    NativeWeldWorldActor::Channel(channel)=>("weld-channel",json!(channel.variant)),
-                    NativeWeldWorldActor::FlameLashFade(fade)=>("weld-flame-lash-fade",json!(match fade.variant{
-                        NativeWeldFlameLashFadeVariant::Source=>"source",NativeWeldFlameLashFadeVariant::Endpoint=>"endpoint",
-                        NativeWeldFlameLashFadeVariant::Chain=>"chain"})),_=>unreachable!(),
+                    WeldWorldActor::Channel(channel)=>("weld-channel",json!(channel.variant)),
+                    WeldWorldActor::FlameLashFade(fade)=>("weld-flame-lash-fade",json!(match fade.variant{
+                        WeldFlameLashFadeVariant::Source=>"source",WeldFlameLashFadeVariant::Endpoint=>"endpoint",
+                        WeldFlameLashFadeVariant::Chain=>"chain"})),_=>unreachable!(),
                 };
                 json!({"id":common.owner.id,"kind":kind,"variant":variant,"lightRegistration":common.owner.light_registration.map(registration),
                     "painterRegistrations":common.owner.painter_registrations.iter().copied().map(registration).collect::<Vec<_>>()})

@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use solomon_sim::boneyard::{BoneyardWorld, LoadedBoneyard};
 use solomon_sim::heading::HEADING_COUNT;
-use solomon_sim::profile::{NATIVE_SKILL_ROW_COUNT, native_weld_build};
+use solomon_sim::profile::{SKILL_ROW_COUNT, weld_build};
 use solomon_sim::session::{GameCheckpoint, SessionParticipant};
 
 // Schema 2 replaces the single local player and world-owned wizard with ordered
@@ -173,11 +173,11 @@ fn migrate_boulder_guidance_fields(
 /// constructor/index preconditions before either kind of participant is admitted.
 pub fn validate_participant(participant: &SessionParticipant) -> Result<(), String> {
     let book = &participant.player.book;
-    if book.primary_skill_id >= NATIVE_SKILL_ROW_COUNT
+    if book.primary_skill_id >= SKILL_ROW_COUNT
         || book.element_root >= 8
         || book.discipline_root >= 8
-        || book.learned_skill_order.iter().any(|id| *id >= NATIVE_SKILL_ROW_COUNT)
-        || book.weld_build_id.is_some_and(|id| native_weld_build(id).is_none())
+        || book.learned_skill_order.iter().any(|id| *id >= SKILL_ROW_COUNT)
+        || book.weld_build_id.is_some_and(|id| weld_build(id).is_none())
         || (book.primary_skill_id == 52 && book.weld_build_id.is_none())
     {
         return Err("The saved skill book contains an invalid skill".into());
@@ -240,7 +240,7 @@ mod tests {
         session
             .secondary
             .players
-            .insert("local".into(), solomon_sim::secondary::NativeSecondaryPlayerState::default());
+            .insert("local".into(), solomon_sim::secondary::SecondaryPlayerState::default());
         session.participants.get_mut("local").unwrap().world_aim = Some(Vec2::new(230.5, 510.75));
         session
     }
@@ -356,8 +356,8 @@ mod tests {
         use solomon_sim::spells::model::PrimarySpellTransient;
         use solomon_sim::spells::weld::*;
         let mut session = fresh_session();
-        let held = create_native_weld_persistent_actor(
-            NativeWeldActorBirth {
+        let held = create_weld_persistent_actor(
+            WeldActorBirth {
                 build_id: 1006,
                 direction: Vec2::new(1.0, 0.0),
                 id: 1,
@@ -369,7 +369,7 @@ mod tests {
             },
             Some(&mut session.painter_order),
         );
-        let mut actor = release_native_weld_persistent_actor(
+        let mut actor = release_weld_persistent_actor(
             held.clone(),
             2,
             1,
@@ -379,7 +379,7 @@ mod tests {
         )
         .actors
         .remove(0);
-        let NativeWeldPersistentActorState::EtherealBoulder(rock) = &mut actor else { panic!() };
+        let WeldPersistentActorState::EtherealBoulder(rock) = &mut actor else { panic!() };
         rock.common.owner.painter_registrations =
             vec![rock.common.owner.light_registration.unwrap()];
         rock.common.owner.age_ticks = 30;
@@ -393,7 +393,7 @@ mod tests {
         session
             .spells
             .transients
-            .push(PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)));
+            .push(PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)));
         let checkpoint = session.checkpoint();
         let current = encode(&checkpoint).unwrap();
         assert_eq!(encode(&decode(&current).unwrap()).unwrap(), current);

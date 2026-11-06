@@ -24,7 +24,7 @@ pub struct SackPageOffsets {
 
 /// Native BuildPage selects grid height from the actual screen height.
 #[must_use]
-pub fn native_inventory_sack_page_height(screen_height: f64) -> f64 {
+pub fn inventory_sack_page_height(screen_height: f64) -> f64 {
     assert!(screen_height.is_finite() && screen_height > 0.0, "inventory height must be positive");
     if screen_height > 320.0 && screen_height <= 600.0 {
         220.0

@@ -1,7 +1,7 @@
 # Client presentation
 
 Accepted `GameSession` state owns commands, UI decisions, sound, saves, and
-checkpoints. `web::presentation::NativePresentationTimeline` owns display copies
+checkpoints. `web::presentation::PresentationTimeline` owns display copies
 sampled from received snapshots.
 
 ## Lifecycle

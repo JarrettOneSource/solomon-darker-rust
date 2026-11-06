@@ -1,15 +1,15 @@
 //! Wizard-name admission and stock heading ink from Website `create-wizard-name.ts`.
 //! The editable browser input is semantic; its visible text is this native glyph layout.
 
-use crate::native_ui_text::{
-    NativeUiFontName, NativeUiGlyphLayout, NativeUiTextAlign, NativeUiTextSpec,
-    layout_native_ui_text, measure_native_ui_text, native_ui_font, native_ui_glyph_ink_bounds,
+use crate::ui_text::{
+    UiFontName, UiGlyphLayout, UiTextAlign, UiTextSpec, layout_ui_text, measure_ui_text, ui_font,
+    ui_glyph_ink_bounds,
 };
 
 pub const CREATE_WIZARD_NAME_MAX_LENGTH: usize = 64;
 pub const CREATE_WIZARD_NAME_MAX_WIDTH: f64 = 372.0;
 /// CreateWizardMenu::Update, 0058A8FF: an empty final TextBox uses this literal.
-pub const NATIVE_EMPTY_WIZARD_NAME: &str = "Genericus";
+pub const EMPTY_WIZARD_NAME: &str = "Genericus";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreateWizardNameRejection {
@@ -33,7 +33,7 @@ impl CreateWizardNameRejection {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateWizardNameLayout {
-    pub glyphs: Vec<NativeUiGlyphLayout>,
+    pub glyphs: Vec<UiGlyphLayout>,
     pub height: f64,
     pub left: f64,
     pub right: f64,
@@ -83,7 +83,7 @@ pub fn validate_create_wizard_name(value: &str) -> Option<CreateWizardNameReject
 /// Current Source allows an empty editable draft and substitutes its native name
 /// only when validating the final manual or random loadout.
 pub fn finalize_create_wizard_name(value: &str) -> Result<&str, CreateWizardNameRejection> {
-    let name = if value.is_empty() { NATIVE_EMPTY_WIZARD_NAME } else { value };
+    let name = if value.is_empty() { EMPTY_WIZARD_NAME } else { value };
     if let Some(reason) = validate_create_wizard_name(name) {
         return Err(reason);
     }
@@ -93,28 +93,28 @@ pub fn finalize_create_wizard_name(value: &str) -> Result<&str, CreateWizardName
 #[must_use]
 pub fn measure_create_wizard_name(value: &str) -> f64 {
     let text = value.to_uppercase();
-    let font = native_ui_font(NativeUiFontName::Heading);
+    let font = ui_font(UiFontName::Heading);
     assert!(
         text.chars().all(|character| font.glyph(character as u32).is_some()),
         "cannot measure an unsupported wizard-name character"
     );
-    measure_native_ui_text(&text, NativeUiFontName::Heading, 1.0)
+    measure_ui_text(&text, UiFontName::Heading, 1.0)
 }
 
 #[must_use]
 pub fn layout_create_wizard_name(value: &str) -> CreateWizardNameLayout {
     assert!(validate_create_wizard_name(value).is_none(), "wizard name is admitted before layout");
     let value = value.to_uppercase();
-    let mut layout = layout_native_ui_text(&NativeUiTextSpec {
-        align: NativeUiTextAlign::Left,
-        ..NativeUiTextSpec::new(NativeUiFontName::Heading, &value, 0.0, 0.0)
+    let mut layout = layout_ui_text(&UiTextSpec {
+        align: UiTextAlign::Left,
+        ..UiTextSpec::new(UiFontName::Heading, &value, 0.0, 0.0)
     });
     let mut minimum_left = f64::INFINITY;
     let mut minimum_top = f64::INFINITY;
     let mut maximum_right = f64::NEG_INFINITY;
     let mut maximum_bottom = f64::NEG_INFINITY;
     for glyph in &layout.glyphs {
-        let ink = native_ui_glyph_ink_bounds(glyph);
+        let ink = ui_glyph_ink_bounds(glyph);
         minimum_left = minimum_left.min(ink.left);
         minimum_top = minimum_top.min(ink.top);
         maximum_right = maximum_right.max(ink.left + ink.width);
@@ -146,7 +146,7 @@ fn supported_character(character: char) -> bool {
     let upper = character.to_uppercase().to_string();
     // Source tests JavaScript upper.length === 1, so only one BMP code unit qualifies.
     upper.encode_utf16().count() == 1
-        && native_ui_font(NativeUiFontName::Heading)
+        && ui_font(UiFontName::Heading)
             .glyph(upper.chars().next().expect("uppercase character exists") as u32)
             .is_some()
 }

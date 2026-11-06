@@ -1,17 +1,17 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::economy::{EquipmentType, HubInventoryItem, HubItemKind, ItemRarity};
-use solomon_sim::equipment::NativeEquipmentEffect;
+use solomon_sim::equipment::EquipmentEffect;
 use solomon_sim::modding::assets::ModSpriteFrame;
 use solomon_sim::modding::inventory::{
     ModConsumableContent, ModEquipmentAffix, ModItemContent, ModItemIcon,
 };
-use solomon_sim::native_ui_text::NativeUiFontName;
 use solomon_sim::player_panels::item_text::{
     HagathaTooltipOptions, HubTooltipLine, HubTooltipOptions, hub_contextual_hover_layout,
-    hub_hagatha_tooltip_lines, hub_inventory_item_info_text, hub_item_tooltip_lines,
-    hub_native_equipment_effect_text,
+    hub_equipment_effect_text, hub_hagatha_tooltip_lines, hub_inventory_item_info_text,
+    hub_item_tooltip_lines,
 };
+use solomon_sim::ui_text::UiFontName;
 
 #[test]
 fn inventory_item_effect_perk_rows_and_native_hover_geometry_match_current_website() {
@@ -19,7 +19,7 @@ fn inventory_item_effect_perk_rows_and_native_hover_geometry_match_current_websi
         serde_json::from_str(include_str!("fixtures/website/item-text-goldens.json")).unwrap();
     for case in fixture["effects"].as_array().unwrap() {
         assert_eq!(
-            hub_native_equipment_effect_text(read_effect(&case["effect"])),
+            hub_equipment_effect_text(read_effect(&case["effect"])),
             case["expected"].as_str().unwrap(),
             "effect {}",
             case["effect"]
@@ -106,15 +106,15 @@ fn lines_json(lines: &[HubTooltipLine]) -> Value {
 
 fn read_line(value: &Value) -> HubTooltipLine {
     HubTooltipLine {
-        font: if value["font"] == "menu" { NativeUiFontName::Menu } else { NativeUiFontName::Body },
+        font: if value["font"] == "menu" { UiFontName::Menu } else { UiFontName::Body },
         text: value["text"].as_str().unwrap().into(),
         tint: value["tint"].as_u64().unwrap() as u32,
         sack_name_browser_font: value["sackNameBrowserFont"].as_bool().unwrap_or(false),
     }
 }
 
-fn read_effect(value: &Value) -> NativeEquipmentEffect {
-    NativeEquipmentEffect {
+fn read_effect(value: &Value) -> EquipmentEffect {
+    EquipmentEffect {
         kind: value["kind"].as_u64().unwrap() as u32,
         magnitude: value["magnitude"].as_f64().unwrap(),
         operator: value["operator"].as_u64().unwrap() as u32,
@@ -201,12 +201,12 @@ fn read_item(value: &Value) -> HubInventoryItem {
         mod_item_content,
         mod_affixes,
         name: value["name"].as_str().unwrap().into(),
-        native_subtype: value["nativeSubtype"].as_u64().map(|value| value as u32),
-        native_selector: value["nativeSelector"].as_u64().map(|value| value as u32),
+        subtype: value["nativeSubtype"].as_u64().map(|value| value as u32),
+        selector: value["nativeSelector"].as_u64().map(|value| value as u32),
         native_effects: value["nativeEffects"]
             .as_array()
             .map(|values| values.iter().map(read_effect).collect()),
-        native_type_id: value["nativeTypeId"].as_u64().unwrap() as u32,
+        type_id: value["nativeTypeId"].as_u64().unwrap() as u32,
         quantity: value["quantity"].as_u64().unwrap() as u32,
         rarity: value["rarity"]
             .as_str()

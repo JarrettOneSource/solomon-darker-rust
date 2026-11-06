@@ -1,12 +1,10 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::lighting::{
-    NativeBoneyardLightIndex, NativeBoneyardLightManagerView, NativeBoneyardLightSource,
-    native_region_light_target_plan,
+    BoneyardLightIndex, BoneyardLightManagerView, BoneyardLightSource, region_light_target_plan,
 };
 use solomon_sim::boneyard::shadows::{
-    NativeShadowCaster, NativeShadowEdge, NativeShadowProgram, NativeShadowRecord,
-    native_shadow_edges, native_shadow_records,
+    ShadowCaster, ShadowEdge, ShadowProgram, ShadowRecord, shadow_edges, shadow_records,
 };
 
 fn number(value: &Value) -> f64 {
@@ -16,7 +14,7 @@ fn point(value: &Value) -> Vec2 {
     Vec2::new(number(&value["x"]), number(&value["y"]))
 }
 
-fn caster(value: &Value) -> NativeShadowCaster {
+fn caster(value: &Value) -> ShadowCaster {
     let program = &value["program"];
     let program = if program.is_null() {
         None
@@ -25,24 +23,22 @@ fn caster(value: &Value) -> NativeShadowCaster {
         let end = point(&program["end"]);
         Some(match program["kind"].as_str().unwrap() {
             "fence-grate" if program["construction"] == "broken" => {
-                NativeShadowProgram::BrokenFenceGrate {
+                ShadowProgram::BrokenFenceGrate {
                     start,
                     end,
                     step: point(&program["step"]),
                     count: program["count"].as_u64().unwrap() as usize,
                 }
             }
-            "fence-grate" => NativeShadowProgram::FenceGrate {
-                start,
-                end,
-                gate: program["construction"] == "gate",
-            },
-            "rails" => NativeShadowProgram::Rails { start, end },
-            "wall" => NativeShadowProgram::Wall { start, end },
+            "fence-grate" => {
+                ShadowProgram::FenceGrate { start, end, gate: program["construction"] == "gate" }
+            }
+            "rails" => ShadowProgram::Rails { start, end },
+            "wall" => ShadowProgram::Wall { start, end },
             _ => unreachable!(),
         })
     };
-    NativeShadowCaster {
+    ShadowCaster {
         id: value["id"].as_str().unwrap().into(),
         position: point(&value["position"]),
         outline: value["outline"].as_array().unwrap().iter().map(point).collect(),
@@ -50,8 +46,8 @@ fn caster(value: &Value) -> NativeShadowCaster {
     }
 }
 
-fn record(value: &Value) -> NativeShadowRecord {
-    NativeShadowRecord {
+fn record(value: &Value) -> ShadowRecord {
+    ShadowRecord {
         base_alpha: number(&value["baseAlpha"]),
         behind_scalar: number(&value["behindScalar"]),
         direction: point(&value["direction"]),
@@ -62,8 +58,8 @@ fn record(value: &Value) -> NativeShadowRecord {
     }
 }
 
-fn edge(value: &Value) -> NativeShadowEdge {
-    NativeShadowEdge {
+fn edge(value: &Value) -> ShadowEdge {
+    ShadowEdge {
         base_alpha: number(&value["baseAlpha"]),
         base_start: point(&value["baseStart"]),
         base_end: point(&value["baseEnd"]),
@@ -78,13 +74,13 @@ fn stock_scenery_shadow_programs_and_light_targets_match_the_website() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/boneyard-shadow-goldens.json"))
             .unwrap();
-    let mut lights = NativeBoneyardLightIndex::new(Vec2::new(2100.0, 3700.0));
+    let mut lights = BoneyardLightIndex::new(Vec2::new(2100.0, 3700.0));
     let providers: Vec<_> = fixture["providers"]
         .as_array()
         .unwrap()
         .iter()
         .map(|source| {
-            NativeBoneyardLightSource::new(
+            BoneyardLightSource::new(
                 point(&source["position"]),
                 number(&source["radius"]),
                 number(&source["intensity"]),
@@ -95,7 +91,7 @@ fn stock_scenery_shadow_programs_and_light_targets_match_the_website() {
     lights.rebuild(
         &providers,
         &[],
-        NativeBoneyardLightManagerView {
+        BoneyardLightManagerView {
             camera_position: point(&fixture["view"]["camera"]),
             zoom: 1.2,
             viewport: Vec2::new(1600.0, 900.0),
@@ -106,23 +102,13 @@ fn stock_scenery_shadow_programs_and_light_targets_match_the_website() {
         let caster = caster(&case["caster"]);
         let frame = case["frame"].as_u64().unwrap();
         let records: Vec<_> = case["records"].as_array().unwrap().iter().map(record).collect();
-        assert_eq!(
-            native_shadow_records(&caster, &lights, frame),
-            records,
-            "{} frame {frame}",
-            caster.id
-        );
+        assert_eq!(shadow_records(&caster, &lights, frame), records, "{} frame {frame}", caster.id);
         let edges: Vec<_> = case["edges"].as_array().unwrap().iter().map(edge).collect();
-        assert_eq!(
-            native_shadow_edges(&caster, &lights, frame),
-            edges,
-            "{} frame {frame}",
-            caster.id
-        );
+        assert_eq!(shadow_edges(&caster, &lights, frame), edges, "{} frame {frame}", caster.id);
     }
     for case in fixture["targets"].as_array().unwrap() {
         let viewport = &case["viewport"];
-        let actual = native_region_light_target_plan(
+        let actual = region_light_target_plan(
             Vec2::new(number(&viewport["width"]), number(&viewport["height"])),
             number(&case["resolution"]),
             number(&case["quality"]),

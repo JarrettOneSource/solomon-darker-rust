@@ -14,16 +14,15 @@ pub use presentation::{
 };
 
 pub use catalog::{
-    HUB_BAD_EULOGIES, HUB_DIALOGUES, HUB_EULOGIES, HUB_INTERACTIONS, HUB_INTERRUPTED_EULOGIES,
-    HUB_MARKER_ACTORS, NATIVE_BOAST_INSTRUCTION, NATIVE_BOASTS, NATIVE_LIBRARIAN_BOOKS,
-    NATIVE_TEACHER_SPELLS,
+    BOAST_INSTRUCTION, BOASTS, HUB_BAD_EULOGIES, HUB_DIALOGUES, HUB_EULOGIES, HUB_INTERACTIONS,
+    HUB_INTERRUPTED_EULOGIES, HUB_MARKER_ACTORS, LIBRARIAN_BOOKS, TEACHER_SPELLS,
 };
 
 use crate::economy::{BoastState, HubTraderId, NativeHubNpcState};
 use crate::float;
 use crate::float::{atan2, fround};
 use crate::hub::regions::HubRegion;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 /// Declaration order is the native interaction tie-break order, with story Polisher last.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,7 +184,7 @@ impl HubNpcListSelector {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HubNpcCommand {
     pub label: &'static str,
-    pub native_command: &'static str,
+    pub command: &'static str,
     pub selector: HubNpcSelector,
 }
 
@@ -219,7 +218,7 @@ pub struct HubDialogueRecord {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeLibrarianBook {
+pub struct LibrarianBook {
     pub id: u32,
     pub key: &'static str,
     pub lines: &'static [&'static str],
@@ -228,7 +227,7 @@ pub struct NativeLibrarianBook {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeTeacherSpell {
+pub struct TeacherSpell {
     pub explanation_label: &'static str,
     pub explanation_lines: &'static [&'static str],
     pub key: &'static str,
@@ -249,7 +248,7 @@ pub enum BoastFailureProducer {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeBoastDefinition {
+pub struct BoastDefinition {
     pub failure_producer: Option<BoastFailureProducer>,
     pub icon_record: usize,
     pub id: u32,
@@ -528,7 +527,7 @@ pub fn hub_npc_selector_rows(
     advanced_unlocks: &[bool; 8],
 ) -> Vec<HubNpcSelectorRow> {
     match selector {
-        HubNpcListSelector::Boast => NATIVE_BOASTS
+        HubNpcListSelector::Boast => BOASTS
             .iter()
             .map(|boast| HubNpcSelectorRow {
                 id: boast.id,
@@ -538,7 +537,7 @@ pub fn hub_npc_selector_rows(
                 boast_icon_record: Some(boast.icon_record),
             })
             .collect(),
-        HubNpcListSelector::Books => NATIVE_LIBRARIAN_BOOKS
+        HubNpcListSelector::Books => LIBRARIAN_BOOKS
             .iter()
             .filter(|book| !book.one_shot || !npc.librarian_lace_read)
             .map(|book| HubNpcSelectorRow {
@@ -549,7 +548,7 @@ pub fn hub_npc_selector_rows(
                 boast_icon_record: None,
             })
             .collect(),
-        HubNpcListSelector::TeacherSpells => NATIVE_TEACHER_SPELLS
+        HubNpcListSelector::TeacherSpells => TEACHER_SPELLS
             .iter()
             .filter(|spell| !advanced_unlocks[spell.skill_id - 72])
             .map(|spell| HubNpcSelectorRow {
@@ -579,18 +578,18 @@ pub fn hub_npc_selector_response(
 ) -> Option<HubNpcChatContent> {
     match selector {
         HubNpcListSelector::Boast => {
-            let boast = NATIVE_BOASTS.iter().find(|boast| boast.id == id)?;
+            let boast = BOASTS.iter().find(|boast| boast.id == id)?;
             Some(record_speech(
                 hub_dialogue_record(boast.response).expect("the native boast response"),
                 HubNpcChatNext::Close,
             ))
         }
         HubNpcListSelector::Books => {
-            let book = NATIVE_LIBRARIAN_BOOKS.iter().find(|book| book.id == id)?;
+            let book = LIBRARIAN_BOOKS.iter().find(|book| book.id == id)?;
             Some(speech(book.key, book.lines, HubNpcChatNext::Choices))
         }
         HubNpcListSelector::TeacherSpells => {
-            let spell = NATIVE_TEACHER_SPELLS.iter().find(|spell| spell.skill_id == id as usize)?;
+            let spell = TEACHER_SPELLS.iter().find(|spell| spell.skill_id == id as usize)?;
             Some(speech(spell.key, spell.explanation_lines, HubNpcChatNext::Choices))
         }
     }
@@ -716,15 +715,15 @@ impl BoastState {
 }
 
 fn native_boast_rules(state: &BoastState) -> Option<BoastRules<'static>> {
-    native_boast_rules_for_selection(state.selected.as_ref()?)
+    boast_rules_for_selection(state.selected.as_ref()?)
 }
 
 #[must_use]
-pub fn native_boast_rules_for_selection(
+pub fn boast_rules_for_selection(
     selection: &crate::economy::BoastSelection,
 ) -> Option<BoastRules<'static>> {
     let id = selection.native_id()?;
-    let definition = NATIVE_BOASTS.get(id as usize)?;
+    let definition = BOASTS.get(id as usize)?;
     Some(BoastRules {
         failure_producers: definition.failure_producer.as_slice(),
         label: definition.label,
@@ -833,7 +832,7 @@ pub fn hub_npc_marker_frame(
     let side = if mirrored { HubNpcMarkerSide::Left } else { actor.side };
     let position = interaction_geometry(id, availability).position;
     let actor_seed = seed ^ actor.type_id.wrapping_mul(0x9e37_79b1);
-    let initial_phase = NativeRng::new(i64::from(actor_seed)).draw_integer(5000);
+    let initial_phase = Rng::new(i64::from(actor_seed)).draw_integer(5000);
     let phase_degrees =
         f64::from(initial_phase) + if actor.phase_advances { tick as f64 } else { 0.0 };
     let suppressed = actor.profile_hint_index.is_some_and(|index| suppression[index]);

@@ -138,8 +138,8 @@ impl BoneyardFence {
 /// Shared endpoint order in `core-kernels/boneyard-fence-posts.ts`.
 /// Main-layer registrations and primary Puppet targets use this same prefix.
 #[must_use]
-pub fn native_boneyard_fence_post_positions(fences: &[BoneyardFence]) -> Vec<Vec2> {
-    scenery::native_boneyard_fence_posts(fences).into_iter().map(|post| post.position).collect()
+pub fn boneyard_fence_post_positions(fences: &[BoneyardFence]) -> Vec<Vec2> {
+    scenery::boneyard_fence_posts(fences).into_iter().map(|post| post.position).collect()
 }
 
 /// An authored terrain patch.

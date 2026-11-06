@@ -2,11 +2,11 @@
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::spline::NaturalSpline;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSilkState {
+pub struct SilkState {
     pub force_accumulator: f64,
     pub age_ticks: u64,
     pub phase: f64,
@@ -22,8 +22,8 @@ pub struct NativeSilkState {
     pub cocoon_health: f64,
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSilkCreation {
-    pub state: NativeSilkState,
+pub struct SilkCreation {
+    pub state: SilkState,
     pub sound_index: usize,
     pub sound_pitch: f64,
     pub sound_position: Vec2,
@@ -36,18 +36,18 @@ pub struct EnemySilkActor {
     pub id: usize,
     pub owner_actor_id: usize,
     pub spawn_tick: u64,
-    pub state: NativeSilkState,
+    pub state: SilkState,
     pub painter_registration: crate::painter::PainterRegistration,
 }
 
 #[must_use]
-pub fn create_native_silk(
+pub fn create_silk(
     position: Vec2,
     target_position: Vec2,
     target_velocity: Vec2,
     cocoon_health: f64,
-    rng: &mut NativeRng,
-) -> NativeSilkCreation {
+    rng: &mut Rng,
+) -> SilkCreation {
     let height = rng.draw_scaled_float(10.0, false);
     rng.draw_scaled_float(2.0, false);
     let lead = rng.draw_float_range(2.7_f32 as f64, 2.9_f32 as f64);
@@ -80,8 +80,8 @@ pub fn create_native_silk(
     let drift = rng.draw_scaled_float(2.0, false);
     let pitch = rng.draw_scaled_float(0.15000003576278687, false);
     let sound = rng.draw_integer(3) as usize;
-    NativeSilkCreation {
-        state: NativeSilkState {
+    SilkCreation {
+        state: SilkState {
             force_accumulator: 0.0,
             age_ticks: 0,
             phase: 0.0,
@@ -108,7 +108,7 @@ pub fn create_native_silk(
     }
 }
 
-pub fn step_native_silk(state: &mut NativeSilkState) -> bool {
+pub fn step_silk(state: &mut SilkState) -> bool {
     state.age_ticks += 1;
     if !state.ended && state.age_ticks.is_multiple_of(4) {
         return true;

@@ -1,9 +1,8 @@
 //! Skill descriptors, equipped rows and offer priority from Source `skill-*.ts`.
 
 use crate::profile::{
-    NATIVE_SKILL_CATALOG, NATIVE_WELD_BUILDS, NativeSkillBookState, NativeSkillDefinition,
-    NativeSkillStatBookValue, PlayerSkillChoice, PlayerStatBookComponent, WizardElement,
-    native_skill_category,
+    PlayerSkillChoice, PlayerStatBookComponent, SKILL_CATALOG, SkillBookState, SkillDefinition,
+    SkillStatBookValue, WELD_BUILDS, WizardElement, skill_category,
 };
 use crate::session::GameSession;
 
@@ -58,7 +57,7 @@ impl DescriptorValues {
 }
 
 pub fn describe_ml_bot_policy_skill(
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
     input: MlBotPolicySkillDescriptorInput,
 ) -> Result<Vec<f32>, String> {
@@ -66,7 +65,7 @@ pub fn describe_ml_bot_policy_skill(
     let catalog = policy_skill_catalog_row(id);
     let stats = stat_book.entries.get(id);
     let family = catalog.map_or("unknown", |row| row.family);
-    let category = native_skill_category(id);
+    let category = skill_category(id);
     let mut values = DescriptorValues([0.0; OPTION_DESCRIPTOR_WIDTH]);
     values.set("present", 1.0);
     values.set("option_id_index_scaled", scaled(id as f64, scales::SKILL_ID));
@@ -120,7 +119,7 @@ pub fn describe_ml_bot_policy_skill(
     values.set("is_health_up", f64::from(id == 64));
     values.set("is_mana_up", f64::from(id == 56));
     if let Some(build_id) = input.weld_build_id {
-        let weld = NATIVE_WELD_BUILDS
+        let weld = WELD_BUILDS
             .iter()
             .find(|weld| weld.id == build_id)
             .ok_or_else(|| format!("ML bot policy weld build {build_id} is not native"))?;
@@ -195,10 +194,10 @@ pub fn describe_ml_bot_policy_skill(
     Ok(values.0.to_vec())
 }
 
-fn ranked(value: Option<&NativeSkillStatBookValue>, rank: f64) -> Option<f64> {
+fn ranked(value: Option<&SkillStatBookValue>, rank: f64) -> Option<f64> {
     let value = match value? {
-        NativeSkillStatBookValue::Scalar(value) => *value,
-        NativeSkillStatBookValue::Ranks(values) => {
+        SkillStatBookValue::Scalar(value) => *value,
+        SkillStatBookValue::Ranks(values) => {
             if values.is_empty() || rank.is_nan() {
                 return None;
             }
@@ -215,20 +214,18 @@ fn ranked(value: Option<&NativeSkillStatBookValue>, rank: f64) -> Option<f64> {
 }
 
 pub fn ml_bot_policy_skill_coverage_key(id: usize, weld_build_id: Option<u32>) -> String {
-    if let Some(weld) =
-        weld_build_id.and_then(|id| NATIVE_WELD_BUILDS.iter().find(|weld| weld.id == id))
-    {
+    if let Some(weld) = weld_build_id.and_then(|id| WELD_BUILDS.iter().find(|weld| weld.id == id)) {
         format!("weld:{}", weld.id)
     } else {
         format!("family:{}", policy_skill_catalog_row(id).map_or("unknown", |row| row.family))
     }
 }
 
-fn policy_skill_catalog_row(id: usize) -> Option<&'static NativeSkillDefinition> {
+fn policy_skill_catalog_row(id: usize) -> Option<&'static SkillDefinition> {
     // Source appends Nullskill (82) only to playerStatBook, after the 82 catalog
     // skills. The Rust table also retains that sentinel, but it is not a known
     // catalog skill for descriptor membership or coverage-family selection.
-    NATIVE_SKILL_CATALOG.get(id).filter(|_| id < 82)
+    SKILL_CATALOG.get(id).filter(|_| id < 82)
 }
 
 pub fn describe_ml_bot_policy_skill_offer(
@@ -332,7 +329,7 @@ pub fn choose_ml_bot_policy_scripted_skill(
     for (index, option) in offer.options.iter().enumerate() {
         let id = option.skill_id;
         let priority = if id == 52 && option.weld_build_id.is_some() {
-            let eligible = NATIVE_WELD_BUILDS
+            let eligible = WELD_BUILDS
                 .iter()
                 .find(|weld| Some(weld.id) == option.weld_build_id)
                 .is_some_and(|weld| {

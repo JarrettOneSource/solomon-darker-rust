@@ -10,8 +10,8 @@ test('a main WASM failure rejects bootstrap import while retaining the Rust load
   const resources = {
     loaderModule: 'solomon-loader-1111111111111111.js',
     loaderWasm: 'solomon-loader-2222222222222222_bg.wasm',
-    mainModule: 'solomon-web-3333333333333333.js',
-    mainWasm: 'solomon-web-4444444444444444_bg.wasm',
+    mainModule: 'solomon-client-3333333333333333.js',
+    mainWasm: 'solomon-client-4444444444444444_bg.wasm',
   };
   const previousWindow = globalThis.window;
   const previousFetch = globalThis.fetch;

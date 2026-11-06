@@ -2,7 +2,7 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::presentation::{
-    native_arena_displacement_cover, native_enemy_world_feedback_transform,
+    arena_displacement_cover, enemy_world_feedback_transform,
 };
 
 fn point(value: &Value) -> Vec2 {
@@ -17,7 +17,7 @@ fn battle_camera_pulse_and_light_edge_cover_replay_the_source() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/battle-screen-goldens.json")).unwrap();
     for case in fixture["transforms"].as_array().unwrap() {
-        let transform = native_enemy_world_feedback_transform(
+        let transform = enemy_world_feedback_transform(
             point(&case["camera"]),
             case["camera"]["zoom"].as_f64().unwrap(),
             viewport(&case["viewport"]),
@@ -28,7 +28,7 @@ fn battle_camera_pulse_and_light_edge_cover_replay_the_source() {
         assert_eq!(transform.scale, case["result"]["scale"].as_f64().unwrap());
     }
     for case in fixture["covers"].as_array().unwrap() {
-        let cover = native_arena_displacement_cover(
+        let cover = arena_displacement_cover(
             point(&case["displacement"]),
             viewport(&case["viewport"]),
             case["complexLighting"].as_bool().unwrap(),

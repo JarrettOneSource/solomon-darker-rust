@@ -2,15 +2,14 @@
 
 use super::model::EnemyTarget;
 use super::model::{CoffinPhase, EnemyActor, EnemyBrain, EnemyLifeState};
-use super::path::native_enemy_target_refresh_ticks;
+use super::path::enemy_target_refresh_ticks;
 use super::world::EnemyStepContext;
 use super::world::EnemyWorld;
 use crate::Vec2;
 use crate::float::hypot;
 use crate::heading::heading_degrees_from_vector;
 use crate::spells::targeting::{
-    PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
-    native_primary_cell_coordinate,
+    PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind, primary_cell_coordinate,
 };
 
 #[must_use]
@@ -31,7 +30,7 @@ pub fn refresh_target(actor: &mut EnemyActor, context: &EnemyStepContext<'_>) {
         actor.path.clear_route();
     }
     actor.next_target_refresh_tick =
-        context.tick + native_enemy_target_refresh_ticks(actor.config.pathfinding_mode);
+        context.tick + enemy_target_refresh_ticks(actor.config.pathfinding_mode);
     actor.target_player_id = next;
 }
 
@@ -187,7 +186,7 @@ impl EnemyWorld {
                 grid_position: None,
                 id: format!("projectile:{}", state.id),
                 kind: PrimarySpellTargetKind::Projectile,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: state.position,
                 query_lane: PrimarySpellQueryLane::Transient,
@@ -205,7 +204,7 @@ impl EnemyWorld {
                 grid_position: None,
                 id: format!("silk:{}", silk.id),
                 kind: PrimarySpellTargetKind::Projectile,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: silk.state.position,
                 query_lane: PrimarySpellQueryLane::Grid,
@@ -231,7 +230,7 @@ impl EnemyWorld {
                 grid_position: None,
                 id: format!("enemy:{}", actor.id),
                 kind: PrimarySpellTargetKind::Enemy,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: actor.position,
                 query_lane: PrimarySpellQueryLane::Grid,
@@ -249,7 +248,7 @@ impl EnemyWorld {
                 grid_position: None,
                 id: format!("enemy:{}", maggot.id),
                 kind: PrimarySpellTargetKind::Enemy,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: maggot.position,
                 query_lane: PrimarySpellQueryLane::Grid,
@@ -271,8 +270,8 @@ impl EnemyWorld {
                 return false;
             }
             if primary_cell_changed(actor.position, position) {
-                actor.native_cell_binding_order = self.next_native_cell_binding_order;
-                self.next_native_cell_binding_order += 1;
+                actor.native_cell_binding_order = self.next_cell_binding_order;
+                self.next_cell_binding_order += 1;
             }
             actor.position = position;
             return true;
@@ -284,16 +283,16 @@ impl EnemyWorld {
             return false;
         }
         if primary_cell_changed(maggot.position, position) {
-            maggot.native_cell_binding_order = self.next_native_cell_binding_order;
-            self.next_native_cell_binding_order += 1;
+            maggot.native_cell_binding_order = self.next_cell_binding_order;
+            self.next_cell_binding_order += 1;
         }
         maggot.position = position;
-        maggot.native_tree_query_member = true;
+        maggot.tree_query_member = true;
         true
     }
 }
 
 pub(super) fn primary_cell_changed(before: Vec2, after: Vec2) -> bool {
-    native_primary_cell_coordinate(before.x) != native_primary_cell_coordinate(after.x)
-        || native_primary_cell_coordinate(before.y) != native_primary_cell_coordinate(after.y)
+    primary_cell_coordinate(before.x) != primary_cell_coordinate(after.x)
+        || primary_cell_coordinate(before.y) != primary_cell_coordinate(after.y)
 }

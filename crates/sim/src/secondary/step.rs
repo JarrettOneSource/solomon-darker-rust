@@ -9,24 +9,23 @@ use crate::Vec2;
 use crate::belt::NativeBeltEntry;
 use crate::float::{atan2, fround};
 use crate::painter::WorldPainterOrder;
-use crate::profile::offensive::resolve_native_skill_damage_value;
+use crate::profile::offensive::resolve_skill_damage_value;
 use crate::spells::targeting::{
-    PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
-    native_primary_circle_targets,
+    PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind, primary_circle_targets,
 };
 
 pub(super) struct BurnRequest {
-    pub actor: NativeSecondaryActorState,
+    pub actor: SecondaryActorState,
     pub damage: f64,
-    pub target: NativeSecondaryTarget,
+    pub target: SecondaryTarget,
 }
 
 pub(super) struct StepEngine<'state, 'context, 'player, W> {
-    pub state: &'state mut NativeSecondarySimulationState,
-    pub context: &'context NativeSecondaryTickContext<'player>,
+    pub state: &'state mut SecondarySimulationState,
+    pub context: &'context SecondaryTickContext<'player>,
     pub world: &'context mut W,
-    pub output: NativeSecondaryTickResult,
-    pub sources: BTreeMap<u64, NativeSecondaryActorState>,
+    pub output: SecondaryTickResult,
+    pub sources: BTreeMap<u64, SecondaryActorState>,
     pub last_appendages: BTreeMap<u64, u64>,
     pub wobble_phases: BTreeMap<u64, f64>,
     pub scenery_phases: BTreeMap<(String, usize), f64>,
@@ -35,19 +34,15 @@ pub(super) struct StepEngine<'state, 'context, 'player, W> {
     pub electric_burns: Vec<BurnRequest>,
 }
 
-impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
-    pub fn candidates(
-        &self,
-        actor: &NativeSecondaryActorState,
-        radius: f64,
-    ) -> Vec<NativeSecondaryTarget> {
+impl<W: SecondaryWorld> StepEngine<'_, '_, '_, W> {
+    pub fn candidates(&self, actor: &SecondaryActorState, radius: f64) -> Vec<SecondaryTarget> {
         let targets = self.world.targets(&actor.world_key, actor.position, radius);
         if !matches!(
             actor.kind,
-            NativeSecondaryActorKind::Shockwave
-                | NativeSecondaryActorKind::RescueShockwave
-                | NativeSecondaryActorKind::MindblastShockwave
-                | NativeSecondaryActorKind::FreezeWave
+            SecondaryActorKind::Shockwave
+                | SecondaryActorKind::RescueShockwave
+                | SecondaryActorKind::MindblastShockwave
+                | SecondaryActorKind::FreezeWave
         ) {
             return stable_targets(targets);
         }
@@ -67,7 +62,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
                 grid_position: None,
                 id,
                 kind: PrimarySpellTargetKind::Enemy,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: target.position,
                 query_lane: PrimarySpellQueryLane::Grid,
@@ -75,7 +70,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
             });
         }
         let mut selected = Vec::new();
-        for target in native_primary_circle_targets(actor.position, radius, 2, &query_targets) {
+        for target in primary_circle_targets(actor.position, radius, 2, &query_targets) {
             let original =
                 by_id.get(&target.id).expect("circle query retains the submitted target identity");
             selected.push((*original).clone());
@@ -83,21 +78,17 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
         selected
     }
 
-    pub fn effect(
-        &self,
-        world_key: &str,
-        target_id: usize,
-    ) -> Option<&NativeSecondaryTargetEffectState> {
-        native_secondary_target_effect(&self.state.target_effects, world_key, target_id)
+    pub fn effect(&self, world_key: &str, target_id: usize) -> Option<&SecondaryTargetEffectState> {
+        secondary_target_effect(&self.state.target_effects, world_key, target_id)
     }
 
     pub fn merge(
         &mut self,
-        actor: &NativeSecondaryActorState,
+        actor: &SecondaryActorState,
         target_id: usize,
-        patch: NativeSecondaryTargetEffectPatch,
+        patch: SecondaryTargetEffectPatch,
     ) {
-        apply_native_secondary_target_effect(
+        apply_secondary_target_effect(
             &mut self.state.target_effects,
             &actor.world_key,
             target_id,
@@ -107,16 +98,15 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
 
     pub fn damage(
         &mut self,
-        actor: &NativeSecondaryActorState,
-        target: &NativeSecondaryTarget,
+        actor: &SecondaryActorState,
+        target: &SecondaryTarget,
         amount: f64,
-        kind: NativeSecondaryDamageKind,
+        kind: SecondaryDamageKind,
     ) {
         if (amount <= 0.0 || amount.is_nan())
             && !matches!(
                 actor.kind,
-                NativeSecondaryActorKind::RescueShockwave
-                    | NativeSecondaryActorKind::GolemKnockback
+                SecondaryActorKind::RescueShockwave | SecondaryActorKind::GolemKnockback
             )
         {
             return;
@@ -124,16 +114,16 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
         let prismatic = self
             .effect(&actor.world_key, target.id)
             .is_some_and(|effect| effect.prismatic_ticks > 0);
-        self.output.damage.push(NativeSecondaryDamageContact {
-            amount: if kind == NativeSecondaryDamageKind::Lightning && prismatic {
+        self.output.damage.push(SecondaryDamageContact {
+            amount: if kind == SecondaryDamageKind::Lightning && prismatic {
                 amount * 2.0
             } else {
                 amount
             },
-            ether_drain: actor.kind == NativeSecondaryActorKind::EtherDrain,
+            ether_drain: actor.kind == SecondaryActorKind::EtherDrain,
             hit_strength: match actor.kind {
-                NativeSecondaryActorKind::FireBurn => Some(0.0),
-                NativeSecondaryActorKind::ElectricBurn => Some(actor.phase),
+                SecondaryActorKind::FireBurn => Some(0.0),
+                SecondaryActorKind::ElectricBurn => Some(actor.phase),
                 _ => None,
             },
             kind,
@@ -142,39 +132,39 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
             special_death_payload: None,
             suppress_hit_reaction: matches!(
                 actor.kind,
-                NativeSecondaryActorKind::FirePatch
-                    | NativeSecondaryActorKind::MovingFire
-                    | NativeSecondaryActorKind::FireBurn
-                    | NativeSecondaryActorKind::ElectricBurn
-                    | NativeSecondaryActorKind::AcidRain
-                    | NativeSecondaryActorKind::EtherDrain
+                SecondaryActorKind::FirePatch
+                    | SecondaryActorKind::MovingFire
+                    | SecondaryActorKind::FireBurn
+                    | SecondaryActorKind::ElectricBurn
+                    | SecondaryActorKind::AcidRain
+                    | SecondaryActorKind::EtherDrain
             ),
-            suppress_hurt_sound: actor.kind == NativeSecondaryActorKind::FireBurn,
+            suppress_hurt_sound: actor.kind == SecondaryActorKind::FireBurn,
             target_id: target.id,
         });
     }
 
     pub fn event(
         &mut self,
-        actor: &NativeSecondaryActorState,
-        cue: Option<NativeSecondaryAudioCue>,
-        kind: NativeSecondaryEventKind,
+        actor: &SecondaryActorState,
+        cue: Option<SecondaryAudioCue>,
+        kind: SecondaryEventKind,
     ) {
         self.state.emit_event(actor_event(actor, self.context.tick, kind, cue));
     }
 
-    fn advance(&mut self, actor: &mut NativeSecondaryActorState) -> bool {
-        if actor.kind == NativeSecondaryActorKind::GolemDeath {
+    fn advance(&mut self, actor: &mut SecondaryActorState) -> bool {
+        if actor.kind == SecondaryActorKind::GolemDeath {
             let animation =
                 actor.golem_death.as_mut().expect("Golem death retains its mutable fragments");
-            crate::death_animations::step_native_golem_death_animation(
+            crate::death_animations::step_golem_death_animation(
                 animation,
                 self.context.tick,
                 &mut self.state.rng,
             );
             let retained_fragments = animation.fragments.iter().any(Option::is_some);
             advance_actor(actor);
-            return actor.age_ticks < crate::death_animations::NATIVE_GOLEM_DEATH_STAR_TICKS
+            return actor.age_ticks < crate::death_animations::GOLEM_DEATH_STAR_TICKS
                 || retained_fragments;
         }
         let Some(owner) = self.context.players.get(&actor.owner_id) else {
@@ -186,7 +176,7 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
         let source = actor.clone();
         advance_actor(actor);
         let mut retain = actor.age_ticks < actor.lifetime_ticks;
-        use NativeSecondaryActorKind::*;
+        use SecondaryActorKind::*;
         match actor.kind {
             Leviathan
             | LeviathanAppendage
@@ -232,17 +222,17 @@ impl<W: NativeSecondaryWorld> StepEngine<'_, '_, '_, W> {
     }
 }
 
-impl NativeSecondarySimulationState {
+impl SecondarySimulationState {
     /// Advances statuses, existing actors and player input in native order, then
     /// enrolls the births in the world's shared painter/light allocator. The host
     /// applies the returned contacts and resource changes after this snapshot tick.
     pub fn step(
         &mut self,
-        context: &NativeSecondaryTickContext<'_>,
-        world: &mut impl NativeSecondaryWorld,
+        context: &SecondaryTickContext<'_>,
+        world: &mut impl SecondaryWorld,
         order: Option<&mut WorldPainterOrder>,
-    ) -> NativeSecondaryTickResult {
-        assert!(context.tick <= MAX_NATIVE_TICKS, "secondary tick is a non-negative safe integer");
+    ) -> SecondaryTickResult {
+        assert!(context.tick <= MAX_TICKS, "secondary tick is a non-negative safe integer");
         self.camera_displacements.clear();
         // Source retains identity before both decay and final-tick pulses. A health
         // query cannot replace this: dying and emerging actors still own modifiers.
@@ -253,14 +243,14 @@ impl NativeSecondarySimulationState {
         for effect in self.target_effects.iter_mut() {
             effect.step();
         }
-        self.target_effects.retain(NativeSecondaryTargetEffectState::is_active);
+        self.target_effects.retain(SecondaryTargetEffectState::is_active);
         let mut actors = std::mem::take(&mut self.actors);
         self.deferred_births = Some(Vec::new());
         let mut engine = StepEngine {
             state: self,
             context,
             world,
-            output: NativeSecondaryTickResult::default(),
+            output: SecondaryTickResult::default(),
             sources: BTreeMap::new(),
             last_appendages: BTreeMap::new(),
             wobble_phases: BTreeMap::new(),
@@ -274,17 +264,16 @@ impl NativeSecondarySimulationState {
             // Other actors never participate in these cross-actor reads.
             if matches!(
                 source.kind,
-                NativeSecondaryActorKind::Leviathan
-                    | NativeSecondaryActorKind::EarthquakeSceneryWobble
+                SecondaryActorKind::Leviathan | SecondaryActorKind::EarthquakeSceneryWobble
             ) {
                 engine.sources.insert(source.id, source.clone());
             }
-            if source.kind == NativeSecondaryActorKind::LeviathanAppendage
+            if source.kind == SecondaryActorKind::LeviathanAppendage
                 && let Some(parent) = source.hit_target_ids.first()
             {
                 engine.last_appendages.insert(*parent, source.id);
             }
-            if source.kind == NativeSecondaryActorKind::EarthquakeSceneryWobble
+            if source.kind == SecondaryActorKind::EarthquakeSceneryWobble
                 && let Some(target) = source.target_id
             {
                 engine.scenery_phases.insert((source.world_key.clone(), target), source.phase);
@@ -300,14 +289,14 @@ impl NativeSecondarySimulationState {
             if let Some(phase) = engine.wobble_phases.get(&actor.id) {
                 actor.phase = *phase;
             }
-            if actor.kind == NativeSecondaryActorKind::EtherDrain
+            if actor.kind == SecondaryActorKind::EtherDrain
                 && engine.drain_pulses.contains(&actor.id)
             {
                 actor.slow_factor = 2.0;
             }
         }
         for request in std::mem::take(&mut engine.fire_burns) {
-            engine.state.apply_fire_burn(NativeSecondaryFireBurnInput {
+            engine.state.apply_fire_burn(SecondaryFireBurnInput {
                 damage: request.damage,
                 owner_id: request.actor.owner_id,
                 rank: request.actor.rank,
@@ -323,7 +312,7 @@ impl NativeSecondarySimulationState {
         if engine.state.events.len() > 512 {
             engine.state.events.drain(..engine.state.events.len() - 512);
         }
-        enroll_native_secondary_light_owners(&mut engine.state.actors, order, |key, id| {
+        enroll_secondary_light_owners(&mut engine.state.actors, order, |key, id| {
             engine.world.target(key, id).map(|target| target.light_registration)
         });
         normalize_output(&mut engine.output);
@@ -331,13 +320,13 @@ impl NativeSecondarySimulationState {
     }
 }
 
-fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: BurnRequest) {
+fn apply_electric_burn(state: &mut SecondarySimulationState, request: BurnRequest) {
     if request.damage <= 0.0 || request.damage.is_nan() {
         return;
     }
     let damage = fround(request.damage / 100.0);
     if let Some(actor) = state.actors.iter_mut().find(|actor| {
-        actor.kind == NativeSecondaryActorKind::ElectricBurn
+        actor.kind == SecondaryActorKind::ElectricBurn
             && actor.world_key == request.actor.world_key
             && actor.target_id == Some(request.target.id)
     }) {
@@ -354,7 +343,7 @@ fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: Burn
         return;
     }
     let mut actor = actor(
-        NativeSecondaryActorKind::ElectricBurn,
+        SecondaryActorKind::ElectricBurn,
         &request.actor.owner_id,
         &request.actor.world_key,
         request.actor.skill_id,
@@ -372,7 +361,7 @@ fn apply_electric_burn(state: &mut NativeSecondarySimulationState, request: Burn
     state.spawn_actor(actor);
 }
 
-fn step_players<W: NativeSecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>) {
+fn step_players<W: SecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>) {
     let mut players = BTreeMap::new();
     for (id, authority) in engine.context.players {
         let mut player = engine.state.players.get(id).cloned().unwrap_or_default();
@@ -391,19 +380,19 @@ fn step_players<W: NativeSecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>)
         for (expired, ability, kind, cue) in [
             (
                 was_planewalker && player.planewalker_ticks_remaining == 0,
-                NativeSecondaryAbilityId::Planewalker,
-                NativeSecondaryEventKind::ToggleOff,
-                NativeSecondaryAudioCue::PlanewalkerOff,
+                SecondaryAbilityId::Planewalker,
+                SecondaryEventKind::ToggleOff,
+                SecondaryAudioCue::PlanewalkerOff,
             ),
             (
                 was_stoneskin && player.stoneskin_ticks_remaining == 0,
-                NativeSecondaryAbilityId::Stoneskin,
-                NativeSecondaryEventKind::Pulse,
-                NativeSecondaryAudioCue::Stoneskin,
+                SecondaryAbilityId::Stoneskin,
+                SecondaryEventKind::Pulse,
+                SecondaryAudioCue::Stoneskin,
             ),
         ] {
             if expired {
-                if ability == NativeSecondaryAbilityId::Stoneskin {
+                if ability == SecondaryAbilityId::Stoneskin {
                     engine.state.spawn_stoneskin_burst(
                         id,
                         authority.character.position,
@@ -446,16 +435,16 @@ fn step_players<W: NativeSecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>)
                 let direction = unit(origin, authority.input.aim.unwrap_or(origin));
                 let maximum_scale = engine.state.rng.draw_scaled_float(1.5, false);
                 let mut orb = actor(
-                    NativeSecondaryActorKind::PlaneOrbShot,
+                    SecondaryActorKind::PlaneOrbShot,
                     id,
                     authority.world_key,
                     Some(12),
                     1,
                     origin,
                 );
-                orb.damage = resolve_native_skill_damage_value(
+                orb.damage = resolve_skill_damage_value(
                     80,
-                    native_plane_orb_damage(authority.skill_book),
+                    plane_orb_damage(authority.skill_book),
                     &authority.offensive_factors,
                 );
                 orb.enhanced = authority.enhanced_effects;
@@ -473,20 +462,20 @@ fn step_players<W: NativeSecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>)
                     12,
                     authority,
                     engine.context.tick,
-                    NativeSecondaryEventKind::Cast,
-                    Some(NativeSecondaryAudioCue::DistortReality),
+                    SecondaryEventKind::Cast,
+                    Some(SecondaryAudioCue::DistortReality),
                 ));
                 let mut event = cast_event(
                     id,
                     12,
                     authority,
                     engine.context.tick,
-                    NativeSecondaryEventKind::Pulse,
-                    Some(NativeSecondaryAudioCue::LightningStart),
+                    SecondaryEventKind::Pulse,
+                    Some(SecondaryAudioCue::LightningStart),
                 );
                 event.pitch = 2.0;
                 event.screen_flash =
-                    Some(NativeSecondaryScreenFlashState::new(1.0, 0.0, 1.0, 0.1, false, 0.1));
+                    Some(SecondaryScreenFlashState::new(1.0, 0.0, 1.0, 0.1, false, 0.1));
                 engine.state.emit_event(event);
             }
             player.plane_orb_held = held;
@@ -507,7 +496,7 @@ fn step_players<W: NativeSecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>)
         if let Some(slot) = slot.filter(|slot| Some(*slot) != player.held_slot)
             && let Some(Some(NativeBeltEntry::Skill { skill_id })) =
                 authority.belt.entries.get(slot)
-            && let Some(ability) = NativeSecondaryAbilityId::from_skill_id(*skill_id)
+            && let Some(ability) = SecondaryAbilityId::from_skill_id(*skill_id)
         {
             let result = super::casting::cast_ability(
                 engine.state,
@@ -558,26 +547,26 @@ fn step_players<W: NativeSecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>)
     }
 }
 
-fn emit_overload<W: NativeSecondaryWorld>(
+fn emit_overload<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
     id: &str,
-    authority: &NativeSecondaryPlayerAuthority<'_>,
-    player: &NativeSecondaryPlayerState,
+    authority: &SecondaryPlayerAuthority<'_>,
+    player: &SecondaryPlayerState,
 ) {
     engine.output.overloaded_player_ids.push(id.to_owned());
     let mut event = cast_event(
         id,
-        player.last_skill_id.unwrap_or(NativeSecondaryAbilityId::Mindstar).skill_id(),
+        player.last_skill_id.unwrap_or(SecondaryAbilityId::Mindstar).skill_id(),
         authority,
         engine.context.tick,
-        NativeSecondaryEventKind::Overload,
-        Some(NativeSecondaryAudioCue::Fizzle),
+        SecondaryEventKind::Overload,
+        Some(SecondaryAudioCue::Fizzle),
     );
     event.pitch = 1.0;
     engine.state.emit_event(event);
 }
 
-fn normalize_output(output: &mut NativeSecondaryTickResult) {
+fn normalize_output(output: &mut SecondaryTickResult) {
     for ids in [
         &mut output.dampened_caster_target_ids,
         &mut output.dispelled_shield_target_ids,

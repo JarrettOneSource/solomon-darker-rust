@@ -2,13 +2,13 @@
 //! independently of the low-mana byte. Retained Website ledger123/report133 catalog.
 
 use solomon_sim::spells::weld::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
-fn particle(seed: i64, weak: bool) -> (NativeWeldSteamActorState, NativeRng) {
-    let mut rng = NativeRng::new(seed);
-    let actor = spawn_native_weld_steam_actor(
-        SpawnNativeWeldSteamInput {
-            birth: NativeWeldActorBirth {
+fn particle(seed: i64, weak: bool) -> (WeldSteamActorState, Rng) {
+    let mut rng = Rng::new(seed);
+    let actor = spawn_weld_steam_actor(
+        SpawnWeldSteamInput {
+            birth: WeldActorBirth {
                 build_id: 1005,
                 direction: Vec2::new(1.0, 0.0),
                 id: 1,
@@ -32,7 +32,7 @@ fn particle(seed: i64, weak: bool) -> (NativeWeldSteamActorState, NativeRng) {
 #[test]
 fn weak_normal_particles_keep_the_ten_tick_contact_clock_and_learned_payload() {
     let (mut actor, _) = particle(0, true);
-    assert_eq!(actor.variant, NativeWeldSteamVariant::Normal);
+    assert_eq!(actor.variant, WeldSteamVariant::Normal);
     assert!(actor.contact_enabled, "0x00543266 has no low-mana test");
     assert_eq!(actor.alpha_multiplier, 0.25);
     assert_eq!(actor.contact_damage, 2.0);
@@ -42,7 +42,7 @@ fn weak_normal_particles_keep_the_ten_tick_contact_clock_and_learned_payload() {
     actor.life_loss = 0.0;
     let mut due = Vec::new();
     for tick in 1..=11 {
-        assert!(step_native_weld_steam_actor(&mut actor));
+        assert!(step_weld_steam_actor(&mut actor));
         if actor.contact_due {
             due.push(tick);
         }
@@ -50,11 +50,11 @@ fn weak_normal_particles_keep_the_ten_tick_contact_clock_and_learned_payload() {
     assert_eq!(due, vec![1, 11]);
     actor.life = 0.5;
     actor.contact_ticks_remaining = 1;
-    assert!(step_native_weld_steam_actor(&mut actor));
+    assert!(step_weld_steam_actor(&mut actor));
     assert!(!actor.contact_due, "contact requires life strictly above .5");
     actor.life = 0.0;
     actor.life_loss = 0.1;
-    assert!(!step_native_weld_steam_actor(&mut actor));
+    assert!(!step_weld_steam_actor(&mut actor));
 }
 
 #[test]
@@ -64,13 +64,13 @@ fn over_is_cosmetic_while_weak_forces_normal_without_changing_constructor_words(
         let (mut funded, funded_rng) = particle(seed, false);
         let (weak, weak_rng) = particle(seed, true);
         assert_eq!(funded_rng, weak_rng, "seed{seed}: constructor draw cardinality");
-        assert_eq!(weak.variant, NativeWeldSteamVariant::Normal);
+        assert_eq!(weak.variant, WeldSteamVariant::Normal);
         assert!(weak.contact_enabled);
-        if funded.variant == NativeWeldSteamVariant::Over {
+        if funded.variant == WeldSteamVariant::Over {
             over_count += 1;
             assert!(!funded.contact_enabled);
             funded.contact_ticks_remaining = 1;
-            assert!(step_native_weld_steam_actor(&mut funded));
+            assert!(step_weld_steam_actor(&mut funded));
             assert!(!funded.contact_due);
         } else {
             assert!(funded.contact_enabled);
@@ -85,7 +85,7 @@ fn over_is_cosmetic_while_weak_forces_normal_without_changing_constructor_words(
 #[test]
 fn weak_contact_permission_and_payload_survive_persistence() {
     let (actor, _) = particle(0, true);
-    let restored: NativeWeldSteamActorState =
+    let restored: WeldSteamActorState =
         serde_json::from_str(&serde_json::to_string(&actor).unwrap()).unwrap();
     assert!(restored.contact_enabled);
     assert_eq!(restored, actor);
@@ -95,10 +95,10 @@ fn weak_contact_permission_and_payload_survive_persistence() {
 fn steam_cast_rate_scales_funded_damage_and_debit_but_not_weak_strength() {
     use solomon_sim::hub::HubWizard;
     use solomon_sim::profile::primary::{
-        NativePrimarySkillProfile, NativePrimarySkillProfileBase, NativeWeldPrimarySkillProfile,
+        PrimarySkillProfile, PrimarySkillProfileBase, WeldPrimarySkillProfile,
     };
-    use solomon_sim::profile::weld::{NativeWeldCastKind, NativeWeldPrimaryVector};
-    use solomon_sim::spells::casting::NativePlayerWeaponKind;
+    use solomon_sim::profile::weld::{WeldCastKind, WeldPrimaryVector};
+    use solomon_sim::spells::casting::PlayerWeaponKind;
     use solomon_sim::spells::model::SpellState;
     use solomon_sim::spells::{
         PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext,
@@ -106,9 +106,7 @@ fn steam_cast_rate_scales_funded_damage_and_debit_but_not_weak_strength() {
 
     // Independently selected instruction-derived examples. Damage is already
     // resolved by 0x0065FFF0 before the handler's casting-rate/weak multiplier.
-    for weapon_kind in
-        [Some(NativePlayerWeaponKind::Staff), Some(NativePlayerWeaponKind::Wand), None]
-    {
+    for weapon_kind in [Some(PlayerWeaponKind::Staff), Some(PlayerWeaponKind::Wand), None] {
         for (rate, boost, mana, damage, spent, weak) in [
             (0.5, 1.0, 100.0, 2.0, 0.1, false),
             (1.0, 1.0, 100.0, 4.0, 0.2, false),
@@ -120,8 +118,8 @@ fn steam_cast_rate_scales_funded_damage_and_debit_but_not_weak_strength() {
             (2.0, 3.0, 100.0, 24.0, 0.4, false),
             (2.0, 3.0, 0.0, 6.0, 0.0, true),
         ] {
-            let profile = NativePrimarySkillProfile::Weld(NativeWeldPrimarySkillProfile {
-                common: NativePrimarySkillProfileBase {
+            let profile = PrimarySkillProfile::Weld(WeldPrimarySkillProfile {
+                common: PrimarySkillProfileBase {
                     damage_minimum: 400.0 * boost,
                     damage_maximum: 400.0 * boost,
                     damage_roll_count: 1.0,
@@ -130,17 +128,17 @@ fn steam_cast_rate_scales_funded_damage_and_debit_but_not_weak_strength() {
                     skill_id: 1005,
                 },
                 build_id: 1005,
-                cast_kind: NativeWeldCastKind::Channel,
+                cast_kind: WeldCastKind::Channel,
                 damage_factor: boost,
-                vector: NativeWeldPrimaryVector {
+                vector: WeldPrimaryVector {
                     build_id: 1005,
-                    cast_kind: NativeWeldCastKind::Channel,
+                    cast_kind: WeldCastKind::Channel,
                     values: vec![400.0, 20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 },
             });
             let mut wizard = HubWizard::at(Vec2::ZERO);
             let mut state = SpellState::default();
-            let mut rng = NativeRng::new(0);
+            let mut rng = Rng::new(0);
             let mut found = false;
             for tick in 1..=20 {
                 let result = state.step_primary(
@@ -176,9 +174,9 @@ fn steam_cast_rate_scales_funded_damage_and_debit_but_not_weak_strength() {
                     None,
                 );
                 use solomon_sim::spells::model::PrimarySpellTransient;
-                use solomon_sim::spells::weld::NativeWeldWorldActor;
+                use solomon_sim::spells::weld::WeldWorldActor;
                 let particle = state.transients.iter().find_map(|actor| match actor {
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(actor))
+                    PrimarySpellTransient::Weld(WeldWorldActor::Steam(actor))
                         if actor.common.birth_tick == tick =>
                     {
                         Some(actor)

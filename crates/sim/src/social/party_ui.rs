@@ -3,42 +3,39 @@
 //! remains in LocalPartyState; this plan owns only measured text, clips and hit regions.
 
 use crate::hud::HudRect;
-use crate::native_ui_text::{
-    NativeUiFontName, NativeUiTextAlign, is_javascript_whitespace, measure_native_ui_text,
-    native_ui_font,
-};
+use crate::ui_text::{UiFontName, UiTextAlign, is_javascript_whitespace, measure_ui_text, ui_font};
 
 use super::PartyVisibility;
 
-pub const NATIVE_PARTY_MENU_FRAME: HudRect = HudRect::new(390.0, 110.0, 820.0, 680.0);
-pub const NATIVE_PARTY_MENU_VIEWPORT: HudRect = HudRect::new(460.0, 278.0, 680.0, 367.0);
-pub const NATIVE_PARTY_MENU_ROW_PITCH: f64 = 66.0;
-pub const NATIVE_PARTY_MENU_WHEEL_STEP: f64 = 25.0;
-pub const NATIVE_PARTY_INVITATION_FRAME: HudRect = HudRect::new(550.0, 268.0, 500.0, 362.0);
-pub const NATIVE_PARTY_INVITATION_TITLE: &str = "PARTY INVITATION";
-pub const NATIVE_PARTY_VISIBILITIES: [PartyVisibility; 3] =
+pub const PARTY_MENU_FRAME: HudRect = HudRect::new(390.0, 110.0, 820.0, 680.0);
+pub const PARTY_MENU_VIEWPORT: HudRect = HudRect::new(460.0, 278.0, 680.0, 367.0);
+pub const PARTY_MENU_ROW_PITCH: f64 = 66.0;
+pub const PARTY_MENU_WHEEL_STEP: f64 = 25.0;
+pub const PARTY_INVITATION_FRAME: HudRect = HudRect::new(550.0, 268.0, 500.0, 362.0);
+pub const PARTY_INVITATION_TITLE: &str = "PARTY INVITATION";
+pub const PARTY_VISIBILITIES: [PartyVisibility; 3] =
     [PartyVisibility::Public, PartyVisibility::InviteOnly, PartyVisibility::Private];
 
 /// `nativeUiPartyInvitationActionBounds`: the two stock message actions use the
 /// Party footer's 125px bottom offset and 36px gap, rather than the default footer.
 #[must_use]
-pub const fn native_party_invitation_action_bounds() -> [HudRect; 2] {
+pub const fn party_invitation_action_bounds() -> [HudRect; 2] {
     [HudRect::new(590.0, 505.0, 192.0, 69.0), HudRect::new(818.0, 505.0, 192.0, 69.0)]
 }
 
 #[must_use]
-pub fn native_party_invitation_body(inviter: &str) -> String {
+pub fn party_invitation_body(inviter: &str) -> String {
     format!("{inviter} invited you to their party.")
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativePartyMenuTab {
+pub enum PartyMenuTab {
     Members,
     Mods,
     Settings,
 }
 
-impl NativePartyMenuTab {
+impl PartyMenuTab {
     pub const ALL: [Self; 3] = [Self::Members, Self::Mods, Self::Settings];
 
     #[must_use]
@@ -61,13 +58,13 @@ impl NativePartyMenuTab {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativePartyMenuTag {
+pub enum PartyMenuTag {
     You,
     Leader,
     Offline,
 }
 
-impl NativePartyMenuTag {
+impl PartyMenuTag {
     #[must_use]
     pub const fn presentation(self) -> (&'static str, u32) {
         match self {
@@ -79,39 +76,39 @@ impl NativePartyMenuTag {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NativePartyMenuMember {
+pub struct PartyMenuMember {
     pub id: String,
     pub name: String,
     pub removable: bool,
-    pub tags: Vec<NativePartyMenuTag>,
+    pub tags: Vec<PartyMenuTag>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NativePartyMenuRequest {
+pub struct PartyMenuRequest {
     pub id: String,
     pub name: String,
 }
 
-pub struct NativePartyMenuSpec<'a> {
+pub struct PartyMenuSpec<'a> {
     pub code: Option<&'a str>,
     pub copied: bool,
     pub error: Option<&'a str>,
     pub leader: bool,
     pub leave_label: Option<&'a str>,
-    pub members: &'a [NativePartyMenuMember],
-    pub requests: &'a [NativePartyMenuRequest],
+    pub members: &'a [PartyMenuMember],
+    pub requests: &'a [PartyMenuRequest],
     pub scroll_y: f64,
-    pub selected_tab: NativePartyMenuTab,
+    pub selected_tab: PartyMenuTab,
     pub visibility: PartyVisibility,
     pub visibility_options: &'a [PartyVisibility],
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePartyMenuText {
+pub struct PartyMenuText {
     pub label: String,
     pub text: String,
-    pub font: NativeUiFontName,
-    pub align: NativeUiTextAlign,
+    pub font: UiFontName,
+    pub align: UiTextAlign,
     pub scale: f64,
     pub tint: u32,
     pub x: f64,
@@ -120,7 +117,7 @@ pub struct NativePartyMenuText {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePartyMenuAction {
+pub struct PartyMenuAction {
     pub bounds: HudRect,
     pub disabled: bool,
     pub id: String,
@@ -128,14 +125,14 @@ pub struct NativePartyMenuAction {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePartyMenuRow {
+pub struct PartyMenuRow {
     pub bounds: HudRect,
     pub id: String,
     pub visible_bounds: Option<HudRect>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePartyMenuRowAction {
+pub struct PartyMenuRowAction {
     pub bounds: HudRect,
     pub id: String,
     pub label: String,
@@ -143,39 +140,34 @@ pub struct NativePartyMenuRowAction {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePartyMenuPlan {
+pub struct PartyMenuPlan {
     pub content_height: f64,
     pub maximum_scroll_y: f64,
     pub scroll_y: f64,
-    pub rows: Vec<NativePartyMenuRow>,
+    pub rows: Vec<PartyMenuRow>,
     pub settings_rows: Vec<HudRect>,
     /// Every row action remains addressable by keyboard, even outside the clip.
-    pub row_actions: Vec<NativePartyMenuRowAction>,
+    pub row_actions: Vec<PartyMenuRowAction>,
     /// Visible hit regions, in the source plan's order.
-    pub actions: Vec<NativePartyMenuAction>,
-    pub texts: Vec<NativePartyMenuText>,
+    pub actions: Vec<PartyMenuAction>,
+    pub texts: Vec<PartyMenuText>,
 }
 
 #[must_use]
-pub fn native_party_menu_name_font(name: &str) -> NativeUiFontName {
-    let font = native_ui_font(NativeUiFontName::WorldAndRoster);
+pub fn party_menu_name_font(name: &str) -> UiFontName {
+    let font = ui_font(UiFontName::WorldAndRoster);
     for character in name.chars() {
         if character != ' ' && font.glyph(u32::from(character)).is_none() {
-            return NativeUiFontName::Menu;
+            return UiFontName::Menu;
         }
     }
-    NativeUiFontName::WorldAndRoster
+    UiFontName::WorldAndRoster
 }
 
 #[must_use]
-pub fn fit_native_party_menu_text(
-    text: &str,
-    font: NativeUiFontName,
-    max_width: f64,
-    scale: f64,
-) -> String {
+pub fn fit_party_menu_text(text: &str, font: UiFontName, max_width: f64, scale: f64) -> String {
     let mut candidate = text.to_owned();
-    while !candidate.is_empty() && measure_native_ui_text(&candidate, font, scale) > max_width {
+    while !candidate.is_empty() && measure_ui_text(&candidate, font, scale) > max_width {
         candidate.pop();
         candidate.truncate(candidate.trim_end_matches(is_javascript_whitespace).len());
     }
@@ -183,7 +175,7 @@ pub fn fit_native_party_menu_text(
 }
 
 #[must_use]
-pub fn native_party_menu_row_button_bounds(right_edge: f64, row_top: f64) -> (HudRect, f64) {
+pub fn party_menu_row_button_bounds(right_edge: f64, row_top: f64) -> (HudRect, f64) {
     let scale = 0.55;
     let surround = 6.0 * scale;
     let width = 353.0 * scale;
@@ -195,14 +187,14 @@ pub fn native_party_menu_row_button_bounds(right_edge: f64, row_top: f64) -> (Hu
 }
 
 #[must_use]
-pub fn clamp_native_party_menu_scroll(requested: f64, content_height: f64) -> f64 {
+pub fn clamp_party_menu_scroll(requested: f64, content_height: f64) -> f64 {
     assert!(requested.is_finite(), "native SwipeBox offset must be finite");
-    requested.max(0.0).min((content_height - NATIVE_PARTY_MENU_VIEWPORT.height).max(0.0))
+    requested.max(0.0).min((content_height - PARTY_MENU_VIEWPORT.height).max(0.0))
 }
 
 #[must_use]
-pub fn plan_native_party_menu(spec: &NativePartyMenuSpec<'_>) -> NativePartyMenuPlan {
-    let mut plan = NativePartyMenuPlan {
+pub fn plan_party_menu(spec: &PartyMenuSpec<'_>) -> PartyMenuPlan {
+    let mut plan = PartyMenuPlan {
         content_height: 0.0,
         maximum_scroll_y: 0.0,
         scroll_y: 0.0,
@@ -215,13 +207,13 @@ pub fn plan_native_party_menu(spec: &NativePartyMenuSpec<'_>) -> NativePartyMenu
     plan.texts.push(centered_text(
         "party:title",
         "PARTY",
-        NativeUiFontName::Menu,
+        UiFontName::Menu,
         0xd9ba70,
         800.0,
         162.0,
     ));
-    for (index, tab) in NativePartyMenuTab::ALL.iter().enumerate() {
-        plan.actions.push(NativePartyMenuAction {
+    for (index, tab) in PartyMenuTab::ALL.iter().enumerate() {
+        plan.actions.push(PartyMenuAction {
             bounds: HudRect::new(431.0 + index as f64 * 246.0, 190.0, 246.0, 69.0),
             disabled: false,
             id: format!("tab:{}", tab.id()),
@@ -229,12 +221,12 @@ pub fn plan_native_party_menu(spec: &NativePartyMenuSpec<'_>) -> NativePartyMenu
         });
     }
     match spec.selected_tab {
-        NativePartyMenuTab::Members => member_list(spec, &mut plan),
-        NativePartyMenuTab::Settings => settings(spec, &mut plan),
-        NativePartyMenuTab::Mods => plan.texts.push(centered_text(
+        PartyMenuTab::Members => member_list(spec, &mut plan),
+        PartyMenuTab::Settings => settings(spec, &mut plan),
+        PartyMenuTab::Mods => plan.texts.push(centered_text(
             "party:empty",
             "Nothing here yet.",
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0xaaa2a6,
             800.0,
             318.0,
@@ -249,7 +241,7 @@ pub fn plan_native_party_menu(spec: &NativePartyMenuSpec<'_>) -> NativePartyMenu
     let width = if count == 1 { 353.0 } else { 260.0 };
     let total_width = width * count as f64 + 36.0 * (count - 1) as f64;
     for (index, (id, label)) in footer.into_iter().enumerate() {
-        plan.actions.push(NativePartyMenuAction {
+        plan.actions.push(PartyMenuAction {
             bounds: HudRect::new(
                 800.0 - total_width / 2.0 + index as f64 * (width + 36.0),
                 665.0,
@@ -262,11 +254,11 @@ pub fn plan_native_party_menu(spec: &NativePartyMenuSpec<'_>) -> NativePartyMenu
         });
     }
     if let Some(error) = spec.error.filter(|error| !error.is_empty()) {
-        let error = fit_native_party_menu_text(error, NativeUiFontName::Medium, 680.0, 1.0);
+        let error = fit_party_menu_text(error, UiFontName::Medium, 680.0, 1.0);
         plan.texts.push(centered_text(
             "party:error",
             &error,
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0xff9a8a,
             800.0,
             764.0,
@@ -275,11 +267,11 @@ pub fn plan_native_party_menu(spec: &NativePartyMenuSpec<'_>) -> NativePartyMenu
     plan
 }
 
-fn member_list(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
+fn member_list(spec: &PartyMenuSpec<'_>, plan: &mut PartyMenuPlan) {
     let count = spec.requests.len() + spec.members.len();
     plan.content_height = if count == 0 { 0.0 } else { count as f64 * 66.0 - 10.0 };
-    plan.maximum_scroll_y = (plan.content_height - NATIVE_PARTY_MENU_VIEWPORT.height).max(0.0);
-    plan.scroll_y = clamp_native_party_menu_scroll(spec.scroll_y, plan.content_height);
+    plan.maximum_scroll_y = (plan.content_height - PARTY_MENU_VIEWPORT.height).max(0.0);
+    plan.scroll_y = clamp_party_menu_scroll(spec.scroll_y, plan.content_height);
     let mut index = 0;
     for request in spec.requests {
         let id = format!("request:{}", request.id);
@@ -305,7 +297,7 @@ fn member_list(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
         plan.texts.push(centered_text(
             "party:empty",
             "No members yet.",
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0xaaa2a6,
             800.0,
             318.0,
@@ -314,14 +306,14 @@ fn member_list(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
 }
 
 fn member_row(
-    plan: &mut NativePartyMenuPlan,
+    plan: &mut PartyMenuPlan,
     index: usize,
     id: &str,
     name: &str,
     tags: &[(&str, u32)],
     buttons: &[(String, &str)],
 ) {
-    let viewport = NATIVE_PARTY_MENU_VIEWPORT;
+    let viewport = PARTY_MENU_VIEWPORT;
     let bounds = HudRect::new(
         viewport.x,
         viewport.y + index as f64 * 66.0 - plan.scroll_y,
@@ -329,13 +321,13 @@ fn member_row(
         56.0,
     );
     let visible_bounds = intersect(bounds, viewport);
-    plan.rows.push(NativePartyMenuRow { bounds, id: id.to_owned(), visible_bounds });
+    plan.rows.push(PartyMenuRow { bounds, id: id.to_owned(), visible_bounds });
     let mut right_edge = bounds.x + bounds.width - 12.0;
     let mut row_buttons = Vec::new();
     for (action, label) in buttons {
-        let (body, surround_width) = native_party_menu_row_button_bounds(right_edge, bounds.y);
+        let (body, surround_width) = party_menu_row_button_bounds(right_edge, bounds.y);
         right_edge -= surround_width + 16.0;
-        plan.row_actions.push(NativePartyMenuRowAction {
+        plan.row_actions.push(PartyMenuRowAction {
             bounds: body,
             id: action.clone(),
             label: (*label).to_owned(),
@@ -350,37 +342,37 @@ fn member_row(
     let baseline = bounds.y + 36.0;
     let mut tags_width = 0.0;
     for (index, (tag, _)) in tags.iter().enumerate() {
-        tags_width += measure_native_ui_text(tag, NativeUiFontName::Body, 1.0)
-            + if index > 0 { 8.0 } else { 0.0 };
+        tags_width +=
+            measure_ui_text(tag, UiFontName::Body, 1.0) + if index > 0 { 8.0 } else { 0.0 };
     }
     let name_limit = right_edge - name_x - if tags.is_empty() { 0.0 } else { tags_width + 12.0 };
-    let font = native_party_menu_name_font(name);
-    let name = fit_native_party_menu_text(name, font, name_limit, 1.0);
+    let font = party_menu_name_font(name);
+    let name = fit_party_menu_text(name, font, name_limit, 1.0);
     if !name.is_empty() {
         let mut text =
             centered_text(&format!("{id}:name"), &name, font, 0xffffff, name_x, baseline);
-        text.align = NativeUiTextAlign::Left;
+        text.align = UiTextAlign::Left;
         text.clipped = true;
         plan.texts.push(text);
     }
-    let mut tag_x = name_x + measure_native_ui_text(&name, font, 1.0) + 12.0;
+    let mut tag_x = name_x + measure_ui_text(&name, font, 1.0) + 12.0;
     for (index, (label, tint)) in tags.iter().enumerate() {
         let mut text = centered_text(
             &format!("{id}:tag-{index}"),
             label,
-            NativeUiFontName::Body,
+            UiFontName::Body,
             *tint,
             tag_x,
             baseline,
         );
-        text.align = NativeUiTextAlign::Left;
+        text.align = UiTextAlign::Left;
         text.clipped = true;
         plan.texts.push(text);
-        tag_x += measure_native_ui_text(label, NativeUiFontName::Body, 1.0) + 8.0;
+        tag_x += measure_ui_text(label, UiFontName::Body, 1.0) + 8.0;
     }
     for (id, label, body) in row_buttons {
         if let Some(bounds) = intersect(body, viewport) {
-            plan.actions.push(NativePartyMenuAction {
+            plan.actions.push(PartyMenuAction {
                 bounds,
                 disabled: false,
                 id: id.clone(),
@@ -390,7 +382,7 @@ fn member_row(
     }
 }
 
-fn settings(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
+fn settings(spec: &PartyMenuSpec<'_>, plan: &mut PartyMenuPlan) {
     settings_row(plan, "visibility", 0, "Visibility");
     let count = spec.visibility_options.len();
     let width = count as f64 * 141.0 + count.saturating_sub(1) as f64 * 4.0;
@@ -398,7 +390,7 @@ fn settings(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
     for (index, visibility) in spec.visibility_options.iter().enumerate() {
         let x = left + index as f64 * 145.0;
         let id = format!("visibility:{}", visibility_id(*visibility));
-        plan.actions.push(NativePartyMenuAction {
+        plan.actions.push(PartyMenuAction {
             bounds: HudRect::new(x, 285.5, 141.0, 41.0),
             disabled: !spec.leader,
             id: id.clone(),
@@ -407,7 +399,7 @@ fn settings(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
         let mut label = centered_text(
             &format!("{id}:label"),
             visibility.label(),
-            NativeUiFontName::ControlPanel,
+            UiFontName::ControlPanel,
             if *visibility == spec.visibility { 0xffffff } else { 0x1a1712 },
             x + 70.5,
             312.5,
@@ -419,7 +411,7 @@ fn settings(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
         plan.texts.push(centered_text(
             "party:leader-note",
             "Only the party leader can change these settings.",
-            NativeUiFontName::Medium,
+            UiFontName::Medium,
             0xaaa2a6,
             800.0,
             380.0,
@@ -431,23 +423,23 @@ fn settings(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
     let mut text = centered_text(
         "party-id:code",
         code,
-        NativeUiFontName::Menu,
+        UiFontName::Menu,
         0xd9ba70,
-        486.0 + measure_native_ui_text("Party ID", NativeUiFontName::WorldAndRoster, 1.0) + 18.0,
+        486.0 + measure_ui_text("Party ID", UiFontName::WorldAndRoster, 1.0) + 18.0,
         380.0,
     );
-    text.align = NativeUiTextAlign::Left;
+    text.align = UiTextAlign::Left;
     plan.texts.push(text);
-    let (bounds, _) = native_party_menu_row_button_bounds(1128.0, 344.0);
-    plan.actions.push(NativePartyMenuAction {
+    let (bounds, _) = party_menu_row_button_bounds(1128.0, 344.0);
+    plan.actions.push(PartyMenuAction {
         bounds,
         disabled: false,
         id: "copy".to_owned(),
         label: if spec.copied { "COPIED" } else { "COPY" }.to_owned(),
     });
     settings_row(plan, "new-party-id", 2, "New party ID");
-    let (bounds, _) = native_party_menu_row_button_bounds(1128.0, 410.0);
-    plan.actions.push(NativePartyMenuAction {
+    let (bounds, _) = party_menu_row_button_bounds(1128.0, 410.0);
+    plan.actions.push(PartyMenuAction {
         bounds,
         disabled: false,
         id: "generate".to_owned(),
@@ -455,34 +447,34 @@ fn settings(spec: &NativePartyMenuSpec<'_>, plan: &mut NativePartyMenuPlan) {
     });
 }
 
-fn settings_row(plan: &mut NativePartyMenuPlan, id: &str, index: usize, label: &str) {
+fn settings_row(plan: &mut PartyMenuPlan, id: &str, index: usize, label: &str) {
     let bounds = HudRect::new(460.0, 278.0 + index as f64 * 66.0, 680.0, 56.0);
     plan.settings_rows.push(bounds);
     let mut text = centered_text(
         &format!("{id}:label"),
         label,
-        NativeUiFontName::WorldAndRoster,
+        UiFontName::WorldAndRoster,
         0xffffff,
         bounds.x + 26.0,
         bounds.y + 36.0,
     );
-    text.align = NativeUiTextAlign::Left;
+    text.align = UiTextAlign::Left;
     plan.texts.push(text);
 }
 
 fn centered_text(
     label: &str,
     text: &str,
-    font: NativeUiFontName,
+    font: UiFontName,
     tint: u32,
     x: f64,
     y: f64,
-) -> NativePartyMenuText {
-    NativePartyMenuText {
+) -> PartyMenuText {
+    PartyMenuText {
         label: label.to_owned(),
         text: text.to_owned(),
         font,
-        align: NativeUiTextAlign::Center,
+        align: UiTextAlign::Center,
         scale: 1.0,
         tint,
         x,

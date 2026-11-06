@@ -5,7 +5,7 @@ use crate::Vec2;
 use crate::float::{fround, hypot};
 
 #[must_use]
-pub fn native_line_vertices(start: Vec2, end: Vec2, width: f64) -> [f64; 8] {
+pub fn line_vertices(start: Vec2, end: Vec2, width: f64) -> [f64; 8] {
     let dx = end.x - start.x;
     let dy = end.y - start.y;
     let length = hypot(dx, dy);
@@ -29,7 +29,7 @@ pub fn native_line_vertices(start: Vec2, end: Vec2, width: f64) -> [f64; 8] {
 }
 
 #[must_use]
-pub fn native_line_color(red: f64, green: f64, blue: f64, alpha: f64) -> u32 {
+pub fn line_color(red: f64, green: f64, blue: f64, alpha: f64) -> u32 {
     // The source truncates and wraps each channel with &0xff, without clamping.
     let channel = |value| (fround(value) * 255.0).trunc().rem_euclid(256.0) as u32;
     channel(red) | channel(green) << 8 | channel(blue) << 16 | channel(alpha) << 24

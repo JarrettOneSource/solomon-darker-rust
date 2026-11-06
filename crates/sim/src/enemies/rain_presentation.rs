@@ -2,10 +2,10 @@
 //! `core-kernels/native-faculty-spells.ts::createNativeRainCloudBillow`.
 
 use super::actor_presentation::{EnemyArtAtlas, EnemySpriteLayer};
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpell, BossSpellKind};
 use crate::float;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RainCloudBillow {
@@ -20,15 +20,15 @@ pub struct RainCloudBillow {
 
 /// Cosmetic RNG and children belong to painting, independently of the world actor clock.
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeRainCloud {
+pub struct RainCloud {
     pub billows: Vec<RainCloudBillow>,
     pub last_birth_tick: u64,
-    pub rng: NativeRng,
+    pub rng: Rng,
 }
 
-impl NativeRainCloud {
+impl RainCloud {
     #[must_use]
-    pub fn new(spell: &NativeBossSpell, presentation_tick: u64) -> Self {
+    pub fn new(spell: &BossSpell, presentation_tick: u64) -> Self {
         assert!(
             matches!(spell.kind, BossSpellKind::RainOfBones { .. }),
             "Rain Cloud requires Rain of Bones"
@@ -40,16 +40,12 @@ impl NativeRainCloud {
             } else {
                 presentation_tick
             },
-            rng: NativeRng::new(spell.owner.id as i64),
+            rng: Rng::new(spell.owner.id as i64),
         }
     }
 
     #[must_use]
-    pub fn update(
-        &mut self,
-        spell: &NativeBossSpell,
-        presentation_tick: u64,
-    ) -> Vec<EnemySpriteLayer> {
+    pub fn update(&mut self, spell: &BossSpell, presentation_tick: u64) -> Vec<EnemySpriteLayer> {
         let BossSpellKind::RainOfBones { alpha, .. } = spell.kind else {
             panic!("Rain Cloud requires Rain of Bones")
         };
@@ -90,7 +86,7 @@ impl NativeRainCloud {
     }
 }
 
-fn create_billow(position: Vec2, rng: &mut NativeRng) -> RainCloudBillow {
+fn create_billow(position: Vec2, rng: &mut Rng) -> RainCloudBillow {
     let entry = 10 + rng.draw_integer(2) as usize;
     let radius = rng.draw_scaled_float(200.0, false);
     let angle = rng.draw_scaled_float(360.0, false) * std::f64::consts::PI / 180.0;

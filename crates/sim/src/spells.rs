@@ -24,8 +24,8 @@ pub mod transient_storage;
 pub use simulation::{
     PrimarySpellBatchTickResult, PrimarySpellCastAuthority, PrimarySpellEpochContext,
     PrimarySpellInput, PrimarySpellOwnerObstruction, PrimarySpellPlayer, PrimarySpellPlayerResult,
-    PrimarySpellTraversalActor, PrimarySpellWorldContext,
-    native_primary_birth_terrain_exclusion_mask, native_primary_flight_terrain_exclusion_mask,
+    PrimarySpellTraversalActor, PrimarySpellWorldContext, primary_birth_terrain_exclusion_mask,
+    primary_flight_terrain_exclusion_mask,
 };
 pub mod special_death;
 pub mod staff;

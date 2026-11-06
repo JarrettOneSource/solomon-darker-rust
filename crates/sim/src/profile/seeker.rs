@@ -5,10 +5,10 @@
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
-use crate::line::native_line_vertices;
+use crate::line::line_vertices;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHagathaSeekerProgram {
+pub struct HagathaSeekerProgram {
     pub distance_cap: f64,
     pub distance_cutoff: f64,
     pub end_distance_factor: f64,
@@ -23,7 +23,7 @@ pub struct NativeHagathaSeekerProgram {
     pub width: f64,
 }
 
-pub const NATIVE_HAGATHA_SEEKER_PROGRAM: NativeHagathaSeekerProgram = NativeHagathaSeekerProgram {
+pub const HAGATHA_SEEKER_PROGRAM: HagathaSeekerProgram = HagathaSeekerProgram {
     distance_cap: 300.0,
     distance_cutoff: 100.0,
     end_distance_factor: 0.5,
@@ -38,18 +38,18 @@ pub const NATIVE_HAGATHA_SEEKER_PROGRAM: NativeHagathaSeekerProgram = NativeHaga
     width: 3.0,
 };
 
-pub const NATIVE_HAGATHA_SEEKER_RAMP_RGBA: [u8; 8] = [255, 255, 255, 0, 216, 186, 112, 255];
-pub const NATIVE_HAGATHA_SEEKER_TRANSPARENT_U: f64 = 0.25;
-pub const NATIVE_HAGATHA_SEEKER_VISIBLE_U: f64 = 0.75;
+pub const HAGATHA_SEEKER_RAMP_RGBA: [u8; 8] = [255, 255, 255, 0, 216, 186, 112, 255];
+pub const HAGATHA_SEEKER_TRANSPARENT_U: f64 = 0.25;
+pub const HAGATHA_SEEKER_VISIBLE_U: f64 = 0.75;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeHagathaSeekerTargetKind {
+pub enum HagathaSeekerTargetKind {
     Bonus,
     Gold,
     Sack,
 }
 
-impl NativeHagathaSeekerTargetKind {
+impl HagathaSeekerTargetKind {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -61,26 +61,26 @@ impl NativeHagathaSeekerTargetKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHagathaSeekerTarget {
+pub struct HagathaSeekerTarget {
     pub id: usize,
-    pub kind: NativeHagathaSeekerTargetKind,
+    pub kind: HagathaSeekerTargetKind,
     pub position: Vec2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHagathaSeekerSegment {
+pub struct HagathaSeekerSegment {
     pub alpha: f64,
     pub end: Vec2,
     pub end_visible: bool,
     pub start: Vec2,
     pub start_visible: bool,
     pub target_id: usize,
-    pub target_kind: NativeHagathaSeekerTargetKind,
+    pub target_kind: HagathaSeekerTargetKind,
     pub width: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHagathaSeekerMeshPlan {
+pub struct HagathaSeekerMeshPlan {
     pub alpha: f64,
     pub alpha_byte: u8,
     pub uvs: [f64; 8],
@@ -88,16 +88,16 @@ pub struct NativeHagathaSeekerMeshPlan {
 }
 
 #[must_use]
-pub fn native_hagatha_seeker_segments(
+pub fn hagatha_seeker_segments(
     player_position: Vec2,
-    targets: &[NativeHagathaSeekerTarget],
+    targets: &[HagathaSeekerTarget],
     tick: f64,
-) -> Vec<NativeHagathaSeekerSegment> {
+) -> Vec<HagathaSeekerSegment> {
     assert!(
         tick.is_finite() && tick >= 0.0,
         "Seeker presentation tick must be finite and non-negative"
     );
-    let program = NATIVE_HAGATHA_SEEKER_PROGRAM;
+    let program = HAGATHA_SEEKER_PROGRAM;
     let mut segments = Vec::new();
     for target in targets {
         let dx = target.position.x - player_position.x;
@@ -121,7 +121,7 @@ pub fn native_hagatha_seeker_segments(
                 fround(player_position.y + direction_y * distance_along),
             )
         };
-        segments.push(NativeHagathaSeekerSegment {
+        segments.push(HagathaSeekerSegment {
             alpha,
             end: point(program.join_radius),
             end_visible: true,
@@ -131,7 +131,7 @@ pub fn native_hagatha_seeker_segments(
             target_kind: target.kind,
             width: program.width,
         });
-        segments.push(NativeHagathaSeekerSegment {
+        segments.push(HagathaSeekerSegment {
             alpha,
             end: point(capped_distance * program.end_distance_factor),
             end_visible: false,
@@ -146,24 +146,16 @@ pub fn native_hagatha_seeker_segments(
 }
 
 #[must_use]
-pub fn native_hagatha_seeker_mesh_plan(
-    segment: NativeHagathaSeekerSegment,
-) -> NativeHagathaSeekerMeshPlan {
-    let start_u = if segment.start_visible {
-        NATIVE_HAGATHA_SEEKER_VISIBLE_U
-    } else {
-        NATIVE_HAGATHA_SEEKER_TRANSPARENT_U
-    };
-    let end_u = if segment.end_visible {
-        NATIVE_HAGATHA_SEEKER_VISIBLE_U
-    } else {
-        NATIVE_HAGATHA_SEEKER_TRANSPARENT_U
-    };
+pub fn hagatha_seeker_mesh_plan(segment: HagathaSeekerSegment) -> HagathaSeekerMeshPlan {
+    let start_u =
+        if segment.start_visible { HAGATHA_SEEKER_VISIBLE_U } else { HAGATHA_SEEKER_TRANSPARENT_U };
+    let end_u =
+        if segment.end_visible { HAGATHA_SEEKER_VISIBLE_U } else { HAGATHA_SEEKER_TRANSPARENT_U };
     let alpha_byte = (segment.alpha.clamp(0.0, 1.0) * 255.0).trunc() as u8;
-    NativeHagathaSeekerMeshPlan {
+    HagathaSeekerMeshPlan {
         alpha: f64::from(alpha_byte) / 255.0,
         alpha_byte,
         uvs: [start_u, 0.5, start_u, 0.5, end_u, 0.5, end_u, 0.5],
-        vertices: native_line_vertices(segment.start, segment.end, segment.width),
+        vertices: line_vertices(segment.start, segment.end, segment.width),
     }
 }

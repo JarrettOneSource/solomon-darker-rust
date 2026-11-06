@@ -48,12 +48,12 @@ pub const HUB_SPAWN: Vec2 = Vec2::new(950.64, 164.04);
 /// Collision radius of the wizard against courtyard segments.
 pub const PLAYER_CHARACTER_RADIUS: f64 = 25.0;
 /// Initial state of the courtyard's collision fallback sampler.
-pub const NATIVE_HUB_COLLISION_RNG_SEED: u32 = 0x51a7_c011;
+pub const HUB_COLLISION_RNG_SEED: u32 = 0x51a7_c011;
 
-const NATIVE_SWEEP_FRACTION: f64 = 0.5;
-const NATIVE_SWEEP_ITERATIONS: usize = 8;
-const NATIVE_SWEEP_STOP_DISTANCE_SQUARED: f64 = 0.01;
-const NATIVE_SURFACE_CLEARANCE: f64 = 0.1;
+const SWEEP_FRACTION: f64 = 0.5;
+const SWEEP_ITERATIONS: usize = 8;
+const SWEEP_STOP_DISTANCE_SQUARED: f64 = 0.01;
+const SURFACE_CLEARANCE: f64 = 0.1;
 
 const INPUT_ACCELERATION: f64 = 10.0;
 const MOVEMENT_LANE_CAP: f64 = 118.75;
@@ -131,13 +131,13 @@ fn separate_from_segment(position: Vec2, radius: f64, segment: &HubSegment) -> V
         return position;
     }
     let distance = distance_squared.sqrt();
-    let separation = radius + NATIVE_SURFACE_CLEARANCE;
+    let separation = radius + SURFACE_CLEARANCE;
     Vec2::new(nearest.x + dx / distance * separation, nearest.y + dy / distance * separation)
 }
 
 /// The stock call site uses the game's shared additive RNG; the web port keeps this lane local
 /// and deterministic (xorshift32) while preserving the recovered `[0, 1]` contract.
-fn native_fallback_sample(state: u32) -> (u32, f64) {
+fn fallback_sample(state: u32) -> (u32, f64) {
     let mut value = state;
     value ^= value << 13;
     value ^= value >> 17;
@@ -163,16 +163,14 @@ fn sweep_toward_destination(
     let mut accepted: Option<Vec2> = None;
     let mut hit: Option<usize> = None;
 
-    for _ in 0..NATIVE_SWEEP_ITERATIONS {
+    for _ in 0..SWEEP_ITERATIONS {
         let remaining = Vec2::new(target.x - current.x, target.y - current.y);
-        if remaining.x * remaining.x + remaining.y * remaining.y
-            < NATIVE_SWEEP_STOP_DISTANCE_SQUARED
-        {
+        if remaining.x * remaining.x + remaining.y * remaining.y < SWEEP_STOP_DISTANCE_SQUARED {
             break;
         }
         let midpoint = Vec2::new(
-            current.x + remaining.x * NATIVE_SWEEP_FRACTION,
-            current.y + remaining.y * NATIVE_SWEEP_FRACTION,
+            current.x + remaining.x * SWEEP_FRACTION,
+            current.y + remaining.y * SWEEP_FRACTION,
         );
         let candidate = match slide_surface {
             Some(surface) => separate_from_segment(midpoint, radius, &segments[surface]),
@@ -214,11 +212,11 @@ fn sweep_step(
     let first_pass = sweep_toward_destination(origin, delta, radius, segments, None);
     match first_pass.hit {
         None => {
-            let (state, value) = native_fallback_sample(rng_state);
+            let (state, value) = fallback_sample(rng_state);
             HubCollisionMove {
                 position: Vec2::new(
-                    origin.x + delta.x * NATIVE_SWEEP_FRACTION * value,
-                    origin.y + delta.y * NATIVE_SWEEP_FRACTION * value,
+                    origin.x + delta.x * SWEEP_FRACTION * value,
+                    origin.y + delta.y * SWEEP_FRACTION * value,
                 ),
                 rng_state: state,
             }
@@ -588,7 +586,7 @@ impl HubWizard {
 mod tests {
     use super::*;
 
-    const SEED: u32 = NATIVE_HUB_COLLISION_RNG_SEED;
+    const SEED: u32 = HUB_COLLISION_RNG_SEED;
     const OPEN_FIELD: [HubSegment; 0] = [];
     const CORNER: [HubSegment; 2] =
         [HubSegment::new(0.0, 0.0, 2000.0, 0.0), HubSegment::new(0.0, 0.0, 0.0, 1100.0)];
@@ -681,10 +679,10 @@ mod tests {
 
     #[test]
     fn the_fallback_sampler_is_deterministic_and_never_returns_zero() {
-        let (state, value) = native_fallback_sample(SEED);
-        assert_eq!((state, value), native_fallback_sample(SEED));
+        let (state, value) = fallback_sample(SEED);
+        assert_eq!((state, value), fallback_sample(SEED));
         assert!((0.0..=1.0).contains(&value));
-        assert_eq!(native_fallback_sample(0).0, 0x6d2b_79f5);
+        assert_eq!(fallback_sample(0).0, 0x6d2b_79f5);
     }
 
     #[test]

@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::secondary::golem::*;
 use solomon_sim::secondary::*;
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::spells::casting::PlayerWeaponKind;
+use solomon_sim::{HubWizard, Rng, Vec2};
 
 pub fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -13,7 +13,7 @@ pub fn point(value: &Value) -> Vec2 {
 pub fn point_snapshot(value: Vec2) -> Value {
     json!({"x":value.x,"y":value.y})
 }
-pub fn rng_snapshot(value: &NativeRng) -> Value {
+pub fn rng_snapshot(value: &Rng) -> Value {
     json!({"indexA":value.index_a,"indexB":value.index_b,"words":&value.words[..]})
 }
 pub fn registration_snapshot(value: PainterRegistration) -> Value {
@@ -30,17 +30,17 @@ pub fn registration(value: &Value) -> PainterRegistration {
     }
 }
 
-pub fn weapon(value: &Value) -> Option<NativePlayerWeaponKind> {
+pub fn weapon(value: &Value) -> Option<PlayerWeaponKind> {
     match value.as_str() {
-        Some("staff") => Some(NativePlayerWeaponKind::Staff),
-        Some("wand") => Some(NativePlayerWeaponKind::Wand),
+        Some("staff") => Some(PlayerWeaponKind::Staff),
+        Some("wand") => Some(PlayerWeaponKind::Wand),
         None => None,
         other => panic!("unknown weapon {other:?}"),
     }
 }
-pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
-    let mut player = NativeSecondaryPlayerState {
-        cast_action: value["castAction"].as_object().map(|_| NativeSecondaryCastAction {
+pub fn read_player(value: &Value) -> SecondaryPlayerState {
+    let mut player = SecondaryPlayerState {
+        cast_action: value["castAction"].as_object().map(|_| SecondaryCastAction {
             weapon_kind: weapon(&value["castAction"]["weaponKind"]),
             progress: value["castAction"]["progress"].as_f64().unwrap(),
             hand: None,
@@ -53,7 +53,7 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
         held_slot: value["heldSlot"].as_u64().map(|id| id as usize),
         last_skill_id: value["lastSkillId"]
             .as_u64()
-            .map(|id| NativeSecondaryAbilityId::from_skill_id(id as usize).unwrap()),
+            .map(|id| SecondaryAbilityId::from_skill_id(id as usize).unwrap()),
         magic_shield_absorb: value["magicShieldAbsorb"].as_f64().unwrap(),
         magic_shield_explosion_damage: value["magicShieldExplosionDamage"].as_f64().unwrap(),
         magic_shield_maximum: value["magicShieldMaximum"].as_f64().unwrap(),
@@ -64,7 +64,7 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
         regenerate: value["regenerate"].as_bool().unwrap(),
         reserved_mana: value["reservedMana"].as_f64().unwrap(),
         stoneskin_ticks_remaining: value["stoneskinTicksRemaining"].as_u64().unwrap(),
-        ..NativeSecondaryPlayerState::default()
+        ..SecondaryPlayerState::default()
     };
     for id in 0..83 {
         player.cooldown_maximum_ticks_by_skill[id] =
@@ -73,16 +73,16 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
     }
     player
 }
-pub fn action_snapshot(action: Option<NativeSecondaryCastAction>) -> Value {
+pub fn action_snapshot(action: Option<SecondaryCastAction>) -> Value {
     match action {
         Some(action) => json!({"progress":action.progress,"weaponKind":match action.weapon_kind {
-            Some(NativePlayerWeaponKind::Staff)=>Some("staff"),
-            Some(NativePlayerWeaponKind::Wand)=>Some("wand"), None=>None,
+            Some(PlayerWeaponKind::Staff)=>Some("staff"),
+            Some(PlayerWeaponKind::Wand)=>Some("wand"), None=>None,
         }}),
         None => Value::Null,
     }
 }
-pub fn player_snapshot(player: &NativeSecondaryPlayerState) -> Value {
+pub fn player_snapshot(player: &SecondaryPlayerState) -> Value {
     json!({
         "castAction":action_snapshot(player.cast_action),
         "castSequence":player.cast_sequence,"castSpinTicksRemaining":player.cast_spin_ticks_remaining,
@@ -90,7 +90,7 @@ pub fn player_snapshot(player: &NativeSecondaryPlayerState) -> Value {
         "cooldownTicksBySkill":&player.cooldown_ticks_by_skill[..],
         "firewalker":player.firewalker,"fizzleSequence":player.fizzle_sequence,
         "globalCooldownTicks":player.global_cooldown_ticks,"heldSlot":player.held_slot,
-        "lastSkillId":player.last_skill_id.map(NativeSecondaryAbilityId::skill_id),
+        "lastSkillId":player.last_skill_id.map(SecondaryAbilityId::skill_id),
         "magicShieldAbsorb":player.magic_shield_absorb,"magicShieldExplosionDamage":player.magic_shield_explosion_damage,
         "magicShieldMaximum":player.magic_shield_maximum,"magicShieldPulseTicks":player.magic_shield_pulse_ticks,
         "mindstar":player.mindstar,"planeOrbHeld":player.plane_orb_held,
@@ -99,7 +99,7 @@ pub fn player_snapshot(player: &NativeSecondaryPlayerState) -> Value {
     })
 }
 
-pub fn effect_snapshot(effect: &NativeSecondaryTargetEffectState) -> Value {
+pub fn effect_snapshot(effect: &SecondaryTargetEffectState) -> Value {
     let electric=effect.electric_burn.as_ref().map(|burn|json!({"arcCount":burn.arc_count,"damagePerTick":burn.damage_per_tick,
         "ownerId":burn.owner_id,"sourceActorId":burn.source_actor_id,"stunFactor":burn.stun_factor,"ticks":burn.ticks}));
     let steamed=effect.steamed.as_ref().map(|burn|json!({"damagePerTick":burn.damage_per_tick,"emberDamage":burn.ember_damage,
@@ -108,11 +108,11 @@ pub fn effect_snapshot(effect: &NativeSecondaryTargetEffectState) -> Value {
     let mut order = Vec::new();
     for kind in &effect.movement_modifier_order {
         order.push(match kind {
-            NativeSecondaryMovementModifierKind::ColdSlow => "cold-slow",
-            NativeSecondaryMovementModifierKind::CircleSlow => "circle-slow",
-            NativeSecondaryMovementModifierKind::Frozen => "frozen",
-            NativeSecondaryMovementModifierKind::Stun => "stun",
-            NativeSecondaryMovementModifierKind::Dazzle => "dazzle",
+            SecondaryMovementModifierKind::ColdSlow => "cold-slow",
+            SecondaryMovementModifierKind::CircleSlow => "circle-slow",
+            SecondaryMovementModifierKind::Frozen => "frozen",
+            SecondaryMovementModifierKind::Stun => "stun",
+            SecondaryMovementModifierKind::Dazzle => "dazzle",
         });
     }
     json!({"circleSlowFactor":effect.circle_slow_factor,"circleSlowTicks":effect.circle_slow_ticks,
@@ -148,7 +148,7 @@ pub fn assert_snapshot(actual: &Value, expected: &Value, path: &str) {
     }
 }
 
-pub fn golem_snapshot(value: NativeSecondaryGolemState) -> Value {
+pub fn golem_snapshot(value: SecondaryGolemState) -> Value {
     json!({
     "actionHeadingOffsetDegrees":value.action_heading_offset_degrees,
     "actionDurationTicks":value.action_duration_ticks,
@@ -169,7 +169,7 @@ pub fn golem_snapshot(value: NativeSecondaryGolemState) -> Value {
     "maximumHealth":value.maximum_health,
     "orbitDirection":value.orbit_direction,
     "orbitHeadingRadians":value.orbit_heading_radians,
-    "phase":match value.phase {NativeGolemPhase::Active=>"active",NativeGolemPhase::Assembly=>"assembly",NativeGolemPhase::Attack=>"attack",NativeGolemPhase::Provoke=>"provoke"},
+    "phase":match value.phase {GolemPhase::Active=>"active",GolemPhase::Assembly=>"assembly",GolemPhase::Attack=>"attack",GolemPhase::Provoke=>"provoke"},
     "poseVariant":value.pose_variant,
     "provokeRollBound":value.provoke_roll_bound,
     "reflectFactor":value.reflect_factor,
@@ -185,7 +185,7 @@ pub fn golem_snapshot(value: NativeSecondaryGolemState) -> Value {
     })
 }
 
-pub fn actor_snapshot(value: &NativeSecondaryActorState) -> Value {
+pub fn actor_snapshot(value: &SecondaryActorState) -> Value {
     json!({
     "ageTicks":value.age_ticks,
     "alpha":value.alpha,
@@ -221,7 +221,7 @@ pub fn actor_snapshot(value: &NativeSecondaryActorState) -> Value {
     })
 }
 
-pub fn flash_snapshot(value: NativeSecondaryScreenFlashState) -> Value {
+pub fn flash_snapshot(value: SecondaryScreenFlashState) -> Value {
     json!({
     "alpha":value.alpha,
     "blue":value.blue,
@@ -232,12 +232,12 @@ pub fn flash_snapshot(value: NativeSecondaryScreenFlashState) -> Value {
     })
 }
 
-pub fn event_snapshot(value: &NativeSecondaryEventState) -> Value {
+pub fn event_snapshot(value: &SecondaryEventState) -> Value {
     json!({
     "actorId":value.actor_id,
     "cameraDisplacement":value.camera_displacement.map(point_snapshot),
     "cameraMagnitude":value.camera_magnitude,
-    "cue":value.cue.map(NativeSecondaryAudioCue::as_str),
+    "cue":value.cue.map(SecondaryAudioCue::as_str),
     "eventId":value.event_id,
     "gain":value.gain,
     "kind":value.kind.as_str(),
@@ -251,7 +251,7 @@ pub fn event_snapshot(value: &NativeSecondaryEventState) -> Value {
     })
 }
 
-pub fn state_snapshot(state: &NativeSecondarySimulationState) -> Value {
+pub fn state_snapshot(state: &SecondarySimulationState) -> Value {
     let actors: Vec<_> = state.actors.iter().map(actor_snapshot).collect();
     let events: Vec<_> = state.events.iter().map(event_snapshot).collect();
     let mut players = json!({});
@@ -268,8 +268,8 @@ impl NativeGolemWorld for OpenWorld {
         requested
     }
 }
-pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
-    let mut state = NativeSecondarySimulationState::new(0);
+pub fn read_state(value: &Value) -> SecondarySimulationState {
+    let mut state = SecondarySimulationState::new(0);
     state.next_actor_id = value["nextActorId"].as_u64().unwrap();
     state.next_event_id = value["nextEventId"].as_u64().unwrap();
     state.firewalker_geometry_sequence =
@@ -286,9 +286,9 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
     }
     for value in value["actors"].as_array().unwrap() {
         assert_eq!(value["kind"].as_str(), Some("golem"));
-        let mut actor = NativeSecondaryActorState::new(
+        let mut actor = SecondaryActorState::new(
             value["id"].as_u64().unwrap(),
-            NativeSecondaryActorKind::Golem,
+            SecondaryActorKind::Golem,
             value["ownerId"].as_str().unwrap().to_owned(),
             value["worldKey"].as_str().unwrap().to_owned(),
             Some(45),
@@ -302,10 +302,10 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
         actor.rotation_radians = value["rotationRadians"].as_f64().unwrap();
         actor.variant = value["variant"].as_i64().unwrap() as i32;
         let source = &value["golem"];
-        let mut golem = NativeSecondaryGolemState::new(
+        let mut golem = SecondaryGolemState::new(
             actor.position,
             actor.rotation_radians,
-            NativeGolemBirthStats {
+            GolemBirthStats {
                 health: source["maximumHealth"].as_f64().unwrap(),
                 damage_maximum: source["damageMaximum"].as_f64().unwrap(),
                 iron: source["iron"].as_bool().unwrap(),
@@ -314,7 +314,7 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
             },
             &mut OpenWorld,
         );
-        golem.phase = NativeGolemPhase::Active;
+        golem.phase = GolemPhase::Active;
         actor.golem = Some(golem);
         state.actors.push(actor);
     }
@@ -322,8 +322,8 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
     assert!(value["targetEffects"].as_array().unwrap().is_empty());
     state
 }
-pub fn target(value: &Value) -> NativeSecondaryTarget {
-    NativeSecondaryTarget {
+pub fn target(value: &Value) -> SecondaryTarget {
+    SecondaryTarget {
         family: value["family"].as_str().unwrap().to_owned(),
         id: value["id"].as_u64().unwrap() as usize,
         light_registration: registration(&value["lightRegistration"]),
@@ -338,17 +338,17 @@ pub fn target(value: &Value) -> NativeSecondaryTarget {
 
 use solomon_sim::belt::PlayerBeltComponent;
 
-use solomon_sim::equipment::{NativeEquipmentModifiers, NativeEquipmentScalarTransform};
-use solomon_sim::profile::NativeSkillBookState;
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
-pub fn factors(value: &Value) -> NativeOffensiveSpellFactors {
+use solomon_sim::equipment::{EquipmentModifiers, EquipmentScalarTransform};
+use solomon_sim::profile::SkillBookState;
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
+pub fn factors(value: &Value) -> OffensiveSpellFactors {
     let equipment = value.get("equipment").map(|value| {
-        let mut modifiers = NativeEquipmentModifiers {
+        let mut modifiers = EquipmentModifiers {
             global_damage_flat: value["globalDamageFlat"].as_f64().unwrap(),
             global_damage_multiplier: value["globalDamageMultiplier"].as_f64().unwrap(),
             global_mana_cost_flat: value["globalManaCostFlat"].as_f64().unwrap(),
             global_mana_cost_multiplier: value["globalManaCostMultiplier"].as_f64().unwrap(),
-            ..NativeEquipmentModifiers::default()
+            ..EquipmentModifiers::default()
         };
         for id in 0..8 {
             modifiers.class_damage_flat[id] = value["classDamageFlat"][id].as_f64().unwrap();
@@ -357,7 +357,7 @@ pub fn factors(value: &Value) -> NativeOffensiveSpellFactors {
             modifiers.class_mana_cost_flat[id] = value["classManaCostFlat"][id].as_f64().unwrap();
             modifiers.class_mana_cost_multiplier[id] =
                 value["classManaCostMultiplier"][id].as_f64().unwrap();
-            modifiers.class_recharge[id] = NativeEquipmentScalarTransform {
+            modifiers.class_recharge[id] = EquipmentScalarTransform {
                 offset: value["classRecharge"][id]["offset"].as_f64().unwrap(),
                 scale: value["classRecharge"][id]["scale"].as_f64().unwrap(),
             };
@@ -369,7 +369,7 @@ pub fn factors(value: &Value) -> NativeOffensiveSpellFactors {
         }
         modifiers
     });
-    NativeOffensiveSpellFactors {
+    OffensiveSpellFactors {
         damage: value["damage"].as_f64().unwrap(),
         mana_cost: value["manaCost"].as_f64().unwrap(),
         global_flat_damage: value["globalFlatDamage"].as_f64().unwrap_or(0.0),
@@ -377,7 +377,7 @@ pub fn factors(value: &Value) -> NativeOffensiveSpellFactors {
         equipment,
     }
 }
-pub fn read_book(value: &Value) -> NativeSkillBookState {
+pub fn read_book(value: &Value) -> SkillBookState {
     let ranks = |key: &str| {
         value[key]
             .as_array()
@@ -388,7 +388,7 @@ pub fn read_book(value: &Value) -> NativeSkillBookState {
             .try_into()
             .unwrap()
     };
-    NativeSkillBookState {
+    SkillBookState {
         advanced_unlocks: value["advancedUnlocks"]
             .as_array()
             .unwrap()
@@ -422,36 +422,36 @@ pub fn read_book(value: &Value) -> NativeSkillBookState {
 
 pub struct World<'a> {
     pub case: &'a Value,
-    pub targets: Vec<NativeSecondaryTarget>,
+    pub targets: Vec<SecondaryTarget>,
 }
-impl NativeSecondaryWorld for World<'_> {
+impl SecondaryWorld for World<'_> {
     fn target_exists(&self, world: &str, id: usize) -> bool {
         world == "boneyard:oracle" && self.targets.iter().any(|target| target.id == id)
     }
-    fn dampen_candidates(&self, _world: &str, _origin: Vec2) -> NativeSecondaryDampenCandidates {
+    fn dampen_candidates(&self, _world: &str, _origin: Vec2) -> SecondaryDampenCandidates {
         let value = &self.case["dampen"];
         let mut projectiles = Vec::new();
         for value in value["projectiles"].as_array().unwrap() {
-            projectiles.push(NativeSecondaryDampenProjectileCandidate {
+            projectiles.push(SecondaryDampenProjectileCandidate {
                 id: value["id"].as_u64().unwrap() as usize,
                 kind: match value["kind"].as_str().unwrap() {
-                    "firebolt" => NativeSecondaryDampenProjectileKind::Firebolt,
-                    "guided-missile" => NativeSecondaryDampenProjectileKind::GuidedMissile,
-                    "skull-missile" => NativeSecondaryDampenProjectileKind::SkullMissile,
-                    "dark-fireball" => NativeSecondaryDampenProjectileKind::DarkFireball,
+                    "firebolt" => SecondaryDampenProjectileKind::Firebolt,
+                    "guided-missile" => SecondaryDampenProjectileKind::GuidedMissile,
+                    "skull-missile" => SecondaryDampenProjectileKind::SkullMissile,
+                    "dark-fireball" => SecondaryDampenProjectileKind::DarkFireball,
                     other => panic!("unknown projectile {other}"),
                 },
                 payload: match value["payload"].as_str().unwrap() {
-                    "fire" => NativeSecondaryDampenPayload::Fire,
-                    "cold" => NativeSecondaryDampenPayload::Cold,
-                    "poison" => NativeSecondaryDampenPayload::Poison,
-                    "dark" => NativeSecondaryDampenPayload::Dark,
+                    "fire" => SecondaryDampenPayload::Fire,
+                    "cold" => SecondaryDampenPayload::Cold,
+                    "poison" => SecondaryDampenPayload::Poison,
+                    "dark" => SecondaryDampenPayload::Dark,
                     other => panic!("unknown payload {other}"),
                 },
                 position: point(&value["position"]),
             });
         }
-        NativeSecondaryDampenCandidates {
+        SecondaryDampenCandidates {
             caster_target_ids: value["casterTargetIds"]
                 .as_array()
                 .unwrap()
@@ -489,11 +489,11 @@ impl NativeSecondaryWorld for World<'_> {
         _player: &str,
         _world: &str,
         requested: Vec2,
-        _rng: &mut NativeRng,
+        _rng: &mut Rng,
     ) -> Vec2 {
         requested
     }
-    fn teleport_destination(&self, _player: &str, _rng: &mut NativeRng) -> Vec2 {
+    fn teleport_destination(&self, _player: &str, _rng: &mut Rng) -> Vec2 {
         Vec2::new(0.0, 0.0)
     }
     fn knockback_area_movement(
@@ -514,10 +514,10 @@ impl NativeSecondaryWorld for World<'_> {
         }
         Vec::new()
     }
-    fn target(&self, _world: &str, id: usize) -> Option<NativeSecondaryTarget> {
+    fn target(&self, _world: &str, id: usize) -> Option<SecondaryTarget> {
         self.targets.iter().find(|target| target.id == id).cloned()
     }
-    fn targets(&self, _world: &str, center: Vec2, radius: f64) -> Vec<NativeSecondaryTarget> {
+    fn targets(&self, _world: &str, center: Vec2, radius: f64) -> Vec<SecondaryTarget> {
         self.targets
             .iter()
             .filter(|target| {
@@ -534,12 +534,12 @@ impl NativeSecondaryWorld for World<'_> {
         _world: &str,
         _center: Vec2,
         _radius: f64,
-    ) -> Vec<NativeSecondarySceneryTarget> {
+    ) -> Vec<SecondarySceneryTarget> {
         self.case["scenery"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|value| NativeSecondarySceneryTarget {
+            .map(|value| SecondarySceneryTarget {
                 id: value["id"].as_u64().unwrap() as usize,
                 position: point(&value["position"]),
                 type_id: value["typeId"].as_u64().unwrap() as u32,
@@ -548,7 +548,7 @@ impl NativeSecondaryWorld for World<'_> {
             .collect()
     }
 }
-pub fn cast_snapshot(result: &NativeSecondaryTickResult) -> Value {
+pub fn cast_snapshot(result: &SecondaryTickResult) -> Value {
     let mut relocated = json!({});
     for (id, position) in &result.relocated_players {
         relocated[id] = point_snapshot(*position);
@@ -566,11 +566,11 @@ pub fn cast_snapshot(result: &NativeSecondaryTickResult) -> Value {
 
 pub fn authority_from_fixture<'a>(
     declared: &'a Value,
-    book: &'a NativeSkillBookState,
+    book: &'a SkillBookState,
     belt: &'a PlayerBeltComponent,
     wizard: &'a HubWizard,
-) -> NativeSecondaryPlayerAuthority<'a> {
-    NativeSecondaryPlayerAuthority {
+) -> SecondaryPlayerAuthority<'a> {
+    SecondaryPlayerAuthority {
         // Historical authority fixtures predate the separate alive input; their
         // retained characters are alive unless the current fixture says otherwise.
         alive: declared["alive"].as_bool().unwrap_or(true),
@@ -592,7 +592,7 @@ pub fn authority_from_fixture<'a>(
         golem_iron: declared["golemIron"].as_bool().unwrap(),
         golem_raw_mana_cost: declared["golemRawManaCost"].as_f64().unwrap(),
         golem_reflect_factor: declared["golemReflectFactor"].as_f64().unwrap(),
-        input: NativeSecondaryInput {
+        input: SecondaryInput {
             aim: declared["input"]["aim"].as_object().map(|_| point(&declared["input"]["aim"])),
             primary: false,
             quickbar: Some(0),

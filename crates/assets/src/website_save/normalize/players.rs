@@ -2,15 +2,15 @@
 
 use serde_json::{Value, json};
 use solomon_sim::belt::{
-    NATIVE_BELT_SLOT_COUNT, PLAYER_BELT_SLOT_COUNT, PlayerBeltComponent, is_native_belt_skill,
-    native_belt_owned_item, native_inventory_item_can_bind_to_belt,
+    BELT_SLOT_COUNT, PLAYER_BELT_SLOT_COUNT, PlayerBeltComponent, belt_owned_item,
+    inventory_item_can_bind_to_belt, is_belt_skill,
 };
 use solomon_sim::combat::PlayerCombatState;
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::profile::{
-    NativeSkillBookState, PlayerConcentrationSlot, PlayerProgressionState, PlayerSkillRuntimeState,
-    PlayerStatBookComponent, native_weld_build, player_skill_derived_stats_with_stat_book,
-    refresh_player_combat_from_skill_stats,
+    PlayerConcentrationSlot, PlayerProgressionState, PlayerSkillRuntimeState,
+    PlayerStatBookComponent, SkillBookState, player_skill_derived_stats_with_stat_book,
+    refresh_player_combat_from_skill_stats, weld_build,
 };
 use solomon_sim::spells::casting::PlayerPrimaryCastState;
 
@@ -279,7 +279,7 @@ pub(super) fn normalize(value: &Value, version: u64, tick: u64) -> Result<Value,
     Ok(Value::Object(source))
 }
 
-fn skill_book(value: &Value, index: usize) -> Result<NativeSkillBookState, String> {
+fn skill_book(value: &Value, index: usize) -> Result<SkillBookState, String> {
     let permanent = array(&value["permanentRanks"], "game save permanent skill ranks")?;
     let effective = array(&value["effectiveRanks"], "game save effective skill ranks")?;
     let learned =
@@ -302,7 +302,7 @@ fn skill_book(value: &Value, index: usize) -> Result<NativeSkillBookState, Strin
             .filter(|value| !value.is_null())
             .unwrap_or(&value["activeWeldBuildId"]),
     );
-    let build = weld_id.as_u64().and_then(|id| u32::try_from(id).ok()).and_then(native_weld_build);
+    let build = weld_id.as_u64().and_then(|id| u32::try_from(id).ok()).and_then(weld_build);
     let components = if let Some(components) = value.get("weldComponentRanks") {
         components.clone()
     } else {
@@ -344,13 +344,13 @@ fn skill_book(value: &Value, index: usize) -> Result<NativeSkillBookState, Strin
 fn saved_belt(
     value: &Value,
     index: usize,
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     economy: &HubEconomyState,
     version: u64,
 ) -> Result<PlayerBeltComponent, String> {
     let entries = array(value, &format!("game save player belt {index}"))?;
     if entries.len() != PLAYER_BELT_SLOT_COUNT
-        && !(version < 50 && entries.len() == NATIVE_BELT_SLOT_COUNT)
+        && !(version < 50 && entries.len() == BELT_SLOT_COUNT)
     {
         return Err(format!("game save player belt {index} is invalid"));
     }
@@ -365,8 +365,7 @@ fn saved_belt(
                 reject_unexpected_keys(source, &field, &["kind", "skillId"], &[])?;
                 let id = entry["skillId"].as_u64().and_then(|id| usize::try_from(id).ok());
                 if id.is_none_or(|id| {
-                    !is_native_belt_skill(id)
-                        || book.effective_ranks.get(id).is_none_or(|rank| *rank < 1)
+                    !is_belt_skill(id) || book.effective_ranks.get(id).is_none_or(|rank| *rank < 1)
                 }) {
                     return Err(format!("{field} skill is invalid"));
                 }
@@ -376,11 +375,10 @@ fn saved_belt(
             }
             Some("item") => {
                 reject_unexpected_keys(source, &field, &["itemId", "kind", "nativeTypeId"], &[])?;
-                let item =
-                    entry["itemId"].as_u64().and_then(|id| native_belt_owned_item(economy, id));
+                let item = entry["itemId"].as_u64().and_then(|id| belt_owned_item(economy, id));
                 if item.is_none_or(|item| {
-                    Some(u64::from(item.native_type_id)) != entry["nativeTypeId"].as_u64()
-                        || !native_inventory_item_can_bind_to_belt(item)
+                    Some(u64::from(item.type_id)) != entry["nativeTypeId"].as_u64()
+                        || !inventory_item_can_bind_to_belt(item)
                 }) {
                     return Err(format!("{field} item is invalid"));
                 }

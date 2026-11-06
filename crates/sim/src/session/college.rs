@@ -3,9 +3,8 @@
 use super::*;
 use crate::game_run::GameRunPhase;
 use crate::hub::college_intro::{
-    NativeCollegeIntroState, acknowledge_hub_college_intro_dialogue,
-    confirm_hub_college_intro_loadout, hub_college_admission_primary_unset,
-    plan_hub_college_intro_arm,
+    CollegeIntroState, acknowledge_hub_college_intro_dialogue, confirm_hub_college_intro_loadout,
+    hub_college_admission_primary_unset, plan_hub_college_intro_arm,
 };
 use crate::hub::regions::HubRegion;
 use crate::profile::NewGameSelection;
@@ -35,7 +34,7 @@ impl GameSession {
         if let Some(spawn) = plan.spawn {
             participant.wizard = HubWizard::at(spawn.position);
             participant.wizard.set_facing(spawn.heading_degrees);
-            participant.college_intro = Some(NativeCollegeIntroState::new());
+            participant.college_intro = Some(CollegeIntroState::new());
         }
         if plan.reset_primary_cast {
             participant.wizard.primary_cast = Default::default();
@@ -100,8 +99,7 @@ impl GameSession {
                 return false;
             }
             let owner = selection.element.into();
-            let seed =
-                crate::profile::draw_native_player_creation_offer_seed(&mut self.gameplay_rng);
+            let seed = crate::profile::draw_player_creation_offer_seed(&mut self.gameplay_rng);
             participant.player.replace_loadout(selection, seed, Some(owner));
             participant.player.refresh_hagatha_skill_effects(&mut self.gameplay_rng);
             reset_loadout_character(participant);
@@ -110,7 +108,7 @@ impl GameSession {
         if !confirm_hub_college_intro_loadout(&mut participant.wizard) {
             return false;
         }
-        let seed = crate::profile::draw_native_player_creation_offer_seed(&mut self.gameplay_rng);
+        let seed = crate::profile::draw_player_creation_offer_seed(&mut self.gameplay_rng);
         participant.player.replace_loadout(selection, seed, None);
         participant.player.refresh_hagatha_skill_effects(&mut self.gameplay_rng);
         participant.player.economy.college_intro_pending = false;

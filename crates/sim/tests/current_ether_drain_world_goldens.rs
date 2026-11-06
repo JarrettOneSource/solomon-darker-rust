@@ -13,9 +13,9 @@ use solomon_sim::boneyard::world::{BoneyardPlayerBody, BoneyardPlayerStatus};
 use solomon_sim::boneyard::{
     BoneyardBounds, BoneyardScene, BoneyardSource, BoneyardSpawn, LoadedBoneyard,
 };
-use solomon_sim::loot::{NativeLootDropKind, NativeLootDropSource, NativeLootDropSpec};
+use solomon_sim::loot::{LootDropKind, LootDropSource, LootDropSpec};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::ether_drain::NativeEtherDrainContact;
+use solomon_sim::secondary::ether_drain::EtherDrainContact;
 use solomon_sim::session::{GameSession, GameSessionOptions};
 
 fn loaded() -> LoadedBoneyard {
@@ -73,11 +73,11 @@ fn player_pairs_loose_sweeps_and_registration_reuse_follow_the_source_transactio
             .unwrap()
             .iter()
             .map(|row| {
-                let mut spec = NativeLootDropSpec::new(
-                    NativeLootDropKind::Gold,
+                let mut spec = LootDropSpec::new(
+                    LootDropKind::Gold,
                     row["id"].as_u64().unwrap(),
                     native_bits::input(&row["position"]),
-                    NativeLootDropSource::Script,
+                    LootDropSource::Script,
                 );
                 spec.amount = row["amount"].as_u64();
                 spec
@@ -98,7 +98,7 @@ fn player_pairs_loose_sweeps_and_registration_reuse_follow_the_source_transactio
                 position: session.participants.get(id).expect("participant exists").wizard.position,
             })
             .collect();
-        let contacts: Vec<NativeEtherDrainContact> = native_bits::input(&case["contacts"]);
+        let contacts: Vec<EtherDrainContact> = native_bits::input(&case["contacts"]);
         let result = session.boneyard.as_mut().unwrap().apply_ether_drain_forces(
             &contacts,
             &bodies,

@@ -3,26 +3,26 @@
 //! The order matters: Siege Mage scales the completed damage product, while Battle Mage
 //! scales mana before flat equipment costs. `primary-profile-goldens.json` pins both.
 
-use crate::equipment::NativeEquipmentModifiers;
+use crate::equipment::EquipmentModifiers;
 
-use super::native_skill_root;
+use super::skill_root;
 
-pub const NATIVE_OFFENSIVE_SKILL_IDS: &[usize] = &[
+pub const OFFENSIVE_SKILL_IDS: &[usize] = &[
     8, 9, 10, 11, 13, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 29, 31, 32, 33, 34, 35, 38, 40,
     41, 42, 43, 44, 47, 50, 52, 55, 65, 72, 73, 74, 76, 77, 78, 79,
 ];
 
 /// The player's offensive bonuses at the instant a spell is cast.
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeOffensiveSpellFactors {
+pub struct OffensiveSpellFactors {
     pub damage: f64,
     pub mana_cost: f64,
     pub global_flat_damage: f64,
     pub global_mana_reduction: f64,
-    pub equipment: Option<NativeEquipmentModifiers>,
+    pub equipment: Option<EquipmentModifiers>,
 }
 
-impl Default for NativeOffensiveSpellFactors {
+impl Default for OffensiveSpellFactors {
     fn default() -> Self {
         Self {
             damage: 1.0,
@@ -34,7 +34,7 @@ impl Default for NativeOffensiveSpellFactors {
     }
 }
 
-impl NativeOffensiveSpellFactors {
+impl OffensiveSpellFactors {
     pub fn validate(&self) {
         for (name, value) in [
             ("offensive damage factor", self.damage),
@@ -48,7 +48,7 @@ impl NativeOffensiveSpellFactors {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeDamageResolutionLanes {
+pub struct DamageResolutionLanes {
     pub actor_base_damage: f64,
     pub base_damage: f64,
     pub global_flat_damage: f64,
@@ -60,7 +60,7 @@ pub struct NativeDamageResolutionLanes {
     pub element_or_class_multiplier: f64,
 }
 
-impl Default for NativeDamageResolutionLanes {
+impl Default for DamageResolutionLanes {
     fn default() -> Self {
         Self {
             actor_base_damage: 0.0,
@@ -77,7 +77,7 @@ impl Default for NativeDamageResolutionLanes {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeManaCostResolutionLanes {
+pub struct ManaCostResolutionLanes {
     pub base_mana_cost: f64,
     pub global_mana_reduction: f64,
     pub global_flat_mana_cost: f64,
@@ -89,7 +89,7 @@ pub struct NativeManaCostResolutionLanes {
     pub element_multiplier: f64,
 }
 
-impl Default for NativeManaCostResolutionLanes {
+impl Default for ManaCostResolutionLanes {
     fn default() -> Self {
         Self {
             base_mana_cost: 0.0,
@@ -106,16 +106,16 @@ impl Default for NativeManaCostResolutionLanes {
 }
 
 #[must_use]
-pub fn native_skill_is_offensive(skill_id: usize) -> bool {
-    NATIVE_OFFENSIVE_SKILL_IDS.contains(&skill_id)
+pub fn skill_is_offensive(skill_id: usize) -> bool {
+    OFFENSIVE_SKILL_IDS.contains(&skill_id)
 }
 
 /// Native `0x0065FFF0`, including the final offensive-only Siege Mage multiplier.
 #[must_use]
-pub fn resolve_native_skill_damage(
+pub fn resolve_skill_damage(
     skill_id: usize,
-    factors: &NativeOffensiveSpellFactors,
-    lanes: NativeDamageResolutionLanes,
+    factors: &OffensiveSpellFactors,
+    lanes: DamageResolutionLanes,
 ) -> f64 {
     factors.validate();
     for value in [
@@ -131,10 +131,10 @@ pub fn resolve_native_skill_damage(
     ] {
         assert!(value.is_finite(), "native damage lane must be finite");
     }
-    let class_id = native_skill_root(skill_id).expect("damage skill has a native class");
-    let identity = NativeEquipmentModifiers::default();
+    let class_id = skill_root(skill_id).expect("damage skill has a native class");
+    let identity = EquipmentModifiers::default();
     let equipment = factors.equipment.as_ref().unwrap_or(&identity);
-    let offensive = native_skill_is_offensive(skill_id);
+    let offensive = skill_is_offensive(skill_id);
     let unforge_damage = if offensive { factors.global_flat_damage } else { 0.0 };
     let damage = (lanes.actor_base_damage
         + lanes.base_damage
@@ -158,10 +158,10 @@ pub fn resolve_native_skill_damage(
 
 /// Native `0x006600F0`: the minimum base cost precedes Battle Mage and later flat lanes.
 #[must_use]
-pub fn resolve_native_skill_mana_cost(
+pub fn resolve_skill_mana_cost(
     skill_id: usize,
-    factors: &NativeOffensiveSpellFactors,
-    lanes: NativeManaCostResolutionLanes,
+    factors: &OffensiveSpellFactors,
+    lanes: ManaCostResolutionLanes,
 ) -> f64 {
     factors.validate();
     for value in [
@@ -177,13 +177,13 @@ pub fn resolve_native_skill_mana_cost(
     ] {
         assert!(value.is_finite(), "native mana lane must be finite");
     }
-    let class_id = native_skill_root(skill_id).expect("mana-cost skill has a native class");
-    let identity = NativeEquipmentModifiers::default();
+    let class_id = skill_root(skill_id).expect("mana-cost skill has a native class");
+    let identity = EquipmentModifiers::default();
     let equipment = factors.equipment.as_ref().unwrap_or(&identity);
     let mut cost =
         (lanes.base_mana_cost - lanes.global_mana_reduction - factors.global_mana_reduction)
             .max(1.0);
-    if native_skill_is_offensive(skill_id) {
+    if skill_is_offensive(skill_id) {
         cost *= factors.mana_cost;
     }
     cost = (cost
@@ -202,37 +202,31 @@ pub fn resolve_native_skill_mana_cost(
 }
 
 #[must_use]
-pub fn resolve_native_skill_damage_value(
+pub fn resolve_skill_damage_value(
     skill_id: usize,
     damage: f64,
-    factors: &NativeOffensiveSpellFactors,
+    factors: &OffensiveSpellFactors,
 ) -> f64 {
-    resolve_native_skill_damage(
+    resolve_skill_damage(
         skill_id,
         factors,
-        NativeDamageResolutionLanes {
-            base_damage: damage,
-            ..NativeDamageResolutionLanes::default()
-        },
+        DamageResolutionLanes { base_damage: damage, ..DamageResolutionLanes::default() },
     )
 }
 
 #[must_use]
-pub fn resolve_native_skill_mana_cost_value(
+pub fn resolve_skill_mana_cost_value(
     skill_id: usize,
     mana_cost: f64,
-    factors: &NativeOffensiveSpellFactors,
+    factors: &OffensiveSpellFactors,
 ) -> f64 {
     if mana_cost == 0.0 {
         factors.validate();
         return 0.0;
     }
-    resolve_native_skill_mana_cost(
+    resolve_skill_mana_cost(
         skill_id,
         factors,
-        NativeManaCostResolutionLanes {
-            base_mana_cost: mana_cost,
-            ..NativeManaCostResolutionLanes::default()
-        },
+        ManaCostResolutionLanes { base_mana_cost: mana_cost, ..ManaCostResolutionLanes::default() },
     )
 }

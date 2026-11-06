@@ -1,7 +1,7 @@
 //! Authored Tutorial frames from `tutorial-modal-callouts.ts::tutorialCalloutGeometry`.
 
 use crate::hud::HudRect;
-use crate::native_ui_text::{NativeUiFontName, measure_native_ui_text, native_ui_font};
+use crate::ui_text::{UiFontName, measure_ui_text, ui_font};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TutorialCalloutLine {
@@ -34,7 +34,7 @@ pub fn tutorial_callout_geometry(
     let mut lines = Vec::new();
     let mut text_width = 0.0_f64;
     for (index, line) in text.split('\n').enumerate() {
-        let width = measure_native_ui_text(line, NativeUiFontName::Menu, 1.0);
+        let width = measure_ui_text(line, UiFontName::Menu, 1.0);
         text_width = text_width.max(width);
         lines.push(TutorialCalloutLine {
             text: line.into(),
@@ -43,8 +43,7 @@ pub fn tutorial_callout_geometry(
             y: center_y.trunc() + 25.0 * index as f64,
         });
     }
-    let text_height =
-        native_ui_font(NativeUiFontName::Menu).metrics[0] + 25.0 * (lines.len() - 1) as f64;
+    let text_height = ui_font(UiFontName::Menu).metrics[0] + 25.0 * (lines.len() - 1) as f64;
     let width = text_width + 28.0;
     let height = text_height + 20.0;
     Ok(TutorialCalloutGeometry {

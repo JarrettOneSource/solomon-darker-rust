@@ -6,7 +6,7 @@ use super::model::{EnemyDeathEffect, EnemyDeathEffectKind};
 use super::projectile_presentation::{effect_atlas, effect_blend};
 use crate::Vec2;
 use crate::float::fround;
-use crate::secondary::presentation::NativeSecondaryQueueFamily;
+use crate::secondary::presentation::SecondaryQueueFamily;
 
 /// One vertical gradient in Banish or Ultra Banish, relative to its actor root.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -24,18 +24,18 @@ pub struct EnemyBanishGradient {
 pub struct EnemyDeathEffectPlan {
     pub gradients: Vec<EnemyBanishGradient>,
     pub layers: Vec<EnemySpriteLayer>,
-    pub queue_family: NativeSecondaryQueueFamily,
+    pub queue_family: SecondaryQueueFamily,
 }
 
 #[must_use]
-pub fn native_enemy_death_effect_plan(
+pub fn enemy_death_effect_plan(
     effect: &EnemyDeathEffect,
     view_height: f64,
 ) -> EnemyDeathEffectPlan {
-    native_enemy_death_effect_plan_with_input(
+    enemy_death_effect_plan_with_input(
         effect,
         view_height,
-        super::presentation::NativeEnemyEffectPresentationInput {
+        super::presentation::EnemyEffectPresentationInput {
             age_ticks: effect.age_ticks as f64,
             rotation_radians: effect.rotation_deg * std::f64::consts::PI / 180.0,
         },
@@ -43,10 +43,10 @@ pub fn native_enemy_death_effect_plan(
 }
 
 #[must_use]
-pub fn native_enemy_death_effect_plan_with_input(
+pub fn enemy_death_effect_plan_with_input(
     effect: &EnemyDeathEffect,
     view_height: f64,
-    sample: super::presentation::NativeEnemyEffectPresentationInput,
+    sample: super::presentation::EnemyEffectPresentationInput,
 ) -> EnemyDeathEffectPlan {
     use EnemyDeathEffectKind as Kind;
     if matches!(effect.kind, Kind::Banish | Kind::BanishBlack) {
@@ -96,9 +96,9 @@ pub fn native_enemy_death_effect_plan_with_input(
         gradients: Vec::new(),
         layers,
         queue_family: if effect.kind == Kind::BoulderBit {
-            NativeSecondaryQueueFamily::OrdinaryDynamic
+            SecondaryQueueFamily::OrdinaryDynamic
         } else {
-            NativeSecondaryQueueFamily::Zanim
+            SecondaryQueueFamily::Zanim
         },
     }
 }

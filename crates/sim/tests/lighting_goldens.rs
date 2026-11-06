@@ -3,9 +3,8 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::lighting::{
-    NativeBoneyardLightIndex, NativeBoneyardLightManagerView, NativeBoneyardLightSource,
-    NativePlayerLightOwner, native_lantern_light_source, native_missile_light_source,
-    native_player_light_source,
+    BoneyardLightIndex, BoneyardLightManagerView, BoneyardLightSource, PlayerLightOwner,
+    lantern_light_source, missile_light_source, player_light_source,
 };
 
 fn number(value: &Value) -> f64 {
@@ -16,8 +15,8 @@ fn point(value: &Value) -> Vec2 {
     Vec2::new(number(&value["x"]), number(&value["y"]))
 }
 
-fn source(value: &Value) -> NativeBoneyardLightSource {
-    NativeBoneyardLightSource {
+fn source(value: &Value) -> BoneyardLightSource {
+    BoneyardLightSource {
         position: point(&value["position"]),
         radius: number(&value["radius"]),
         intensity: number(&value["intensity"]),
@@ -39,8 +38,8 @@ fn player_lantern_and_missile_lights_keep_native_pulse_and_rounding() {
         let actual = match kind {
             "player" => {
                 let player = &case["player"];
-                native_player_light_source(
-                    NativePlayerLightOwner {
+                player_light_source(
+                    PlayerLightOwner {
                         id: player["id"].as_str().unwrap(),
                         position: point(&player["position"]),
                         heading_index: player["headingIndex"].as_u64().unwrap() as usize,
@@ -52,8 +51,8 @@ fn player_lantern_and_missile_lights_keep_native_pulse_and_rounding() {
                 )
                 .unwrap()
             }
-            "lantern" => native_lantern_light_source(Vec2::new(100.0, 300.0), tick, true),
-            "missile" => native_missile_light_source(17, Vec2::new(100.0, 300.0), tick, true),
+            "lantern" => lantern_light_source(Vec2::new(100.0, 300.0), tick, true),
+            "missile" => missile_light_source(17, Vec2::new(100.0, 300.0), tick, true),
             _ => panic!("unknown light fixture kind {kind}"),
         };
         let expected = source(&case["expected"]);
@@ -73,7 +72,7 @@ fn player_lantern_and_missile_lights_keep_native_pulse_and_rounding() {
 
 #[test]
 fn native_light_acceptance_grid_and_surface_queries_match_the_website() {
-    let mut index = NativeBoneyardLightIndex::new(Vec2::new(2100.0, 3700.0));
+    let mut index = BoneyardLightIndex::new(Vec2::new(2100.0, 3700.0));
     for case in fixture()["grids"].as_array().unwrap() {
         let view = &case["view"];
         let providers: Vec<_> = case["providers"].as_array().unwrap().iter().map(source).collect();
@@ -81,7 +80,7 @@ fn native_light_acceptance_grid_and_surface_queries_match_the_website() {
         index.rebuild(
             &providers,
             &tail,
-            NativeBoneyardLightManagerView {
+            BoneyardLightManagerView {
                 camera_position: point(&view["camera"]),
                 zoom: number(&view["camera"]["zoom"]),
                 viewport: Vec2::new(

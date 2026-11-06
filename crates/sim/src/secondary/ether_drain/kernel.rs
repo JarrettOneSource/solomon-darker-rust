@@ -1,39 +1,39 @@
 //! Field membership, binary32 pressure and private animations from `native-ether-drain.ts`.
 
 use super::{
-    NativeEtherDrainAnimation, NativeEtherDrainState, NativeEtherDrainTargetRef,
-    NativeEtherDrainWorldAnimationIds, NativeEtherDrainWorldAnimationRef,
+    EtherDrainAnimation, EtherDrainState, EtherDrainTargetRef, EtherDrainWorldAnimationIds,
+    EtherDrainWorldAnimationRef,
 };
 use crate::float::{fround, sin};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_ETHER_DRAIN_BROAD_RADIUS: f64 = 1024.0;
-pub const NATIVE_ETHER_DRAIN_CORPSE_TIMER_TICKS: u64 = 130;
-pub const NATIVE_ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED: f64 = 100.0;
+pub const ETHER_DRAIN_BROAD_RADIUS: f64 = 1024.0;
+pub const ETHER_DRAIN_CORPSE_TIMER_TICKS: u64 = 130;
+pub const ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED: f64 = 100.0;
 const PRESSURE_DISTANCE_SQUARED: f64 = 262_144.0;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEtherDrainTarget {
+pub struct EtherDrainTarget {
     pub activation_delay_ticks: i64,
     pub force_factor: f64,
     pub native_flags: u32,
     pub position: Vec2,
     #[cfg_attr(feature = "persistence", serde(rename = "ref"))]
-    pub reference: NativeEtherDrainTargetRef,
+    pub reference: EtherDrainTargetRef,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEtherDrainWorldAnimationTarget {
+pub struct EtherDrainWorldAnimationTarget {
     pub bounce_velocity: f64,
     pub position: Vec2,
     #[cfg_attr(feature = "persistence", serde(rename = "ref"))]
-    pub reference: NativeEtherDrainWorldAnimationRef,
+    pub reference: EtherDrainWorldAnimationRef,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeEtherDrainField<'a> {
+pub struct EtherDrainField<'a> {
     pub alpha: f64,
     pub damage: f64,
     pub id: u64,
@@ -43,7 +43,7 @@ pub struct NativeEtherDrainField<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEtherDrainContact {
+pub struct EtherDrainContact {
     pub amount: f64,
     pub damage_flags: u32,
     pub magic_contact: bool,
@@ -51,41 +51,41 @@ pub struct NativeEtherDrainContact {
     pub delta: Vec2,
     pub owner_id: String,
     pub source_actor_id: u64,
-    pub target: NativeEtherDrainTargetRef,
+    pub target: EtherDrainTargetRef,
     /// The field's shared RNG supplies this after accepting a magic contact.
     pub hit_strength: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEtherDrainWorldAnimationContact {
+pub struct EtherDrainWorldAnimationContact {
     pub consume: bool,
     pub delta: Vec2,
     #[cfg_attr(feature = "persistence", serde(rename = "ref"))]
-    pub reference: NativeEtherDrainWorldAnimationRef,
+    pub reference: EtherDrainWorldAnimationRef,
     pub source_actor_id: u64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
-pub struct NativeEtherDrainAnimationStep {
-    pub animations: Vec<NativeEtherDrainAnimation>,
+pub struct EtherDrainAnimationStep {
+    pub animations: Vec<EtherDrainAnimation>,
     pub pulses: Vec<f64>,
 }
 
 #[must_use]
-pub fn create_native_ether_drain_debris(
+pub fn create_ether_drain_debris(
     center: Vec2,
     position: Vec2,
     oscillation_degrees: f64,
     rotation_degrees: f64,
     variant: u32,
-) -> NativeEtherDrainAnimation {
+) -> EtherDrainAnimation {
     let dx = fround(position.x - center.x);
     let dy = fround(position.y - center.y);
     let distance = fround(fround(dx * dx + dy * dy).sqrt());
     let inverse = if distance == 0.0 { 0.0 } else { fround(1.0 / distance) };
-    NativeEtherDrainAnimation::Debris {
+    EtherDrainAnimation::Debris {
         position,
         direction: Vec2::new(fround(dx * inverse), fround(dy * inverse)),
         remaining_distance: distance,
@@ -98,7 +98,7 @@ pub fn create_native_ether_drain_debris(
 
 /// Native signed area and first moments accumulate at binary32 stores.
 #[must_use]
-pub fn native_ether_drain_leaf_center(polygon: &[Vec2]) -> Vec2 {
+pub fn ether_drain_leaf_center(polygon: &[Vec2]) -> Vec2 {
     let mut area = 0.0;
     let mut x = 0.0;
     let mut y = 0.0;
@@ -116,18 +116,18 @@ pub fn native_ether_drain_leaf_center(polygon: &[Vec2]) -> Vec2 {
 /// The loose-object prefix survives ordinary spatial refresh. Notification order
 /// is significant: a newly registered drop can force a query between timer polls.
 #[must_use]
-pub fn refresh_native_ether_drain_targets(
-    source: Option<&NativeEtherDrainState>,
-    targets: &[NativeEtherDrainTarget],
+pub fn refresh_ether_drain_targets(
+    source: Option<&EtherDrainState>,
+    targets: &[EtherDrainTarget],
     center: Vec2,
     refresh: bool,
-) -> (bool, NativeEtherDrainState) {
+) -> (bool, EtherDrainState) {
     let mut state = source.cloned().unwrap_or_default();
     state.loose.retain(|reference| targets.iter().any(|target| &target.reference == reference));
     let previous_ordinal = source.map_or(-1, |source| source.last_loot_registration_ordinal);
     let mut notified = false;
     for target in targets {
-        let NativeEtherDrainTargetRef::Loot { registration_ordinal, .. } = target.reference else {
+        let EtherDrainTargetRef::Loot { registration_ordinal, .. } = target.reference else {
             continue;
         };
         if registration_ordinal as i64 > previous_ordinal
@@ -144,7 +144,7 @@ pub fn refresh_native_ether_drain_targets(
     if refreshed {
         state.queried.clear();
         for target in targets {
-            if !matches!(target.reference, NativeEtherDrainTargetRef::Loot { .. })
+            if !matches!(target.reference, EtherDrainTargetRef::Loot { .. })
                 && target.native_flags & 0xc02 != 0
                 && inside_broad_ellipse(center, target.position, 0.8_f32 as f64)
             {
@@ -160,9 +160,9 @@ pub fn refresh_native_ether_drain_targets(
     (refreshed, state)
 }
 
-pub fn refresh_native_ether_drain_world_animations(
-    state: &mut NativeEtherDrainState,
-    targets: &[NativeEtherDrainWorldAnimationTarget],
+pub fn refresh_ether_drain_world_animations(
+    state: &mut EtherDrainState,
+    targets: &[EtherDrainWorldAnimationTarget],
     center: Vec2,
     initialized: bool,
 ) {
@@ -175,7 +175,7 @@ pub fn refresh_native_ether_drain_world_animations(
         let dx = fround(target.position.x - center.x);
         let dy = fround(target.position.y - center.y);
         if (!initialized || id > previous_id)
-            && fround(dx * dx + dy * dy) < NATIVE_ETHER_DRAIN_BROAD_RADIUS.powi(2)
+            && fround(dx * dx + dy * dy) < ETHER_DRAIN_BROAD_RADIUS.powi(2)
             && !state.world_animation_refs.contains(&target.reference)
         {
             state.world_animation_refs.push(target.reference);
@@ -186,10 +186,10 @@ pub fn refresh_native_ether_drain_world_animations(
 }
 
 #[must_use]
-pub fn native_ether_drain_contact(
-    field: NativeEtherDrainField<'_>,
-    target: &NativeEtherDrainTarget,
-) -> Option<NativeEtherDrainContact> {
+pub fn ether_drain_contact(
+    field: EtherDrainField<'_>,
+    target: &EtherDrainTarget,
+) -> Option<EtherDrainContact> {
     let dx = fround(field.position.x - target.position.x);
     let dy = fround(field.position.y - target.position.y);
     let squared = fround(dx * dx + dy * dy);
@@ -220,11 +220,11 @@ pub fn native_ether_drain_contact(
     if target.native_flags & 1 != 0 {
         amount = fround(amount * 2.0);
     }
-    Some(NativeEtherDrainContact {
+    Some(EtherDrainContact {
         amount,
         damage_flags: 0x10a,
         magic_contact: !loose && squared < 400.0,
-        consume: loose && squared < NATIVE_ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED,
+        consume: loose && squared < ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED,
         delta: Vec2::new(component(dx), component(dy)),
         owner_id: field.owner_id.into(),
         source_actor_id: field.id,
@@ -236,24 +236,24 @@ pub fn native_ether_drain_contact(
 /// Grounded animations use the Hurricane fast normalization and squared strength.
 /// They have no 512-unit pressure cutoff, unlike Puppet targets.
 #[must_use]
-pub fn native_ether_drain_world_animation_contact(
-    field: NativeEtherDrainField<'_>,
-    target: NativeEtherDrainWorldAnimationTarget,
-) -> Option<NativeEtherDrainWorldAnimationContact> {
+pub fn ether_drain_world_animation_contact(
+    field: EtherDrainField<'_>,
+    target: EtherDrainWorldAnimationTarget,
+) -> Option<EtherDrainWorldAnimationContact> {
     if target.bounce_velocity != 0.0 {
         return None;
     }
     let dx = fround(field.position.x - target.position.x);
     let dy = fround(field.position.y - target.position.y);
     let squared = fround(dx * dx + dy * dy);
-    let inverse = fround(1.0 / crate::hurricane::native_hurricane_fast_distance(squared));
+    let inverse = fround(1.0 / crate::hurricane::hurricane_fast_distance(squared));
     let strength = fround(
         fround((0.1_f32 as f64).max(1.0 - squared / PRESSURE_DISTANCE_SQUARED)) * 1.100000023841858,
     );
     let component =
         |delta| fround(fround(fround(fround(delta * inverse) * strength) * strength) * field.alpha);
-    Some(NativeEtherDrainWorldAnimationContact {
-        consume: squared < NATIVE_ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED,
+    Some(EtherDrainWorldAnimationContact {
+        consume: squared < ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED,
         delta: Vec2::new(component(dx), component(dy)),
         reference: target.reference,
         source_actor_id: field.id,
@@ -261,7 +261,7 @@ pub fn native_ether_drain_world_animation_contact(
 }
 
 #[must_use]
-pub fn native_ether_drain_enemy_force_factor(family: &str) -> f64 {
+pub fn ether_drain_enemy_force_factor(family: &str) -> f64 {
     match family {
         "DEMON" => 0.5,
         "DIREFACULTY" => 0.35_f32 as f64,
@@ -272,7 +272,7 @@ pub fn native_ether_drain_enemy_force_factor(family: &str) -> f64 {
 }
 
 #[must_use]
-pub fn native_ether_drain_captures_family(family: &str) -> bool {
+pub fn ether_drain_captures_family(family: &str) -> bool {
     matches!(
         family,
         "SKELETON"
@@ -290,21 +290,21 @@ pub fn native_ether_drain_captures_family(family: &str) -> bool {
 /// The private Anim_Manager runs after the field, including children born in this
 /// tick. Even a debris fragment expiring now consumes its three source draws.
 #[must_use]
-pub fn step_native_ether_drain_animations(
-    source: &[NativeEtherDrainAnimation],
+pub fn step_ether_drain_animations(
+    source: &[EtherDrainAnimation],
     center: Vec2,
-    rng: &mut NativeRng,
-) -> NativeEtherDrainAnimationStep {
+    rng: &mut Rng,
+) -> EtherDrainAnimationStep {
     let mut animations = Vec::new();
     let mut pulses = Vec::new();
     for animation in source {
         match *animation {
-            NativeEtherDrainAnimation::Captured { alpha, atlas, entry, tint, body_y_offset } => {
+            EtherDrainAnimation::Captured { alpha, atlas, entry, tint, body_y_offset } => {
                 let alpha = fround(alpha - (0.2_f32 as f64));
                 if alpha <= 0.0 {
                     pulses.push(1.5);
                 } else {
-                    animations.push(NativeEtherDrainAnimation::Captured {
+                    animations.push(EtherDrainAnimation::Captured {
                         alpha,
                         atlas,
                         entry,
@@ -313,7 +313,7 @@ pub fn step_native_ether_drain_animations(
                     });
                 }
             }
-            NativeEtherDrainAnimation::Debris {
+            EtherDrainAnimation::Debris {
                 direction,
                 remaining_distance,
                 speed,
@@ -339,7 +339,7 @@ pub fn step_native_ether_drain_animations(
                     pulses.push(0.5);
                     continue;
                 }
-                animations.push(NativeEtherDrainAnimation::Debris {
+                animations.push(EtherDrainAnimation::Debris {
                     position: Vec2::new(
                         fround(
                             center.x
@@ -361,49 +361,49 @@ pub fn step_native_ether_drain_animations(
             }
         }
     }
-    NativeEtherDrainAnimationStep { animations, pulses }
+    EtherDrainAnimationStep { animations, pulses }
 }
 
 pub(super) fn inside_broad_ellipse(center: Vec2, point: Vec2, vertical: f64) -> bool {
     let dx = fround(point.x - center.x);
     let dy = fround(fround(point.y - center.y) / vertical);
-    fround(dx * dx + dy * dy) < NATIVE_ETHER_DRAIN_BROAD_RADIUS.powi(2)
+    fround(dx * dx + dy * dy) < ETHER_DRAIN_BROAD_RADIUS.powi(2)
 }
 
 fn animation_id(
-    reference: NativeEtherDrainWorldAnimationRef,
-    ids: &NativeEtherDrainWorldAnimationIds,
+    reference: EtherDrainWorldAnimationRef,
+    ids: &EtherDrainWorldAnimationIds,
 ) -> (u64, u64) {
     let id = match reference {
-        NativeEtherDrainWorldAnimationRef::EnemyDeathEffect { id }
-        | NativeEtherDrainWorldAnimationRef::PrimaryTransient { id }
-        | NativeEtherDrainWorldAnimationRef::SecondaryActor { id }
-        | NativeEtherDrainWorldAnimationRef::DeathWeapon { id }
-        | NativeEtherDrainWorldAnimationRef::GolemFragment { id, .. } => id,
+        EtherDrainWorldAnimationRef::EnemyDeathEffect { id }
+        | EtherDrainWorldAnimationRef::PrimaryTransient { id }
+        | EtherDrainWorldAnimationRef::SecondaryActor { id }
+        | EtherDrainWorldAnimationRef::DeathWeapon { id }
+        | EtherDrainWorldAnimationRef::GolemFragment { id, .. } => id,
     };
     (id, *animation_id_ref(reference, ids))
 }
 fn animation_id_ref(
-    reference: NativeEtherDrainWorldAnimationRef,
-    ids: &NativeEtherDrainWorldAnimationIds,
+    reference: EtherDrainWorldAnimationRef,
+    ids: &EtherDrainWorldAnimationIds,
 ) -> &u64 {
     match reference {
-        NativeEtherDrainWorldAnimationRef::EnemyDeathEffect { .. } => &ids.enemy_death_effect,
-        NativeEtherDrainWorldAnimationRef::PrimaryTransient { .. } => &ids.primary_transient,
-        NativeEtherDrainWorldAnimationRef::SecondaryActor { .. } => &ids.secondary_actor,
-        NativeEtherDrainWorldAnimationRef::DeathWeapon { .. } => &ids.death_weapon,
-        NativeEtherDrainWorldAnimationRef::GolemFragment { .. } => &ids.golem_fragment,
+        EtherDrainWorldAnimationRef::EnemyDeathEffect { .. } => &ids.enemy_death_effect,
+        EtherDrainWorldAnimationRef::PrimaryTransient { .. } => &ids.primary_transient,
+        EtherDrainWorldAnimationRef::SecondaryActor { .. } => &ids.secondary_actor,
+        EtherDrainWorldAnimationRef::DeathWeapon { .. } => &ids.death_weapon,
+        EtherDrainWorldAnimationRef::GolemFragment { .. } => &ids.golem_fragment,
     }
 }
 fn animation_id_mut(
-    reference: NativeEtherDrainWorldAnimationRef,
-    ids: &mut NativeEtherDrainWorldAnimationIds,
+    reference: EtherDrainWorldAnimationRef,
+    ids: &mut EtherDrainWorldAnimationIds,
 ) -> &mut u64 {
     match reference {
-        NativeEtherDrainWorldAnimationRef::EnemyDeathEffect { .. } => &mut ids.enemy_death_effect,
-        NativeEtherDrainWorldAnimationRef::PrimaryTransient { .. } => &mut ids.primary_transient,
-        NativeEtherDrainWorldAnimationRef::SecondaryActor { .. } => &mut ids.secondary_actor,
-        NativeEtherDrainWorldAnimationRef::DeathWeapon { .. } => &mut ids.death_weapon,
-        NativeEtherDrainWorldAnimationRef::GolemFragment { .. } => &mut ids.golem_fragment,
+        EtherDrainWorldAnimationRef::EnemyDeathEffect { .. } => &mut ids.enemy_death_effect,
+        EtherDrainWorldAnimationRef::PrimaryTransient { .. } => &mut ids.primary_transient,
+        EtherDrainWorldAnimationRef::SecondaryActor { .. } => &mut ids.secondary_actor,
+        EtherDrainWorldAnimationRef::DeathWeapon { .. } => &mut ids.death_weapon,
+        EtherDrainWorldAnimationRef::GolemFragment { .. } => &mut ids.golem_fragment,
     }
 }

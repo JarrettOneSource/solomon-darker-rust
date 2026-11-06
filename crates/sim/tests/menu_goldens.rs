@@ -203,11 +203,11 @@ fn create_reveal_curves_title_rows_and_pause_fades_match_the_website() {
     }
     for case in golden["pauseCases"].as_array().expect("pause cases") {
         assert_eq!(
-            menu::native_pause_menu_reveal(true, number(&case["elapsed"])),
+            menu::pause_menu_reveal(true, number(&case["elapsed"])),
             number(&case["opening"])
         );
         assert_eq!(
-            menu::native_pause_menu_reveal(false, number(&case["elapsed"])),
+            menu::pause_menu_reveal(false, number(&case["elapsed"])),
             number(&case["closing"])
         );
     }

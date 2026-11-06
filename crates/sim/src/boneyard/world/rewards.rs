@@ -7,14 +7,13 @@ use crate::enemies::EnemyToken;
 use crate::enemies::model::EnemyReward;
 use crate::enemies::world::EnemyWorld;
 use crate::loot::{
-    NativeLootArenaInput, NativeLootDropKind, NativeLootKeyInput, NativeLootModifiers,
-    NativeLootParticipantInput, NativeLootPolicies, NativeLootPolicy, NativeLootSelectionInput,
-    dire_boss_item_recipe_pool,
+    LootArenaInput, LootDropKind, LootKeyInput, LootModifiers, LootParticipantInput, LootPolicies,
+    LootPolicy, LootSelectionInput, dire_boss_item_recipe_pool,
 };
 use crate::painter::WorldPainterOrder;
 
 use super::super::collision::can_place_boneyard_body;
-use super::super::tutorial::{native_tutorial_amulet_item, native_tutorial_health_potion_item};
+use super::super::tutorial::{tutorial_amulet_item, tutorial_health_potion_item};
 use super::{BoneyardPlayerCombatStatus, BoneyardWorld};
 
 /// The source uses retained pre-death rows, including dying enemies and Maggots, for these
@@ -74,14 +73,14 @@ impl BoneyardWorld {
                 players.iter().find(|player| reward.player_id.as_deref() == Some(player.status.id));
             let policies = reward.loot_source.policies.unwrap_or_default();
             let policy = |id| {
-                NativeLootPolicy::from_id(u32::from(id))
-                    .expect("authored enemy loot policy is in0..6")
+                LootPolicy::from_id(u32::from(id)).expect("authored enemy loot policy is in0..6")
             };
             let world_has_health_potion_sack = self.loot.actors.iter().any(|actor| {
-                actor.kind == NativeLootDropKind::Sack
-                    && actor.item.as_ref().is_some_and(|item| {
-                        item.native_type_id == 7001 && item.native_subtype == Some(0)
-                    })
+                actor.kind == LootDropKind::Sack
+                    && actor
+                        .item
+                        .as_ref()
+                        .is_some_and(|item| item.type_id == 7001 && item.subtype == Some(0))
             });
             let remaining_goodies = self
                 .loot
@@ -103,11 +102,11 @@ impl BoneyardWorld {
                 reward.loot_source.recipe_uid,
             );
             self.loot.materialize_enemy_loot(
-                NativeLootSelectionInput {
+                LootSelectionInput {
                     actor_seed: reward.loot_source.actor_seed,
                     ground_recipe_indexes: &[],
                     item_recipe_pool: item_recipe_pool.as_deref(),
-                    arena: NativeLootArenaInput {
+                    arena: LootArenaInput {
                         disable_mask: 0,
                         item_level_maximum: 100,
                         item_level_minimum: 0,
@@ -120,26 +119,25 @@ impl BoneyardWorld {
                     drop_delay_context: 0,
                     inventory_has_health_potion: player
                         .is_some_and(|player| player.inventory_has_health_potion),
-                    key: NativeLootKeyInput {
+                    key: LootKeyInput {
                         current: self.loot.next_key_drop_level,
                         level: arena_level as u32,
                         remaining: remaining_goodies,
                     },
                     nearby_mask_two_count: snapshot
                         .nearby_count(reward.actor_id, reward.loot_source.position),
-                    participant: NativeLootParticipantInput {
+                    participant: LootParticipantInput {
                         advanced_unlocks: player
                             .map_or(&[false; 8], |player| player.advanced_unlocks),
                         level: player.map_or(1, |player| player.level),
-                        modifiers: player.map_or_else(NativeLootModifiers::default, |player| {
-                            player.loot_modifiers
-                        }),
+                        modifiers: player
+                            .map_or_else(LootModifiers::default, |player| player.loot_modifiers),
                         owned_recipe_indexes: player
                             .map_or(&[][..], |player| player.owned_recipe_indexes),
                         slot: usize::from(reward.loot_source.participant_slot),
                     },
                     placement: &placement,
-                    policies: NativeLootPolicies {
+                    policies: LootPolicies {
                         gold: policy(policies.gold),
                         item: policy(policies.item),
                         orb: policy(policies.orb),
@@ -163,7 +161,7 @@ impl BoneyardWorld {
                 && self.tutorial.as_ref().is_some_and(|tutorial| tutorial.item_drop_armed)
             {
                 self.loot.spawn_custom_items(
-                    &[native_tutorial_amulet_item()],
+                    &[tutorial_amulet_item()],
                     reward.loot_source.position,
                     tick,
                     painter_order,
@@ -172,7 +170,7 @@ impl BoneyardWorld {
                     false;
             } else if reward.loot_source.recipe_uid == Some(10065) && self.tutorial.is_some() {
                 self.loot.spawn_custom_items(
-                    &[native_tutorial_health_potion_item()],
+                    &[tutorial_health_potion_item()],
                     reward.loot_source.position,
                     tick,
                     painter_order,

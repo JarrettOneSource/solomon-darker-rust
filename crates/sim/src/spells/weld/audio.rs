@@ -1,7 +1,7 @@
 //! Stock cast/loop cue ownership from `native-weld-primary-runtime.ts`.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeWeldCastCue {
+pub enum WeldCastCue {
     BallLightning,
     BlizzardBeamLoop,
     BurningBolt,
@@ -14,7 +14,7 @@ pub enum NativeWeldCastCue {
     SteamJetLoop,
 }
 
-impl NativeWeldCastCue {
+impl WeldCastCue {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -33,37 +33,37 @@ impl NativeWeldCastCue {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeWeldAudioPlan {
+pub struct WeldAudioPlan {
     pub build_id: u32,
-    pub cue: NativeWeldCastCue,
+    pub cue: WeldCastCue,
     pub looping: bool,
-    pub native_loop_ids: &'static [u32],
-    pub native_sound_ids: &'static [u32],
-    pub native_sound_variant_ids: &'static [u32],
+    pub loop_ids: &'static [u32],
+    pub sound_ids: &'static [u32],
+    pub sound_variant_ids: &'static [u32],
 }
 
 #[must_use]
-pub fn native_weld_audio_plan(build_id: u32) -> NativeWeldAudioPlan {
+pub fn weld_audio_plan(build_id: u32) -> WeldAudioPlan {
     let (cue, loops, sounds, variants): (_, &'static [u32], &'static [u32], &'static [u32]) =
         match build_id {
-            1000 => (NativeWeldCastCue::BurningBolt, &[], &[57, 97], &[]),
-            1001 => (NativeWeldCastCue::FrostMissile, &[], &[38], &[]),
-            1002 => (NativeWeldCastCue::BallLightning, &[], &[], &[224, 225]),
-            1003 => (NativeWeldCastCue::FlameLashLoop, &[157], &[33], &[]),
-            1004 => (NativeWeldCastCue::BlizzardBeamLoop, &[160], &[44], &[]),
-            1005 => (NativeWeldCastCue::SteamJetLoop, &[172, 157], &[], &[]),
-            1006 => (NativeWeldCastCue::EtherealBoulderLoop, &[159], &[87], &[]),
-            1007 => (NativeWeldCastCue::MeteorSwarmLoop, &[165], &[], &[]),
-            1008 => (NativeWeldCastCue::HailstonesLoop, &[160, 159], &[87], &[]),
-            1009 => (NativeWeldCastCue::CrawlingShock, &[], &[], &[203, 204, 205]),
+            1000 => (WeldCastCue::BurningBolt, &[], &[57, 97], &[]),
+            1001 => (WeldCastCue::FrostMissile, &[], &[38], &[]),
+            1002 => (WeldCastCue::BallLightning, &[], &[], &[224, 225]),
+            1003 => (WeldCastCue::FlameLashLoop, &[157], &[33], &[]),
+            1004 => (WeldCastCue::BlizzardBeamLoop, &[160], &[44], &[]),
+            1005 => (WeldCastCue::SteamJetLoop, &[172, 157], &[], &[]),
+            1006 => (WeldCastCue::EtherealBoulderLoop, &[159], &[87], &[]),
+            1007 => (WeldCastCue::MeteorSwarmLoop, &[165], &[], &[]),
+            1008 => (WeldCastCue::HailstonesLoop, &[160, 159], &[87], &[]),
+            1009 => (WeldCastCue::CrawlingShock, &[], &[], &[203, 204, 205]),
             _ => panic!("unknown native Weld build"),
         };
-    NativeWeldAudioPlan {
+    WeldAudioPlan {
         build_id,
         cue,
         looping: !loops.is_empty(),
-        native_loop_ids: loops,
-        native_sound_ids: sounds,
-        native_sound_variant_ids: variants,
+        loop_ids: loops,
+        sound_ids: sounds,
+        sound_variant_ids: variants,
     }
 }

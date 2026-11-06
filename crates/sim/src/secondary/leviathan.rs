@@ -3,16 +3,16 @@
 
 use crate::float;
 use crate::float::{atan2, fround};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_LEVIATHAN_ACTIVE_FIRST_AGE: u64 = 41;
-pub const NATIVE_LEVIATHAN_ACTIVE_LAST_AGE: u64 = 1640;
-pub const NATIVE_LEVIATHAN_LIFETIME_TICKS: u64 = 1664;
-pub const NATIVE_LEVIATHAN_TARGET_RANGE: f64 = 300.0;
-pub const NATIVE_ETHER_BOLT_LIFETIME_TICKS: u64 = 200;
+pub const LEVIATHAN_ACTIVE_FIRST_AGE: u64 = 41;
+pub const LEVIATHAN_ACTIVE_LAST_AGE: u64 = 1640;
+pub const LEVIATHAN_LIFETIME_TICKS: u64 = 1664;
+pub const LEVIATHAN_TARGET_RANGE: f64 = 300.0;
+pub const ETHER_BOLT_LIFETIME_TICKS: u64 = 200;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeLeviathanAppendageBirth {
+pub struct LeviathanAppendageBirth {
     pub bank: u32,
     pub base_offset: Vec2,
     pub countdown: i32,
@@ -23,8 +23,8 @@ pub struct NativeLeviathanAppendageBirth {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeLeviathanBirth {
-    pub appendages: Vec<NativeLeviathanAppendageBirth>,
+pub struct LeviathanBirth {
+    pub appendages: Vec<LeviathanAppendageBirth>,
     pub maximum_scale: f64,
     pub quantity: usize,
     pub rotation_radians: f64,
@@ -174,11 +174,11 @@ const MUZZLE_SOCKETS: [Vec2; 15] = [
 ];
 
 #[must_use]
-pub fn create_native_leviathan_birth(
-    rng: &mut NativeRng,
+pub fn create_leviathan_birth(
+    rng: &mut Rng,
     configured_maximum: f64,
     force_maximum: bool,
-) -> NativeLeviathanBirth {
+) -> LeviathanBirth {
     let rotation = rng.draw_scaled_float(360.0, false);
     let maximum = (configured_maximum + 0.5).floor().clamp(1.0, 5.0) as i32;
     let quantity = if force_maximum { maximum } else { rng.draw_integer(maximum) + 1 } as usize;
@@ -189,7 +189,7 @@ pub fn create_native_leviathan_birth(
         let spin_step = rng.draw_scaled_float(1.0, false);
         let bank = rng.draw_integer(2) as u32;
         let countdown = rng.draw_integer(100);
-        appendages.push(NativeLeviathanAppendageBirth {
+        appendages.push(LeviathanAppendageBirth {
             bank,
             base_offset: Vec2::new(layout.base_x, fround(-(layout.base_y_minimum + base_y))),
             countdown,
@@ -205,7 +205,7 @@ pub fn create_native_leviathan_birth(
         3 => 0.95_f32 as f64,
         _ => 1.0,
     };
-    NativeLeviathanBirth {
+    LeviathanBirth {
         appendages,
         maximum_scale,
         quantity,
@@ -214,7 +214,7 @@ pub fn create_native_leviathan_birth(
 }
 
 #[must_use]
-pub fn native_leviathan_current_scale(age_ticks: u64) -> f64 {
+pub fn leviathan_current_scale(age_ticks: u64) -> f64 {
     if age_ticks <= 40 {
         let mut scale = 0.0;
         for _ in 0..age_ticks {
@@ -222,21 +222,21 @@ pub fn native_leviathan_current_scale(age_ticks: u64) -> f64 {
         }
         return scale;
     }
-    if age_ticks < NATIVE_LEVIATHAN_ACTIVE_LAST_AGE {
+    if age_ticks < LEVIATHAN_ACTIVE_LAST_AGE {
         return 1.0;
     }
     let mut scale = 1.0;
-    for _ in 0..(age_ticks - NATIVE_LEVIATHAN_ACTIVE_LAST_AGE + 1).min(25) {
+    for _ in 0..(age_ticks - LEVIATHAN_ACTIVE_LAST_AGE + 1).min(25) {
         scale = fround(scale - 0.04_f32 as f64);
     }
     scale.max(0.0)
 }
 
 #[must_use]
-pub fn native_leviathan_phase(age_ticks: u64) -> u32 {
+pub fn leviathan_phase(age_ticks: u64) -> u32 {
     if age_ticks <= 40 {
         0
-    } else if age_ticks < NATIVE_LEVIATHAN_ACTIVE_LAST_AGE {
+    } else if age_ticks < LEVIATHAN_ACTIVE_LAST_AGE {
         1
     } else {
         2
@@ -244,42 +244,42 @@ pub fn native_leviathan_phase(age_ticks: u64) -> u32 {
 }
 
 #[must_use]
-pub fn native_leviathan_active(age_ticks: u64) -> bool {
-    (NATIVE_LEVIATHAN_ACTIVE_FIRST_AGE..=NATIVE_LEVIATHAN_ACTIVE_LAST_AGE).contains(&age_ticks)
+pub fn leviathan_active(age_ticks: u64) -> bool {
+    (LEVIATHAN_ACTIVE_FIRST_AGE..=LEVIATHAN_ACTIVE_LAST_AGE).contains(&age_ticks)
 }
 
 #[must_use]
-pub fn native_leviathan_heading_vector(heading_degrees: f64) -> Vec2 {
+pub fn leviathan_heading_vector(heading_degrees: f64) -> Vec2 {
     let radians = heading_degrees * std::f64::consts::PI / 180.0;
     Vec2::new(fround(float::sin(radians)), fround(-float::cos(radians)))
 }
 
 #[must_use]
-pub fn native_leviathan_heading_degrees(from: Vec2, to: Vec2) -> f64 {
+pub fn leviathan_heading_degrees(from: Vec2, to: Vec2) -> f64 {
     let degrees = atan2(to.x - from.x, -(to.y - from.y)) * 180.0 / std::f64::consts::PI;
     if degrees < 0.0 { degrees + 360.0 } else { degrees }
 }
 
 #[must_use]
-pub fn native_leviathan_direction_frame(heading_degrees: f64) -> usize {
+pub fn leviathan_direction_frame(heading_degrees: f64) -> usize {
     let rounded_heading = (heading_degrees + 0.5).floor();
     let frame = ((rounded_heading + 12.0) / 24.0).floor() as usize;
     if frame > 14 { frame - 15 } else { frame }
 }
 
 #[must_use]
-pub fn native_leviathan_appendage_record(bank: u32, heading_degrees: f64) -> usize {
-    343 + bank as usize * 15 + native_leviathan_direction_frame(heading_degrees)
+pub fn leviathan_appendage_record(bank: u32, heading_degrees: f64) -> usize {
+    343 + bank as usize * 15 + leviathan_direction_frame(heading_degrees)
 }
 
 #[must_use]
-pub fn native_leviathan_appendage_local_root(
+pub fn leviathan_appendage_local_root(
     base_offset: Vec2,
     recoil: Vec2,
     spin_degrees: f64,
     deployment: f64,
 ) -> Vec2 {
-    let spin = native_leviathan_heading_vector(spin_degrees);
+    let spin = leviathan_heading_vector(spin_degrees);
     Vec2::new(
         fround(base_offset.x + recoil.x + 2.0 * spin.x),
         fround(base_offset.y + recoil.y + 4.0 * spin.y + 35.0 + deployment * 100.0),
@@ -287,7 +287,7 @@ pub fn native_leviathan_appendage_local_root(
 }
 
 #[must_use]
-pub fn native_leviathan_appendage_presentation_root(
+pub fn leviathan_appendage_presentation_root(
     parent_position: Vec2,
     parent_composite_scale: f64,
     local_root: Vec2,
@@ -299,7 +299,7 @@ pub fn native_leviathan_appendage_presentation_root(
 }
 
 #[must_use]
-pub fn native_leviathan_muzzle_position(
+pub fn leviathan_muzzle_position(
     parent_position: Vec2,
     local_root: Vec2,
     bank: u32,
@@ -308,7 +308,7 @@ pub fn native_leviathan_muzzle_position(
 ) -> Vec2 {
     assert!(bank <= 1, "Leviathan appendage has one of its two authored banks");
     // Both authored banks use the same socket positions; their texture records differ.
-    let socket = MUZZLE_SOCKETS[native_leviathan_direction_frame(heading_degrees)];
+    let socket = MUZZLE_SOCKETS[leviathan_direction_frame(heading_degrees)];
     let wobble =
         float::sin(heading_degrees * std::f64::consts::PI / 180.0) * 5.0 * std::f64::consts::PI
             / 180.0;
@@ -321,21 +321,17 @@ pub fn native_leviathan_muzzle_position(
 }
 
 #[must_use]
-pub fn native_leviathan_inside_target_lane(
-    origin: Vec2,
-    heading_degrees: f64,
-    target: Vec2,
-) -> bool {
+pub fn leviathan_inside_target_lane(origin: Vec2, heading_degrees: f64, target: Vec2) -> bool {
     let dx = target.x - origin.x;
     let dy = target.y - origin.y;
     let distance_squared = dx * dx + dy * dy;
-    if distance_squared >= NATIVE_LEVIATHAN_TARGET_RANGE * NATIVE_LEVIATHAN_TARGET_RANGE {
+    if distance_squared >= LEVIATHAN_TARGET_RANGE * LEVIATHAN_TARGET_RANGE {
         return false;
     }
     if distance_squared == 0.0 {
         return true;
     }
-    let target_heading = native_leviathan_heading_degrees(origin, target);
+    let target_heading = leviathan_heading_degrees(origin, target);
     let delta = (((target_heading - heading_degrees + 540.0) % 360.0) - 180.0).abs();
     delta <= 25.0
 }

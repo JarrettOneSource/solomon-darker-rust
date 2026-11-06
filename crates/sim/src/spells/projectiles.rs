@@ -1,8 +1,8 @@
 //! Native elemental projectile births and motion from `primary-spells.ts`.
 
-use super::casting::{NativePlayerWeaponKind, primary_spell_emitter_offset};
+use super::casting::{PlayerWeaponKind, primary_spell_emitter_offset};
 use super::earth::earth_boulder_flight_orientation_step;
-use super::fire::draw_native_fire_private_seed;
+use super::fire::draw_fire_private_seed;
 use super::model::*;
 use super::targeting::*;
 use crate::float::fround;
@@ -10,15 +10,13 @@ use crate::heading::heading_degrees_from_vector;
 use crate::hub::HubWizard;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::profile::WizardElement;
-use crate::profile::primary::{
-    NativePrimarySkillProfile, NativePrimarySkillProfileBase, NativeSpentEmber,
-};
-use crate::{NativeRng, Vec2};
+use crate::profile::primary::{PrimarySkillProfile, PrimarySkillProfileBase, SpentEmber};
+use crate::{Rng, Vec2};
 
 pub(super) fn emitter(
     wizard: &HubWizard,
     element: WizardElement,
-    weapon: Option<NativePlayerWeaponKind>,
+    weapon: Option<PlayerWeaponKind>,
 ) -> Vec2 {
     let offset = primary_spell_emitter_offset(
         wizard.heading_index,
@@ -34,8 +32,8 @@ pub(super) struct OneShotBirth<'a> {
     pub first_id: u64,
     pub owner_id: &'a str,
     pub wizard: &'a HubWizard,
-    pub weapon: Option<NativePlayerWeaponKind>,
-    pub profile: &'a NativePrimarySkillProfile,
+    pub weapon: Option<PlayerWeaponKind>,
+    pub profile: &'a PrimarySkillProfile,
     pub world_key: &'a str,
     pub targets: &'a [PrimarySpellTarget],
     pub underpowered: bool,
@@ -43,13 +41,13 @@ pub(super) struct OneShotBirth<'a> {
 
 pub(super) fn create_one_shot_projectiles(
     birth: OneShotBirth<'_>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     order: &mut WorldPainterOrder,
 ) -> Vec<PrimarySpellProjectile> {
-    if let NativePrimarySkillProfile::Weld(profile) = birth.profile {
+    if let PrimarySkillProfile::Weld(profile) = birth.profile {
         let origin = emitter(birth.wizard, WizardElement::Fire, birth.weapon);
-        return super::weld::spawn_native_weld_one_shot(
-            super::weld::SpawnNativeWeldOneShotInput {
+        return super::weld::spawn_weld_one_shot(
+            super::weld::SpawnWeldOneShotInput {
                 aim_direction: birth.wizard.primary_cast.aim_direction,
                 first_id: birth.first_id,
                 origin,
@@ -69,8 +67,8 @@ pub(super) fn create_one_shot_projectiles(
     let damage = draw_inclusive_damage(birth.profile.common(), rng)
         * if birth.underpowered { 0.5 } else { 1.0 };
     let aim = birth.wizard.primary_cast.aim_direction;
-    if let NativePrimarySkillProfile::Fire(profile) = birth.profile {
-        let private_seed = draw_native_fire_private_seed(rng);
+    if let PrimarySkillProfile::Fire(profile) = birth.profile {
+        let private_seed = draw_fire_private_seed(rng);
         let origin = emitter(birth.wizard, WizardElement::Fire, birth.weapon);
         let position = Vec2::new(origin.x + aim.x * 20.0, origin.y + 10.0 + aim.y * 20.0);
         let common = PrimarySpellProjectileBase {
@@ -95,15 +93,11 @@ pub(super) fn create_one_shot_projectiles(
             explode_damage: if birth.underpowered { 0.0 } else { profile.explode_damage },
             explode_radius: if birth.underpowered { 0.0 } else { profile.explode_radius },
             private_seed,
-            spent_ember: if birth.underpowered {
-                NativeSpentEmber::None
-            } else {
-                profile.spent_ember
-            },
+            spent_ember: if birth.underpowered { SpentEmber::None } else { profile.spent_ember },
             underpowered: birth.underpowered,
         })];
     }
-    let NativePrimarySkillProfile::Ether(profile) = birth.profile else {
+    let PrimarySkillProfile::Ether(profile) = birth.profile else {
         unreachable!("one-shot elemental profile");
     };
     let aim_heading = heading_degrees_from_vector(aim.x, aim.y);
@@ -114,7 +108,7 @@ pub(super) fn create_one_shot_projectiles(
     let position = Vec2::new(origin.x, origin.y + 10.0);
     let mut projectiles = Vec::with_capacity(quantity);
     for index in 0..quantity {
-        let heading_degrees = native_missile_fan_heading(aim_heading, quantity, index);
+        let heading_degrees = missile_fan_heading(aim_heading, quantity, index);
         let direction = direction_from_heading(heading_degrees);
         let target = select_ether_primary_target(position, direction, birth.targets);
         let common = PrimarySpellProjectileBase {
@@ -142,7 +136,7 @@ pub(super) fn create_one_shot_projectiles(
             turn_input: if birth.underpowered {
                 1.2_f32 as f64
             } else {
-                fround(2.0 * profile.speed_factor * native_missile_fan_turn_scale(index))
+                fround(2.0 * profile.speed_factor * missile_fan_turn_scale(index))
             },
             turn_accumulator: ETHER_PRIMARY_INITIAL_TURN,
             underpowered: birth.underpowered,
@@ -152,7 +146,7 @@ pub(super) fn create_one_shot_projectiles(
     projectiles
 }
 
-fn draw_inclusive_damage(profile: &NativePrimarySkillProfileBase, rng: &mut NativeRng) -> f64 {
+fn draw_inclusive_damage(profile: &PrimarySkillProfileBase, rng: &mut Rng) -> f64 {
     let count = profile.damage_roll_count;
     assert!(
         count.is_finite() && count.fract() == 0.0 && count >= 1.0,
@@ -176,7 +170,7 @@ pub(super) fn advance_projectile(
     }
     match spell {
         PrimarySpellProjectile::Weld(projectile) => {
-            super::weld::step_native_weld_projectile(projectile, targets);
+            super::weld::step_weld_projectile(projectile, targets);
             return;
         }
         PrimarySpellProjectile::Ether(spell) => {

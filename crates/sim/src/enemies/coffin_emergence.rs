@@ -7,27 +7,27 @@ use super::world::EnemyWorld;
 use crate::enemies::model::EnemyActor;
 use crate::float::{self, fround};
 use crate::painter::WorldPainterOrder;
-use crate::spells::earth_debris::{NativeBoulderDebrisMotion, step_native_boulder_debris_motion};
-use crate::{NativeRng, Vec2};
+use crate::spells::earth_debris::{BoulderDebrisMotion, step_boulder_debris_motion};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeCoffinEmergenceParticle {
+pub struct CoffinEmergenceParticle {
     #[cfg_attr(feature = "persistence", serde(flatten))]
-    pub motion: NativeBoulderDebrisMotion,
+    pub motion: BoulderDebrisMotion,
     pub record: usize,
     pub scale: f64,
     pub enhanced_shadow: bool,
 }
 
 #[must_use]
-pub fn create_native_coffin_emergence(
-    rng: &mut NativeRng,
+pub fn create_coffin_emergence(
+    rng: &mut Rng,
     position: Vec2,
     scale: f64,
     radius: f64,
     enhanced: bool,
-) -> Vec<NativeCoffinEmergenceParticle> {
+) -> Vec<CoffinEmergenceParticle> {
     assert!(
         scale.is_finite() && scale > 0.0 && radius.is_finite() && radius > 0.0,
         "Coffin emergence requires its live native scale and radius"
@@ -58,11 +58,11 @@ pub fn create_native_coffin_emergence(
             fround(fround(direction.x * speed) * 0.75),
             fround(fround(direction.y * speed) * 0.75),
         );
-        particles.push(NativeCoffinEmergenceParticle {
+        particles.push(CoffinEmergenceParticle {
             record,
             scale: size,
             enhanced_shadow: enhanced,
-            motion: NativeBoulderDebrisMotion {
+            motion: BoulderDebrisMotion {
                 alpha: if enhanced { 10.0 } else { 2.0 },
                 bounce_velocity: vertical_velocity,
                 height,
@@ -85,7 +85,7 @@ pub(super) fn spawn_coffin_emergence(
     enhanced: bool,
     order: &mut WorldPainterOrder,
 ) {
-    let particles = create_native_coffin_emergence(
+    let particles = create_coffin_emergence(
         &mut world.steering_rng,
         actor.position,
         actor.config.scale,
@@ -130,10 +130,10 @@ pub(super) fn spawn_coffin_emergence(
 pub(super) fn step_coffin_emergence(
     effect: &mut EnemyDeathEffect,
     tick: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> bool {
-    let Some(motion) = step_native_boulder_debris_motion(
-        NativeBoulderDebrisMotion {
+    let Some(motion) = step_boulder_debris_motion(
+        BoulderDebrisMotion {
             alpha: effect.opacity_timer,
             bounce_velocity: effect.bounce_velocity,
             height: effect.height,

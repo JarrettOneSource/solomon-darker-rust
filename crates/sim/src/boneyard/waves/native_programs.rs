@@ -9,7 +9,7 @@ use crate::enemies::config::{
 use crate::enemies::{EnemyFlag, SpawnPositionPolicy};
 
 #[must_use]
-pub fn native_survival_programs(source_sha256: &str) -> Option<SurvivalPrograms> {
+pub fn survival_programs(source_sha256: &str) -> Option<SurvivalPrograms> {
     match source_sha256 {
         "bd3c38468481b7337b1e7382e5503cc214356906571763a68188b23e821e73fb" => {
             Some(SurvivalPrograms {

@@ -4,10 +4,10 @@ use super::model::{
     BossPhase, DemonSkullAction, DemonSkullActionProgram, DemonSkullBrain, DemonSkullRangedAttack,
 };
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_DEMON_SKULL_SCREAM_TICKS: u64 = 275;
-pub const NATIVE_DEMON_SKULL_DEATH_STREAM_TICKS: u64 = 600;
+pub const DEMON_SKULL_SCREAM_TICKS: u64 = 275;
+pub const DEMON_SKULL_DEATH_STREAM_TICKS: u64 = 600;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DemonSkullActionKind {
@@ -43,7 +43,7 @@ impl From<DemonSkullRangedAttack> for DemonSkullActionKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeDemonSkullControllerContext {
+pub struct DemonSkullControllerContext {
     pub alternate_player: bool,
     pub has_action: bool,
     pub heading_deg: f64,
@@ -55,7 +55,7 @@ pub struct NativeDemonSkullControllerContext {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct NativeDemonSkullControllerStep {
+pub struct DemonSkullControllerStep {
     pub begin_action: Option<DemonSkullActionKind>,
     pub increment_attack_seed: bool,
     pub landing: bool,
@@ -63,11 +63,7 @@ pub struct NativeDemonSkullControllerStep {
 }
 
 #[must_use]
-pub fn create_native_demon_skull(
-    rng: &mut NativeRng,
-    movement_scale: f64,
-    capabilities: u8,
-) -> DemonSkullBrain {
+pub fn create_demon_skull(rng: &mut Rng, movement_scale: f64, capabilities: u8) -> DemonSkullBrain {
     let body_phase_deg = rng.draw_scaled_float(360.0, false);
     let flicker_phase_deg = rng.draw_scaled_float(360.0, false);
     DemonSkullBrain {
@@ -98,7 +94,7 @@ pub fn create_native_demon_skull(
 }
 
 #[must_use]
-pub fn create_native_demon_skull_action(
+pub fn create_demon_skull_action(
     kind: DemonSkullActionKind,
     heading: f64,
     target_heading: Option<f64>,
@@ -134,7 +130,7 @@ pub fn create_native_demon_skull_action(
             original_heading_deg: heading,
         },
         DemonSkullActionKind::Spit => {
-            let mut rng = NativeRng::new(i64::from(action_seed));
+            let mut rng = Rng::new(i64::from(action_seed));
             let base = rng.draw_integer(3);
             let short = rng.draw_integer(20);
             let extra = rng.draw_integer(30);
@@ -151,7 +147,7 @@ pub fn create_native_demon_skull_action(
     DemonSkullAction { retired: kind == DemonSkullActionKind::Scream, program }
 }
 
-pub fn prepare_native_demon_skull_tick(brain: &mut DemonSkullBrain, admitted: bool) {
+pub fn prepare_demon_skull_tick(brain: &mut DemonSkullBrain, admitted: bool) {
     brain.flair_glow = fround(brain.flair_glow - fround(0.05)).max(0.0);
     brain.seen |= admitted;
     brain.speed = if brain.speed > brain.target_speed {
@@ -162,7 +158,7 @@ pub fn prepare_native_demon_skull_tick(brain: &mut DemonSkullBrain, admitted: bo
 }
 
 #[must_use]
-pub fn native_demon_skull_attack_choices(
+pub fn demon_skull_attack_choices(
     capabilities: u8,
     distance_squared: f64,
     line_of_sight: bool,
@@ -187,11 +183,11 @@ pub fn native_demon_skull_attack_choices(
 }
 
 #[must_use]
-pub fn step_native_demon_skull_controller(
+pub fn step_demon_skull_controller(
     brain: &mut DemonSkullBrain,
-    rng: &mut NativeRng,
-    context: NativeDemonSkullControllerContext,
-) -> NativeDemonSkullControllerStep {
+    rng: &mut Rng,
+    context: DemonSkullControllerContext,
+) -> DemonSkullControllerStep {
     let phase = rng.draw_float_range(3.0, 6.0);
     if brain.body_heading_deg == -1.0 {
         brain.body_heading_deg = context.heading_deg;
@@ -213,14 +209,14 @@ pub fn step_native_demon_skull_controller(
             brain.body_pose = 1.0;
             brain.speed =
                 fround(brain.speed + fround(0.04)).min(fround(context.movement_scale * 10.0));
-            return NativeDemonSkullControllerStep { scream_shake: true, ..Default::default() };
+            return DemonSkullControllerStep { scream_shake: true, ..Default::default() };
         }
         let landing = brain.body_pose == 1.0;
         let speed = fround(brain.speed - fround(0.1));
         brain.body_pose = 0.0;
         brain.scream_active = speed >= context.movement_scale;
         brain.speed = speed.max(context.movement_scale);
-        return NativeDemonSkullControllerStep { landing, ..Default::default() };
+        return DemonSkullControllerStep { landing, ..Default::default() };
     }
     if let Some(attack) = brain.pending_attack {
         brain.speed = fround(brain.speed - fround(0.025)).max(0.0);
@@ -228,14 +224,14 @@ pub fn step_native_demon_skull_controller(
             return Default::default();
         }
         brain.pending_attack = None;
-        return NativeDemonSkullControllerStep {
+        return DemonSkullControllerStep {
             begin_action: Some(attack.into()),
             ..Default::default()
         };
     }
     if !context.has_action && brain.capabilities & 32 != 0 {
         brain.capabilities &= !32;
-        return NativeDemonSkullControllerStep {
+        return DemonSkullControllerStep {
             begin_action: Some(DemonSkullActionKind::Flair),
             ..Default::default()
         };
@@ -248,7 +244,7 @@ pub fn step_native_demon_skull_controller(
     {
         brain.scream_active = true;
         brain.body_pose = 1.0;
-        return NativeDemonSkullControllerStep {
+        return DemonSkullControllerStep {
             begin_action: Some(DemonSkullActionKind::Scream),
             ..Default::default()
         };
@@ -269,12 +265,11 @@ pub fn step_native_demon_skull_controller(
     };
     brain.attack_ticks_remaining =
         (fround(delay * 100.0).round_ties_even() / divisor).trunc() as i64;
-    let choices =
-        native_demon_skull_attack_choices(brain.capabilities, distance, context.line_of_sight);
+    let choices = demon_skull_attack_choices(brain.capabilities, distance, context.line_of_sight);
     if choices.is_empty() {
         return Default::default();
     }
     brain.pending_attack = Some(choices[rng.draw_integer(choices.len() as i32) as usize]);
     brain.target_speed = fround(0.0001);
-    NativeDemonSkullControllerStep { increment_attack_seed: true, ..Default::default() }
+    DemonSkullControllerStep { increment_attack_seed: true, ..Default::default() }
 }

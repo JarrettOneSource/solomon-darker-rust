@@ -2,11 +2,11 @@
 
 use crate::profile::runtime::{PlayerStaffAttackOutcome, PlayerStaffDamageLane};
 use crate::spells::model::PrimarySpellTransientBase;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffActionBase {
+pub struct PlayerStaffActionBase {
     pub common: PrimarySpellTransientBase,
     pub contact_sequence: u64,
     pub heading_degrees: f64,
@@ -17,8 +17,8 @@ pub struct NativePlayerStaffActionBase {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffMeleeAction {
-    pub base: NativePlayerStaffActionBase,
+pub struct PlayerStaffMeleeAction {
+    pub base: PlayerStaffActionBase,
     pub action_timing_factor: f64,
     pub base_progress_per_tick: f64,
     pub lane: PlayerStaffDamageLane,
@@ -27,29 +27,29 @@ pub struct NativePlayerStaffMeleeAction {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffSpinAction {
-    pub base: NativePlayerStaffActionBase,
+pub struct PlayerStaffSpinAction {
+    pub base: PlayerStaffActionBase,
     pub countdown: f64,
     pub turn_sign: i8,
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub enum NativePlayerStaffAction {
-    Melee(NativePlayerStaffMeleeAction),
-    Spin(NativePlayerStaffSpinAction),
+pub enum PlayerStaffAction {
+    Melee(PlayerStaffMeleeAction),
+    Spin(PlayerStaffSpinAction),
 }
 
-impl NativePlayerStaffAction {
+impl PlayerStaffAction {
     #[must_use]
-    pub fn base(&self) -> &NativePlayerStaffActionBase {
+    pub fn base(&self) -> &PlayerStaffActionBase {
         match self {
             Self::Melee(action) => &action.base,
             Self::Spin(action) => &action.base,
         }
     }
 
-    pub fn base_mut(&mut self) -> &mut NativePlayerStaffActionBase {
+    pub fn base_mut(&mut self) -> &mut PlayerStaffActionBase {
         match self {
             Self::Melee(action) => &mut action.base,
             Self::Spin(action) => &mut action.base,
@@ -68,14 +68,14 @@ impl NativePlayerStaffAction {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeStaffProcSound {
+pub enum StaffProcSound {
     CriticalHit,
     DisableEnemy,
     Knockback,
     SpinAttack,
 }
 
-impl NativeStaffProcSound {
+impl StaffProcSound {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -89,12 +89,12 @@ impl NativeStaffProcSound {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffContactEvent {
+pub struct PlayerStaffContactEvent {
     pub common: PrimarySpellTransientBase,
     pub impact_sound_pitches: Vec<f64>,
     pub origin: Vec2,
     pub outcome: PlayerStaffAttackOutcome,
-    pub proc_sound: Option<NativeStaffProcSound>,
+    pub proc_sound: Option<StaffProcSound>,
     pub proc_sound_pitches: Vec<f64>,
     pub pike_break_sound_indexes: Vec<usize>,
     pub swoosh_pitch: f64,
@@ -103,7 +103,7 @@ pub struct NativePlayerStaffContactEvent {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffContactKnockback {
+pub struct PlayerStaffContactKnockback {
     pub common: PrimarySpellTransientBase,
     pub delta: Vec2,
     pub remaining_ticks: u64,
@@ -112,13 +112,13 @@ pub struct NativePlayerStaffContactKnockback {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffPikeBreakVfx {
+pub struct PlayerStaffPikeBreakVfx {
     pub common: PrimarySpellTransientBase,
     #[cfg_attr(feature = "persistence", serde(default = "pike_break_shadow_default"))]
     pub enhanced_shadow: bool,
     pub heading_degrees: f64,
     pub position: Vec2,
-    pub presentation_rng: NativeRng,
+    pub presentation_rng: Rng,
     pub target_id: String,
 }
 
@@ -129,7 +129,7 @@ fn pike_break_shadow_default() -> bool {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffSmokeVfx {
+pub struct PlayerStaffSmokeVfx {
     pub common: PrimarySpellTransientBase,
     pub alpha: f64,
     pub alpha_loss: f64,
@@ -142,7 +142,7 @@ pub struct NativePlayerStaffSmokeVfx {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffMoveFadeVfx {
+pub struct PlayerStaffMoveFadeVfx {
     pub common: PrimarySpellTransientBase,
     pub alpha: f64,
     pub alpha_loss: f64,
@@ -157,7 +157,7 @@ pub struct NativePlayerStaffMoveFadeVfx {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffPerspectiveVfx {
+pub struct PlayerStaffPerspectiveVfx {
     pub common: PrimarySpellTransientBase,
     pub alpha: f64,
     pub alpha_loss: f64,
@@ -170,13 +170,13 @@ pub struct NativePlayerStaffPerspectiveVfx {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub enum NativePlayerStaffVfx {
-    Smoke(NativePlayerStaffSmokeVfx),
-    MoveFade(NativePlayerStaffMoveFadeVfx),
-    PerspectiveFade(NativePlayerStaffPerspectiveVfx),
+pub enum PlayerStaffVfx {
+    Smoke(PlayerStaffSmokeVfx),
+    MoveFade(PlayerStaffMoveFadeVfx),
+    PerspectiveFade(PlayerStaffPerspectiveVfx),
 }
 
-impl NativePlayerStaffVfx {
+impl PlayerStaffVfx {
     #[must_use]
     pub fn common(&self) -> &PrimarySpellTransientBase {
         match self {
@@ -197,7 +197,7 @@ impl NativePlayerStaffVfx {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffKnockbackActor {
+pub struct StaffKnockbackActor {
     pub common: PrimarySpellTransientBase,
     pub arc_degrees: f64,
     pub origin: Vec2,
@@ -207,16 +207,16 @@ pub struct NativeStaffKnockbackActor {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub enum NativePlayerStaffTransient {
-    Action(NativePlayerStaffAction),
-    Contact(NativePlayerStaffContactEvent),
-    ContactKnockback(NativePlayerStaffContactKnockback),
-    PikeBreak(NativePlayerStaffPikeBreakVfx),
-    Vfx(NativePlayerStaffVfx),
-    Knockback(NativeStaffKnockbackActor),
+pub enum PlayerStaffTransient {
+    Action(PlayerStaffAction),
+    Contact(PlayerStaffContactEvent),
+    ContactKnockback(PlayerStaffContactKnockback),
+    PikeBreak(PlayerStaffPikeBreakVfx),
+    Vfx(PlayerStaffVfx),
+    Knockback(StaffKnockbackActor),
 }
 
-impl NativePlayerStaffTransient {
+impl PlayerStaffTransient {
     #[must_use]
     pub fn common(&self) -> &PrimarySpellTransientBase {
         match self {
@@ -243,14 +243,14 @@ impl NativePlayerStaffTransient {
     #[must_use]
     pub const fn kind(&self) -> &'static str {
         match self {
-            Self::Action(NativePlayerStaffAction::Melee(_)) => "player-staff-melee",
-            Self::Action(NativePlayerStaffAction::Spin(_)) => "player-staff-spin",
+            Self::Action(PlayerStaffAction::Melee(_)) => "player-staff-melee",
+            Self::Action(PlayerStaffAction::Spin(_)) => "player-staff-spin",
             Self::Contact(_) => "player-staff-contact",
             Self::ContactKnockback(_) => "player-staff-contact-knockback",
             Self::PikeBreak(_) => "player-staff-pike-break",
-            Self::Vfx(NativePlayerStaffVfx::Smoke(_)) => "player-staff-smoke",
-            Self::Vfx(NativePlayerStaffVfx::MoveFade(_)) => "player-staff-move-fade",
-            Self::Vfx(NativePlayerStaffVfx::PerspectiveFade(_)) => "player-staff-perspective-fade",
+            Self::Vfx(PlayerStaffVfx::Smoke(_)) => "player-staff-smoke",
+            Self::Vfx(PlayerStaffVfx::MoveFade(_)) => "player-staff-move-fade",
+            Self::Vfx(PlayerStaffVfx::PerspectiveFade(_)) => "player-staff-perspective-fade",
             Self::Knockback(_) => "player-staff-knockback",
         }
     }
@@ -258,22 +258,22 @@ impl NativePlayerStaffTransient {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativePlayerStaffActionStep {
-    pub action: Option<NativePlayerStaffAction>,
+pub struct PlayerStaffActionStep {
+    pub action: Option<PlayerStaffAction>,
     pub contact: bool,
-    pub sample: NativePlayerStaffAction,
+    pub sample: PlayerStaffAction,
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffTarget {
+pub struct StaffTarget {
     pub collision_radius: f64,
     pub id: String,
     pub position: Vec2,
     pub registration_order: Option<usize>,
 }
 
-impl AsRef<NativeStaffTarget> for NativeStaffTarget {
+impl AsRef<StaffTarget> for StaffTarget {
     fn as_ref(&self) -> &Self {
         self
     }
@@ -281,20 +281,20 @@ impl AsRef<NativeStaffTarget> for NativeStaffTarget {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffPhysicalTarget {
-    pub target: NativeStaffTarget,
+pub struct StaffPhysicalTarget {
+    pub target: StaffTarget,
     pub pike: bool,
 }
 
-impl AsRef<NativeStaffTarget> for NativeStaffPhysicalTarget {
-    fn as_ref(&self) -> &NativeStaffTarget {
+impl AsRef<StaffTarget> for StaffPhysicalTarget {
+    fn as_ref(&self) -> &StaffTarget {
         &self.target
     }
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeStaffPlayer {
+pub struct StaffPlayer {
     pub collision_radius: f64,
     pub heading_degrees: f64,
     pub position: Vec2,
@@ -302,9 +302,9 @@ pub struct NativeStaffPlayer {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffPhysicalImpact {
+pub struct StaffPhysicalImpact {
     pub contact_knockback_delta: Option<Vec2>,
-    pub pike_break_presentation_rng: Option<NativeRng>,
+    pub pike_break_presentation_rng: Option<Rng>,
     pub sound_pitch: f64,
     pub target_id: String,
     pub vertical_velocity: f64,
@@ -312,39 +312,39 @@ pub struct NativeStaffPhysicalImpact {
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffContactPresentation {
-    pub event: NativePlayerStaffContactEvent,
+pub struct StaffContactPresentation {
+    pub event: PlayerStaffContactEvent,
     pub next_id: u64,
-    pub vfx: Vec<NativePlayerStaffVfx>,
+    pub vfx: Vec<PlayerStaffVfx>,
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffDisplacement {
+pub struct StaffDisplacement {
     pub delta: Vec2,
     pub target_id: String,
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffHeadingPerturbation {
+pub struct StaffHeadingPerturbation {
     pub heading_degrees: f64,
     pub target_id: String,
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffKnockbackStep {
+pub struct StaffKnockbackStep {
     pub camera_displacement: Vec2,
-    pub actor: Option<NativeStaffKnockbackActor>,
+    pub actor: Option<StaffKnockbackActor>,
     pub dazzled_target_ids: Vec<String>,
-    pub displacements: Vec<NativeStaffDisplacement>,
-    pub heading_perturbations: Vec<NativeStaffHeadingPerturbation>,
+    pub displacements: Vec<StaffDisplacement>,
+    pub heading_perturbations: Vec<StaffHeadingPerturbation>,
 }
 
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeStaffContactKnockbackStep {
-    pub actor: Option<NativePlayerStaffContactKnockback>,
+pub struct StaffContactKnockbackStep {
+    pub actor: Option<PlayerStaffContactKnockback>,
     pub displacement: Option<Vec2>,
 }

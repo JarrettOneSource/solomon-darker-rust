@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use solomon_sim::boneyard::LoadedBoneyard;
 use solomon_sim::combat::PlayerLifeState;
-use solomon_sim::economy::NativeInventoryDyeSession;
+use solomon_sim::economy::InventoryDyeSession;
 use solomon_sim::enemies::EnemySpawnIntent;
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::modding::identity::GameContentManifest;
@@ -20,7 +20,7 @@ type Inputs = BTreeMap<String, GameSessionInput>;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ArchivedState {
     pub checkpoint: GameCheckpoint,
-    pub inventory_dye_sessions: BTreeMap<String, NativeInventoryDyeSession>,
+    pub inventory_dye_sessions: BTreeMap<String, InventoryDyeSession>,
 }
 impl ArchivedState {
     pub fn capture(state: &GameSession) -> Arc<Self> {

@@ -630,7 +630,7 @@ async function close(client) {
     assert.deepEqual(clients.flatMap(client => client.errors), []);
     if (build) {
       const wasm = Object.keys(build.files).map(file => path.basename(file))
-        .find(file => /^solomon-web-.*\.wasm$/.test(file));
+        .find(file => /^solomon-client-.*\.wasm$/.test(file));
       assert.ok(wasm, 'the accepted artifact manifest names the game WASM');
       for (const client of clients) assert.ok(client.wasm.has(wasm));
     }
@@ -653,7 +653,7 @@ async function close(client) {
     }
     const artifact = build && {revision: build.revision, builtAt: build.builtAt,
       wasm: Object.fromEntries(Object.entries(build.files)
-        .filter(([file]) => /^solomon-web-.*\.wasm$/.test(path.basename(file))))};
+        .filter(([file]) => /^solomon-client-.*\.wasm$/.test(path.basename(file))))};
     const receipt = {passed: !failure, step, artifact, checks, failure,
       peerSurvival: clients[0]?.peerSurvival};
     receipt.browserClosed = (await Promise.all(clients.map(close))).every(Boolean);

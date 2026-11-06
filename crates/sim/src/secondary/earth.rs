@@ -1,25 +1,24 @@
 //! Earthquake's ordered scenery disturbances and the shared articulated Golem.
 
 use super::casting::GolemWorld;
-use super::golem::{NativeGolemKernelActor, NativeGolemKernelTarget, step_native_secondary_golem};
+use super::golem::{GolemKernelActor, GolemKernelTarget, step_secondary_golem};
 use super::program::*;
 use super::spawns;
 use super::step::StepEngine;
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryAudioCue as Cue,
-    NativeSecondaryDamageKind as Damage, NativeSecondaryEventKind as Event,
-    NativeSecondaryHeadingMode, NativeSecondaryTargetEffectPatch as Patch,
-    NativeSecondaryTargetHeadingChange, NativeSecondaryWorld,
+    SecondaryActorKind as Kind, SecondaryAudioCue as Cue, SecondaryDamageKind as Damage,
+    SecondaryEventKind as Event, SecondaryHeadingMode, SecondaryTargetEffectPatch as Patch,
+    SecondaryTargetHeadingChange, SecondaryWorld,
 };
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorState;
 
-pub(super) fn step<W: NativeSecondaryWorld>(
+pub(super) fn step<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     match actor.kind {
@@ -57,10 +56,10 @@ pub(super) fn step<W: NativeSecondaryWorld>(
     }
 }
 
-fn quake<W: NativeSecondaryWorld>(
+fn quake<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
 ) {
     let before = source.lifetime_ticks.saturating_sub(source.age_ticks);
     let after = before.saturating_sub(1);
@@ -105,9 +104,9 @@ fn quake<W: NativeSecondaryWorld>(
                 ticks = ((50.0 + f64::from(pause)) / time.max(f64::EPSILON) + 0.5).floor() as u64;
             }
             let heading = engine.state.rng.draw_sign(15.0);
-            engine.output.target_heading_changes.push(NativeSecondaryTargetHeadingChange {
+            engine.output.target_heading_changes.push(SecondaryTargetHeadingChange {
                 degrees: heading,
-                mode: NativeSecondaryHeadingMode::Relative,
+                mode: SecondaryHeadingMode::Relative,
                 target_id: target.id,
             });
             engine.merge(
@@ -152,10 +151,10 @@ fn quake<W: NativeSecondaryWorld>(
     }
 }
 
-fn debris<W: NativeSecondaryWorld>(
+fn debris<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let mut alpha = source.alpha;
@@ -208,13 +207,13 @@ fn debris<W: NativeSecondaryWorld>(
     *retain = *retain && alpha > 0.0;
 }
 
-fn golem<W: NativeSecondaryWorld>(
+fn golem<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
-    let mut kernel = NativeGolemKernelActor {
+    let mut kernel = GolemKernelActor {
         age_ticks: source.age_ticks,
         damage_minimum: source.damage,
         golem: source.golem.expect("Golem actor retains its articulated state"),
@@ -227,7 +226,7 @@ fn golem<W: NativeSecondaryWorld>(
     let targets = engine
         .candidates(source, 1000.0)
         .into_iter()
-        .map(|target| NativeGolemKernelTarget {
+        .map(|target| GolemKernelTarget {
             id: target.id,
             position: target.position,
             radius: target.radius,
@@ -241,7 +240,7 @@ fn golem<W: NativeSecondaryWorld>(
         origin: source.position,
     };
     let owner = &engine.context.players[&source.owner_id];
-    let result = step_native_secondary_golem(
+    let result = step_secondary_golem(
         &mut kernel,
         Some(owner.character.position),
         &targets,
@@ -256,7 +255,7 @@ fn golem<W: NativeSecondaryWorld>(
     actor.target_id = kernel.target_id;
     if let Some(milestone) = result.assembly_milestone {
         let enhanced = engine.context.enhanced_effects_for(&actor.owner_id);
-        let debris = super::golem_debris::create_native_golem_assembly_debris(
+        let debris = super::golem_debris::create_golem_assembly_debris(
             &mut engine.state.rng,
             actor.scale,
             enhanced,
@@ -324,17 +323,15 @@ fn golem<W: NativeSecondaryWorld>(
     *retain = true;
 }
 
-fn assembly_debris<W: NativeSecondaryWorld>(
+fn assembly_debris<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
-    use crate::spells::earth_debris::{
-        NativeBoulderDebrisMotion, step_native_boulder_debris_motion,
-    };
-    let motion = step_native_boulder_debris_motion(
-        NativeBoulderDebrisMotion {
+    use crate::spells::earth_debris::{BoulderDebrisMotion, step_boulder_debris_motion};
+    let motion = step_boulder_debris_motion(
+        BoulderDebrisMotion {
             alpha: source.alpha,
             bounce_velocity: source.endpoint.x,
             height: source.phase,
@@ -361,22 +358,20 @@ fn assembly_debris<W: NativeSecondaryWorld>(
 
 /// The shared area callback commits each move before the next target query.
 /// A target reached through body contact joins this same five-update area.
-fn golem_knockback<W: NativeSecondaryWorld>(
+fn golem_knockback<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
-    use crate::knockback::{
-        NativeKnockbackArea, NativeKnockbackAreaWorld, step_native_knockback_area,
-    };
+    use crate::knockback::{KnockbackArea, KnockbackAreaWorld, step_knockback_area};
 
     struct AreaWorld<'a, W> {
         world: &'a mut W,
         world_key: &'a str,
         source_actor_id: u64,
     }
-    impl<W: NativeSecondaryWorld> NativeKnockbackAreaWorld<usize> for AreaWorld<'_, W> {
+    impl<W: SecondaryWorld> KnockbackAreaWorld<usize> for AreaWorld<'_, W> {
         fn position(&self, id: &usize) -> Option<Vec2> {
             self.world.target(self.world_key, *id).map(|target| target.position)
         }
@@ -385,8 +380,8 @@ fn golem_knockback<W: NativeSecondaryWorld>(
         }
     }
     let ids: Vec<_> = source.hit_target_ids.iter().map(|id| *id as usize).collect();
-    let area = step_native_knockback_area(
-        NativeKnockbackArea {
+    let area = step_knockback_area(
+        KnockbackArea {
             origin: actor.position,
             remaining_distance: source.quantity,
             target_ids: &ids,
@@ -412,9 +407,9 @@ fn golem_knockback<W: NativeSecondaryWorld>(
         };
         engine.damage(actor, &target, actor.damage, Damage::Physical);
         engine.merge(actor, target.id, Patch { dazzle_ticks: Some(200), ..Patch::default() });
-        engine.output.target_heading_changes.push(NativeSecondaryTargetHeadingChange {
+        engine.output.target_heading_changes.push(SecondaryTargetHeadingChange {
             degrees: perturbation.heading_degrees,
-            mode: NativeSecondaryHeadingMode::Relative,
+            mode: SecondaryHeadingMode::Relative,
             target_id: target.id,
         });
     }

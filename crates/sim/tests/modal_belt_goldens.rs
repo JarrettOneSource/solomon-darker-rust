@@ -245,7 +245,7 @@ fn sack(
 
 #[test]
 fn equipment_shortcuts_keep_exact_owning_roots_across_all_banks_and_scenes() {
-    use solomon_sim::belt::NativeBeltCommand;
+    use solomon_sim::belt::BeltCommand;
     use solomon_sim::economy::{EquipmentSlot, EquipmentType, find_inventory_item};
 
     for (kind, sink) in [
@@ -272,10 +272,7 @@ fn equipment_shortcuts_keep_exact_owning_roots_across_all_banks_and_scenes() {
                     }
                     economy.next_item_id = 300;
                     assert!(
-                        session.bind_belt(
-                            "caster",
-                            NativeBeltCommand::BindItem { item_id: 100, slot }
-                        )
+                        session.bind_belt("caster", BeltCommand::BindItem { item_id: 100, slot })
                     );
                     let expected_entry =
                         session.participants.get("caster").unwrap().player.belt.entries[slot];
@@ -320,7 +317,7 @@ fn equipment_shortcuts_keep_exact_owning_roots_across_all_banks_and_scenes() {
 
 #[test]
 fn sack_shortcuts_keep_two_press_loadout_swaps_and_nested_contents() {
-    use solomon_sim::belt::NativeBeltCommand;
+    use solomon_sim::belt::BeltCommand;
     use solomon_sim::economy::{EquipmentSlot, EquipmentType, find_inventory_item};
 
     for slot in [0, 7, 8, 15, 16, 23] {
@@ -347,9 +344,7 @@ fn sack_shortcuts_keep_two_press_loadout_swaps_and_nested_contents() {
             }
             economy.backpack = vec![sack(200, contents)];
             economy.next_item_id = 300;
-            assert!(
-                session.bind_belt("caster", NativeBeltCommand::BindItem { item_id: 200, slot })
-            );
+            assert!(session.bind_belt("caster", BeltCommand::BindItem { item_id: 200, slot }));
             let expected_entry =
                 session.participants.get("caster").unwrap().player.belt.entries[slot];
             for (equipped_base, returned_base) in [(100, 110), (110, 100)] {

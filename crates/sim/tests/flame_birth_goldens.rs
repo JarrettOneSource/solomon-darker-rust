@@ -1,9 +1,9 @@
 //! Constructor and light samples from current Source, including the shared RNG tail.
 use serde_json::{Value, json};
-use solomon_sim::boneyard::lighting::NativeBoneyardLightSource;
+use solomon_sim::boneyard::lighting::BoneyardLightSource;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use solomon_sim::spells::weld::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -19,7 +19,7 @@ fn registration(value: PainterRegistration) -> Value {
         WorldManagerLane::Actor => "actor", WorldManagerLane::Transient => "transient",
     },"registrationOrdinal":value.registration_ordinal})
 }
-fn base(actor: &NativeWeldActorBase) -> Value {
+fn base(actor: &WeldActorBase) -> Value {
     let owner = &actor.owner;
     json!({"ageTicks":owner.age_ticks,"birthTick":actor.birth_tick,"buildId":actor.build_id,
         "direction":coordinates(actor.direction),"id":owner.id,"origin":coordinates(actor.origin),
@@ -27,32 +27,30 @@ fn base(actor: &NativeWeldActorBase) -> Value {
         "lightRegistration":owner.light_registration.map(registration),
         "painterRegistrations":owner.painter_registrations.iter().copied().map(registration).collect::<Vec<_>>()})
 }
-fn fade_row(actor: &NativeWeldFlameLashFadeState) -> Value {
+fn fade_row(actor: &WeldFlameLashFadeState) -> Value {
     let mut row = base(&actor.common);
-    let NativeFlameFadeVisual::NativeBirth(birth) = actor.flame_visual else {
-        panic!("expected native birth")
-    };
+    let FlameFadeVisual::Birth(birth) = actor.flame_visual else { panic!("expected native birth") };
     let payload = json!({"kind":"weld-flame-lash-fade","alpha":actor.alpha,"alphaStep":actor.alpha_step,
         "baseScale":actor.base_scale,"colorGreen":actor.color_green,
         "flameVisual":{"kind":"native-birth-v1","birthAlpha":birth.birth_alpha},
         "position":coordinates(actor.position),"record":actor.record,"rotationDegrees":actor.rotation_degrees,
         "variant":match actor.variant {
-            NativeWeldFlameLashFadeVariant::Source=>"source",NativeWeldFlameLashFadeVariant::Endpoint=>"endpoint",
-            NativeWeldFlameLashFadeVariant::Chain=>"chain",
+            WeldFlameLashFadeVariant::Source=>"source",WeldFlameLashFadeVariant::Endpoint=>"endpoint",
+            WeldFlameLashFadeVariant::Chain=>"chain",
         },"wrapperScalar":actor.wrapper_scalar});
     row.as_object_mut().unwrap().extend(payload.as_object().unwrap().clone());
     row
 }
-fn channel_row(actor: &NativeWeldChannelActorState) -> Value {
+fn channel_row(actor: &WeldChannelActorState) -> Value {
     let mut row = base(&actor.common);
-    let Some(NativeFlameChannelVisual::NativeBirth(birth)) = &actor.flame_visual else {
+    let Some(FlameChannelVisual::Birth(birth)) = &actor.flame_visual else {
         panic!("expected native birth")
     };
     let ribbon = match birth.ribbon {
-        NativeFlameRibbonBirth::Short { width_factor } => {
+        FlameRibbonBirth::Short { width_factor } => {
             json!({"kind":"short","widthFactor":width_factor})
         }
-        NativeFlameRibbonBirth::Long { phase_degrees } => {
+        FlameRibbonBirth::Long { phase_degrees } => {
             json!({"kind":"long","phaseDegrees":phase_degrees})
         }
     };
@@ -60,7 +58,7 @@ fn channel_row(actor: &NativeWeldChannelActorState) -> Value {
         "midpoint":actor.midpoint.map(coordinates),"targetId":actor.target_id,"underpowered":actor.underpowered,
         "variant":actor.variant,"enhancedEffects":actor.enhanced_effects,
         "flameVisual":{"kind":"native-birth-v1","role":match birth.role {
-            NativeFlameChannelRole::Main=>"main",NativeFlameChannelRole::Chain=>"chain",
+            FlameChannelRole::Main=>"main",FlameChannelRole::Chain=>"chain",
         },"cameraDisplacement":birth.camera_displacement.map(coordinates),"start":coordinates(birth.start),
         "control":coordinates(birth.control),"end":coordinates(birth.end),"offset":coordinates(birth.offset),
         "width":birth.width,"ribbon":ribbon,"path":{"intensity":birth.path.intensity,
@@ -69,11 +67,11 @@ fn channel_row(actor: &NativeWeldChannelActorState) -> Value {
     row.as_object_mut().unwrap().extend(payload.as_object().unwrap().clone());
     row
 }
-fn light_row(light: NativeBoneyardLightSource) -> Value {
+fn light_row(light: BoneyardLightSource) -> Value {
     json!({"position":coordinates(light.position),"intensity":light.intensity,"radius":light.radius,
         "castsDirectionalShadow":light.casts_directional_shadow})
 }
-fn assert_tail(rng: &NativeRng, order: WorldPainterOrder, expected: &Value) {
+fn assert_tail(rng: &Rng, order: WorldPainterOrder, expected: &Value) {
     website_rows::compare(
         &json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":rng.words.as_slice()}),
         &expected["rng"],
@@ -86,8 +84,8 @@ fn assert_tail(rng: &NativeRng, order: WorldPainterOrder, expected: &Value) {
         "Flame constructor manager order",
     );
 }
-fn birth<'a>(input: &Value, vector: &'a [f64]) -> NativeWeldActorBirth<'a> {
-    NativeWeldActorBirth {
+fn birth<'a>(input: &Value, vector: &'a [f64]) -> WeldActorBirth<'a> {
+    WeldActorBirth {
         build_id: 1003,
         direction: point(&input["direction"]),
         id: input["id"].as_u64().unwrap(),
@@ -108,12 +106,12 @@ fn current_flame_factory_births_preserve_native_words_roots_and_light_samples() 
         let channel = &input["channel"];
         let vector: Vec<f64> =
             channel["vector"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let mut order = WorldPainterOrder { next_actor_ordinal: 300, next_transient_ordinal: 900 };
         let enhanced_effects = channel["enhancedEffects"].as_bool().unwrap();
-        let result = create_native_flame_lash_factory(
-            NativeFlameLashFactoryBirthInput {
-                channel: NativeWeldChannelInput {
+        let result = create_flame_lash_factory(
+            FlameLashFactoryBirthInput {
+                channel: WeldChannelInput {
                     birth: birth(channel, &vector),
                     endpoint: Some(point(&channel["endpoint"])),
                     midpoint: Some(point(&channel["midpoint"])),
@@ -123,16 +121,16 @@ fn current_flame_factory_births_preserve_native_words_roots_and_light_samples() 
                     flame_visual: None,
                 },
                 source_fade_id: 72,
-                geometry: NativeFlameLashFactoryInput {
+                geometry: FlameLashFactoryInput {
                     start: point(&input["geometry"]["start"]),
                     control: point(&input["geometry"]["control"]),
                     end: point(&input["geometry"]["end"]),
                     offset: point(&input["geometry"]["offset"]),
                 },
                 role: if input["role"] == "main" {
-                    NativeFlameChannelRole::Main
+                    FlameChannelRole::Main
                 } else {
-                    NativeFlameChannelRole::Chain
+                    FlameChannelRole::Chain
                 },
                 camera_displacement: input["cameraDisplacement"]
                     .as_object()
@@ -158,11 +156,10 @@ fn current_flame_factory_births_preserve_native_words_roots_and_light_samples() 
             &case["source"],
             "Flame source flare birth",
         );
-        let Some(NativeFlameChannelVisual::NativeBirth(visual)) = &result.channel.flame_visual
-        else {
+        let Some(FlameChannelVisual::Birth(visual)) = &result.channel.flame_visual else {
             unreachable!()
         };
-        let lights: Vec<_> = native_flame_lash_path_lights(visual, enhanced_effects)
+        let lights: Vec<_> = flame_lash_path_lights(visual, enhanced_effects)
             .unwrap()
             .into_iter()
             .map(light_row)
@@ -174,32 +171,32 @@ fn current_flame_factory_births_preserve_native_words_roots_and_light_samples() 
         let input = &case["input"];
         let vector: Vec<f64> =
             input["vector"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
-        let mut rng = NativeRng::new(731);
+        let mut rng = Rng::new(731);
         let mut order = WorldPainterOrder { next_actor_ordinal: 300, next_transient_ordinal: 900 };
-        let actor = create_native_weld_flame_lash_fade(
-            NativeWeldFlameLashFadeInput {
+        let actor = create_weld_flame_lash_fade(
+            WeldFlameLashFadeInput {
                 birth: birth(input, &vector),
                 alpha: input["alpha"].as_f64().unwrap(),
                 variant: match input["variant"].as_str().unwrap() {
-                    "source" => NativeWeldFlameLashFadeVariant::Source,
-                    "endpoint" => NativeWeldFlameLashFadeVariant::Endpoint,
-                    _ => NativeWeldFlameLashFadeVariant::Chain,
+                    "source" => WeldFlameLashFadeVariant::Source,
+                    "endpoint" => WeldFlameLashFadeVariant::Endpoint,
+                    _ => WeldFlameLashFadeVariant::Chain,
                 },
                 enhanced_effects: input["enhancedEffects"].as_bool().unwrap(),
             },
             &mut rng,
             Some(&mut order),
         );
-        let mut actor = NativeWeldWorldActor::FlameLashFade(actor);
+        let mut actor = WeldWorldActor::FlameLashFade(actor);
         for frame in case["frames"].as_array().unwrap() {
-            let NativeWeldWorldActor::FlameLashFade(fade) = &actor else { unreachable!() };
+            let WeldWorldActor::FlameLashFade(fade) = &actor else { unreachable!() };
             website_rows::compare(&fade_row(fade), &frame["actor"], "Flame fade epoch");
             website_rows::compare(
-                &native_flame_lash_fade_light(fade).map(light_row).unwrap_or(Value::Null),
+                &flame_lash_fade_light(fade).map(light_row).unwrap_or(Value::Null),
                 &frame["light"],
                 "Flame fade wrapper light",
             );
-            let alive = step_native_weld_world_actor(&mut actor, &mut rng, &|_, _, _| true).alive;
+            let alive = step_weld_world_actor(&mut actor, &mut rng, &|_, _, _| true).alive;
             assert_eq!(alive, frame != case["frames"].as_array().unwrap().last().unwrap());
         }
         assert_tail(&rng, order, case);

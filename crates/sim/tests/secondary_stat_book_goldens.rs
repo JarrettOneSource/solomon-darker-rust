@@ -1,13 +1,11 @@
 //! Actual host mana previews retain authored and rank-zero upgrade rows.
 
 use serde::Deserialize;
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
 use solomon_sim::profile::{
-    NativeSkillBookState, PlayerStatBookComponent, WizardDiscipline, WizardElement,
+    PlayerStatBookComponent, SkillBookState, WizardDiscipline, WizardElement,
 };
-use solomon_sim::secondary::{
-    NativeSecondaryAbilityId, native_secondary_ability_mana_cost_with_stat_book,
-};
+use solomon_sim::secondary::{SecondaryAbilityId, secondary_ability_mana_cost_with_stat_book};
 
 #[derive(Deserialize)]
 struct Fixture {
@@ -29,14 +27,14 @@ fn secondary_mana_previews_use_actual_player_stat_book_supplements() {
         serde_json::from_str(include_str!("fixtures/website/secondary-stat-book-goldens.json"))
             .unwrap();
     for case in fixture.cases {
-        let mut book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+        let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
         book.effective_ranks.copy_from_slice(&case.ranks);
         for (skill_id, expected) in case.costs {
-            let actual = native_secondary_ability_mana_cost_with_stat_book(
+            let actual = secondary_ability_mana_cost_with_stat_book(
                 &book,
                 &case.stat_book,
-                NativeSecondaryAbilityId::from_skill_id(skill_id).unwrap(),
-                &NativeOffensiveSpellFactors::default(),
+                SecondaryAbilityId::from_skill_id(skill_id).unwrap(),
+                &OffensiveSpellFactors::default(),
             );
             assert_eq!(
                 actual, expected,

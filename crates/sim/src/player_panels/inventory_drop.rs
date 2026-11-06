@@ -3,9 +3,7 @@
 
 use crate::Vec2;
 use crate::audio::AudioCue;
-use crate::belt::{
-    NativeBeltCommand, native_belt_equipment_slots, native_inventory_item_can_bind_to_belt,
-};
+use crate::belt::{BeltCommand, belt_equipment_slots, inventory_item_can_bind_to_belt};
 use crate::economy::{
     EquipmentSlot, HubEconomyState, HubInventoryAction, HubInventoryItem, HubTransferGesture,
     TransferDirection, inventory_items_at_sack_path, inventory_items_share_stack,
@@ -35,7 +33,7 @@ pub struct InventoryDropContext<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum InventoryDropEffect {
     Action(HubInventoryAction),
-    BindBelt(NativeBeltCommand),
+    BindBelt(BeltCommand),
     Flyby(InventoryFlybyRequest),
     Sound { cue: AudioCue, playback_rate: f64 },
     SelectReference(u64),
@@ -73,7 +71,7 @@ fn drop_backpack(
         if !item.can_unforge() {
             return restore(item, point, source_center);
         }
-        if item.native_type_id == 7008 {
+        if item.type_id == 7008 {
             return if item.contents.as_ref().is_none_or(Vec::is_empty) {
                 vec![InventoryDropEffect::Action(HubInventoryAction::Unforge { item_id })]
             } else {
@@ -117,7 +115,7 @@ fn drop_backpack(
     let visible = visible_items(context);
     let resident =
         visible.iter().find(|entry| entry.slot == destination_slot).map(|entry| entry.item);
-    if let Some(sack) = resident.filter(|item| item.native_type_id == 7008) {
+    if let Some(sack) = resident.filter(|item| item.type_id == 7008) {
         return vec![
             backpack_open(),
             InventoryDropEffect::Action(HubInventoryAction::Move {
@@ -197,7 +195,7 @@ fn drop_equipment(
     let visible = visible_items(context);
     let resident =
         visible.iter().find(|entry| entry.slot == destination_slot).map(|entry| entry.item);
-    if let Some(sack) = resident.filter(|item| item.native_type_id == 7008) {
+    if let Some(sack) = resident.filter(|item| item.type_id == 7008) {
         return vec![
             backpack_open(),
             InventoryDropEffect::Action(HubInventoryAction::Unequip {
@@ -256,9 +254,7 @@ fn equipment_sink(
     point: Vec2,
     context: &InventoryDropContext<'_>,
 ) -> Option<EquipmentSlot> {
-    for slot in
-        native_belt_equipment_slots(item, context.economy.owned_perk_selectors.contains(&19))
-    {
+    for slot in belt_equipment_slots(item, context.economy.owned_perk_selectors.contains(&19)) {
         for mut rect in equipment_slot_rects(slot) {
             if context.companion {
                 rect.x -= 53.0;
@@ -275,13 +271,15 @@ fn belt_binding(
     item: &HubInventoryItem,
     point: Vec2,
     context: &InventoryDropContext<'_>,
-) -> Option<NativeBeltCommand> {
-    if !native_inventory_item_can_bind_to_belt(item) {
+) -> Option<BeltCommand> {
+    if !inventory_item_can_bind_to_belt(item) {
         return None;
     }
-    context.belt_rects.iter().position(|rect| point_in_rect(point, *rect)).map(|slot| {
-        NativeBeltCommand::BindItem { item_id: item.id, slot: context.belt_start + slot }
-    })
+    context
+        .belt_rects
+        .iter()
+        .position(|rect| point_in_rect(point, *rect))
+        .map(|slot| BeltCommand::BindItem { item_id: item.id, slot: context.belt_start + slot })
 }
 
 fn visible_slot_at(point: Vec2) -> Option<usize> {

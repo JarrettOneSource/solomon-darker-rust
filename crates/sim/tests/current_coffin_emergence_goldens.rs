@@ -8,7 +8,7 @@ mod native_bits;
 mod secondary;
 
 use serde_json::{Value, json};
-use solomon_sim::enemies::coffin_emergence::create_native_coffin_emergence;
+use solomon_sim::enemies::coffin_emergence::create_coffin_emergence;
 use solomon_sim::enemies::config::EnemyArenaScalars;
 use solomon_sim::enemies::model::{CoffinPhase, EnemyBrain, EnemyDeathEffect};
 use solomon_sim::enemies::path::EnemyNavigation;
@@ -18,8 +18,8 @@ use solomon_sim::enemies::world::{
 };
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::spells::earth_debris::step_native_boulder_debris_motion;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::spells::earth_debris::step_boulder_debris_motion;
+use solomon_sim::{Rng, Vec2};
 
 #[test]
 fn native_coffin_factories_and_all_retained_bounces_share_the_source_motion_program() {
@@ -29,8 +29,8 @@ fn native_coffin_factories_and_all_retained_bounces_share_the_source_motion_prog
     .unwrap();
     assert_eq!(fixture["kernels"].as_array().unwrap().len(), 18);
     for (case_index, case) in fixture["kernels"].as_array().unwrap().iter().enumerate() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut particles = create_native_coffin_emergence(
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let mut particles = create_coffin_emergence(
             &mut rng,
             native_bits::input(&case["position"]),
             case["scale"].as_f64().unwrap(),
@@ -44,7 +44,7 @@ fn native_coffin_factories_and_all_retained_bounces_share_the_source_motion_prog
                 let mut retained = Vec::new();
                 for mut particle in particles {
                     if let Some(motion) =
-                        step_native_boulder_debris_motion(particle.motion, tick, &mut rng)
+                        step_boulder_debris_motion(particle.motion, tick, &mut rng)
                     {
                         particle.motion = motion;
                         retained.push(particle);
@@ -144,10 +144,10 @@ fn actual_coffin_hidden_to_rising_birth_keeps_particle_rng_and_shared_registrati
                     roll_loot_seed: None,
                     native_visibility: None,
                     projected_point_visible: None,
-                    native_view_bounds: None,
+                    view_bounds: None,
                     puppet_targets: &[],
                     light_at: None,
-                    native_movement_view: None,
+                    movement_view: None,
                 },
                 Some(&mut order),
                 None,

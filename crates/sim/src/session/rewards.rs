@@ -3,8 +3,8 @@
 use super::*;
 use crate::boneyard::loot::{BoneyardLootEvent, BoneyardLootEventType, BoneyardLootPickup};
 use crate::enemies::model::EnemyReward;
-use crate::loot::{NativeBonusKind, NativeLootDropKind, NativeOrbKind};
-use crate::profile::{NATIVE_SKILL_CATALOG, boneyard_enemy_experience_award};
+use crate::loot::{BonusKind, LootDropKind, OrbKind};
+use crate::profile::{SKILL_CATALOG, boneyard_enemy_experience_award};
 
 /// Births and pickup labels applied later in the same source epoch.
 pub(super) struct WorldRewardEffects {
@@ -48,17 +48,17 @@ impl GameSession {
             };
             let player = &mut participant.player;
             match pickup.kind {
-                NativeLootDropKind::Gold => player.economy.credit_loot_gold(pickup.amount),
-                NativeLootDropKind::Sack => {
+                LootDropKind::Gold => player.economy.credit_loot_gold(pickup.amount),
+                LootDropKind::Sack => {
                     if let Some(item) = &pickup.item {
                         player.economy.insert_loot_item(item.clone());
                     }
                 }
-                NativeLootDropKind::Orb => match pickup.orb_kind {
-                    Some(NativeOrbKind::Health) => {
+                LootDropKind::Orb => match pickup.orb_kind {
+                    Some(OrbKind::Health) => {
                         player.combat.restore_health(crate::float::fround(pickup.orb_value * 25.0))
                     }
-                    Some(NativeOrbKind::Mana) => {
+                    Some(OrbKind::Mana) => {
                         let requested = crate::float::fround(pickup.orb_value * 40.0);
                         super::extensions::apply_filtered_mana_delta(
                             player,
@@ -72,8 +72,8 @@ impl GameSession {
                     }
                     None => {}
                 },
-                NativeLootDropKind::Bonus => match pickup.bonus_kind {
-                    Some(NativeBonusKind::SkillChoice) => {
+                LootDropKind::Bonus => match pickup.bonus_kind {
+                    Some(BonusKind::SkillChoice) => {
                         player.grant_bonus_skill_choice(&mut self.gameplay_rng);
                         bonus_choices.push(pickup.player_id.clone());
                         self.assign_automatic_skill_choices_with_extensions(
@@ -81,17 +81,15 @@ impl GameSession {
                             extensions,
                         );
                     }
-                    Some(NativeBonusKind::SkillRank) => {
+                    Some(BonusKind::SkillRank) => {
                         let world =
                             self.boneyard.as_mut().expect("ground bonus belongs to a Boneyard");
                         if let Some(id) = player.increase_random_skill(&mut world.loot.shared_rng) {
-                            text_overrides.push((
-                                pickup.actor_id,
-                                format!("{} +1", NATIVE_SKILL_CATALOG[id].name),
-                            ));
+                            text_overrides
+                                .push((pickup.actor_id, format!("{} +1", SKILL_CATALOG[id].name)));
                         }
                     }
-                    Some(NativeBonusKind::DamageX4) => player.progression.apply_damage_x4_bonus(),
+                    Some(BonusKind::DamageX4) => player.progression.apply_damage_x4_bonus(),
                     None => {}
                 },
             }

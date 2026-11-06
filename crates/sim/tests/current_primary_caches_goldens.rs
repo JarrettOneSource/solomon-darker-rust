@@ -3,17 +3,13 @@
 #[allow(dead_code)]
 mod support;
 use serde_json::{Value, json};
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
-use solomon_sim::profile::primary::{NativePrimarySkillProfile, native_primary_skill_profile};
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
-use solomon_sim::spells::air_water::{
-    create_native_water_aura_actor, native_water_aura_visual_plan,
-};
-use solomon_sim::spells::earth::{
-    NativeEarthBoulderContactInput, consume_native_earth_boulder_contact,
-};
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
+use solomon_sim::profile::primary::{PrimarySkillProfile, primary_skill_profile};
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::spells::air_water::{create_water_aura_actor, water_aura_visual_plan};
+use solomon_sim::spells::earth::{EarthBoulderContactInput, consume_earth_boulder_contact};
 use solomon_sim::spells::model::PrimarySpellTransientBase;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 fn fixture() -> Value {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/current-primary-caches-goldens.json"))
@@ -28,21 +24,20 @@ fn compare(actual: Value, expected: &Value, label: &str) {
 fn current_water_hail_and_earth_cache_units_match_source() {
     for case in fixture()["profiles"].as_array().unwrap() {
         let water = case["element"] == "water";
-        let mut book = NativeSkillBookState::new(
+        let mut book = SkillBookState::new(
             if water { WizardElement::Water } else { WizardElement::Earth },
             WizardDiscipline::Arcane,
         );
         for id in if water { &[37, 38][..] } else { &[47][..] } {
             book.effective_ranks[*id] = case["rank"].as_u64().unwrap() as u32;
         }
-        let actual =
-            match native_primary_skill_profile(&book, &NativeOffensiveSpellFactors::default()) {
-                NativePrimarySkillProfile::Water(profile) => {
-                    json!([profile.aura_radius_scale, profile.hail_threshold])
-                }
-                NativePrimarySkillProfile::Earth(profile) => json!([profile.maximum_charge]),
-                _ => unreachable!(),
-            };
+        let actual = match primary_skill_profile(&book, &OffensiveSpellFactors::default()) {
+            PrimarySkillProfile::Water(profile) => {
+                json!([profile.aura_radius_scale, profile.hail_threshold])
+            }
+            PrimarySkillProfile::Earth(profile) => json!([profile.maximum_charge]),
+            _ => unreachable!(),
+        };
         compare(actual, &case["expected"], &format!("{} rank{}", case["element"], case["rank"]));
     }
 }
@@ -50,15 +45,15 @@ fn current_water_hail_and_earth_cache_units_match_source() {
 fn cold_aura_constructor_rng_and_native_fade_stores_match_source() {
     for case in fixture()["auras"].as_array().unwrap() {
         let radius_scale =
-            solomon_sim::cold_aura::native_cold_aura_radius_scale(case["feet"].as_f64().unwrap());
+            solomon_sim::cold_aura::cold_aura_radius_scale(case["feet"].as_f64().unwrap());
         compare(json!(radius_scale), &case["radiusScale"], "Cold Aura feet cache");
         compare(
-            json!(solomon_sim::cold_aura::native_cold_aura_query_radius(radius_scale)),
+            json!(solomon_sim::cold_aura::cold_aura_query_radius(radius_scale)),
             &case["queryRadius"],
             "Cold Aura query radius",
         );
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut actor = create_native_water_aura_actor(
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let mut actor = create_water_aura_actor(
             PrimarySpellTransientBase {
                 age_ticks: 0,
                 id: 1,
@@ -89,7 +84,7 @@ fn cold_aura_constructor_rng_and_native_fade_stores_match_source() {
         );
         for frame in case["frames"].as_array().unwrap() {
             actor.common.age_ticks = frame["ageTicks"].as_f64().unwrap().max(0.0).trunc() as u64;
-            let draw = native_water_aura_visual_plan(&actor);
+            let draw = water_aura_visual_plan(&actor);
             compare(
                 json!({"alpha":draw.alpha,"rotationRadians":draw.rotation_radians,"scale":draw.scale,"tint":draw.tint}),
                 &frame["visual"],
@@ -102,7 +97,7 @@ fn cold_aura_constructor_rng_and_native_fade_stores_match_source() {
 fn earth_contact_never_rounds_above_its_release_charge() {
     for case in fixture()["pools"].as_array().unwrap() {
         let value = &case["input"];
-        let result = consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+        let result = consume_earth_boulder_contact(EarthBoulderContactInput {
             release_base_damage: value["releaseBaseDamage"].as_f64().unwrap(),
             release_charge: value["releaseCharge"].as_f64().unwrap(),
             remaining_pool: value["remainingPool"].as_f64().unwrap(),

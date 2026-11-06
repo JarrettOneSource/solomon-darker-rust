@@ -8,14 +8,11 @@ use crate::spells::model::{
     PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
 };
 use crate::spells::simulation::{PrimarySpellEpochContext, PrimarySpellTraversalActor};
-use crate::spells::targeting::NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK;
-use crate::spells::weld::{NativeWeldPersistentActorState, NativeWeldWorldActor};
-use crate::{NativeRng, Vec2};
+use crate::spells::targeting::PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK;
+use crate::spells::weld::{WeldPersistentActorState, WeldWorldActor};
+use crate::{Rng, Vec2};
 
-pub fn enroll_native_weld_actor_painter(
-    actor: &mut NativeWeldActorBase,
-    order: &mut WorldPainterOrder,
-) {
+pub fn enroll_weld_actor_painter(actor: &mut WeldActorBase, order: &mut WorldPainterOrder) {
     let owner = &mut actor.owner;
     if owner.painter_registrations.is_empty() {
         let registration = owner
@@ -32,16 +29,16 @@ impl SpellState {
         spell: &mut PrimarySpellProjectile,
         targets: &[crate::spells::targeting::PrimarySpellTarget],
         tick: u64,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
     ) {
         crate::spells::projectiles::advance_projectile(spell, targets);
         let PrimarySpellProjectile::Weld(weld) = spell else { return };
-        step_native_weld_projectile_presentation(weld, rng);
+        step_weld_projectile_presentation(weld, rng);
         if weld.build_id == 1009 {
-            let fades = create_native_weld_ground_spark_fade_program(weld, rng);
+            let fades = create_weld_ground_spark_fade_program(weld, rng);
             for seed in fades {
-                let actor = create_native_weld_ground_spark_fade_actor(
-                    NativeWeldActorBirth {
+                let actor = create_weld_ground_spark_fade_actor(
+                    WeldActorBirth {
                         build_id: 1009,
                         direction: weld.common.direction,
                         id: self.next_id,
@@ -53,9 +50,8 @@ impl SpellState {
                     },
                     seed,
                 );
-                self.transients.push(PrimarySpellTransient::Weld(
-                    NativeWeldWorldActor::GroundSparkFade(actor),
-                ));
+                self.transients
+                    .push(PrimarySpellTransient::Weld(WeldWorldActor::GroundSparkFade(actor)));
                 self.next_id += 1;
             }
         }
@@ -63,13 +59,12 @@ impl SpellState {
 
     pub(crate) fn advance_weld_world_actor(
         &mut self,
-        actor: &mut NativeWeldWorldActor,
+        actor: &mut WeldWorldActor,
         context: &PrimarySpellEpochContext<'_>,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
     ) -> bool {
-        if let NativeWeldWorldActor::Persistent(NativeWeldPersistentActorState::Hailstones(hail)) =
-            actor
+        if let WeldWorldActor::Persistent(WeldPersistentActorState::Hailstones(hail)) = actor
             && hail.phase == PrimarySpellProjectilePhase::Flight
         {
             let origin = hail.common.origin;
@@ -83,28 +78,25 @@ impl SpellState {
                 origin,
                 lookahead,
                 None,
-                NATIVE_PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
+                PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
             )
             .is_some()
             {
-                let children = create_native_weld_hail_terrain_impact(
-                    hail,
-                    true,
-                    self.next_id,
-                    context.tick,
-                    rng,
-                );
+                let children =
+                    create_weld_hail_terrain_impact(hail, true, self.next_id, context.tick, rng);
                 self.next_id += children.len() as u64;
-                self.transients.extend(children.into_iter().map(|child| {
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(child))
-                }));
+                self.transients.extend(
+                    children
+                        .into_iter()
+                        .map(|child| PrimarySpellTransient::Weld(WeldWorldActor::HailChild(child))),
+                );
                 return false;
             }
         }
         let already_impacting =
-            matches!(actor, NativeWeldWorldActor::Meteor(meteor) if meteor.impact_due);
-        let can_advance = |persistent: &NativeWeldPersistentActorState, from, to| {
-            let NativeWeldPersistentActorState::EtherealBoulder(boulder) = persistent else {
+            matches!(actor, WeldWorldActor::Meteor(meteor) if meteor.impact_due);
+        let can_advance = |persistent: &WeldPersistentActorState, from, to| {
+            let WeldPersistentActorState::EtherealBoulder(boulder) = persistent else {
                 return true;
             };
             (context.can_traverse)(
@@ -115,7 +107,7 @@ impl SpellState {
                 0,
             )
         };
-        let step = step_native_weld_world_actor(actor, rng, &can_advance);
+        let step = step_weld_world_actor(actor, rng, &can_advance);
         if let Some(boulder) = step.terrain_contact {
             let children = create_primary_spell_weld_boulder_terminal(
                 self.next_id,
@@ -132,32 +124,30 @@ impl SpellState {
             return false;
         }
         let mut children = Vec::new();
-        if let NativeWeldWorldActor::Meteor(meteor) = actor
+        if let WeldWorldActor::Meteor(meteor) = actor
             && meteor.impact_due
             && !already_impacting
         {
-            children.push(NativeWeldWorldActor::MeteorFlash(create_native_weld_meteor_flash(
+            children.push(WeldWorldActor::MeteorFlash(create_weld_meteor_flash(
                 meteor,
                 self.next_id,
                 context.tick,
             )));
             self.next_id += 1;
             for debris in step.debris {
-                children.push(NativeWeldWorldActor::BoulderDebris(
-                    create_native_weld_boulder_debris_actor(
-                        NativeWeldActorBirth {
-                            build_id: 1007,
-                            direction: meteor.common.direction,
-                            id: self.next_id,
-                            origin: meteor.position,
-                            owner_id: &meteor.common.owner.owner_id,
-                            tick: context.tick,
-                            vector: &meteor.common.vector,
-                            world_key: &meteor.common.owner.world_key,
-                        },
-                        debris,
-                    ),
-                ));
+                children.push(WeldWorldActor::BoulderDebris(create_weld_boulder_debris_actor(
+                    WeldActorBirth {
+                        build_id: 1007,
+                        direction: meteor.common.direction,
+                        id: self.next_id,
+                        origin: meteor.position,
+                        owner_id: &meteor.common.owner.owner_id,
+                        tick: context.tick,
+                        vector: &meteor.common.vector,
+                        world_key: &meteor.common.owner.world_key,
+                    },
+                    debris,
+                )));
                 self.next_id += 1;
             }
         }
@@ -172,7 +162,7 @@ impl SpellState {
             let PrimarySpellTransient::Weld(actor) = effect else {
                 continue;
             };
-            enroll_native_weld_actor_painter(actor.common_mut(), order);
+            enroll_weld_actor_painter(actor.common_mut(), order);
         }
     }
 }

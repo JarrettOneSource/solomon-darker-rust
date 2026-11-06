@@ -7,30 +7,29 @@ use super::projectiles::{EnemyProjectileEffect, EnemyProjectileEffectKind};
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
-use crate::spells::fire::native_fire_presentation_random;
+use crate::spells::fire::fire_presentation_random;
 use crate::spells::fire_presentation::{
-    NativeFireGroundGlowPlan, native_fire_explosion_plan, native_fire_ground_glow_plan,
-    native_fire_patch_transform,
+    FireGroundGlowPlan, fire_explosion_plan, fire_ground_glow_plan, fire_patch_transform,
 };
 use crate::spells::model::FireExplosionPresentation;
 use crate::spells::presentation::{SpellAtlas, SpellBlend, SpellDrawQueue};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyProjectileEffectPlan {
-    pub ground_glow: Option<NativeFireGroundGlowPlan>,
+    pub ground_glow: Option<FireGroundGlowPlan>,
     pub layers: Vec<EnemySpriteLayer>,
     pub position: Vec2,
 }
 
 #[must_use]
-pub fn native_enemy_projectile_effect_plan(
+pub fn enemy_projectile_effect_plan(
     effect: &EnemyProjectileEffect,
     point_gain: f64,
 ) -> EnemyProjectileEffectPlan {
-    native_enemy_projectile_effect_plan_with_input(
+    enemy_projectile_effect_plan_with_input(
         effect,
         point_gain,
-        super::presentation::NativeEnemyEffectPresentationInput {
+        super::presentation::EnemyEffectPresentationInput {
             age_ticks: effect.state.age_ticks as f64,
             rotation_radians: effect.state.rotation_deg * std::f64::consts::PI / 180.0,
         },
@@ -38,10 +37,10 @@ pub fn native_enemy_projectile_effect_plan(
 }
 
 #[must_use]
-pub fn native_enemy_projectile_effect_plan_with_input(
+pub fn enemy_projectile_effect_plan_with_input(
     effect: &EnemyProjectileEffect,
     point_gain: f64,
-    sample: super::presentation::NativeEnemyEffectPresentationInput,
+    sample: super::presentation::EnemyEffectPresentationInput,
 ) -> EnemyProjectileEffectPlan {
     let mut plan = effect_plan(effect, point_gain, sample);
     for layer in &mut plan.layers {
@@ -55,7 +54,7 @@ pub fn native_enemy_projectile_effect_plan_with_input(
 fn effect_plan(
     effect: &EnemyProjectileEffect,
     point_gain: f64,
-    sample: super::presentation::NativeEnemyEffectPresentationInput,
+    sample: super::presentation::EnemyEffectPresentationInput,
 ) -> EnemyProjectileEffectPlan {
     let state = &effect.state;
     let mut plan = EnemyProjectileEffectPlan {
@@ -70,7 +69,7 @@ fn effect_plan(
         _ => None,
     };
     if let Some(queue) = explosion_queue {
-        let explosion = native_fire_explosion_plan(
+        let explosion = fire_explosion_plan(
             sample.age_ticks,
             state.position,
             FireExplosionPresentation::Fire,
@@ -138,7 +137,7 @@ fn effect_plan(
     };
     if let EnemyProjectileEffectKind::DemonFire { fire } = &effect.kind {
         sprite.entry = 46 + fire.atlas_phase.round_ties_even().rem_euclid(32.0) as usize;
-        let transform = native_fire_patch_transform(
+        let transform = fire_patch_transform(
             state.position,
             state.scale,
             fire.fade_alpha,
@@ -147,7 +146,7 @@ fn effect_plan(
         plan.position = transform.position;
         sprite.scale = transform.scale_x;
         sprite.scale_y = Some(transform.scale_y);
-        plan.ground_glow = Some(native_fire_ground_glow_plan(
+        plan.ground_glow = Some(fire_ground_glow_plan(
             state.id as u64,
             state.alpha,
             state.position,
@@ -161,7 +160,7 @@ fn effect_plan(
 
 fn guided_impact_layers(
     effect: &EnemyProjectileEffect,
-    sample: super::presentation::NativeEnemyEffectPresentationInput,
+    sample: super::presentation::EnemyEffectPresentationInput,
 ) -> Vec<EnemySpriteLayer> {
     let state = &effect.state;
     let rotation = sample.rotation_radians;
@@ -169,7 +168,7 @@ fn guided_impact_layers(
     let phase = rotation * 180.0 / std::f64::consts::PI;
     let tick = (state.spawn_tick as f64 + sample.age_ticks).floor() as u64;
     let random =
-        |channel, maximum| native_fire_presentation_random(state.id as u64, tick, channel, maximum);
+        |channel, maximum| fire_presentation_random(state.id as u64, tick, channel, maximum);
     let sine = |degrees: f64| float::sin(degrees * std::f64::consts::PI / 180.0);
     let main = EnemySpriteLayer {
         alpha: state.alpha * (0.5 + random(40, 0.5)),

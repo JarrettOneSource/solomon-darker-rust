@@ -9,30 +9,28 @@ impl ContactWork<'_, '_> {
         let mut effects: Vec<_> = self.source.transients.iter().cloned().collect();
         effects.sort_by_key(|effect| effect.common().id);
         for effect in effects {
-            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) = effect
-            else {
+            let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)) = effect else {
                 continue;
             };
             if actor.held() || actor.common().owner.world_key != self.context.world_key {
                 continue;
             }
             match actor {
-                NativeWeldPersistentActorState::EtherealBoulder(actor) => {
+                WeldPersistentActorState::EtherealBoulder(actor) => {
                     self.resolve_weld_boulder_contact(actor)
                 }
-                NativeWeldPersistentActorState::Hailstones(actor) => {
+                WeldPersistentActorState::Hailstones(actor) => {
                     self.resolve_weld_hail_contacts(actor)
                 }
-                NativeWeldPersistentActorState::MeteorField(_) => {}
+                WeldPersistentActorState::MeteorField(_) => {}
             }
         }
     }
 
-    fn resolve_weld_boulder_contact(&mut self, mut actor: NativeWeldEtherealBoulderState) {
+    fn resolve_weld_boulder_contact(&mut self, mut actor: WeldEtherealBoulderState) {
         let rows = target_rows(self.enemies);
         let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
-        let contacts =
-            native_primary_root_targets(actor.common.origin, actor.scale * 75.0, 0x6, &targets);
+        let contacts = primary_root_targets(actor.common.origin, actor.scale * 75.0, 0x6, &targets);
         let contacts: Vec<_> = contacts
             .into_iter()
             .filter(|target| !actor.hit_target_ids.contains(&target.id))
@@ -48,7 +46,7 @@ impl ContactWork<'_, '_> {
                 .iter()
                 .find(|row| row.target.id == target.id)
                 .expect("gathered Boulder target");
-            let contact = consume_native_earth_boulder_contact(NativeEarthBoulderContactInput {
+            let contact = consume_earth_boulder_contact(EarthBoulderContactInput {
                 release_base_damage: actor.damage,
                 release_charge: actor.maximum_scale,
                 remaining_pool: actor.remaining_damage,
@@ -77,13 +75,13 @@ impl ContactWork<'_, '_> {
         let hit_ids = actor.hit_target_ids.clone();
         let remaining = actor.remaining_damage;
         if actor.hit_target_ids.len() == original.hit_target_ids.len()
-            || retain_native_weld_persistent_actor_contacts(&mut actor, hit_ids, remaining, scale)
+            || retain_weld_persistent_actor_contacts(&mut actor, hit_ids, remaining, scale)
         {
-            finish_native_weld_ethereal_boulder_guidance(&mut actor, &self.enemies.spell_targets());
+            finish_weld_ethereal_boulder_guidance(&mut actor, &self.enemies.spell_targets());
             self.updated_transients.insert(
                 actor.common.owner.id,
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                    NativeWeldPersistentActorState::EtherealBoulder(actor),
+                PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+                    WeldPersistentActorState::EtherealBoulder(actor),
                 )),
             );
         } else {
@@ -103,22 +101,22 @@ impl ContactWork<'_, '_> {
         }
     }
 
-    fn resolve_weld_hail_contacts(&mut self, mut actor: NativeWeldHailstonesState) {
+    fn resolve_weld_hail_contacts(&mut self, mut actor: WeldHailstonesState) {
         if actor.release_age_ticks == Some(0) {
             return;
         }
         let mut damage_by_rock: BTreeMap<_, _> =
             actor.rocks.iter().map(|rock| (rock.rock_id, rock.damage_remaining)).collect();
         for (substep_index, substep) in
-            native_weld_hailstone_flight_contact_substeps(&actor).into_iter().enumerate()
+            weld_hailstone_flight_contact_substeps(&actor).into_iter().enumerate()
         {
             let mut query_radius = actor.collision_radius;
-            for _ in 0..NATIVE_WELD_HAIL_FLIGHT_SUBSTEPS - substep_index - 1 {
+            for _ in 0..WELD_HAIL_FLIGHT_SUBSTEPS - substep_index - 1 {
                 query_radius = fround(query_radius - actor.widen)
             }
             let rows = target_rows(self.enemies);
             let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
-            for target in native_primary_root_targets(substep.origin, query_radius, 0x2, &targets) {
+            for target in primary_root_targets(substep.origin, query_radius, 0x2, &targets) {
                 let Some(current_row) =
                     target_rows(self.enemies).into_iter().find(|row| row.target.id == target.id)
                 else {
@@ -144,30 +142,28 @@ impl ContactWork<'_, '_> {
                         fround(substep.origin.x + offset.x),
                         fround(substep.origin.y + offset.y),
                     );
-                    let radius = fround(
-                        current_row.target.body_radius * NATIVE_WELD_HAIL_TARGET_RADIUS_FACTOR,
-                    );
+                    let radius =
+                        fround(current_row.target.body_radius * WELD_HAIL_TARGET_RADIUS_FACTOR);
                     if squared_distance(point, current_row.target.position) >= radius * radius {
                         continue;
                     }
                     self.weld_cold(
                         current.actor_id,
-                        NATIVE_WELD_HAIL_COLD_SLOW_FACTOR,
-                        NATIVE_WELD_HAIL_COLD_SLOW_TICKS,
+                        WELD_HAIL_COLD_SLOW_FACTOR,
+                        WELD_HAIL_COLD_SLOW_TICKS,
                     );
                     let target_key = format!("enemy:{}", current.actor_id);
                     if !self.active_knockback_target_ids.contains(&target_key)
-                        && let Some(knockback) = create_native_weld_hail_knockback(
+                        && let Some(knockback) = create_weld_hail_knockback(
                             &actor,
                             self.next_id,
                             &target_key,
                             self.context.tick,
                         )
                     {
-                        let effect =
-                            self.enroll_weld_combat_actor(NativeWeldWorldActor::HailChild(
-                                NativeWeldHailChildActorState::Knockback(knockback),
-                            ));
+                        let effect = self.enroll_weld_combat_actor(WeldWorldActor::HailChild(
+                            WeldHailChildActorState::Knockback(knockback),
+                        ));
                         self.impact_transients.push(effect);
                         self.active_knockback_target_ids.insert(target_key);
                         self.next_id += 1;
@@ -192,12 +188,12 @@ impl ContactWork<'_, '_> {
                         damaged.killed,
                     );
                     if next_damage < 0.001 {
-                        let draw = native_weld_hailstone_draw_offset(rock);
+                        let draw = weld_hailstone_draw_offset(rock);
                         let start = Vec2::new(
                             fround(substep.origin.x + draw.x),
                             fround(substep.origin.y + draw.y),
                         );
-                        let children = create_native_weld_hail_contact_presentation(
+                        let children = create_weld_hail_contact_presentation(
                             &actor,
                             start,
                             point,
@@ -207,8 +203,8 @@ impl ContactWork<'_, '_> {
                         );
                         self.next_id += children.len() as u64;
                         for child in children {
-                            let effect = self
-                                .enroll_weld_combat_actor(NativeWeldWorldActor::HailChild(child));
+                            let effect =
+                                self.enroll_weld_combat_actor(WeldWorldActor::HailChild(child));
                             self.impact_transients.push(effect);
                         }
                     }
@@ -223,11 +219,11 @@ impl ContactWork<'_, '_> {
             .iter()
             .map(|rock| damage_by_rock.get(&rock.rock_id).copied().unwrap_or(0.0))
             .collect();
-        if retain_native_weld_hailstone_damage(&mut actor, &damage) {
+        if retain_weld_hailstone_damage(&mut actor, &damage) {
             self.updated_transients.insert(
                 actor.common.owner.id,
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                    NativeWeldPersistentActorState::Hailstones(actor),
+                PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+                    WeldPersistentActorState::Hailstones(actor),
                 )),
             );
         } else {
@@ -239,19 +235,16 @@ impl ContactWork<'_, '_> {
         let mut effects: Vec<_> = self.source.transients.iter().cloned().collect();
         effects.sort_by_key(|effect| effect.common().id);
         for effect in effects {
-            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(meteor)) = effect else {
+            let PrimarySpellTransient::Weld(WeldWorldActor::Meteor(meteor)) = effect else {
                 continue;
             };
             if meteor.common.owner.world_key != self.context.world_key {
                 continue;
             }
             let pulse = if meteor.impact_due {
-                Some((meteor.damage * 0.5, native_weld_meteor_direct_radius()))
+                Some((meteor.damage * 0.5, weld_meteor_direct_radius()))
             } else if meteor.pulse_due {
-                Some((
-                    meteor.damage / 20.0,
-                    native_weld_meteor_pulse_radius(meteor.impact_radius_scalar),
-                ))
+                Some((meteor.damage / 20.0, weld_meteor_pulse_radius(meteor.impact_radius_scalar)))
             } else {
                 None
             };
@@ -273,7 +266,7 @@ impl ContactWork<'_, '_> {
             }
             if meteor.impact_due {
                 let effects = self.detonate_weld_fire(
-                    NativeWeldActorBirth {
+                    WeldActorBirth {
                         build_id: 1007,
                         direction: meteor.common.direction,
                         id: self.next_id,

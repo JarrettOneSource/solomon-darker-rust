@@ -2,100 +2,98 @@
 
 use std::collections::BTreeMap;
 
-use super::golem::{
-    NativeGolemIncomingDamage, NativeGolemKernelActor, damage_native_secondary_golem,
-};
+use super::golem::{GolemIncomingDamage, GolemKernelActor, damage_secondary_golem};
 use super::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryAudioCue,
-    NativeSecondaryEventKind, NativeSecondaryEventState, NativeSecondaryPlayerState,
-    NativeSecondaryScreenFlashState, NativeSecondaryTarget, NativeSecondaryTargetEffectState,
+    SecondaryActorKind, SecondaryActorState, SecondaryAudioCue, SecondaryEventKind,
+    SecondaryEventState, SecondaryPlayerState, SecondaryScreenFlashState, SecondaryTarget,
+    SecondaryTargetEffectState,
 };
 use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondarySimulationState {
-    pub camera_displacements: Vec<NativeSecondaryCameraDisplacement>,
+pub struct SecondarySimulationState {
+    pub camera_displacements: Vec<SecondaryCameraDisplacement>,
     pub stoneskin_warp: Option<Vec<f64>>,
-    pub actors: Vec<super::NativeSecondaryActorState>,
+    pub actors: Vec<super::SecondaryActorState>,
     /// Birth commands collected while existing actors advance. They become live
     /// together after that phase, so children cannot advance on their birth tick.
     #[cfg_attr(feature = "persistence", serde(skip))]
-    pub(super) deferred_births: Option<Vec<NativeSecondaryActorState>>,
-    pub events: Vec<NativeSecondaryEventState>,
+    pub(super) deferred_births: Option<Vec<SecondaryActorState>>,
+    pub events: Vec<SecondaryEventState>,
     pub firewalker_geometry_sequence: u32,
     pub next_actor_id: u64,
     pub next_event_id: u64,
-    pub players: BTreeMap<String, NativeSecondaryPlayerState>,
-    pub rng: NativeRng,
-    pub target_effects: Vec<NativeSecondaryTargetEffectState>,
+    pub players: BTreeMap<String, SecondaryPlayerState>,
+    pub rng: Rng,
+    pub target_effects: Vec<SecondaryTargetEffectState>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryCameraDisplacement {
+pub struct SecondaryCameraDisplacement {
     pub displacement: Vec2,
     pub tick: u64,
     pub world_key: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSecondaryFireBurnInput {
+pub struct SecondaryFireBurnInput {
     pub damage: f64,
     pub owner_id: String,
     pub rank: u32,
     pub skill_id: usize,
-    pub target: NativeSecondaryTarget,
+    pub target: SecondaryTarget,
     pub world_key: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSecondaryEtherBurnInput {
+pub struct SecondaryEtherBurnInput {
     pub owner_id: String,
     pub rank: u32,
-    pub target: NativeSecondaryTarget,
+    pub target: SecondaryTarget,
     pub world_key: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryPlayerDamageResult {
+pub struct SecondaryPlayerDamageResult {
     pub absorbed_damage: f64,
     pub health_damage: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeSecondaryPlayerDamagePresentation {
+pub struct SecondaryPlayerDamagePresentation {
     pub physical: bool,
     pub enhanced_effects: bool,
 }
 
-impl Default for NativeSecondaryPlayerDamagePresentation {
+impl Default for SecondaryPlayerDamagePresentation {
     fn default() -> Self {
         Self { physical: false, enhanced_effects: true }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryPlayerDamageInput<'a> {
+pub struct SecondaryPlayerDamageInput<'a> {
     pub player_id: &'a str,
     pub amount: f64,
     pub tick: u64,
     pub position: Vec2,
     pub world_key: &'a str,
-    pub presentation: NativeSecondaryPlayerDamagePresentation,
+    pub presentation: SecondaryPlayerDamagePresentation,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSecondaryGolemDamageResult {
+pub struct SecondaryGolemDamageResult {
     pub ignored: bool,
     pub killed: bool,
     pub owner_id: Option<String>,
     pub reflected_damage: f64,
 }
 
-impl NativeSecondarySimulationState {
+impl SecondarySimulationState {
     #[must_use]
     pub fn new(seed: i64) -> Self {
         Self {
@@ -108,7 +106,7 @@ impl NativeSecondarySimulationState {
             next_actor_id: 1,
             next_event_id: 1,
             players: BTreeMap::new(),
-            rng: NativeRng::new(seed),
+            rng: Rng::new(seed),
             target_effects: Vec::new(),
         }
     }
@@ -119,7 +117,7 @@ impl NativeSecondarySimulationState {
         record_camera_displacement(&mut self.camera_displacements, world_key, displacement, tick);
     }
 
-    pub fn emit_event(&mut self, mut event: NativeSecondaryEventState) {
+    pub fn emit_event(&mut self, mut event: SecondaryEventState) {
         event.event_id = self.next_event_id;
         self.next_event_id += 1;
         self.events.push(event);
@@ -130,14 +128,14 @@ impl NativeSecondarySimulationState {
     pub fn write_screen_flashes_since(
         &self,
         first_event_id: u64,
-        writer: &mut crate::screen_flash::NativeScreenFlashWriter,
+        writer: &mut crate::screen_flash::ScreenFlashWriter,
     ) {
         for event in &self.events {
             if event.event_id < first_event_id {
                 continue;
             }
             if let Some(flash) = event.screen_flash {
-                writer.write(crate::screen_flash::NativeScreenFlashInput {
+                writer.write(crate::screen_flash::ScreenFlashInput {
                     tick: event.tick,
                     world_key: event.world_key.clone(),
                     position: event.position,
@@ -148,7 +146,7 @@ impl NativeSecondarySimulationState {
         }
     }
 
-    pub fn spawn_actor(&mut self, mut actor: NativeSecondaryActorState) -> u64 {
+    pub fn spawn_actor(&mut self, mut actor: SecondaryActorState) -> u64 {
         actor.id = self.next_actor_id;
         self.next_actor_id += 1;
         let id = actor.id;
@@ -165,19 +163,19 @@ impl NativeSecondarySimulationState {
     pub fn cast(
         &mut self,
         owner: &str,
-        ability: super::NativeSecondaryAbilityId,
-        context: &super::NativeSecondaryTickContext<'_>,
-        world: &impl super::NativeSecondaryWorld,
-    ) -> super::NativeSecondaryTickResult {
+        ability: super::SecondaryAbilityId,
+        context: &super::SecondaryTickContext<'_>,
+        world: &impl super::SecondaryWorld,
+    ) -> super::SecondaryTickResult {
         let player = self.players.get(owner).cloned().unwrap_or_default();
         let result = super::casting::cast_ability(self, player, owner, ability, context, world);
         self.players.insert(owner.to_owned(), result.player);
-        let mut output = super::NativeSecondaryTickResult {
+        let mut output = super::SecondaryTickResult {
             target_heading_changes: result.target_heading_changes,
             dampened_caster_target_ids: result.dampened_caster_target_ids,
             dispelled_shield_target_ids: result.dispelled_shield_target_ids,
             removed_projectile_ids: result.removed_projectile_ids,
-            ..super::NativeSecondaryTickResult::default()
+            ..super::SecondaryTickResult::default()
         };
         for ids in [
             &mut output.dampened_caster_target_ids,
@@ -210,12 +208,12 @@ impl NativeSecondarySimulationState {
     pub fn activate_belt_skill(
         &mut self,
         owner: &str,
-        ability: super::NativeSecondaryAbilityId,
+        ability: super::SecondaryAbilityId,
         slot: usize,
-        context: &super::NativeSecondaryTickContext<'_>,
-        world: &impl super::NativeSecondaryWorld,
+        context: &super::SecondaryTickContext<'_>,
+        world: &impl super::SecondaryWorld,
         order: Option<&mut crate::painter::WorldPainterOrder>,
-    ) -> super::NativeSecondaryTickResult {
+    ) -> super::SecondaryTickResult {
         let authority = context.players.get(owner).expect("secondary authority retains its player");
         let mut player = self.players.get(owner).cloned().unwrap_or_default();
         player.reserved_mana = player.mana_reserve(authority.skill_book, authority.maximum_mana);
@@ -227,14 +225,11 @@ impl NativeSecondarySimulationState {
             if overloaded {
                 let mut event = super::program::cast_event(
                     owner,
-                    player
-                        .last_skill_id
-                        .unwrap_or(super::NativeSecondaryAbilityId::Mindstar)
-                        .skill_id(),
+                    player.last_skill_id.unwrap_or(super::SecondaryAbilityId::Mindstar).skill_id(),
                     authority,
                     context.tick,
-                    NativeSecondaryEventKind::Overload,
-                    Some(NativeSecondaryAudioCue::Fizzle),
+                    SecondaryEventKind::Overload,
+                    Some(SecondaryAudioCue::Fizzle),
                 );
                 event.pitch = 1.0;
                 self.emit_event(event);
@@ -254,7 +249,7 @@ impl NativeSecondarySimulationState {
         if self.events.len() > 512 {
             self.events.drain(..self.events.len() - 512);
         }
-        super::enroll_native_secondary_light_owners(&mut self.actors, order, |key, id| {
+        super::enroll_secondary_light_owners(&mut self.actors, order, |key, id| {
             world.target(key, id).map(|target| target.light_registration)
         });
         result
@@ -268,13 +263,13 @@ impl NativeSecondarySimulationState {
         self.actors.retain_mut(|actor| {
             if !matches!(
                 actor.kind,
-                NativeSecondaryActorKind::MindblastBurst
-                    | NativeSecondaryActorKind::MindblastShockwave
-                    | NativeSecondaryActorKind::RescueShockwave
+                SecondaryActorKind::MindblastBurst
+                    | SecondaryActorKind::MindblastShockwave
+                    | SecondaryActorKind::RescueShockwave
             ) {
                 return true;
             }
-            let before = super::motion::NativeExpandingWave {
+            let before = super::motion::ExpandingWave {
                 radius: actor.radius,
                 growth: actor.quantity,
                 scalar: actor.alpha,
@@ -282,10 +277,10 @@ impl NativeSecondarySimulationState {
                 fade_threshold: actor.slow_factor,
             };
             super::program::advance_actor(actor);
-            if actor.kind == NativeSecondaryActorKind::MindblastBurst {
+            if actor.kind == SecondaryActorKind::MindblastBurst {
                 return actor.age_ticks < actor.lifetime_ticks;
             }
-            let wave = super::motion::step_native_expanding_wave(before, rng);
+            let wave = super::motion::step_expanding_wave(before, rng);
             record_camera_displacement(proposals, &actor.world_key, wave.displacement, tick);
             if !wave.retain {
                 return false;
@@ -310,7 +305,7 @@ impl NativeSecondarySimulationState {
         self.events.clear();
         self.target_effects.clear();
         for player in self.players.values_mut() {
-            *player = NativeSecondaryPlayerState::default();
+            *player = SecondaryPlayerState::default();
         }
     }
 
@@ -329,7 +324,7 @@ impl NativeSecondarySimulationState {
         }
         self.players.remove(player_id);
         self.actors.retain(|actor| {
-            actor.owner_id != player_id || actor.kind == NativeSecondaryActorKind::GolemDeath
+            actor.owner_id != player_id || actor.kind == SecondaryActorKind::GolemDeath
         });
         for effect in self.target_effects.iter_mut() {
             if effect.electric_burn.as_ref().is_some_and(|burn| burn.owner_id == player_id) {
@@ -346,16 +341,16 @@ impl NativeSecondarySimulationState {
                 effect.frost_burn_ticks = 0;
             }
         }
-        self.target_effects.retain(NativeSecondaryTargetEffectState::is_active);
+        self.target_effects.retain(SecondaryTargetEffectState::is_active);
     }
 
-    pub fn apply_fire_burn(&mut self, input: NativeSecondaryFireBurnInput) {
+    pub fn apply_fire_burn(&mut self, input: SecondaryFireBurnInput) {
         if input.damage.is_nan() || input.damage <= 0.0 {
             return;
         }
         let damage = fround(input.damage / 200.0);
         if let Some(existing) = self.actors.iter_mut().find(|actor| {
-            actor.kind == NativeSecondaryActorKind::FireBurn
+            actor.kind == SecondaryActorKind::FireBurn
                 && actor.world_key == input.world_key
                 && actor.target_id == Some(input.target.id)
         }) {
@@ -369,9 +364,9 @@ impl NativeSecondarySimulationState {
             existing.skill_id = Some(input.skill_id);
             return;
         }
-        let mut actor = NativeSecondaryActorState::new(
+        let mut actor = SecondaryActorState::new(
             0,
-            NativeSecondaryActorKind::FireBurn,
+            SecondaryActorKind::FireBurn,
             input.owner_id,
             input.world_key,
             Some(input.skill_id),
@@ -387,9 +382,9 @@ impl NativeSecondarySimulationState {
         self.spawn_actor(actor);
     }
 
-    pub fn apply_ether_burn(&mut self, input: NativeSecondaryEtherBurnInput) {
+    pub fn apply_ether_burn(&mut self, input: SecondaryEtherBurnInput) {
         if let Some(existing) = self.actors.iter_mut().find(|actor| {
-            actor.kind == NativeSecondaryActorKind::EtherBurn
+            actor.kind == SecondaryActorKind::EtherBurn
                 && actor.world_key == input.world_key
                 && actor.target_id == Some(input.target.id)
         }) {
@@ -401,9 +396,9 @@ impl NativeSecondarySimulationState {
             existing.scale = input.target.scale;
             return;
         }
-        let mut actor = NativeSecondaryActorState::new(
+        let mut actor = SecondaryActorState::new(
             0,
-            NativeSecondaryActorKind::EtherBurn,
+            SecondaryActorKind::EtherBurn,
             input.owner_id,
             input.world_key,
             Some(14),
@@ -420,10 +415,10 @@ impl NativeSecondarySimulationState {
 
     pub fn apply_player_damage(
         &mut self,
-        input: NativeSecondaryPlayerDamageInput<'_>,
+        input: SecondaryPlayerDamageInput<'_>,
         order: &mut WorldPainterOrder,
-    ) -> NativeSecondaryPlayerDamageResult {
-        let NativeSecondaryPlayerDamageInput {
+    ) -> SecondaryPlayerDamageResult {
+        let SecondaryPlayerDamageInput {
             player_id,
             amount,
             tick,
@@ -436,9 +431,8 @@ impl NativeSecondarySimulationState {
             "secondary player damage is finite and non-negative"
         );
         let unabsorbed =
-            NativeSecondaryPlayerDamageResult { absorbed_damage: 0.0, health_damage: amount };
-        let absorbed =
-            NativeSecondaryPlayerDamageResult { absorbed_damage: amount, health_damage: 0.0 };
+            SecondaryPlayerDamageResult { absorbed_damage: 0.0, health_damage: amount };
+        let absorbed = SecondaryPlayerDamageResult { absorbed_damage: amount, health_damage: 0.0 };
         let Some(current) = self.players.get(player_id) else {
             return unabsorbed;
         };
@@ -458,7 +452,7 @@ impl NativeSecondarySimulationState {
                     presentation.enhanced_effects,
                     None,
                 );
-                super::enroll_native_secondary_painter_owners(
+                super::enroll_secondary_painter_owners(
                     self.actors.iter_mut().filter(|actor| actor.id >= first_birth),
                     order,
                 );
@@ -476,13 +470,13 @@ impl NativeSecondarySimulationState {
             player.magic_shield_explosion_damage = 0.0;
             player.magic_shield_maximum = 0.0;
         }
-        let mut event = NativeSecondaryEventState::new(
-            NativeSecondaryEventKind::ShieldHit,
+        let mut event = SecondaryEventState::new(
+            SecondaryEventKind::ShieldHit,
             player_id.to_owned(),
             world_key.to_owned(),
             tick,
         );
-        event.cue = Some(NativeSecondaryAudioCue::HitShield);
+        event.cue = Some(SecondaryAudioCue::HitShield);
         event.pitch = fround(0.8 + hit_pitch);
         event.position = position;
         event.skill_id = Some(54);
@@ -490,13 +484,13 @@ impl NativeSecondarySimulationState {
         if !broke {
             return absorbed;
         }
-        let mut event = NativeSecondaryEventState::new(
-            NativeSecondaryEventKind::ShieldBreak,
+        let mut event = SecondaryEventState::new(
+            SecondaryEventKind::ShieldBreak,
             player_id.to_owned(),
             world_key.to_owned(),
             tick,
         );
-        event.cue = Some(NativeSecondaryAudioCue::PopShield);
+        event.cue = Some(SecondaryAudioCue::PopShield);
         event.pitch = 0.8_f32 as f64;
         event.position = position;
         event.skill_id = Some(54);
@@ -505,9 +499,9 @@ impl NativeSecondarySimulationState {
             let rotation = self.rng.draw_scaled_float(360.0, false);
             let alpha = self.rng.draw_scaled_float(0.75, false);
             let scale = self.rng.draw_scaled_float(0.25, false);
-            let mut actor = NativeSecondaryActorState::new(
+            let mut actor = SecondaryActorState::new(
                 0,
-                NativeSecondaryActorKind::ShieldBreak,
+                SecondaryActorKind::ShieldBreak,
                 player_id.to_owned(),
                 world_key.to_owned(),
                 Some(54),
@@ -526,9 +520,9 @@ impl NativeSecondarySimulationState {
             for _ in 0..502 {
                 self.rng.draw_word();
             }
-            let mut actor = NativeSecondaryActorState::new(
+            let mut actor = SecondaryActorState::new(
                 0,
-                NativeSecondaryActorKind::ShieldExplosion,
+                SecondaryActorKind::ShieldExplosion,
                 player_id.to_owned(),
                 world_key.to_owned(),
                 Some(54),
@@ -540,9 +534,9 @@ impl NativeSecondarySimulationState {
             actor.radius = 110.0;
             actor.painter_registrations = vec![order.register(WorldManagerLane::Transient)];
             self.spawn_actor(actor);
-            let mut actor = NativeSecondaryActorState::new(
+            let mut actor = SecondaryActorState::new(
                 0,
-                NativeSecondaryActorKind::Shockwave,
+                SecondaryActorKind::Shockwave,
                 player_id.to_owned(),
                 world_key.to_owned(),
                 Some(54),
@@ -557,17 +551,17 @@ impl NativeSecondarySimulationState {
             actor.painter_registrations = vec![order.register(WorldManagerLane::Transient)];
             actor.light_registration = Some(order.register(WorldManagerLane::Actor));
             self.spawn_actor(actor);
-            let mut event = NativeSecondaryEventState::new(
-                NativeSecondaryEventKind::Impact,
+            let mut event = SecondaryEventState::new(
+                SecondaryEventKind::Impact,
                 player_id.to_owned(),
                 world_key.to_owned(),
                 tick,
             );
             event.camera_magnitude = 1.25;
-            event.cue = Some(NativeSecondaryAudioCue::MagicShieldExplode);
+            event.cue = Some(SecondaryAudioCue::MagicShieldExplode);
             event.position = position;
             event.screen_flash =
-                Some(NativeSecondaryScreenFlashState::new(0.5, 1.0, 1.0, 0.05, true, 1.0));
+                Some(SecondaryScreenFlashState::new(0.5, 1.0, 1.0, 0.05, true, 1.0));
             event.skill_id = Some(54);
             self.emit_event(event);
         }
@@ -577,28 +571,30 @@ impl NativeSecondarySimulationState {
     pub fn apply_golem_damage(
         &mut self,
         actor_id: u64,
-        damage: NativeGolemIncomingDamage,
+        damage: GolemIncomingDamage,
         tick: u64,
         enhanced_effects: bool,
         order: Option<&mut crate::painter::WorldPainterOrder>,
-    ) -> NativeSecondaryGolemDamageResult {
-        let missing = NativeSecondaryGolemDamageResult {
+    ) -> SecondaryGolemDamageResult {
+        let missing = SecondaryGolemDamageResult {
             ignored: true,
             killed: false,
             owner_id: None,
             reflected_damage: 0.0,
         };
-        let Some(index) = self.actors.iter().position(|actor| {
-            actor.id == actor_id && actor.kind == NativeSecondaryActorKind::Golem
-        }) else {
+        let Some(index) = self
+            .actors
+            .iter()
+            .position(|actor| actor.id == actor_id && actor.kind == SecondaryActorKind::Golem)
+        else {
             return missing;
         };
         let actor = self.actors[index].clone();
         let Some(golem) = actor.golem else {
             return missing;
         };
-        let received = damage_native_secondary_golem(
-            NativeGolemKernelActor {
+        let received = damage_secondary_golem(
+            GolemKernelActor {
                 age_ticks: actor.age_ticks,
                 damage_minimum: actor.damage,
                 golem,
@@ -610,7 +606,7 @@ impl NativeSecondarySimulationState {
             },
             damage,
         );
-        let result = NativeSecondaryGolemDamageResult {
+        let result = SecondaryGolemDamageResult {
             ignored: received.ignored,
             killed: received.killed,
             owner_id: Some(actor.owner_id.clone()),
@@ -625,48 +621,44 @@ impl NativeSecondarySimulationState {
             actor.quantity = remaining.golem.current_health;
             return result;
         }
-        let animation = crate::death_animations::create_native_golem_death_animation(
+        let animation = crate::death_animations::create_golem_death_animation(
             &mut self.rng,
             actor.position,
             enhanced_effects,
         );
         self.actors.remove(index);
-        let mut death = NativeSecondaryActorState::new(
+        let mut death = SecondaryActorState::new(
             0,
-            NativeSecondaryActorKind::GolemDeath,
+            SecondaryActorKind::GolemDeath,
             actor.owner_id.clone(),
             actor.world_key.clone(),
             Some(45),
         );
         death.enhanced = enhanced_effects;
         death.lifetime_ticks = if enhanced_effects {
-            crate::death_animations::NATIVE_GOLEM_DEATH_MAX_AGE_ENHANCED
+            crate::death_animations::GOLEM_DEATH_MAX_AGE_ENHANCED
         } else {
-            crate::death_animations::NATIVE_GOLEM_DEATH_MAX_AGE_BASIC
+            crate::death_animations::GOLEM_DEATH_MAX_AGE_BASIC
         };
         death.position = actor.position;
         death.golem_death = Some(animation);
         if let Some(order) = order {
             death.painter_registrations = order.register_many(
                 crate::painter::WorldManagerLane::Actor,
-                crate::death_animations::NATIVE_GOLEM_DEATH_PAINTER_COUNT,
+                crate::death_animations::GOLEM_DEATH_PAINTER_COUNT,
             );
         }
         death.variant = i32::from(golem.iron);
         self.spawn_actor(death);
         let death = self.actors.last().expect("Golem death presentation was spawned").clone();
         for cue in [
-            NativeSecondaryAudioCue::StoneBreak,
-            NativeSecondaryAudioCue::FlameLashStart,
-            NativeSecondaryAudioCue::GolemDie,
-            NativeSecondaryAudioCue::RockHit,
+            SecondaryAudioCue::StoneBreak,
+            SecondaryAudioCue::FlameLashStart,
+            SecondaryAudioCue::GolemDie,
+            SecondaryAudioCue::RockHit,
         ] {
-            let event = super::program::actor_event(
-                &death,
-                tick,
-                NativeSecondaryEventKind::Impact,
-                Some(cue),
-            );
+            let event =
+                super::program::actor_event(&death, tick, SecondaryEventKind::Impact, Some(cue));
             self.emit_event(event);
         }
         result
@@ -674,7 +666,7 @@ impl NativeSecondarySimulationState {
 }
 
 fn record_camera_displacement(
-    proposals: &mut Vec<NativeSecondaryCameraDisplacement>,
+    proposals: &mut Vec<SecondaryCameraDisplacement>,
     world_key: &str,
     displacement: Vec2,
     tick: u64,
@@ -687,7 +679,7 @@ fn record_camera_displacement(
         return;
     }
     proposals.retain(|row| row.world_key != world_key);
-    proposals.push(NativeSecondaryCameraDisplacement {
+    proposals.push(SecondaryCameraDisplacement {
         displacement,
         tick,
         world_key: world_key.to_owned(),

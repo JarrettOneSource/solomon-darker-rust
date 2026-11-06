@@ -3,13 +3,13 @@
 //! modifier; the admitted secondary terminal receiver owns its detonation.
 
 use super::*;
-use crate::secondary::NativeSecondarySteamedEffectState;
+use crate::secondary::SecondarySteamedEffectState;
 
 impl ContactWork<'_, '_> {
     pub(super) fn resolve_weld_transient_forces(&mut self) {
         for effect in self.source.transients.iter().cloned().collect::<Vec<_>>() {
-            let PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                NativeWeldHailChildActorState::Knockback(mut actor),
+            let PrimarySpellTransient::Weld(WeldWorldActor::HailChild(
+                WeldHailChildActorState::Knockback(mut actor),
             )) = effect
             else {
                 continue;
@@ -47,14 +47,14 @@ impl ContactWork<'_, '_> {
                 actor.common.owner.age_ticks += 1;
                 self.updated_transients.insert(
                     actor.common.owner.id,
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                        NativeWeldHailChildActorState::Knockback(actor),
+                    PrimarySpellTransient::Weld(WeldWorldActor::HailChild(
+                        WeldHailChildActorState::Knockback(actor),
                     )),
                 );
             }
         }
         for effect in self.source.transients.iter().cloned().collect::<Vec<_>>() {
-            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(actor)) = effect else {
+            let PrimarySpellTransient::Weld(WeldWorldActor::Steam(actor)) = effect else {
                 continue;
             };
             if actor.common.owner.world_key != self.context.world_key
@@ -68,8 +68,8 @@ impl ContactWork<'_, '_> {
             for row in root_target_rows(self.enemies, center, radius, 0x2) {
                 self.target_effect(
                     row.actor_id,
-                    NativeSecondaryTargetEffectPatch {
-                        steamed: Some(Some(NativeSecondarySteamedEffectState {
+                    SecondaryTargetEffectPatch {
+                        steamed: Some(Some(SecondarySteamedEffectState {
                             damage_per_tick: fround(actor.life.min(1.0) * actor.contact_damage),
                             ember_damage: actor.common.vector[6],
                             ember_fragments: actor.common.vector[7].round().max(0.0) as usize,
@@ -79,7 +79,7 @@ impl ContactWork<'_, '_> {
                             source_actor_id: actor.common.owner.id,
                             ticks: 10,
                         })),
-                        ..NativeSecondaryTargetEffectPatch::default()
+                        ..SecondaryTargetEffectPatch::default()
                     },
                 );
             }

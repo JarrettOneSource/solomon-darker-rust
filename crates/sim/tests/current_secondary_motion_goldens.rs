@@ -8,18 +8,18 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 use solomon_sim::belt::PlayerBeltComponent;
-use solomon_sim::secondary::motion::create_native_stoneskin_warp;
+use solomon_sim::secondary::motion::create_stoneskin_warp;
 use solomon_sim::secondary::*;
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 use support::*;
 
-fn rng_values(rng: &NativeRng) -> Vec<u32> {
+fn rng_values(rng: &Rng) -> Vec<u32> {
     let mut values = vec![rng.index_a as u32, rng.index_b as u32];
     values.extend(rng.words);
     values
 }
 
-fn cameras(state: &NativeSecondarySimulationState) -> Value {
+fn cameras(state: &SecondarySimulationState) -> Value {
     Value::Array(state.camera_displacements.iter().map(|row| json!({
         "displacement":point_snapshot(row.displacement),"tick":row.tick,"worldKey":row.world_key,
     })).collect())
@@ -33,17 +33,13 @@ fn current_secondary_warps_and_wave_camera_proposals_preserve_the_source_rng_and
     .unwrap();
     assert_eq!(fixture["sourceRevision"], "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     for case in fixture["gridCases"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         for grid in case["grids"].as_array().unwrap() {
-            assert_snapshot(
-                &json!(create_native_stoneskin_warp(&mut rng)),
-                &grid["positions"],
-                "warp",
-            );
+            assert_snapshot(&json!(create_stoneskin_warp(&mut rng)), &grid["positions"], "warp");
             assert_snapshot(&json!(rng_values(&rng)), &grid["rng"], "warp RNG");
         }
     }
-    let mut state = NativeSecondarySimulationState::new(17);
+    let mut state = SecondarySimulationState::new(17);
     assert!(state.camera_displacements.is_empty());
     assert!(state.stoneskin_warp.is_none());
     for (proposal, expected) in fixture["proposals"]
@@ -70,19 +66,19 @@ fn current_secondary_warps_and_wave_camera_proposals_preserve_the_source_rng_and
     let empty_world = json!({"scenery":[]});
     let mut world = World { case: &empty_world, targets: Vec::new() };
     for case in fixture["waveCases"].as_array().unwrap() {
-        let kind = NativeSecondaryActorKind::ALL
+        let kind = SecondaryActorKind::ALL
             .into_iter()
             .find(|kind| kind.as_str() == case["kind"].as_str().unwrap())
             .unwrap();
-        let mut state = NativeSecondarySimulationState::new(case["seed"].as_i64().unwrap());
-        let mut wave = NativeSecondaryActorState::new(
+        let mut state = SecondarySimulationState::new(case["seed"].as_i64().unwrap());
+        let mut wave = SecondaryActorState::new(
             0,
             kind,
             "player".into(),
             declared["worldKey"].as_str().unwrap().into(),
             match kind {
-                NativeSecondaryActorKind::Shockwave => Some(21),
-                NativeSecondaryActorKind::FreezeWave => Some(35),
+                SecondaryActorKind::Shockwave => Some(21),
+                SecondaryActorKind::FreezeWave => Some(35),
                 _ => None,
             },
         );
@@ -101,7 +97,7 @@ fn current_secondary_warps_and_wave_camera_proposals_preserve_the_source_rng_and
                 state.step_mindblast_presentation(tick);
             } else {
                 state.step(
-                    &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+                    &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
                     &mut world,
                     None,
                 );

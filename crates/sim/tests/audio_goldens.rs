@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use solomon_sim::audio::{
     AUDIO_CATALOG, AudioCue, CreateAudioAction, MusicScene, create_entry_audio_events,
-    create_selection_audio_events, hub_audio_attenuation, hub_teacher_releases_between,
-    hub_teacher_summon_pitch, native_footstep_cue,
+    create_selection_audio_events, footstep_cue, hub_audio_attenuation,
+    hub_teacher_releases_between, hub_teacher_summon_pitch,
 };
 use solomon_sim::profile::WizardElement;
 
@@ -93,7 +93,7 @@ fn stock_create_cues_mixing_hashes_and_music_match_the_retained_source() {
         assert_eq!(hub_audio_attenuation(case.distance), case.expected);
     }
     for case in fixture.steps {
-        assert_eq!(native_footstep_cue(case.tick, &case.player_id).as_str(), case.expected);
+        assert_eq!(footstep_cue(case.tick, &case.player_id).as_str(), case.expected);
     }
     for case in fixture.teacher {
         assert_eq!(hub_teacher_summon_pitch(case.release), case.expected);

@@ -3,20 +3,20 @@
 
 use std::collections::BTreeMap;
 
-use super::{NativeSecondaryScreenFeedbackContext, NativeSecondaryScreenOverlay};
+use super::{SecondaryScreenFeedbackContext, SecondaryScreenOverlay};
 use crate::float::fround;
-use crate::screen_flash::{NativeScreenFlashState, NativeScreenFlashWrite};
+use crate::screen_flash::{ScreenFlashState, ScreenFlashWrite};
 use crate::secondary::presentation::draws::{pack_normalized_rgb, repeated_float_decay};
 
 #[derive(Clone, Debug)]
 struct ObservedWrite {
-    write: NativeScreenFlashWrite,
+    write: ScreenFlashWrite,
     gain: f64,
     eligible: bool,
 }
 
 #[derive(Clone, Debug)]
-pub struct NativeScreenFlashPresentation {
+pub struct ScreenFlashPresentation {
     writes: BTreeMap<u64, ObservedWrite>,
     epoch: Option<u64>,
     retired_order: u64,
@@ -24,7 +24,7 @@ pub struct NativeScreenFlashPresentation {
     world_key: String,
 }
 
-impl NativeScreenFlashPresentation {
+impl ScreenFlashPresentation {
     #[must_use]
     pub fn new(initial_tick: u64, world_key: String) -> Self {
         Self {
@@ -36,11 +36,7 @@ impl NativeScreenFlashPresentation {
         }
     }
 
-    pub fn consume(
-        &mut self,
-        state: &NativeScreenFlashState,
-        context: NativeSecondaryScreenFeedbackContext,
-    ) {
+    pub fn consume(&mut self, state: &ScreenFlashState, context: SecondaryScreenFeedbackContext) {
         if self.epoch.is_some_and(|epoch| state.epoch < epoch) {
             return;
         }
@@ -63,9 +59,9 @@ impl NativeScreenFlashPresentation {
         }
     }
 
-    pub fn sample(&mut self, tick: f64) -> Option<NativeSecondaryScreenOverlay> {
+    pub fn sample(&mut self, tick: f64) -> Option<SecondaryScreenOverlay> {
         self.tick = self.tick.max(tick.trunc().max(0.0) as u64);
-        let mut winner: Option<crate::secondary::NativeSecondaryScreenFlashState> = None;
+        let mut winner: Option<crate::secondary::SecondaryScreenFlashState> = None;
         let mut alpha = 0.0;
         let mut last_tick = 0;
         let mut anchor = None;
@@ -101,7 +97,7 @@ impl NativeScreenFlashPresentation {
         if alpha <= 0.0 {
             return None;
         }
-        Some(NativeSecondaryScreenOverlay {
+        Some(SecondaryScreenOverlay {
             alpha,
             color: pack_normalized_rgb(flash.red, flash.green, flash.blue),
         })

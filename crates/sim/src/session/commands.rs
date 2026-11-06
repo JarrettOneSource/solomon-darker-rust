@@ -2,9 +2,7 @@
 //! Browser and native host share these admission checks and world side effects.
 
 use super::*;
-use crate::belt::{
-    NativeBeltCommand, NativeBeltEntry, native_belt_entry_item, native_belt_equipment_slots,
-};
+use crate::belt::{BeltCommand, NativeBeltEntry, belt_entry_item, belt_equipment_slots};
 use crate::boneyard::loot::BoneyardGoodieInteraction;
 use crate::economy::{
     EquipmentSlot, HubEconomyRejection, HubEconomyResult, HubInventoryAction, find_inventory_item,
@@ -24,8 +22,8 @@ impl GameSession {
                 .is_some_and(|participant| participant.player.combat.can_accept_input())
     }
 
-    pub fn bind_belt(&mut self, id: &str, command: NativeBeltCommand) -> bool {
-        if matches!(command, NativeBeltCommand::BindItem { .. }) {
+    pub fn bind_belt(&mut self, id: &str, command: BeltCommand) -> bool {
+        if matches!(command, BeltCommand::BindItem { .. }) {
             self.close_inventory_dye_session(id, None);
         }
         if !self.can_edit_books(id) {
@@ -125,7 +123,7 @@ impl GameSession {
         let bonus_book = match action {
             HubInventoryAction::ReadSkillBook { item_id } => {
                 find_inventory_item(&participant.player.economy.backpack, *item_id)
-                    .is_some_and(|item| item.native_subtype == Some(2))
+                    .is_some_and(|item| item.subtype == Some(2))
             }
             _ => false,
         };
@@ -238,12 +236,12 @@ impl GameSession {
             if participant.player.book.effective_ranks.get(skill_id).copied().unwrap_or(0) < 1 {
                 return Ok(rejected(HubEconomyRejection::IneligibleItem));
             }
-            let accepted = match crate::profile::native_skill_category(skill_id) {
+            let accepted = match crate::profile::skill_category(skill_id) {
                 Some(1) => self.select_primary(id, skill_id),
                 Some(3) => self.select_concentration(id, skill_id),
                 Some(2) if self.run.phase == GameRunPhase::Active && self.boneyard.is_some() => {
                     let Some(ability) =
-                        crate::secondary::NativeSecondaryAbilityId::from_skill_id(skill_id)
+                        crate::secondary::SecondaryAbilityId::from_skill_id(skill_id)
                     else {
                         return Ok(rejected(HubEconomyRejection::ServiceUnavailable));
                     };
@@ -258,18 +256,18 @@ impl GameSession {
                 rejected(HubEconomyRejection::ServiceUnavailable)
             });
         }
-        let Some(item) = native_belt_entry_item(entry, economy) else {
+        let Some(item) = belt_entry_item(entry, economy) else {
             return Ok(rejected(HubEconomyRejection::ItemNotFound));
         };
         let item_id = item.id;
-        if item.native_type_id == 7001 {
+        if item.type_id == 7001 {
             return self.apply_inventory_with_extensions(
                 id,
                 &HubInventoryAction::Consume { item_id },
                 extensions,
             );
         }
-        if item.native_type_id == 7008 {
+        if item.type_id == 7008 {
             return self.apply_inventory_with_extensions(
                 id,
                 &HubInventoryAction::EquipSackContents { item_id },
@@ -280,8 +278,7 @@ impl GameSession {
             return Ok(rejected(HubEconomyRejection::IneligibleItem));
         }
         if find_inventory_item(&economy.backpack, item_id).is_some() {
-            let slots =
-                native_belt_equipment_slots(item, economy.owned_perk_selectors.contains(&19));
+            let slots = belt_equipment_slots(item, economy.owned_perk_selectors.contains(&19));
             if let Some(target) = slots
                 .iter()
                 .copied()
@@ -413,7 +410,7 @@ mod tests {
                 },
                 GameSessionOptions::default(),
             );
-            assert!(state.bind_belt("owner", NativeBeltCommand::BindItem { item_id: 1, slot }));
+            assert!(state.bind_belt("owner", BeltCommand::BindItem { item_id: 1, slot }));
             let player = &mut state.participants.get_mut("owner").unwrap().player;
             player.combat.current_health = 1.0;
             let result = state.activate_belt_slot("owner", slot, None);

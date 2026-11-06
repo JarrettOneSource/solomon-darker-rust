@@ -5,27 +5,27 @@ use solomon_sim::economy::HubEconomyState;
 use solomon_sim::harden_effects::*;
 use solomon_sim::harmful::*;
 use solomon_sim::profile::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: Vec2) -> Value {
     json!({"x":value.x,"y":value.y})
 }
-fn rng(value: &NativeRng) -> Value {
+fn rng(value: &Rng) -> Value {
     json!({"indexA":value.index_a,"indexB":value.index_b,"words":&value.words[..]})
 }
-fn body(value: NativeHardenShardBody) -> Value {
+fn body(value: HardenShardBody) -> Value {
     json!({"bounceVelocity":value.bounce_velocity,"height":value.height,"life":value.life,"position":point(value.position),"record":value.record,"rotationDegrees":value.rotation_degrees,"rotationStepDegrees":value.rotation_step_degrees,"velocity":point(value.velocity),"verticalVelocity":value.vertical_velocity})
 }
-fn chip(value: NativeHardenChip) -> Value {
+fn chip(value: HardenChip) -> Value {
     json!({"pitch":value.pitch,"shard":body(value.shard)})
 }
 fn flash(value: &PlayerFlashResponse) -> Value {
     json!({"cameraDisplacement":point(value.camera_displacement),"durationTicks":value.duration_ticks,"growScales":value.grow_scales,"pitch":value.pitch})
 }
-fn effect(value: &NativeHardenEffect) -> Value {
+fn effect(value: &HardenEffect) -> Value {
     let (owner, kind, mut value) = match value {
-        NativeHardenEffect::Shard { owner, body: shard } => (owner, "harden-shard", body(*shard)),
-        NativeHardenEffect::Burst { owner, alpha, position } => {
+        HardenEffect::Shard { owner, body: shard } => (owner, "harden-shard", body(*shard)),
+        HardenEffect::Burst { owner, alpha, position } => {
             (owner, "harden-burst", json!({"alpha":alpha,"position":point(*position)}))
         }
     };
@@ -60,7 +60,7 @@ fn assert_snapshot(actual: &Value, expected: &Value, label: &str) {
 fn harmful_contact_flash_and_harden_effects_replay_native_draw_order() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/harmful-goldens.json")).unwrap();
-    let mut book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+    let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
     let economy = HubEconomyState::new(77, WizardElement::Ether);
     let base_runtime = PlayerSkillRuntimeState::new(&mut book, &economy);
     let base_progression = PlayerProgressionState::new(1);
@@ -71,7 +71,7 @@ fn harmful_contact_flash_and_harden_effects_replay_native_draw_order() {
         let mut runtime = base_runtime.clone();
         let mut progression = base_progression.clone();
         let mut stats = base_stats;
-        runtime.harden = NativeHardenState {
+        runtime.harden = HardenState {
             armor: spec["armor"].as_f64().unwrap(),
             coating: spec["coating"].as_f64().unwrap(),
         };
@@ -81,14 +81,13 @@ fn harmful_contact_flash_and_harden_effects_replay_native_draw_order() {
         stats.magic_resistance = spec["magic"].as_f64().unwrap();
         stats.incoming_damage_factor = spec["incoming"].as_f64().unwrap();
         stats.deflect_chance_percent = spec["deflect"].as_f64().unwrap();
-        let mut random = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut random = Rng::new(case["seed"].as_i64().unwrap());
         let result = resolve_player_harmful_contact(
             PlayerHarmfulContactContext {
                 runtime: &runtime,
                 derived: &stats,
                 progression: &progression,
-                rescue_protection:
-                    &solomon_sim::player_rescue::NativePlayerRescueProtection::default(),
+                rescue_protection: &solomon_sim::player_rescue::PlayerRescueProtection::default(),
                 reflection_source_in_range: case["inRange"].as_bool().unwrap(),
                 position,
                 enhanced_effects: true,
@@ -107,7 +106,7 @@ fn harmful_contact_flash_and_harden_effects_replay_native_draw_order() {
         let mut stats = base_stats;
         stats.flash_chance_percent = case["chance"].as_f64().unwrap();
         stats.flash_duration_ticks = 400;
-        let mut random = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut random = Rng::new(case["seed"].as_i64().unwrap());
         let result = resolve_player_flash_response(&stats, &mut random);
         assert_snapshot(
             &json!({"flash":result.as_ref().map(flash),"rng":rng(&random)}),
@@ -116,9 +115,9 @@ fn harmful_contact_flash_and_harden_effects_replay_native_draw_order() {
         );
     }
     for case in fixture["breakups"].as_array().unwrap() {
-        let mut random = NativeRng::new(case["seed"].as_i64().unwrap());
-        let result = create_native_harden_breakup(
-            NativeHardenBreakupInput {
+        let mut random = Rng::new(case["seed"].as_i64().unwrap());
+        let result = create_harden_breakup(
+            HardenBreakupInput {
                 coating: case["coating"].as_f64().unwrap(),
                 position,
                 owner_id: "player",
@@ -138,9 +137,8 @@ fn harmful_contact_flash_and_harden_effects_replay_native_draw_order() {
         let blocked = case["blocked"].as_bool().unwrap();
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for tick in 101..=850 {
-            effects.retain_mut(|effect| {
-                step_native_harden_effect(effect, tick, &mut random, |_| !blocked)
-            });
+            effects
+                .retain_mut(|effect| step_harden_effect(effect, tick, &mut random, |_| !blocked));
             if samples.peek().is_some_and(|sample| sample["tick"].as_u64() == Some(tick)) {
                 let expected = samples.next().unwrap();
                 assert_snapshot(

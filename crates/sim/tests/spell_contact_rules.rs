@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use solomon_sim::Vec2;
-use solomon_sim::belt::NativeBeltCommand;
+use solomon_sim::belt::BeltCommand;
 use solomon_sim::boneyard::navigation::NavigationSet;
 use solomon_sim::boneyard::{
     BoneyardBounds, BoneyardScene, BoneyardSource, BoneyardSpawn, LoadedBoneyard,
@@ -12,13 +12,13 @@ use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::enemies::model::{EnemyEvent, EnemyEventKind};
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::NativeSecondaryActorKind;
-use solomon_sim::secondary::presentation::native_secondary_presentation_plan;
+use solomon_sim::secondary::SecondaryActorKind;
+use solomon_sim::secondary::presentation::secondary_presentation_plan;
 use solomon_sim::session::{
     GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
 use solomon_sim::spells::model::PrimarySpellTransient;
-use solomon_sim::spells::weld::NativeWeldWorldActor;
+use solomon_sim::spells::weld::WeldWorldActor;
 
 fn drain_session() -> (GameSession, NavigationSet) {
     let mut session = GameSession::new_participants(
@@ -43,9 +43,7 @@ fn drain_session() -> (GameSession, NavigationSet) {
         1,
         &mut session.gameplay_rng,
     );
-    assert!(
-        session.bind_belt("owner", NativeBeltCommand::BindSkill { skill_id: Some(74), slot: 0 },)
-    );
+    assert!(session.bind_belt("owner", BeltCommand::BindSkill { skill_id: Some(74), slot: 0 },));
     session
         .install_boneyard(LoadedBoneyard {
             choice_id: "empty".into(),
@@ -125,7 +123,7 @@ fn ether_drain_retains_cheat_death_feedback_for_caster_and_peer() {
         assert_eq!(participant.player.combat.life_state, PlayerLifeState::Alive);
         assert!(participant.player.combat.current_health > 0.0);
         assert!(session.secondary.actors.iter().any(|actor| {
-            actor.kind == NativeSecondaryActorKind::RescueShockwave && actor.owner_id == victim
+            actor.kind == SecondaryActorKind::RescueShockwave && actor.owner_id == victim
         }));
         let rescues: Vec<_> = session
             .boneyard
@@ -241,11 +239,11 @@ fn a_living_player_at_the_center_does_not_expand_the_capture_pulse() {
             .secondary
             .actors
             .iter()
-            .filter(|actor| actor.kind == NativeSecondaryActorKind::EtherDrain)
+            .filter(|actor| actor.kind == SecondaryActorKind::EtherDrain)
         {
             field_ticks += 1;
             assert_eq!(field.slow_factor, 0.0, "living contact is not capture");
-            let plan = native_secondary_presentation_plan(field, session.ticks as f64, 1.0);
+            let plan = secondary_presentation_plan(field, session.ticks as f64, 1.0);
             assert!(!plan.draws.iter().any(|draw| draw.role == "ether-drain-capture-pulse"));
         }
     }
@@ -310,8 +308,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
                     assert_eq!(emission.underpowered, reserve.is_some());
                 }
                 for actor in session.spells.transients.iter() {
-                    let PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(particle)) = actor
-                    else {
+                    let PrimarySpellTransient::Weld(WeldWorldActor::Steam(particle)) = actor else {
                         continue;
                     };
                     contact_particles += usize::from(particle.contact_enabled);
@@ -336,7 +333,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
             }
             assert!(!session.spells.transients.iter().any(|actor| matches!(
                 actor,
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(_))
+                PrimarySpellTransient::Weld(WeldWorldActor::Steam(_))
             )));
         }
     }
@@ -344,7 +341,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
 
 #[test]
 fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
-    use solomon_sim::spells::weld::NativeWeldPersistentActorState;
+    use solomon_sim::spells::weld::WeldPersistentActorState;
     for funded in [true, false] {
         let (mut session, navigation) = drain_session();
         let player = &mut session.participants.get_mut("owner").unwrap().player;
@@ -388,8 +385,8 @@ fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
                 GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
             );
             for actor in session.spells.transients.iter() {
-                let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                    NativeWeldPersistentActorState::EtherealBoulder(rock),
+                let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+                    WeldPersistentActorState::EtherealBoulder(rock),
                 )) = actor
                 else {
                     continue;

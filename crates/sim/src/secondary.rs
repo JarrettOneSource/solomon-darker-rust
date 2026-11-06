@@ -29,56 +29,48 @@ mod step;
 mod stoneskin;
 
 pub use actors::{
-    NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryDamageContact,
-    NativeSecondaryDamageKind, NativeSecondaryHeadingMode, NativeSecondaryKnockbackContact,
-    NativeSecondaryLightDisposition, NativeSecondaryTarget, NativeSecondaryTargetHeadingChange,
-    enroll_native_secondary_light_owners, enroll_native_secondary_painter_owners,
-    native_secondary_light_disposition, native_secondary_painter_manager_lane,
+    SecondaryActorKind, SecondaryActorState, SecondaryDamageContact, SecondaryDamageKind,
+    SecondaryHeadingMode, SecondaryKnockbackContact, SecondaryLightDisposition, SecondaryTarget,
+    SecondaryTargetHeadingChange, enroll_secondary_light_owners, enroll_secondary_painter_owners,
+    secondary_light_disposition, secondary_painter_manager_lane,
 };
 pub use context::{
-    NativeSecondaryDampenCandidates, NativeSecondaryDampenPayload,
-    NativeSecondaryDampenProjectileCandidate, NativeSecondaryDampenProjectileKind,
-    NativeSecondaryInput, NativeSecondaryPlayerAuthority, NativeSecondaryPlayerSnapshot,
-    NativeSecondarySceneryTarget, NativeSecondaryTickContext, NativeSecondaryTickResult,
-    NativeSecondaryWorld,
+    SecondaryDampenCandidates, SecondaryDampenPayload, SecondaryDampenProjectileCandidate,
+    SecondaryDampenProjectileKind, SecondaryInput, SecondaryPlayerAuthority,
+    SecondaryPlayerSnapshot, SecondarySceneryTarget, SecondaryTickContext, SecondaryTickResult,
+    SecondaryWorld,
 };
 pub use events::{
-    NativeSecondaryAudioCue, NativeSecondaryEventKind, NativeSecondaryEventState,
-    NativeSecondaryScreenFlashState,
+    SecondaryAudioCue, SecondaryEventKind, SecondaryEventState, SecondaryScreenFlashState,
 };
 pub use feedback::{
-    NativePlayerFlashResponseInput, NativePlayerMindblastInput, NativePlayerMindblastTriggerResult,
-    NativePlayerRescueInput, NativeScriptFire,
+    PlayerFlashResponseInput, PlayerMindblastInput, PlayerMindblastTriggerResult,
+    PlayerRescueInput, ScriptFire,
 };
 pub use player::{
-    NATIVE_SECONDARY_GLOBAL_COOLDOWN_TICKS, NativeHandCast2, NativeSecondaryCastAction,
-    NativeSecondaryCastStep, NativeSecondaryPlayerState, native_plane_orb_damage,
-    step_native_secondary_cast_action,
+    HandCast2, SECONDARY_GLOBAL_COOLDOWN_TICKS, SecondaryCastAction, SecondaryCastStep,
+    SecondaryPlayerState, plane_orb_damage, step_secondary_cast_action,
 };
 pub use simulation::{
-    NativeSecondaryCameraDisplacement, NativeSecondaryEtherBurnInput, NativeSecondaryFireBurnInput,
-    NativeSecondaryGolemDamageResult, NativeSecondaryPlayerDamageInput,
-    NativeSecondaryPlayerDamagePresentation, NativeSecondaryPlayerDamageResult,
-    NativeSecondarySimulationState,
+    SecondaryCameraDisplacement, SecondaryEtherBurnInput, SecondaryFireBurnInput,
+    SecondaryGolemDamageResult, SecondaryPlayerDamageInput, SecondaryPlayerDamagePresentation,
+    SecondaryPlayerDamageResult, SecondarySimulationState,
 };
 pub use status::{
-    NativeSecondaryElectricBurnEffectState, NativeSecondaryMovementModifierKind,
-    NativeSecondarySteamedEffectState, NativeSecondaryTargetEffectPatch,
-    NativeSecondaryTargetEffectState, apply_native_secondary_dazzle,
-    apply_native_secondary_target_effect, native_secondary_target_effect,
-    native_secondary_target_material_tint,
+    SecondaryElectricBurnEffectState, SecondaryMovementModifierKind, SecondarySteamedEffectState,
+    SecondaryTargetEffectPatch, SecondaryTargetEffectState, apply_secondary_dazzle,
+    apply_secondary_target_effect, secondary_target_effect, secondary_target_material_tint,
 };
 
 use crate::profile::offensive::{
-    NativeOffensiveSpellFactors, resolve_native_skill_damage_value,
-    resolve_native_skill_mana_cost_value,
+    OffensiveSpellFactors, resolve_skill_damage_value, resolve_skill_mana_cost_value,
 };
-use crate::profile::{NATIVE_SKILL_CATALOG, NativeSkillBookState, native_skill_stat};
+use crate::profile::{SKILL_CATALOG, SkillBookState, skill_stat};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeSecondaryAbilityId {
+pub enum SecondaryAbilityId {
     CallLeviathan = 11,
     Planewalker = 12,
     Phasing = 15,
@@ -104,7 +96,7 @@ pub enum NativeSecondaryAbilityId {
     Regenerate = 79,
 }
 
-impl NativeSecondaryAbilityId {
+impl SecondaryAbilityId {
     pub const ALL: [Self; 23] = [
         Self::CallLeviathan,
         Self::Planewalker,
@@ -143,19 +135,19 @@ impl NativeSecondaryAbilityId {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryStatValue {
+pub struct SecondaryStatValue {
     pub name: &'static str,
     pub value: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSecondaryAbilityRankStats {
+pub struct SecondaryAbilityRankStats {
     pub rank: u32,
-    pub ability: NativeSecondaryAbilityId,
-    pub values: Vec<NativeSecondaryStatValue>,
+    pub ability: SecondaryAbilityId,
+    pub values: Vec<SecondaryStatValue>,
 }
 
-impl NativeSecondaryAbilityRankStats {
+impl SecondaryAbilityRankStats {
     #[must_use]
     pub fn value(&self, property: &str) -> Option<f64> {
         self.values.iter().find(|entry| entry.name == property).map(|entry| entry.value)
@@ -165,21 +157,21 @@ impl NativeSecondaryAbilityRankStats {
 /// Every authored secondary stat except the two rank-limit metadata properties.
 #[must_use]
 pub fn effective_secondary_ability_rank_stats(
-    skill_book: &NativeSkillBookState,
-    ability: NativeSecondaryAbilityId,
-) -> NativeSecondaryAbilityRankStats {
-    native_secondary_ability_rank_stats(ability, skill_book.effective_ranks[ability.skill_id()])
+    skill_book: &SkillBookState,
+    ability: SecondaryAbilityId,
+) -> SecondaryAbilityRankStats {
+    secondary_ability_rank_stats(ability, skill_book.effective_ranks[ability.skill_id()])
 }
 
 /// `nativeSecondaryAbilityRankStats` admits Revelation's rank two even for a
 /// normally single-rank ability. Short authored arrays retain their final row.
 #[must_use]
-pub fn native_secondary_ability_rank_stats(
-    ability: NativeSecondaryAbilityId,
+pub fn secondary_ability_rank_stats(
+    ability: SecondaryAbilityId,
     rank: u32,
-) -> NativeSecondaryAbilityRankStats {
+) -> SecondaryAbilityRankStats {
     let skill_id = ability.skill_id();
-    let definition = &NATIVE_SKILL_CATALOG[skill_id];
+    let definition = &SKILL_CATALOG[skill_id];
     assert!(
         rank > 0 && rank <= definition.maximum_level.max(2),
         "secondary ability has a valid learned rank"
@@ -191,30 +183,27 @@ pub fn native_secondary_ability_rank_stats(
         }
         let value = property.value.at_rank(rank).expect("authored secondary stat has a rank");
         assert!(value.is_finite(), "authored secondary stat is finite");
-        values.push(NativeSecondaryStatValue { name: property.name, value });
+        values.push(SecondaryStatValue { name: property.name, value });
     }
-    NativeSecondaryAbilityRankStats { rank, ability, values }
+    SecondaryAbilityRankStats { rank, ability, values }
 }
 
 #[must_use]
 pub fn resolved_secondary_ability_rank_stats(
-    skill_book: &NativeSkillBookState,
-    ability: NativeSecondaryAbilityId,
-    offensive_factors: &NativeOffensiveSpellFactors,
-) -> NativeSecondaryAbilityRankStats {
+    skill_book: &SkillBookState,
+    ability: SecondaryAbilityId,
+    offensive_factors: &OffensiveSpellFactors,
+) -> SecondaryAbilityRankStats {
     let mut stats = effective_secondary_ability_rank_stats(skill_book, ability);
     // Source keeps Leviathan's ranked base on the retained parent. Each bolt
     // resolves the live caster's modifiers when that appendage actually fires.
-    if ability == NativeSecondaryAbilityId::CallLeviathan {
+    if ability == SecondaryAbilityId::CallLeviathan {
         return stats;
     }
     for property in &mut stats.values {
         if matches!(property.name, "mDamage" | "mDamage1" | "mDamage2") {
-            property.value = resolve_native_skill_damage_value(
-                ability.skill_id(),
-                property.value,
-                offensive_factors,
-            );
+            property.value =
+                resolve_skill_damage_value(ability.skill_id(), property.value, offensive_factors);
         }
     }
     stats
@@ -222,47 +211,47 @@ pub fn resolved_secondary_ability_rank_stats(
 
 /// Raw cost additions are derived by the skill runtime before offensive/equipment lanes.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct NativeSecondaryManaCostBonuses {
+pub struct SecondaryManaCostBonuses {
     pub explosive_shield: f64,
     pub golem: f64,
     pub magic_storm: f64,
 }
 
 #[must_use]
-pub fn native_secondary_ability_mana_cost(
-    skill_book: &NativeSkillBookState,
-    ability: NativeSecondaryAbilityId,
-    offensive_factors: &NativeOffensiveSpellFactors,
-    bonuses: NativeSecondaryManaCostBonuses,
+pub fn secondary_ability_mana_cost(
+    skill_book: &SkillBookState,
+    ability: SecondaryAbilityId,
+    offensive_factors: &OffensiveSpellFactors,
+    bonuses: SecondaryManaCostBonuses,
 ) -> f64 {
     let stats = resolved_secondary_ability_rank_stats(skill_book, ability, offensive_factors);
     let mut cost = stats.value("mManaCost").unwrap_or(0.0);
     cost += match ability {
-        NativeSecondaryAbilityId::MagicStorm => bonuses.magic_storm,
-        NativeSecondaryAbilityId::RaiseGolem => bonuses.golem,
-        NativeSecondaryAbilityId::MagicShield => bonuses.explosive_shield,
+        SecondaryAbilityId::MagicStorm => bonuses.magic_storm,
+        SecondaryAbilityId::RaiseGolem => bonuses.golem,
+        SecondaryAbilityId::MagicShield => bonuses.explosive_shield,
         _ => 0.0,
     };
-    resolve_native_skill_mana_cost_value(ability.skill_id(), cost, offensive_factors)
+    resolve_skill_mana_cost_value(ability.skill_id(), cost, offensive_factors)
 }
 
 /// The actual snapshot/authority supplement uses the player's stat book,
 /// retaining rank-zero upgrade costs (`game-snapshot.ts` and `game-simulation.ts`).
 /// Base secondary rank tables intentionally remain the source shared catalog.
 #[must_use]
-pub fn native_secondary_ability_mana_cost_with_stat_book(
-    skill_book: &NativeSkillBookState,
+pub fn secondary_ability_mana_cost_with_stat_book(
+    skill_book: &SkillBookState,
     stat_book: &crate::profile::PlayerStatBookComponent,
-    ability: NativeSecondaryAbilityId,
-    offensive_factors: &NativeOffensiveSpellFactors,
+    ability: SecondaryAbilityId,
+    offensive_factors: &OffensiveSpellFactors,
 ) -> f64 {
     let ranked =
         |id, property| stat_book.stat(id, property, skill_book.effective_ranks[id]).unwrap_or(0.0);
-    native_secondary_ability_mana_cost(
+    secondary_ability_mana_cost(
         skill_book,
         ability,
         offensive_factors,
-        NativeSecondaryManaCostBonuses {
+        SecondaryManaCostBonuses {
             explosive_shield: ranked(55, "mManaCost"),
             golem: ranked(75, "mManaCost"),
             magic_storm: ranked(28, "mManaCost"),
@@ -271,11 +260,11 @@ pub fn native_secondary_ability_mana_cost_with_stat_book(
 }
 
 #[must_use]
-pub fn native_secondary_cooldown_capacity_ticks(
-    skill_book: &NativeSkillBookState,
-    ability: NativeSecondaryAbilityId,
+pub fn secondary_cooldown_capacity_ticks(
+    skill_book: &SkillBookState,
+    ability: SecondaryAbilityId,
 ) -> f64 {
-    use NativeSecondaryAbilityId::*;
+    use SecondaryAbilityId::*;
     match ability {
         Phasing | Teleport => {
             (effective_skill_value(skill_book, ability.skill_id(), "mCooldown") * 100.0 + 0.5)
@@ -295,14 +284,10 @@ pub fn native_secondary_cooldown_capacity_ticks(
     }
 }
 
-fn effective_skill_value(
-    skill_book: &NativeSkillBookState,
-    skill_id: usize,
-    property: &str,
-) -> f64 {
+fn effective_skill_value(skill_book: &SkillBookState, skill_id: usize, property: &str) -> f64 {
     let rank = skill_book.effective_ranks[skill_id];
     if rank == 0 {
         return 0.0;
     }
-    native_skill_stat(skill_id, property, rank).unwrap_or(0.0)
+    skill_stat(skill_id, property, rank).unwrap_or(0.0)
 }

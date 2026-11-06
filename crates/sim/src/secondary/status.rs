@@ -5,7 +5,7 @@ use crate::float::fround;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeSecondaryMovementModifierKind {
+pub enum SecondaryMovementModifierKind {
     ColdSlow,
     CircleSlow,
     Frozen,
@@ -15,7 +15,7 @@ pub enum NativeSecondaryMovementModifierKind {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryElectricBurnEffectState {
+pub struct SecondaryElectricBurnEffectState {
     pub arc_count: usize,
     pub damage_per_tick: f64,
     pub owner_id: String,
@@ -26,7 +26,7 @@ pub struct NativeSecondaryElectricBurnEffectState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondarySteamedEffectState {
+pub struct SecondarySteamedEffectState {
     pub damage_per_tick: f64,
     pub ember_damage: f64,
     pub ember_fragments: usize,
@@ -39,7 +39,7 @@ pub struct NativeSecondarySteamedEffectState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryTargetEffectState {
+pub struct SecondaryTargetEffectState {
     pub circle_slow_factor: f64,
     pub circle_slow_ticks: u64,
     pub cold_slow_factor: f64,
@@ -48,7 +48,7 @@ pub struct NativeSecondaryTargetEffectState {
     pub dazzle_maximum_ticks: u64,
     pub dazzle_ticks: u64,
     pub disrupted_ticks: u64,
-    pub electric_burn: Option<NativeSecondaryElectricBurnEffectState>,
+    pub electric_burn: Option<SecondaryElectricBurnEffectState>,
     pub flee_ticks: u64,
     pub frost_burn_damage_per_tick: f64,
     pub frost_burn_owner_id: Option<String>,
@@ -57,11 +57,11 @@ pub struct NativeSecondaryTargetEffectState {
     pub frost_burn_ticks: u64,
     pub frozen_ticks: u64,
     pub frozen_time_scale: f64,
-    pub movement_modifier_order: Vec<NativeSecondaryMovementModifierKind>,
+    pub movement_modifier_order: Vec<SecondaryMovementModifierKind>,
     pub prismatic_ticks: u64,
     pub stun_factor: f64,
     pub stun_ticks: u64,
-    pub steamed: Option<NativeSecondarySteamedEffectState>,
+    pub steamed: Option<SecondarySteamedEffectState>,
     pub target_id: usize,
     pub time_scale: f64,
     pub weaken_factor: f64,
@@ -69,7 +69,7 @@ pub struct NativeSecondaryTargetEffectState {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeSecondaryTargetEffectPatch {
+pub struct SecondaryTargetEffectPatch {
     pub circle_slow_factor: Option<f64>,
     pub circle_slow_ticks: Option<u64>,
     pub cold_slow_factor: Option<f64>,
@@ -78,7 +78,7 @@ pub struct NativeSecondaryTargetEffectPatch {
     pub dazzle_ticks: Option<u64>,
     pub disrupted_ticks: Option<u64>,
     /// None leaves the modifier unchanged; Some(None) explicitly removes it.
-    pub electric_burn: Option<Option<NativeSecondaryElectricBurnEffectState>>,
+    pub electric_burn: Option<Option<SecondaryElectricBurnEffectState>>,
     pub flee_ticks: Option<u64>,
     pub frost_burn_damage_per_tick: Option<f64>,
     pub frost_burn_owner_id: Option<String>,
@@ -90,11 +90,11 @@ pub struct NativeSecondaryTargetEffectPatch {
     pub prismatic_ticks: Option<u64>,
     pub stun_factor: Option<f64>,
     pub stun_ticks: Option<u64>,
-    pub steamed: Option<Option<NativeSecondarySteamedEffectState>>,
+    pub steamed: Option<Option<SecondarySteamedEffectState>>,
     pub weaken_factor: Option<f64>,
 }
 
-impl NativeSecondaryTargetEffectState {
+impl SecondaryTargetEffectState {
     #[must_use]
     pub fn new(world_key: String, target_id: usize) -> Self {
         Self {
@@ -127,14 +127,14 @@ impl NativeSecondaryTargetEffectState {
         }
     }
 
-    pub fn apply(&mut self, patch: NativeSecondaryTargetEffectPatch) {
+    pub fn apply(&mut self, patch: SecondaryTargetEffectPatch) {
         if let Some(factor) = patch.stun_factor {
             assert!(
                 factor.is_finite() && (0.0..=1.0).contains(&factor),
                 "Stun factor is inside [0,1]"
             );
         }
-        use NativeSecondaryMovementModifierKind::*;
+        use SecondaryMovementModifierKind::*;
         for (kind, current_ticks, incoming_ticks) in [
             (ColdSlow, self.cold_slow_ticks, patch.cold_slow_ticks),
             (CircleSlow, self.circle_slow_ticks, patch.circle_slow_ticks),
@@ -286,20 +286,20 @@ impl NativeSecondaryTargetEffectState {
             || self.weaken_factor < 1.0
     }
 
-    fn modifier_ticks(&self, kind: NativeSecondaryMovementModifierKind) -> u64 {
+    fn modifier_ticks(&self, kind: SecondaryMovementModifierKind) -> u64 {
         match kind {
-            NativeSecondaryMovementModifierKind::ColdSlow => self.cold_slow_ticks,
-            NativeSecondaryMovementModifierKind::CircleSlow => self.circle_slow_ticks,
-            NativeSecondaryMovementModifierKind::Frozen => self.frozen_ticks,
-            NativeSecondaryMovementModifierKind::Stun => self.stun_ticks,
-            NativeSecondaryMovementModifierKind::Dazzle => self.dazzle_ticks,
+            SecondaryMovementModifierKind::ColdSlow => self.cold_slow_ticks,
+            SecondaryMovementModifierKind::CircleSlow => self.circle_slow_ticks,
+            SecondaryMovementModifierKind::Frozen => self.frozen_ticks,
+            SecondaryMovementModifierKind::Stun => self.stun_ticks,
+            SecondaryMovementModifierKind::Dazzle => self.dazzle_ticks,
         }
     }
 
     fn compose_time_scale(&mut self) {
         let mut scale = fround(1.0);
         for kind in &self.movement_modifier_order {
-            use NativeSecondaryMovementModifierKind::*;
+            use SecondaryMovementModifierKind::*;
             let factor = match kind {
                 ColdSlow => {
                     if self.cold_slow_ticks > 0 {
@@ -344,11 +344,11 @@ impl NativeSecondaryTargetEffectState {
     }
 }
 
-pub fn apply_native_secondary_target_effect(
-    effects: &mut Vec<NativeSecondaryTargetEffectState>,
+pub fn apply_secondary_target_effect(
+    effects: &mut Vec<SecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
-    patch: NativeSecondaryTargetEffectPatch,
+    patch: SecondaryTargetEffectPatch,
 ) {
     if let Some(effect) = effects
         .iter_mut()
@@ -356,46 +356,46 @@ pub fn apply_native_secondary_target_effect(
     {
         effect.apply(patch);
     } else {
-        let mut effect = NativeSecondaryTargetEffectState::new(world_key.to_owned(), target_id);
+        let mut effect = SecondaryTargetEffectState::new(world_key.to_owned(), target_id);
         effect.apply(patch);
         effects.push(effect);
     }
 }
 
-pub fn apply_native_secondary_dazzle(
-    effects: &mut Vec<NativeSecondaryTargetEffectState>,
+pub fn apply_secondary_dazzle(
+    effects: &mut Vec<SecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
     duration_ticks: u64,
 ) {
     if duration_ticks > 0 {
-        apply_native_secondary_target_effect(
+        apply_secondary_target_effect(
             effects,
             world_key,
             target_id,
-            NativeSecondaryTargetEffectPatch {
+            SecondaryTargetEffectPatch {
                 dazzle_ticks: Some(duration_ticks),
-                ..NativeSecondaryTargetEffectPatch::default()
+                ..SecondaryTargetEffectPatch::default()
             },
         );
     }
 }
 
 #[must_use]
-pub fn native_secondary_target_effect<'a>(
-    effects: impl IntoIterator<Item = &'a NativeSecondaryTargetEffectState>,
+pub fn secondary_target_effect<'a>(
+    effects: impl IntoIterator<Item = &'a SecondaryTargetEffectState>,
     world_key: &str,
     target_id: usize,
-) -> Option<&'a NativeSecondaryTargetEffectState> {
+) -> Option<&'a SecondaryTargetEffectState> {
     effects
         .into_iter()
         .find(|effect| effect.world_key == world_key && effect.target_id == target_id)
 }
 
 #[must_use]
-pub fn native_secondary_target_material_tint(
+pub fn secondary_target_material_tint(
     world_tint: u32,
-    effect: Option<&NativeSecondaryTargetEffectState>,
+    effect: Option<&SecondaryTargetEffectState>,
 ) -> u32 {
     let Some(effect) = effect else {
         return world_tint;
@@ -423,8 +423,8 @@ pub fn native_secondary_target_material_tint(
 }
 
 fn merge_electric_burn(
-    current: &mut Option<NativeSecondaryElectricBurnEffectState>,
-    incoming: Option<NativeSecondaryElectricBurnEffectState>,
+    current: &mut Option<SecondaryElectricBurnEffectState>,
+    incoming: Option<SecondaryElectricBurnEffectState>,
 ) {
     let Some(mut incoming) = incoming else {
         *current = None;
@@ -453,8 +453,8 @@ fn merge_electric_burn(
 }
 
 fn merge_steamed(
-    current: &mut Option<NativeSecondarySteamedEffectState>,
-    incoming: Option<NativeSecondarySteamedEffectState>,
+    current: &mut Option<SecondarySteamedEffectState>,
+    incoming: Option<SecondarySteamedEffectState>,
 ) {
     let Some(mut incoming) = incoming else {
         *current = None;

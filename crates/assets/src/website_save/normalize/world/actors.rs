@@ -1,11 +1,11 @@
 //! Legacy enemy body/controller migrations. Native draws stay in saved actor order.
 
 use serde_json::{Value, json};
-use solomon_sim::boneyard::waves::native_survival_programs;
+use solomon_sim::boneyard::waves::survival_programs;
 use solomon_sim::enemies::config::{AuthoredEnemyFamily, EnemyLootPolicies, desaturate_color};
 use solomon_sim::enemies::model::FlightPhase;
 use solomon_sim::rng::next_xorshift_random;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 use super::super::super::contract::{MAX_SAFE_INTEGER, record};
 use super::super::super::value::{decode, encode};
@@ -18,7 +18,7 @@ pub(super) fn normalize(
     last_step_tick: &Value,
     source_sha: &str,
     private_rng: &mut u32,
-    native_rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> Result<Vec<Value>, String> {
     let mut result = Vec::new();
     for (index, value) in array(value, "game save Boneyard enemy actors")?.iter().enumerate() {
@@ -67,7 +67,7 @@ pub(super) fn normalize(
             if speed <= 0.0 {
                 return Err("Wraith chase speed must be positive".into());
             }
-            let mut flight = solomon_sim::enemies::wraith::create_native_wraith_flight_state(
+            let mut flight = solomon_sim::enemies::wraith::create_wraith_flight_state(
                 speed, resting, initial, flyby,
             );
             if value["lifeState"].as_str() != Some("alive") {
@@ -195,7 +195,7 @@ pub(super) fn normalize(
             super::discorporeal::validate(&brain)?;
         }
         if version < 34 && family == "archer" {
-            brain["strafe"] = json!({"direction":native_rng.draw_sign(1.0),
+            brain["strafe"] = json!({"direction":rng.draw_sign(1.0),
                 "limbHeadingDeg":finite(&value["headingDeg"], &format!("game save Archer {index} heading"))?,
                 "movementRamp":0,"turnBlend":0});
         }
@@ -325,7 +325,7 @@ fn faculty_color(config: &Value, source_sha: &str) -> Result<Value, String> {
     let mut family = record(&config["family"], "saved Faculty appearance")?.clone();
     let name = config["recipeName"].as_str().unwrap_or("");
     if matches!(name, "Dire Sirmin" | "Dire Lucritius" | "Dire Aliss")
-        && let Some(programs) = native_survival_programs(source_sha)
+        && let Some(programs) = survival_programs(source_sha)
         && let Some(recipe) = programs.bosses.iter().flat_map(|boss| &boss.recipes).find(|recipe| {
             recipe.name == name && config["recipeUid"].as_u64() == Some(recipe.uid as u64)
         })

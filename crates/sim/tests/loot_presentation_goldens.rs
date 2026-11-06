@@ -15,11 +15,11 @@ fn point(value: &Value) -> Vec2 {
 }
 
 fn actor(value: &Value) -> BoneyardLootActor {
-    let item = value["itemNativeTypeId"].as_u64().map(|native_type_id| {
+    let item = value["itemNativeTypeId"].as_u64().map(|type_id| {
         let economy = HubEconomyState::new(1, WizardElement::Air);
         let mut item = economy.backpack[0].clone();
-        item.native_type_id = native_type_id as u32;
-        item.native_subtype = value["itemNativeSubtype"].as_u64().map(|value| value as u32);
+        item.type_id = type_id as u32;
+        item.subtype = value["itemNativeSubtype"].as_u64().map(|value| value as u32);
         item
     });
     BoneyardLootActor {
@@ -32,10 +32,10 @@ fn actor(value: &Value) -> BoneyardLootActor {
         frame_phase: value["framePhase"].as_f64().unwrap(),
         id: value["id"].as_u64().unwrap() as usize,
         kind: match value["kind"].as_str().unwrap() {
-            "orb" => NativeLootDropKind::Orb,
-            "gold" => NativeLootDropKind::Gold,
-            "sack" => NativeLootDropKind::Sack,
-            "bonus" => NativeLootDropKind::Bonus,
+            "orb" => LootDropKind::Orb,
+            "gold" => LootDropKind::Gold,
+            "sack" => LootDropKind::Sack,
+            "bonus" => LootDropKind::Bonus,
             kind => panic!("unknown loot kind {kind}"),
         },
         last_step_tick: None,
@@ -54,16 +54,12 @@ fn actor(value: &Value) -> BoneyardLootActor {
         settled_sound_emitted: false,
         spawn_tick: 0,
         amount: 0,
-        bonus_kind: value["bonusKind"].as_u64().and_then(|id| NativeBonusKind::from_id(id as u32)),
+        bonus_kind: value["bonusKind"].as_u64().and_then(|id| BonusKind::from_id(id as u32)),
         item,
-        native_type_id: 0,
-        orb_kind: Some(if value["orbKind"] == "health" {
-            NativeOrbKind::Health
-        } else {
-            NativeOrbKind::Mana
-        }),
+        type_id: 0,
+        orb_kind: Some(if value["orbKind"] == "health" { OrbKind::Health } else { OrbKind::Mana }),
         orb_value: value["orbValue"].as_f64().unwrap(),
-        source: NativeLootDropSource::Script,
+        source: LootDropSource::Script,
         tier: value["tier"].as_u64().unwrap() as u32,
     }
 }
@@ -90,7 +86,7 @@ fn goodie(value: &Value) -> BoneyardGoodieState {
     }
 }
 
-fn layer_snapshot(draw: &NativeLootVisualLayer) -> Value {
+fn layer_snapshot(draw: &LootVisualLayer) -> Value {
     let mut value = json!({ "alpha": draw.alpha, "atlas": match draw.atlas {
         SpellAtlas::BadGuys => "BadGuys", SpellAtlas::DeadHawg => "DeadHawg",
     }, "blendMode": match draw.blend { SpellBlend::Normal => "normal", SpellBlend::Add => "add" },
@@ -103,7 +99,7 @@ fn layer_snapshot(draw: &NativeLootVisualLayer) -> Value {
     value
 }
 
-fn plan_snapshot(plan: &NativeLootPresentationPlan) -> Value {
+fn plan_snapshot(plan: &LootPresentationPlan) -> Value {
     json!({ "layers": plan.layers.iter().map(layer_snapshot).collect::<Vec<_>>(),
         "nextScatterSeed": plan.next_scatter_seed })
 }
@@ -155,12 +151,12 @@ fn ground_loot_scatter_goodies_and_hit_copies_replay_the_source() {
             .unwrap();
     for (index, case) in fixture["actors"].as_array().unwrap().iter().enumerate() {
         let actor = actor(&case["actor"]);
-        let plan = native_loot_presentation_plan(&actor, actor.scatter_seed);
-        let trig = matches!(actor.kind, NativeLootDropKind::Gold | NativeLootDropKind::Orb);
+        let plan = loot_presentation_plan(&actor, actor.scatter_seed);
+        let trig = matches!(actor.kind, LootDropKind::Gold | LootDropKind::Orb);
         assert_snapshot(&plan_snapshot(&plan), &case["plan"], &format!("actor:{index}"), trig);
         assert_snapshot(
             &painter_snapshot(
-                native_loot_painter_layer(&actor),
+                loot_painter_layer(&actor),
                 &format!("loot:{}", actor.id),
                 "ordinary-dynamic",
             ),
@@ -173,7 +169,7 @@ fn ground_loot_scatter_goodies_and_hit_copies_replay_the_source() {
         let actor = actor(&case["actor"]);
         let mut seed = actor.scatter_seed;
         for (frame, expected) in case["plans"].as_array().unwrap().iter().enumerate() {
-            let plan = native_loot_presentation_plan(&actor, seed);
+            let plan = loot_presentation_plan(&actor, seed);
             seed = plan.next_scatter_seed;
             assert_snapshot(
                 &plan_snapshot(&plan),
@@ -185,7 +181,7 @@ fn ground_loot_scatter_goodies_and_hit_copies_replay_the_source() {
     }
     for (index, case) in fixture["goodies"].as_array().unwrap().iter().enumerate() {
         let goodie = goodie(&case["goodie"]);
-        let draws = native_goodie_presentation_plan(
+        let draws = goodie_presentation_plan(
             &goodie,
             case["tick"].as_f64().unwrap(),
             case["hitAlpha"].as_f64().unwrap(),
@@ -199,7 +195,7 @@ fn ground_loot_scatter_goodies_and_hit_copies_replay_the_source() {
         );
         assert_snapshot(
             &painter_snapshot(
-                native_goodie_painter_layer(&goodie),
+                goodie_painter_layer(&goodie),
                 &format!("goodie:{}", goodie.id),
                 "scenery",
             ),
@@ -215,7 +211,7 @@ fn pickup_messages_coalesce_gold_and_preserve_source_stack_and_fade_timing() {
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/loot-presentation-goldens.json"))
             .unwrap();
-    let mut presentation = NativeLootMessagePresentation::new(0);
+    let mut presentation = LootMessagePresentation::new(0);
     for (index, case) in fixture["journeys"].as_array().unwrap().iter().enumerate() {
         if let Some(event) = case["event"].as_object() {
             let event = BoneyardLootEvent {

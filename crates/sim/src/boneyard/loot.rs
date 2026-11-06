@@ -13,29 +13,28 @@ use std::collections::HashSet;
 use crate::economy::{HubEconomyState, HubInventoryItem, HubItemKind, base_item};
 use crate::enemies::model::EnemyDeathEffect;
 use crate::float::fround;
-use crate::loot::items::resolve_native_goodie_contents;
+use crate::loot::items::resolve_goodie_contents;
 use crate::loot::{
-    NativeBonusKind, NativeLootArenaInput, NativeLootDropKind, NativeLootDropSource,
-    NativeLootDropSpec, NativeLootItemIds, NativeLootKeyInput, NativeLootModifiers,
-    NativeLootParticipantInput, NativeLootPlacement, NativeLootPolicies, NativeLootPolicy,
-    NativeLootScriptAction, NativeLootSelectionInput, NativeOrbKind, initial_native_key_drop_level,
-    materialize_native_loot_script_action, roll_native_enemy_loot,
+    BonusKind, LootArenaInput, LootDropKind, LootDropSource, LootDropSpec, LootItemIds,
+    LootKeyInput, LootModifiers, LootParticipantInput, LootPlacement, LootPolicies, LootPolicy,
+    LootScriptAction, LootSelectionInput, OrbKind, initial_key_drop_level,
+    materialize_loot_script_action, roll_enemy_loot,
 };
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::rng::seed_from_text;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::BoneyardBounds;
 
-pub const NATIVE_LOOT_WORLD_ID_MINIMUM: usize = 1;
-pub const NATIVE_LOOT_WORLD_ID_MAXIMUM: usize = 2047;
-pub const NATIVE_LOOT_EVENT_RETENTION_TICKS: u64 = 100;
-pub const NATIVE_GOODIE_KEY_FEEDBACK_INTERVAL_TICKS: i64 = 200;
-const NATIVE_ORB_DECAY_DELAY_TICKS: i64 = 900;
-const NATIVE_ORB_DECAY_PER_TICK: f64 = 0.002_f32 as f64;
-const NATIVE_ORB_ACTIVE_VALUE_FLOOR: f64 = 0.01_f32 as f64;
-const NATIVE_BONUS_LIFETIME_TICKS: i64 = 1200;
-const NATIVE_GOODIE_EFFECT_ID_START: usize = 1_000_000;
+pub const LOOT_WORLD_ID_MINIMUM: usize = 1;
+pub const LOOT_WORLD_ID_MAXIMUM: usize = 2047;
+pub const LOOT_EVENT_RETENTION_TICKS: u64 = 100;
+pub const GOODIE_KEY_FEEDBACK_INTERVAL_TICKS: i64 = 200;
+const ORB_DECAY_DELAY_TICKS: i64 = 900;
+const ORB_DECAY_PER_TICK: f64 = 0.002_f32 as f64;
+const ORB_ACTIVE_VALUE_FLOOR: f64 = 0.01_f32 as f64;
+const BONUS_LIFETIME_TICKS: i64 = 1200;
+const GOODIE_EFFECT_ID_START: usize = 1_000_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -91,17 +90,18 @@ pub struct BoneyardLootActor {
     pub alpha: f64,
     pub amount: u64,
     pub animation_phase: f64,
-    pub bonus_kind: Option<NativeBonusKind>,
+    pub bonus_kind: Option<BonusKind>,
     pub bounce_height: f64,
     pub bounce_velocity: f64,
     pub frame_phase: f64,
     pub id: usize,
     pub item: Option<HubInventoryItem>,
-    pub kind: NativeLootDropKind,
+    pub kind: LootDropKind,
     pub last_step_tick: Option<u64>,
     pub lifetime_ticks_remaining: Option<i64>,
-    pub native_type_id: u32,
-    pub orb_kind: Option<NativeOrbKind>,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+    pub type_id: u32,
+    pub orb_kind: Option<OrbKind>,
     pub orb_value: f64,
     pub painter_registration: PainterRegistration,
     pub position: Vec2,
@@ -110,7 +110,7 @@ pub struct BoneyardLootActor {
     pub scatter_active: bool,
     pub scatter_progress: f64,
     pub settled_sound_emitted: bool,
-    pub source: NativeLootDropSource,
+    pub source: LootDropSource,
     pub spawn_tick: u64,
     pub tier: u32,
 }
@@ -155,7 +155,7 @@ pub struct BoneyardLootStore {
     pub next_goodie_id: usize,
     pub next_item_id: u64,
     pub next_key_drop_level: u32,
-    pub shared_rng: NativeRng,
+    pub shared_rng: Rng,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -165,7 +165,7 @@ pub struct BoneyardLootParticipant<'a> {
     pub connected: bool,
     pub heading_index: usize,
     pub level: u32,
-    pub modifiers: NativeLootModifiers,
+    pub modifiers: LootModifiers,
     pub owned_recipe_indexes: &'a [usize],
     pub player_id: &'a str,
     pub position: Vec2,
@@ -175,10 +175,10 @@ pub struct BoneyardLootParticipant<'a> {
 pub struct BoneyardLootPickup {
     pub actor_id: usize,
     pub amount: u64,
-    pub bonus_kind: Option<NativeBonusKind>,
+    pub bonus_kind: Option<BonusKind>,
     pub item: Option<HubInventoryItem>,
-    pub kind: NativeLootDropKind,
-    pub orb_kind: Option<NativeOrbKind>,
+    pub kind: LootDropKind,
+    pub orb_kind: Option<OrbKind>,
     pub orb_value: f64,
     pub player_id: String,
     pub source_position: Vec2,
@@ -208,7 +208,7 @@ pub struct BoneyardLootStep {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeHagathaLastWordLoot {
+pub struct HagathaLastWordLoot {
     pub actor_ids: Vec<usize>,
     pub gold: u64,
     pub items: Vec<HubInventoryItem>,
@@ -230,8 +230,7 @@ pub enum BoneyardGoodieInteraction {
 impl BoneyardLootStore {
     #[must_use]
     pub fn new(seed: &str, source_goodies: &[BoneyardGoodieInput]) -> Self {
-        let mut shared_rng =
-            NativeRng::new(i64::from(seed_from_text(&format!("{seed}:native-loot"))));
+        let mut shared_rng = Rng::new(i64::from(seed_from_text(&format!("{seed}:native-loot"))));
         let mut goodies = Vec::with_capacity(source_goodies.len());
         for (source_order, source) in source_goodies.iter().enumerate() {
             let reward_seed =
@@ -253,17 +252,17 @@ impl BoneyardLootStore {
                 timer: 0,
             });
         }
-        let next_key_drop_level = initial_native_key_drop_level(&mut shared_rng);
+        let next_key_drop_level = initial_key_drop_level(&mut shared_rng);
         Self {
             actors: Vec::new(),
             effects: Vec::new(),
             goodies,
             last_step_tick: None,
-            last_key_needed_tick: -NATIVE_GOODIE_KEY_FEEDBACK_INTERVAL_TICKS - 1,
+            last_key_needed_tick: -GOODIE_KEY_FEEDBACK_INTERVAL_TICKS - 1,
             last_successful_item_level: -1,
-            next_actor_id: NATIVE_LOOT_WORLD_ID_MINIMUM,
+            next_actor_id: LOOT_WORLD_ID_MINIMUM,
             next_event_id: 1,
-            next_effect_id: NATIVE_GOODIE_EFFECT_ID_START,
+            next_effect_id: GOODIE_EFFECT_ID_START,
             next_goodie_id: source_goodies.len() + 1,
             next_item_id: 1,
             next_key_drop_level,
@@ -281,18 +280,17 @@ impl BoneyardLootStore {
     }
 
     #[must_use]
-    pub fn native_hagatha_last_word_loot(&self) -> NativeHagathaLastWordLoot {
-        let mut output =
-            NativeHagathaLastWordLoot { actor_ids: Vec::new(), gold: 0, items: Vec::new() };
+    pub fn hagatha_last_word_loot(&self) -> HagathaLastWordLoot {
+        let mut output = HagathaLastWordLoot { actor_ids: Vec::new(), gold: 0, items: Vec::new() };
         for actor in self.actors.iter() {
-            if actor.native_type_id != 2012 && actor.native_type_id != 2013 {
+            if actor.type_id != 2012 && actor.type_id != 2013 {
                 continue;
             }
             output.actor_ids.push(actor.id);
-            if actor.native_type_id == 2012 {
+            if actor.type_id == 2012 {
                 output.gold += actor.amount;
             }
-            if actor.native_type_id == 2013
+            if actor.type_id == 2013
                 && let Some(item) = &actor.item
             {
                 output.items.push(item.clone());
@@ -389,7 +387,7 @@ impl BoneyardLootStore {
         tick: u64,
     ) -> Option<BoneyardLootEvent> {
         let goodie = self.goodies.iter().find(|goodie| goodie.id == goodie_id)?;
-        if tick as i64 <= self.last_key_needed_tick + NATIVE_GOODIE_KEY_FEEDBACK_INTERVAL_TICKS {
+        if tick as i64 <= self.last_key_needed_tick + GOODIE_KEY_FEEDBACK_INTERVAL_TICKS {
             return None;
         }
         let mut event =
@@ -404,7 +402,7 @@ impl BoneyardLootStore {
     /// Returns the number rejected by the stock 1..=2047 ground-actor address space.
     pub fn spawn_specs(
         &mut self,
-        specs: Vec<NativeLootDropSpec>,
+        specs: Vec<LootDropSpec>,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
     ) -> usize {
@@ -419,35 +417,31 @@ impl BoneyardLootStore {
             self.actors.push(BoneyardLootActor {
                 activation_delay_ticks: spec.activation_delay_ticks,
                 age_ticks: 0,
-                alpha: if spec.kind == NativeLootDropKind::Bonus { 1.0 } else { 0.0 },
+                alpha: if spec.kind == LootDropKind::Bonus { 1.0 } else { 0.0 },
                 animation_phase: spec.phase,
-                bounce_height: if spec.kind == NativeLootDropKind::Sack { -25.0 } else { 0.0 },
-                bounce_velocity: if spec.kind == NativeLootDropKind::Sack {
-                    0.1_f32 as f64
-                } else {
-                    0.0
-                },
+                bounce_height: if spec.kind == LootDropKind::Sack { -25.0 } else { 0.0 },
+                bounce_velocity: if spec.kind == LootDropKind::Sack { 0.1_f32 as f64 } else { 0.0 },
                 frame_phase: 0.0,
                 id,
                 kind: spec.kind,
                 last_step_tick: tick.checked_sub(1),
                 lifetime_ticks_remaining: match spec.kind {
-                    NativeLootDropKind::Orb => Some(NATIVE_ORB_DECAY_DELAY_TICKS),
-                    NativeLootDropKind::Bonus => Some(NATIVE_BONUS_LIFETIME_TICKS),
+                    LootDropKind::Orb => Some(ORB_DECAY_DELAY_TICKS),
+                    LootDropKind::Bonus => Some(BONUS_LIFETIME_TICKS),
                     _ => None,
                 },
                 painter_registration: painter_order.register(WorldManagerLane::Actor),
                 position: spec.position,
                 rotation_deg: spec.rotation_deg.unwrap_or(0.0),
                 scatter_seed: spec.scatter_seed.unwrap_or(0),
-                scatter_active: spec.kind == NativeLootDropKind::Gold,
+                scatter_active: spec.kind == LootDropKind::Gold,
                 scatter_progress: 0.0,
                 settled_sound_emitted: false,
                 spawn_tick: tick,
                 amount: spec.amount.unwrap_or(0),
                 bonus_kind: spec.bonus_kind,
                 item: spec.item,
-                native_type_id: spec.native_type_id,
+                type_id: spec.type_id,
                 orb_kind: spec.orb_kind,
                 orb_value: spec.value.unwrap_or(0.0),
                 source: spec.source,
@@ -469,12 +463,8 @@ impl BoneyardLootStore {
             let mut item = source.clone();
             item.id = self.next_item_id;
             self.next_item_id += 1;
-            let mut spec = NativeLootDropSpec::new(
-                NativeLootDropKind::Sack,
-                0,
-                position,
-                NativeLootDropSource::Enemy,
-            );
+            let mut spec =
+                LootDropSpec::new(LootDropKind::Sack, 0, position, LootDropSource::Enemy);
             spec.item = Some(item);
             specs.push(spec);
         }
@@ -485,15 +475,15 @@ impl BoneyardLootStore {
     /// The borrowed selection supplies actual player, enemy and geometry values.
     pub fn materialize_enemy_loot(
         &mut self,
-        input: NativeLootSelectionInput<'_>,
+        input: LootSelectionInput<'_>,
         on_death_program: Option<BoneyardLootDeathProgram>,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
     ) -> usize {
-        let mut ids = NativeLootItemIds::new(self.next_item_id);
+        let mut ids = LootItemIds::new(self.next_item_id);
         let ground = self.ground_recipe_indexes();
         let selected_input = self.enemy_selection_input(input, &ground);
-        let rolled = roll_native_enemy_loot(&selected_input, &mut self.shared_rng, &mut ids);
+        let rolled = roll_enemy_loot(&selected_input, &mut self.shared_rng, &mut ids);
         self.last_successful_item_level = rolled.materialization.last_successful_item_level;
         self.next_key_drop_level = rolled.materialization.next_key_drop_level;
         self.next_item_id = ids.next_id;
@@ -502,13 +492,13 @@ impl BoneyardLootStore {
         let mut rejected = self.spawn_specs(rolled.materialization.drops, tick, painter_order);
         if on_death_program == Some(BoneyardLootDeathProgram::MinibossDie) {
             let action = if self.shared_rng.draw_integer(2) == 1 {
-                NativeLootScriptAction::DropRandomGold { minimum: 300, maximum: 600 }
+                LootScriptAction::DropRandomGold { minimum: 300, maximum: 600 }
             } else {
-                NativeLootScriptAction::DropRandomItem { mode: 0 }
+                LootScriptAction::DropRandomItem { mode: 0 }
             };
             let ground = self.ground_recipe_indexes();
             let selected_input = self.enemy_selection_input(input, &ground);
-            let scripted = materialize_native_loot_script_action(
+            let scripted = materialize_loot_script_action(
                 &selected_input,
                 action,
                 &mut self.shared_rng,
@@ -527,7 +517,7 @@ impl BoneyardLootStore {
     fn ground_recipe_indexes(&self) -> Vec<usize> {
         let mut recipes = Vec::new();
         for actor in self.actors.iter() {
-            if actor.native_type_id == 2013
+            if actor.type_id == 2013
                 && let Some(recipe) = actor.item.as_ref().and_then(|item| item.recipe_index)
             {
                 recipes.push(recipe);
@@ -538,12 +528,12 @@ impl BoneyardLootStore {
 
     fn enemy_selection_input<'a>(
         &self,
-        mut input: NativeLootSelectionInput<'a>,
+        mut input: LootSelectionInput<'a>,
         ground_recipe_indexes: &'a [usize],
-    ) -> NativeLootSelectionInput<'a> {
+    ) -> LootSelectionInput<'a> {
         input.ground_recipe_indexes = ground_recipe_indexes;
         input.arena.last_successful_item_level = self.last_successful_item_level;
-        input.key = NativeLootKeyInput {
+        input.key = LootKeyInput {
             current: self.next_key_drop_level,
             level: input.arena.level as u32,
             remaining: self
@@ -561,7 +551,7 @@ impl BoneyardLootStore {
     pub fn step(
         &mut self,
         participants: &[BoneyardLootParticipant<'_>],
-        placement: &dyn NativeLootPlacement,
+        placement: &dyn LootPlacement,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
     ) -> BoneyardLootStep {
@@ -591,8 +581,8 @@ impl BoneyardLootStore {
     fn allocate_actor_id(&mut self, occupied: &HashSet<usize>) -> Option<usize> {
         for _ in 0..2048 {
             let candidate = self.next_actor_id;
-            self.next_actor_id = if candidate >= NATIVE_LOOT_WORLD_ID_MAXIMUM {
-                NATIVE_LOOT_WORLD_ID_MINIMUM
+            self.next_actor_id = if candidate >= LOOT_WORLD_ID_MAXIMUM {
+                LOOT_WORLD_ID_MINIMUM
             } else {
                 candidate + 1
             };
@@ -637,14 +627,14 @@ impl BoneyardLootStore {
     ) -> bool {
         actor.age_ticks += 1;
         actor.last_step_tick = Some(tick);
-        if actor.kind == NativeLootDropKind::Orb {
+        if actor.kind == LootDropKind::Orb {
             return self.step_orb(actor, participants, tick, painter_order, output);
         }
-        if actor.kind == NativeLootDropKind::Bonus {
+        if actor.kind == LootDropKind::Bonus {
             return self.step_bonus(actor, participants, tick, painter_order, output);
         }
         actor.activation_delay_ticks -= 1;
-        if actor.activation_delay_ticks < 1 && actor.kind == NativeLootDropKind::Gold {
+        if actor.activation_delay_ticks < 1 && actor.kind == LootDropKind::Gold {
             if actor.scatter_active {
                 actor.scatter_progress = fround(actor.scatter_progress + 0.5);
                 if actor.scatter_progress > 8.0 {
@@ -666,7 +656,7 @@ impl BoneyardLootStore {
             }
         }
         if actor.activation_delay_ticks < 1
-            && actor.kind == NativeLootDropKind::Sack
+            && actor.kind == LootDropKind::Sack
             && actor.bounce_velocity != 0.0
         {
             let height = fround(actor.bounce_height + actor.bounce_velocity);
@@ -702,17 +692,17 @@ impl BoneyardLootStore {
         painter_order: &mut WorldPainterOrder,
         output: &mut BoneyardLootStep,
     ) -> bool {
-        let delay = actor.lifetime_ticks_remaining.unwrap_or(NATIVE_ORB_DECAY_DELAY_TICKS) - 1;
+        let delay = actor.lifetime_ticks_remaining.unwrap_or(ORB_DECAY_DELAY_TICKS) - 1;
         actor.alpha = fround(actor.alpha + (0.05_f32 as f64)).min(1.0);
         actor.animation_phase = fround(actor.animation_phase + 2.5);
         if delay < 1 {
-            actor.orb_value = fround(actor.orb_value - NATIVE_ORB_DECAY_PER_TICK);
+            actor.orb_value = fround(actor.orb_value - ORB_DECAY_PER_TICK);
         }
         if actor.orb_value <= 0.0 {
             return false;
         }
         actor.lifetime_ticks_remaining = Some(delay);
-        if actor.orb_value <= NATIVE_ORB_ACTIVE_VALUE_FLOOR {
+        if actor.orb_value <= ORB_ACTIVE_VALUE_FLOOR {
             return true;
         }
         for participant in participants {
@@ -749,7 +739,7 @@ impl BoneyardLootStore {
         painter_order: &mut WorldPainterOrder,
         output: &mut BoneyardLootStep,
     ) -> bool {
-        let delay = actor.lifetime_ticks_remaining.unwrap_or(NATIVE_BONUS_LIFETIME_TICKS) - 1;
+        let delay = actor.lifetime_ticks_remaining.unwrap_or(BONUS_LIFETIME_TICKS) - 1;
         if delay < 1 {
             actor.alpha = fround(actor.alpha - (0.01_f32 as f64));
         }
@@ -781,12 +771,12 @@ impl BoneyardLootStore {
             }
             let dx = actor.position.x - participant.position.x;
             let dy = actor.position.y - participant.position.y;
-            let base_radius = if actor.kind == NativeLootDropKind::Bonus { 20.0 } else { 30.0 };
+            let base_radius = if actor.kind == LootDropKind::Bonus { 20.0 } else { 30.0 };
             let radius = fround(base_radius * participant.modifiers.pickup_factor);
             if dx * dx + dy * dy >= radius * radius {
                 continue;
             }
-            if actor.kind == NativeLootDropKind::Gold
+            if actor.kind == LootDropKind::Gold
                 && participant.modifiers.pickup_factor > 1.259_999_99
                 && self.shared_rng.draw_integer(15) != 1
             {
@@ -819,23 +809,23 @@ impl BoneyardLootStore {
             tick,
         });
         let sound = match actor.kind {
-            NativeLootDropKind::Gold => Some(BoneyardLootSound::PickupCoin),
-            NativeLootDropKind::Orb => Some(BoneyardLootSound::GotoOrb),
-            NativeLootDropKind::Sack => Some(BoneyardLootSound::PickupBag),
-            NativeLootDropKind::Bonus => None,
+            LootDropKind::Gold => Some(BoneyardLootSound::PickupCoin),
+            LootDropKind::Orb => Some(BoneyardLootSound::GotoOrb),
+            LootDropKind::Sack => Some(BoneyardLootSound::PickupBag),
+            LootDropKind::Bonus => None,
         };
         let playback_rate = sound.map(|sound| {
             if sound == BoneyardLootSound::GotoOrb { 1.0 } else { self.draw_loot_pitch() }
         });
         let text = match actor.kind {
-            NativeLootDropKind::Gold => Some(format!("{} GOLD", actor.amount)),
-            NativeLootDropKind::Sack => actor.item.as_ref().map(|item| item.name.clone()),
-            NativeLootDropKind::Bonus => match actor.bonus_kind {
-                Some(NativeBonusKind::SkillChoice) => Some("BONUS SKILL POINT".to_owned()),
-                Some(NativeBonusKind::DamageX4) => Some("DAMAGE x4".to_owned()),
+            LootDropKind::Gold => Some(format!("{} GOLD", actor.amount)),
+            LootDropKind::Sack => actor.item.as_ref().map(|item| item.name.clone()),
+            LootDropKind::Bonus => match actor.bonus_kind {
+                Some(BonusKind::SkillChoice) => Some("BONUS SKILL POINT".to_owned()),
+                Some(BonusKind::DamageX4) => Some("DAMAGE x4".to_owned()),
                 _ => None,
             },
-            NativeLootDropKind::Orb => None,
+            LootDropKind::Orb => None,
         };
         let mut event =
             self.event(BoneyardLootEventType::LootPickup, actor.id, actor.position, tick);
@@ -847,7 +837,7 @@ impl BoneyardLootStore {
     }
 
     fn sack_drop_sound(&mut self, actor: &BoneyardLootActor) -> BoneyardLootSound {
-        if actor.item.as_ref().is_some_and(|item| item.native_type_id == 7001) {
+        if actor.item.as_ref().is_some_and(|item| item.type_id == 7001) {
             return BoneyardLootSound::DropPotion;
         }
         if self.shared_rng.draw_integer(2) == 0 {
@@ -879,7 +869,7 @@ impl BoneyardLootStore {
     fn step_goodies(
         &mut self,
         participants: &[BoneyardLootParticipant<'_>],
-        placement: &dyn NativeLootPlacement,
+        placement: &dyn LootPlacement,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
         events: &mut Vec<BoneyardLootEvent>,
@@ -927,14 +917,14 @@ impl BoneyardLootStore {
         &mut self,
         goodie: &BoneyardGoodieState,
         participant: Option<&BoneyardLootParticipant<'_>>,
-        placement: &dyn NativeLootPlacement,
+        placement: &dyn LootPlacement,
         tick: u64,
         painter_order: &mut WorldPainterOrder,
     ) {
-        let mut ids = NativeLootItemIds::new(self.next_item_id);
+        let mut ids = LootItemIds::new(self.next_item_id);
         let advanced = [false; 8];
         let ground = self.ground_recipe_indexes();
-        let contents = resolve_native_goodie_contents(
+        let contents = resolve_goodie_contents(
             &mut self.shared_rng,
             &mut ids,
             goodie.reward_seed % 18,
@@ -945,11 +935,11 @@ impl BoneyardLootStore {
         );
         let position = Vec2::new(goodie.position.x, goodie.position.y + 25.0);
         if contents.gold > 0 {
-            let input = NativeLootSelectionInput {
+            let input = LootSelectionInput {
                 actor_seed: 0,
                 ground_recipe_indexes: &[],
                 item_recipe_pool: None,
-                arena: NativeLootArenaInput {
+                arena: LootArenaInput {
                     disable_mask: 0,
                     item_level_maximum: 100,
                     item_level_minimum: 0,
@@ -961,31 +951,28 @@ impl BoneyardLootStore {
                 explicit_gold_amount: Some(contents.gold),
                 drop_delay_context: 0,
                 inventory_has_health_potion: false,
-                key: NativeLootKeyInput { current: 1, level: 0, remaining: 0 },
+                key: LootKeyInput { current: 1, level: 0, remaining: 0 },
                 nearby_mask_two_count: 0,
-                participant: NativeLootParticipantInput {
+                participant: LootParticipantInput {
                     advanced_unlocks: &advanced,
                     level: 1,
                     modifiers: participant
-                        .map_or_else(NativeLootModifiers::default, |player| player.modifiers),
+                        .map_or_else(LootModifiers::default, |player| player.modifiers),
                     owned_recipe_indexes: &[],
                     slot: 0,
                 },
                 placement,
-                policies: NativeLootPolicies {
-                    gold: NativeLootPolicy::Forced,
-                    ..NativeLootPolicies::DISABLED
-                },
+                policies: LootPolicies { gold: LootPolicy::Forced, ..LootPolicies::DISABLED },
                 scene_forces_health_potion: false,
                 source_position: position,
                 world_badguy_count: 0,
                 world_has_health_potion_sack: false,
             };
-            let rolled = roll_native_enemy_loot(&input, &mut self.shared_rng, &mut ids);
+            let rolled = roll_enemy_loot(&input, &mut self.shared_rng, &mut ids);
             self.next_item_id = ids.next_id;
             let mut drops = rolled.materialization.drops;
             for drop in &mut drops {
-                drop.source = NativeLootDropSource::Goodie;
+                drop.source = LootDropSource::Goodie;
             }
             self.spawn_specs(drops, tick, painter_order);
             return;
@@ -998,12 +985,7 @@ impl BoneyardLootStore {
             base_item(self.next_item_id, HubItemKind::Sack, "Sack", 7008, Some(0), &[70]);
         self.next_item_id += 1;
         bundle.contents = Some(contents.items);
-        let mut spec = NativeLootDropSpec::new(
-            NativeLootDropKind::Sack,
-            0,
-            position,
-            NativeLootDropSource::Goodie,
-        );
+        let mut spec = LootDropSpec::new(LootDropKind::Sack, 0, position, LootDropSource::Goodie);
         spec.item = Some(bundle);
         self.spawn_specs(vec![spec], tick, painter_order);
     }

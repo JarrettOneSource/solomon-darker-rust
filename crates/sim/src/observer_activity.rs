@@ -2,7 +2,7 @@
 //! Roster order and accepted skill changes come from the session; this projection never
 //! chooses a skill or changes progression.
 
-use crate::profile::{NATIVE_SKILL_CATALOG, PlayerSkillOffer, PlayerSkillOfferOption};
+use crate::profile::{PlayerSkillOffer, PlayerSkillOfferOption, SKILL_CATALOG};
 
 /// The fields the source observer reads from one participant, in session insertion order.
 #[derive(Clone, Copy, Debug)]
@@ -127,7 +127,7 @@ fn skill_name(skill_id: usize) -> String {
     // Row 82 exists only as the source's extra stat-book row, outside CATALOG.skills.
     // The Rust table retains it for fixed-size runtime indexing; observer names must
     // still use the catalog's absent-row fallback rather than its empty stat-book name.
-    NATIVE_SKILL_CATALOG
+    SKILL_CATALOG
         .get(skill_id)
         .filter(|_| skill_id != 82)
         .map_or_else(|| format!("Skill {skill_id}"), |skill| skill.name.to_owned())

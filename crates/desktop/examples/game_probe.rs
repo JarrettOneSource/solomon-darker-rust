@@ -3,8 +3,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), String> {
     use glow::HasContext;
-    use solomon_desktop::{authority::LocalAuthority, window::NativeWindow};
-    use solomon_web::{
+    use solomon_client::{
         Game,
         desktop::{
             DesktopControls,
@@ -12,6 +11,7 @@ fn main() -> Result<(), String> {
         },
         platform::{ClientTasks, Surface},
     };
+    use solomon_desktop::{authority::LocalAuthority, window::NativeWindow};
     use std::{cell::RefCell, path::PathBuf, rc::Rc};
     use winit::{
         application::ApplicationHandler,
@@ -114,11 +114,11 @@ fn main() -> Result<(), String> {
                 solomon_graphics::assets::configure(solomon_graphics::assets::NativeAssets::new(
                     &self.assets,
                 )?);
-                solomon_web::configure_native_storage(self.output.join("profile"))?;
+                solomon_client::configure_native_storage(self.output.join("profile"))?;
                 self.tasks = Some(ClientTasks::install());
                 let authority = LocalAuthority::start(self.assets.clone(), self.revision.clone())?;
                 let endpoint = authority.endpoint();
-                solomon_web::platform::configure_native_location(
+                solomon_client::platform::configure_native_location(
                     &endpoint.url.replacen("ws:", "http:", 1),
                     None,
                 )?;
@@ -171,7 +171,7 @@ fn main() -> Result<(), String> {
                 }
                 egui_winit::accesskit_winit::WindowEvent::ActionRequested(action) => {
                     if let Err(error) =
-                        game.accesskit_action(action, solomon_web::platform::monotonic_ms())
+                        game.accesskit_action(action, solomon_client::platform::monotonic_ms())
                     {
                         self.error = Some(error);
                     }
@@ -185,7 +185,7 @@ fn main() -> Result<(), String> {
                 return;
             }
             let result = (|| {
-                let now = solomon_web::platform::monotonic_ms();
+                let now = solomon_client::platform::monotonic_ms();
                 let Some(game) = self.game.as_ref().cloned() else { return Ok(()) };
                 game.borrow_mut().window_event(&event, now)?;
                 if let WindowEvent::Resized(size) = event

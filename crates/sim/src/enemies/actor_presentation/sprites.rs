@@ -10,9 +10,9 @@ use crate::enemies::model::EnemyActor;
 pub(super) fn imp(
     actor: &EnemyActor,
     facing: usize,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
-    let green = actor.config.native_type_id == 2044;
+    let green = actor.config.type_id == 2044;
     let atlas = if green { EnemyArtAtlas::Unholy } else { EnemyArtAtlas::BadGuys };
     let frame = sample.imp_effect_frame.floor().clamp(0.0, 9.0) as usize;
     EnemyFamilyPresentation::body(vec![
@@ -40,7 +40,7 @@ pub(super) fn imp(
 
 pub(super) fn portal(
     _actor: &EnemyActor,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
     if sample.alpha <= 0.0 {
         return EnemyFamilyPresentation::default();
@@ -84,13 +84,13 @@ pub(super) fn wraith(actor: &EnemyActor, facing: usize) -> EnemyFamilyPresentati
 
 pub(super) fn coffin(
     _actor: &EnemyActor,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
     let state = match sample.coffin_state {
-        NativeEnemyCoffinState::Hidden => return EnemyFamilyPresentation::default(),
-        NativeEnemyCoffinState::Closed => "closed",
-        NativeEnemyCoffinState::Opening => "opening",
-        NativeEnemyCoffinState::Open => "open",
+        EnemyCoffinState::Hidden => return EnemyFamilyPresentation::default(),
+        EnemyCoffinState::Closed => "closed",
+        EnemyCoffinState::Opening => "opening",
+        EnemyCoffinState::Open => "open",
     };
     EnemyFamilyPresentation::body(vec![EnemySpriteLayer {
         rotation_radians: sample.coffin_rotation_radians,
@@ -106,7 +106,7 @@ pub(super) fn coffin(
 pub(super) fn spider(
     _actor: &EnemyActor,
     facing: usize,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
 ) -> EnemyFamilyPresentation {
     let appearance = sample.spider.expect("Spider draw sample contains its outline appearance");
     let pose = sample.body_pose;

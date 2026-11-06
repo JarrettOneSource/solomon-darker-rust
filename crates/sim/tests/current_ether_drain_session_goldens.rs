@@ -11,7 +11,7 @@ use std::collections::HashSet;
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::belt::NativeBeltCommand;
+use solomon_sim::belt::BeltCommand;
 use solomon_sim::boneyard::navigation::NavigationSet;
 use solomon_sim::boneyard::{
     BoneyardBounds, BoneyardScene, BoneyardSource, BoneyardSpawn, LoadedBoneyard,
@@ -19,10 +19,10 @@ use solomon_sim::boneyard::{
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::enemies::model::EnemyLifeState;
 use solomon_sim::enemies::{EnemyFlag, EnemySpawnIntent, EnemyToken};
-use solomon_sim::loot::{NativeLootDropKind, NativeLootDropSource, NativeLootDropSpec};
+use solomon_sim::loot::{LootDropKind, LootDropSource, LootDropSpec};
 use solomon_sim::painter::WorldManagerLane;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::NativeSecondaryActorKind;
+use solomon_sim::secondary::SecondaryActorKind;
 use solomon_sim::session::{
     GameSession, GameSessionInput, GameSessionOptions, GameSessionTickContext,
 };
@@ -81,7 +81,7 @@ fn snapshot(state: &GameSession) -> Value {
         .iter()
         .map(|actor| {
             let mut value = secondary::actor_snapshot(actor);
-            if actor.kind == NativeSecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
+            if actor.kind == SecondaryActorKind::EtherDrain || actor.ether_drain.is_some() {
                 value["etherDrain"] = serde_json::to_value(actor.ether_drain.as_ref()).unwrap();
             }
             value
@@ -114,10 +114,10 @@ fn snapshot(state: &GameSession) -> Value {
         .iter()
         .map(|actor| {
             let kind = match actor.kind {
-                NativeLootDropKind::Gold => "gold",
-                NativeLootDropKind::Orb => "orb",
-                NativeLootDropKind::Sack => "sack",
-                NativeLootDropKind::Bonus => "bonus",
+                LootDropKind::Gold => "gold",
+                LootDropKind::Orb => "orb",
+                LootDropKind::Sack => "sack",
+                LootDropKind::Bonus => "bonus",
             };
             json!({"id": actor.id, "kind": kind, "position": actor.position,
             "activationDelayTicks": actor.activation_delay_ticks,
@@ -164,9 +164,7 @@ fn current_session_field_uses_actual_bodies_loot_capture_and_shared_random_strea
             1,
             &mut state.gameplay_rng,
         );
-        assert!(
-            state.bind_belt("owner", NativeBeltCommand::BindSkill { skill_id: Some(74), slot: 0 })
-        );
+        assert!(state.bind_belt("owner", BeltCommand::BindSkill { skill_id: Some(74), slot: 0 }));
         state.install_boneyard(loaded()).unwrap();
         state.enhanced_effects = case["enhancedEffects"].as_bool().unwrap();
         state.participants.get_mut("owner").unwrap().wizard.position = Vec2::new(90.0, 250.0);
@@ -177,11 +175,11 @@ fn current_session_field_uses_actual_bodies_loot_capture_and_shared_random_strea
             .unwrap()
             .iter()
             .map(|row| {
-                let mut spec = NativeLootDropSpec::new(
-                    NativeLootDropKind::Gold,
+                let mut spec = LootDropSpec::new(
+                    LootDropKind::Gold,
                     row["id"].as_u64().unwrap(),
                     native_bits::input(&row["position"]),
-                    NativeLootDropSource::Script,
+                    LootDropSource::Script,
                 );
                 spec.amount = row["amount"].as_u64();
                 spec
@@ -281,7 +279,7 @@ fn painter_session() -> (GameSession, NavigationSet) {
         1,
         &mut state.gameplay_rng,
     );
-    assert!(state.bind_belt("owner", NativeBeltCommand::BindSkill { skill_id: Some(74), slot: 0 }));
+    assert!(state.bind_belt("owner", BeltCommand::BindSkill { skill_id: Some(74), slot: 0 }));
     state.install_boneyard(loaded()).unwrap();
     state.participants.get_mut("owner").unwrap().wizard.position = Vec2::new(90.0, 250.0);
     state.participants.get_mut("peer").unwrap().wizard.position = Vec2::new(90.0, 350.0);
@@ -299,7 +297,7 @@ fn painter_session() -> (GameSession, NavigationSet) {
         .secondary
         .actors
         .iter_mut()
-        .find(|a| a.kind == NativeSecondaryActorKind::EtherDrain)
+        .find(|a| a.kind == SecondaryActorKind::EtherDrain)
         .unwrap();
     // Start the ordinary public tick at the field's fully grown contact phase.
     field.phase = 1.0;
@@ -318,7 +316,7 @@ fn assert_born_flare(
         .secondary
         .actors
         .iter()
-        .filter(|a| a.kind == NativeSecondaryActorKind::EtherDrainCaptureFlare)
+        .filter(|a| a.kind == SecondaryActorKind::EtherDrainCaptureFlare)
         .collect();
     assert_eq!(flares.len(), 1);
     let flare = flares[0];
@@ -348,14 +346,13 @@ fn assert_flash_birth(state: &GameSession) {
         .filter(|actor| {
             matches!(
                 actor.kind,
-                NativeSecondaryActorKind::FlashResponseGrow
-                    | NativeSecondaryActorKind::FlashResponseFade
+                SecondaryActorKind::FlashResponseGrow | SecondaryActorKind::FlashResponseFade
             )
         })
         .collect();
     let expected = [
-        vec![NativeSecondaryActorKind::FlashResponseGrow; 8],
-        vec![NativeSecondaryActorKind::FlashResponseFade; 4],
+        vec![SecondaryActorKind::FlashResponseGrow; 8],
+        vec![SecondaryActorKind::FlashResponseFade; 4],
     ]
     .concat();
     assert_eq!(children.iter().map(|actor| actor.kind).collect::<Vec<_>>(), expected);
@@ -407,8 +404,7 @@ fn assert_flash_birth(state: &GameSession) {
         .filter(|actor| {
             matches!(
                 actor.kind,
-                NativeSecondaryActorKind::FlashResponseGrow
-                    | NativeSecondaryActorKind::FlashResponseFade
+                SecondaryActorKind::FlashResponseGrow | SecondaryActorKind::FlashResponseFade
             )
         })
         .collect();
@@ -465,7 +461,7 @@ fn post_secondary_ether_drain_shield_break_registers_children_before_snapshot() 
             GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
         );
         if state.secondary.events.iter().any(|event| {
-            event.kind == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
+            event.kind == solomon_sim::secondary::SecondaryEventKind::ShieldBreak
                 && event.owner_id == "peer"
                 && event.tick == state.ticks
         }) {
@@ -473,10 +469,13 @@ fn post_secondary_ether_drain_shield_break_registers_children_before_snapshot() 
         }
     }
     assert!(
-        state.secondary.events.iter().any(|event| event.kind
-            == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
-            && event.owner_id == "peer"
-            && event.tick == state.ticks),
+        state
+            .secondary
+            .events
+            .iter()
+            .any(|event| event.kind == solomon_sim::secondary::SecondaryEventKind::ShieldBreak
+                && event.owner_id == "peer"
+                && event.tick == state.ticks),
         "the field must break the active shield during late magic contact"
     );
     let children: Vec<_> = state
@@ -487,17 +486,17 @@ fn post_secondary_ether_drain_shield_break_registers_children_before_snapshot() 
             actor.owner_id == "peer"
                 && matches!(
                     actor.kind,
-                    NativeSecondaryActorKind::ShieldBreak
-                        | NativeSecondaryActorKind::ShieldExplosion
-                        | NativeSecondaryActorKind::Shockwave
+                    SecondaryActorKind::ShieldBreak
+                        | SecondaryActorKind::ShieldExplosion
+                        | SecondaryActorKind::Shockwave
                 )
                 && actor.skill_id == Some(54)
         })
         .collect();
     assert_eq!(children.len(), 22);
-    assert!(children[..20].iter().all(|actor| actor.kind == NativeSecondaryActorKind::ShieldBreak));
-    assert_eq!(children[20].kind, NativeSecondaryActorKind::ShieldExplosion);
-    assert_eq!(children[21].kind, NativeSecondaryActorKind::Shockwave);
+    assert!(children[..20].iter().all(|actor| actor.kind == SecondaryActorKind::ShieldBreak));
+    assert_eq!(children[20].kind, SecondaryActorKind::ShieldExplosion);
+    assert_eq!(children[21].kind, SecondaryActorKind::Shockwave);
     let roots: Vec<_> = children
         .iter()
         .map(|actor| {
@@ -552,7 +551,7 @@ fn post_secondary_ordinary_magic_shield_break_registers_twenty_children() {
             GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
         );
         if state.secondary.events.iter().any(|event| {
-            event.kind == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
+            event.kind == solomon_sim::secondary::SecondaryEventKind::ShieldBreak
                 && event.owner_id == "peer"
                 && event.tick == state.ticks
         }) {
@@ -560,18 +559,19 @@ fn post_secondary_ordinary_magic_shield_break_registers_twenty_children() {
         }
     }
     assert!(
-        state.secondary.events.iter().any(|event| event.kind
-            == solomon_sim::secondary::NativeSecondaryEventKind::ShieldBreak
-            && event.owner_id == "peer"
-            && event.tick == state.ticks)
+        state
+            .secondary
+            .events
+            .iter()
+            .any(|event| event.kind == solomon_sim::secondary::SecondaryEventKind::ShieldBreak
+                && event.owner_id == "peer"
+                && event.tick == state.ticks)
     );
     let children: Vec<_> = state
         .secondary
         .actors
         .iter()
-        .filter(|actor| {
-            actor.owner_id == "peer" && actor.kind == NativeSecondaryActorKind::ShieldBreak
-        })
+        .filter(|actor| actor.owner_id == "peer" && actor.kind == SecondaryActorKind::ShieldBreak)
         .collect();
     assert_eq!(children.len(), 20);
     assert!(children.iter().all(|actor| actor.painter_registrations.len() == 1
@@ -579,7 +579,7 @@ fn post_secondary_ordinary_magic_shield_break_registers_twenty_children() {
     assert!(!state.secondary.actors.iter().any(|actor| actor.owner_id == "peer"
         && matches!(
             actor.kind,
-            NativeSecondaryActorKind::ShieldExplosion | NativeSecondaryActorKind::Shockwave
+            SecondaryActorKind::ShieldExplosion | SecondaryActorKind::Shockwave
         )
         && actor.skill_id == Some(54)));
 }
@@ -608,7 +608,7 @@ fn flash_post_secondary_poison_response_registers_children_before_snapshot() {
     owner.player.combat.current_health = 0.0;
     owner.player.combat.poison_damage_per_tick = 1.0;
     owner.player.combat.poison_ticks_remaining = 2;
-    state.secondary.rng = solomon_sim::NativeRng::new(18);
+    state.secondary.rng = solomon_sim::Rng::new(18);
     state.step(
         &Default::default(),
         GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
@@ -628,15 +628,13 @@ fn flash_post_secondary_poison_response_registers_children_before_snapshot() {
 
 #[test]
 fn replacement_capture_enrolls_its_flare_before_snapshot_and_keeps_it_through_restore() {
-    use solomon_sim::secondary::ether_drain::{
-        NativeEtherDrainAtlas, NativeEtherDrainCapturedImage,
-    };
+    use solomon_sim::secondary::ether_drain::{EtherDrainAtlas, EtherDrainCapturedImage};
     let (mut state, navigation) = painter_session();
     // A previous victim is still in the field when the next enemy is captured.
     state.secondary.capture_ether_drain_image(
         1,
-        Some(NativeEtherDrainCapturedImage {
-            atlas: NativeEtherDrainAtlas::BadGuys,
+        Some(EtherDrainCapturedImage {
+            atlas: EtherDrainAtlas::BadGuys,
             entry: 1477,
             tint: 0xffffff,
             body_y_offset: 23,
@@ -681,12 +679,8 @@ fn replacement_capture_enrolls_its_flare_before_snapshot_and_keeps_it_through_re
 #[test]
 fn consumed_loot_enrolls_its_flare_on_the_contact_tick() {
     let (mut state, navigation) = painter_session();
-    let mut spec = NativeLootDropSpec::new(
-        NativeLootDropKind::Gold,
-        1,
-        Vec2::new(250.0, 250.0),
-        NativeLootDropSource::Script,
-    );
+    let mut spec =
+        LootDropSpec::new(LootDropKind::Gold, 1, Vec2::new(250.0, 250.0), LootDropSource::Script);
     spec.amount = Some(1);
     state.boneyard.as_mut().unwrap().loot.spawn_specs(
         vec![spec],

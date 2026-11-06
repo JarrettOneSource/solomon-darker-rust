@@ -8,7 +8,7 @@ use std::f64::consts::PI;
 use crate::Vec2;
 use crate::appearance::equipment::PlayerWeaponAppearance;
 use crate::combat::{PlayerCombatState, player_death_frame_at_tick};
-use crate::spells::casting::NativePlayerWeaponKind;
+use crate::spells::casting::PlayerWeaponKind;
 
 use super::{mix, stable_hash, unit};
 
@@ -200,10 +200,10 @@ pub fn legacy_player_death_weapon_motion(
     trigger: &PlayerDeathWeaponTrigger,
     age_ticks: u64,
     origin: Vec2,
-) -> crate::death_animations::NativeBouncerMotion {
+) -> crate::death_animations::BouncerMotion {
     let kind = match trigger.weapon.kind {
-        NativePlayerWeaponKind::Staff => "staff",
-        NativePlayerWeaponKind::Wand => "wand",
+        PlayerWeaponKind::Staff => "staff",
+        PlayerWeaponKind::Wand => "wand",
     };
     let seed = stable_hash(&format!(
         "{}:{}:{}:{}:{}",
@@ -252,7 +252,7 @@ pub fn legacy_player_death_weapon_motion(
         }
         rotation_degrees += rotation_speed;
     }
-    crate::death_animations::NativeBouncerMotion {
+    crate::death_animations::BouncerMotion {
         bounce_velocity: if settled { 0.0 } else { bounce_velocity },
         height,
         position: Vec2::new(origin.x + offset.x, origin.y + offset.y),

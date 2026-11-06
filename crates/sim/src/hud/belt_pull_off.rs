@@ -4,13 +4,13 @@
 use crate::Vec2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeBeltPullOffStep {
+pub enum BeltPullOffStep {
     Degrees90,
     Degrees120,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeBeltPullOffBurstMember {
+pub struct BeltPullOffBurstMember {
     pub brightness: f64,
     pub duration_ms: f64,
     pub end: Vec2,
@@ -21,7 +21,7 @@ pub struct NativeBeltPullOffBurstMember {
 }
 
 #[must_use]
-pub fn native_belt_pull_off_started(origin: Vec2, current: Vec2) -> bool {
+pub fn belt_pull_off_started(origin: Vec2, current: Vec2) -> bool {
     let dx = current.x - origin.x;
     let dy = current.y - origin.y;
     dx * dx + dy * dy > 50.0 * 50.0
@@ -30,18 +30,18 @@ pub fn native_belt_pull_off_started(origin: Vec2, current: Vec2) -> bool {
 /// All 24 smoke puffs and the source's three/four move-fade spokes. The view
 /// chooses the 90/120-degree branch separately, exactly as the React component.
 #[must_use]
-pub fn native_belt_pull_off_burst_members(
-    step: NativeBeltPullOffStep,
+pub fn belt_pull_off_burst_members(
+    step: BeltPullOffStep,
     random: &mut impl FnMut() -> f64,
-) -> Vec<NativeBeltPullOffBurstMember> {
+) -> Vec<BeltPullOffBurstMember> {
     let mut members = Vec::new();
     for lane in (0..360).step_by(30) {
         members.push(smoke_puff(f64::from(lane), false, random));
         members.push(smoke_puff(f64::from(lane), true, random));
     }
     let step_degrees = match step {
-        NativeBeltPullOffStep::Degrees90 => 90,
-        NativeBeltPullOffStep::Degrees120 => 120,
+        BeltPullOffStep::Degrees90 => 90,
+        BeltPullOffStep::Degrees120 => 120,
     };
     for lane in (0..360).step_by(step_degrees) {
         let extent = step_degrees as f64 / 3.0;
@@ -53,7 +53,7 @@ pub fn native_belt_pull_off_burst_members(
         let velocity_x = direction.x * 3.25 + random_unit(random) * 0.5;
         let velocity_y = direction.y * 3.25 + random_unit(random) * 0.5;
         let travel = geometric_travel(0.94, ticks);
-        members.push(NativeBeltPullOffBurstMember {
+        members.push(BeltPullOffBurstMember {
             brightness: 1.0,
             duration_ms: ticks * 10.0,
             end: Vec2::new(
@@ -69,11 +69,7 @@ pub fn native_belt_pull_off_burst_members(
     members
 }
 
-fn smoke_puff(
-    lane: f64,
-    inner: bool,
-    random: &mut impl FnMut() -> f64,
-) -> NativeBeltPullOffBurstMember {
+fn smoke_puff(lane: f64, inner: bool, random: &mut impl FnMut() -> f64) -> BeltPullOffBurstMember {
     let direction = screen_direction(lane + random_unit(random) * 10.0);
     let radius = (if inner { 8.0 } else { 15.0 }) - random_unit(random) * 2.0;
     let speed = (2.5 + random_unit(random) * 0.1) * if inner { 0.5 } else { 1.0 };
@@ -82,7 +78,7 @@ fn smoke_puff(
     let travel = geometric_travel(0.910000026, ticks);
     let scale = 1.25 - random_unit(random) * 0.4;
     let rotation_per_tick = (2.0 + random_unit(random) * 2.0) / 3.0;
-    NativeBeltPullOffBurstMember {
+    BeltPullOffBurstMember {
         brightness: if inner { 0.75 } else { 0.5 },
         duration_ms: ticks * 10.0,
         end: Vec2::new(

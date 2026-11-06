@@ -226,12 +226,12 @@ fn supported_archive_protocols_keep_their_complete_checkpoint() {
 }
 
 fn boulder_archive() -> Value {
-    use solomon_sim::spells::weld::{NativeWeldActorBirth, create_native_weld_persistent_actor};
+    use solomon_sim::spells::weld::{WeldActorBirth, create_weld_persistent_actor};
     let archive = sample_archive();
     let (bytes, _) = super::encoding::serialize_archive(&archive, "boulder-history").unwrap();
     let mut document: Value = serde_json::from_slice(&bytes).unwrap();
-    let held = create_native_weld_persistent_actor(
-        NativeWeldActorBirth {
+    let held = create_weld_persistent_actor(
+        WeldActorBirth {
             build_id: 1006,
             direction: Vec2::new(1.0, 0.0),
             id: 41,

@@ -10,7 +10,7 @@ its native application and browser WASM embedding. The website supplies accounts
 | `solomon-sim` | Game rules, sessions, players, enemies, spells, inventory, and deterministic state |
 | `solomon-assets` | Sprite bundles, scene decoding, navigation inputs, save formats, and validation |
 | `solomon-graphics` | Shared OpenGL/WebGL2 rendering, textures, blend modes, image decoding and text rasterization |
-| `solomon-web` | Shared Game, GPU UI, world presentation, audio director and native/browser platform adapters |
+| `solomon-client` | Shared Game, GPU UI, world presentation, audio director and native/browser platform adapters |
 | `solomon-loader` | Browser startup splash before the main WASM module loads |
 | `solomon-protocol` | Versioned messages, snapshots, commands, and acknowledgements |
 | `solomon-launcher` | Native authority, HTTP/WebSocket transport, persistence, and service integration |
@@ -153,9 +153,9 @@ For each client frame:
 5. Draw world geometry, actors, lights, and UI from their owning models.
 6. Drain accepted audio events and retire unused GPU resources.
 
-`crates/web/src/game.rs` composes the running game. The native event loop in
+`crates/client/src/game.rs` composes the running game. The native event loop in
 `crates/desktop/src/app.rs` owns windows and session retirement;
-`crates/web/src/bootstrap.rs` owns browser callbacks and embedding.
+`crates/client/src/bootstrap.rs` owns browser callbacks and embedding.
 Target-selected platform modules provide input, text, clipboard, files, storage,
 networking and clocks without a JavaScript runtime in desktop builds.
 [Client presentation](CLIENT-PRESENTATION.md) defines interpolation and prediction.

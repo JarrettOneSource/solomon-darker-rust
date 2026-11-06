@@ -6,16 +6,16 @@ use super::sample::*;
 use crate::enemies::EnemyToken;
 use crate::enemies::config::EnemyFamilyConfig;
 use crate::enemies::model::{EnemyActor, EnemyBrain, EnemyLifeState};
-use crate::enemies::presentation::native_death_magic_layers;
+use crate::enemies::presentation::death_magic_layers;
 use crate::float;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 pub(super) fn faculty(
     actor: &EnemyActor,
     facing: usize,
     tick: u64,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let EnemyFamilyConfig::Faculty(appearance) = &actor.config.family else {
@@ -63,13 +63,13 @@ pub(super) fn faculty(
             )
         },
     ];
-    let mut rng = NativeRng::new(actor.id as i64 + tick as i64);
+    let mut rng = Rng::new(actor.id as i64 + tick as i64);
     for hand in 0..2 {
         if brain.hand_mask & (1 << hand) == 0 {
             continue;
         }
         let anchor = point(art, EnemyArtAtlas::Faculty, body_entry, hand);
-        let aura = native_death_magic_layers(
+        let aura = death_magic_layers(
             Vec2::new(anchor.x, anchor.y + bob),
             1.5,
             sample.presentation_tick,
@@ -135,7 +135,7 @@ pub(super) fn faculty(
 pub(super) fn heartmonger(
     actor: &EnemyActor,
     facing: usize,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let EnemyBrain::Heartmonger(brain) = &actor.brain else { unreachable!("Heartmonger brain") };
@@ -174,7 +174,7 @@ pub(super) fn demon_skull(
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let EnemyBrain::DemonSkull(brain) = &actor.brain else { unreachable!("DemonSkull brain") };
-    let mut rng = NativeRng::new(actor.id as i64 + tick as i64);
+    let mut rng = Rng::new(actor.id as i64 + tick as i64);
     let bob = fround(float::sin(radians(brain.body_phase_deg)) * 10.0 - 25.0);
     let scale = actor.config.scale;
     let offset = Vec2::new(

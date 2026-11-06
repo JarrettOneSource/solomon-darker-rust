@@ -1,11 +1,11 @@
 use super::*;
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::enemies::demon_skull_controller::*;
 use solomon_sim::enemies::faculty_controller::*;
 use solomon_sim::enemies::faculty_spells::*;
 use solomon_sim::enemies::guided_missile::*;
 use solomon_sim::enemies::model::{EnemyBrain, FacultyActionKind, FacultyBrain};
-use solomon_sim::enemies::path::NativeEnemyPathState;
+use solomon_sim::enemies::path::EnemyPathState;
 
 fn action_kind(value: &str) -> FacultyActionKind {
     match value {
@@ -40,30 +40,30 @@ fn skull_state_json(brain: &solomon_sim::enemies::model::DemonSkullBrain) -> Val
     state
 }
 
-pub(super) fn dark_fireball_json(state: NativeDarkFireballState) -> Value {
+pub(super) fn dark_fireball_json(state: DarkFireballState) -> Value {
     json!({"ageTicks":state.age_ticks,"arcPhase":state.arc_phase,"arcPhaseStep":state.arc_phase_step,
         "headingDeg":state.heading_deg,"position":point_json(state.position),
         "remainingTicks":state.remaining_ticks,"velocity":point_json(state.velocity)})
 }
 
-pub(super) fn rain_state_json(state: NativeRainOfBonesState) -> Value {
+pub(super) fn rain_state_json(state: RainOfBonesState) -> Value {
     json!({"alpha":state.alpha,"phase":state.phase,"position":point_json(state.position),
         "remainingTicks":state.remaining_ticks,"rotationSign":state.rotation_sign,"scale":state.scale})
 }
 
-pub(super) fn dire_fire_json(state: NativeDireFireState) -> Value {
+pub(super) fn dire_fire_json(state: DireFireState) -> Value {
     json!({"alpha":state.alpha,"glow":state.glow,"phase":state.phase,"ramp":state.ramp,
         "rotationPhases":state.rotation_phases,"rotationRates":state.rotation_rates,
         "rotationSigns":state.rotation_signs,"scale":state.scale,"scaleSign":state.scale_sign})
 }
 
-pub(super) fn guided_missile_json(state: NativeGuidedMissileState) -> Value {
+pub(super) fn guided_missile_json(state: GuidedMissileState) -> Value {
     json!({"headingDeg":state.heading_deg,"minimumSpeed":state.minimum_speed,"phaseDeg":state.phase_deg,
         "position":point_json(state.position),"remainingTicks":state.remaining_ticks,
         "speed":state.speed,"turnRate":state.turn_rate,"visualScale":state.visual_scale})
 }
 
-pub(super) fn boss_spell_json(spell: &solomon_sim::enemies::boss_spell::NativeBossSpell) -> Value {
+pub(super) fn boss_spell_json(spell: &solomon_sim::enemies::boss_spell::BossSpell) -> Value {
     use solomon_sim::enemies::boss_spell::BossSpellKind;
     let owner = spell.owner;
     let mut record = json!({"ageTicks":owner.age_ticks,"damage":owner.damage,"id":owner.id,
@@ -162,13 +162,13 @@ pub(super) fn boss_spell_json(spell: &solomon_sim::enemies::boss_spell::NativeBo
 fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
     let golden: Value = serde_json::from_str(&fixture("enemy-boss-goldens.json")).unwrap();
     for case in golden["facultyActions"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let kind = action_kind(case["kind"].as_str().unwrap());
-        let mut action = create_native_faculty_action(kind, &mut rng);
+        let mut action = create_faculty_action(kind, &mut rng);
         assert_json_equal(&faculty_action_json(&action), &case["initial"], "Faculty action birth");
         assert_json_equal(&json!(rng_record(&rng)), &case["rng"], "Faculty action RNG");
         for expected in case["samples"].as_array().unwrap() {
-            let step = step_native_faculty_action(&action, number(case, "speed"));
+            let step = step_faculty_action(&action, number(case, "speed"));
             let actual = json!({"action":faculty_action_json(&step.action),"bodyPose":step.body_pose,
                 "complete":step.complete,"dispatch":step.dispatch,"lockedFacing":step.locked_facing,"marker":step.marker});
             assert_json_equal(&actual, expected, "Faculty action update");
@@ -176,14 +176,10 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         }
     }
     for case in golden["facultyControllers"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut brain = create_native_faculty(&mut rng);
-        register_native_faculty(
-            &mut brain,
-            &mut rng,
-            case["memberCount"].as_u64().unwrap() as usize,
-        );
-        let mut path = NativeEnemyPathState::new(&mut rng);
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let mut brain = create_faculty(&mut rng);
+        register_faculty(&mut brain, &mut rng, case["memberCount"].as_u64().unwrap() as usize);
+        let mut path = EnemyPathState::new(&mut rng);
         brain.secondary_cooldown = -1;
         brain.completed_dispatches = 1;
         brain.primary_poll = 0;
@@ -194,8 +190,8 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         );
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for tick in 1..=2600 {
-            advance_native_faculty_orbit(&mut path, brain.orbit_sign, &mut rng);
-            let context = NativeFacultyContext {
+            advance_faculty_orbit(&mut path, brain.orbit_sign, &mut rng);
+            let context = FacultyContext {
                 advance_action: tick % 400 < 350,
                 actor_time_scale: if tick % 500 < 30 {
                     0.0
@@ -235,8 +231,8 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         assert!(samples.next().is_none());
     }
     for case in golden["darkFireballs"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let states = create_native_dark_fireballs(
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let states = create_dark_fireballs(
             Vec2::new(125.0, 240.0),
             77.0,
             case["ring"].as_bool().unwrap(),
@@ -256,8 +252,7 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
             let mut prior_tick = 0;
             for sample in trajectory["samples"].as_array().unwrap() {
                 for tick in prior_tick + 1..=sample["tick"].as_u64().unwrap() {
-                    let step =
-                        step_native_dark_fireball(state, if tick % 20 == 0 { 0.5 } else { 1.0 });
+                    let step = step_dark_fireball(state, if tick % 20 == 0 { 0.5 } else { 1.0 });
                     state = step.spell;
                     if tick == sample["tick"].as_u64().unwrap() {
                         assert_json_equal(
@@ -277,13 +272,13 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         }
     }
     for case in golden["rainOfBones"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut state = create_native_rain_of_bones(Vec2::new(125.0, 240.0), &mut rng);
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let mut state = create_rain_of_bones(Vec2::new(125.0, 240.0), &mut rng);
         assert_json_equal(&rain_state_json(state), &case["initial"], "rain birth");
         assert_json_equal(&json!(rng_record(&rng)), &case["initialRng"], "rain birth RNG");
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for tick in 1..=1400 {
-            let step = step_native_rain_of_bones(state, &mut rng);
+            let step = step_rain_of_bones(state, &mut rng);
             state = step.state;
             let Some(expected) =
                 samples.peek().filter(|sample| sample["tick"].as_u64() == Some(tick))
@@ -302,14 +297,14 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         assert!(samples.next().is_none());
     }
     for case in golden["direFires"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut state = create_native_dire_fire(&mut rng);
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let mut state = create_dire_fire(&mut rng);
         assert_json_equal(&dire_fire_json(state), &case["initial"], "Dire Fire birth");
         assert_json_equal(&json!(rng_record(&rng)), &case["initialRng"], "Dire Fire birth RNG");
         let mut prior_tick = 0;
         for sample in case["samples"].as_array().unwrap() {
             for _ in prior_tick + 1..=sample["tick"].as_u64().unwrap() {
-                state = step_native_dire_fire(state, &mut rng);
+                state = step_dire_fire(state, &mut rng);
             }
             assert_json_equal(&dire_fire_json(state), &sample["state"], "Dire Fire state");
             assert_json_equal(&json!(rng_record(&rng)), &sample["rng"], "Dire Fire RNG");
@@ -317,8 +312,8 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         }
     }
     for case in golden["guidedMissiles"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut state = create_native_guided_missile(&mut rng, Vec2::new(125.0, 240.0), 359.0, 1.5);
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let mut state = create_guided_missile(&mut rng, Vec2::new(125.0, 240.0), 359.0, 1.5);
         assert_json_equal(&guided_missile_json(state), &case["initial"], "skull missile birth");
         assert_json_equal(&json!(rng_record(&rng)), &case["rng"], "skull missile birth RNG");
         let mut prior_tick = 0;
@@ -347,11 +342,11 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         let origin = Vec2::new(125.0, 240.0);
         let point = point_from_json(&sample["point"]);
         assert_eq!(
-            native_blightning_contains(origin, number(sample, "heading"), point),
+            blightning_contains(origin, number(sample, "heading"), point),
             sample["blightning"].as_bool().unwrap()
         );
         assert_eq!(
-            native_tragic_circle_contains(origin, point),
+            tragic_circle_contains(origin, point),
             sample["tragicCircle"].as_bool().unwrap()
         );
     }
@@ -365,7 +360,7 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
             "flair" => DemonSkullActionKind::Flair,
             _ => panic!("source DemonSkull action"),
         };
-        let action = create_native_demon_skull_action(
+        let action = create_demon_skull_action(
             kind,
             177.0,
             Some(231.0),
@@ -379,18 +374,18 @@ fn faculty_actions_controllers_and_private_spell_lifetimes_match_the_website() {
         );
     }
     for case in golden["demonSkullControllers"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let mut brain = create_native_demon_skull(&mut rng, 1.25, integer(case, "capabilities"));
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let mut brain = create_demon_skull(&mut rng, 1.25, integer(case, "capabilities"));
         assert_json_equal(&skull_state_json(&brain), &case["initial"], "DemonSkull birth");
         assert_json_equal(&json!(rng_record(&rng)), &case["initialRng"], "DemonSkull birth RNG");
         let mut last_action_tick = -1000_i64;
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for tick in 1..=2600_i64 {
-            prepare_native_demon_skull_tick(&mut brain, tick >= 10);
-            let step = step_native_demon_skull_controller(
+            prepare_demon_skull_tick(&mut brain, tick >= 10);
+            let step = step_demon_skull_controller(
                 &mut brain,
                 &mut rng,
-                NativeDemonSkullControllerContext {
+                DemonSkullControllerContext {
                     alternate_player: tick % 500 < 100,
                     has_action: tick - last_action_tick < 100,
                     heading_deg: if tick % 250 < 125 { 30.0 } else { 200.0 },

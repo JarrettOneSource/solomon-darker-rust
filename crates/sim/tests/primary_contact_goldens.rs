@@ -5,22 +5,22 @@ use solomon_sim::enemies::model::EnemyLifeState;
 use solomon_sim::enemies::path::EnemyNavigation;
 use solomon_sim::enemies::projectile_emission::{SpawnEnemyProjectileOptions, spawn_projectile};
 use solomon_sim::enemies::projectiles::EnemyProjectileKind;
-use solomon_sim::enemies::silk::{EnemySilkActor, create_native_silk, step_native_silk};
+use solomon_sim::enemies::silk::{EnemySilkActor, create_silk, step_silk};
 use solomon_sim::enemies::world::{
     EnemyGeometry, EnemyMovementRequest, EnemyProjectileWorldQuery, EnemySpawnContext, EnemyWorld,
 };
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use solomon_sim::profile::primary::*;
-use solomon_sim::profile::weld::{NativeWeldCastKind, NativeWeldPrimaryVector};
-use solomon_sim::secondary::NativeSecondaryTargetEffectPatch;
+use solomon_sim::profile::weld::{WeldCastKind, WeldPrimaryVector};
+use solomon_sim::secondary::SecondaryTargetEffectPatch;
 use solomon_sim::spells::contacts::*;
 use solomon_sim::spells::model::PrimarySpellTransient;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
 };
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -84,7 +84,7 @@ fn registration_row(value: PainterRegistration) -> Value {
         value.registration_ordinal
     ])
 }
-fn random_row(value: &NativeRng) -> Value {
+fn random_row(value: &Rng) -> Value {
     json!({"indexA": value.index_a, "indexB": value.index_b, "words": value.words.as_slice()})
 }
 fn transient_common(value: &Value) -> PrimarySpellTransientBase {
@@ -153,7 +153,7 @@ fn projectile(value: &Value) -> PrimarySpellProjectile {
             explode_damage: number(value, "explodeDamage"),
             explode_radius: number(value, "explodeRadius"),
             private_seed: number(value, "privateSeed") as i32,
-            spent_ember: NativeSpentEmber::None,
+            spent_ember: SpentEmber::None,
             underpowered: value["underpowered"].as_bool().unwrap(),
         }),
         other => panic!("unexpected contact fixture projectile {other}"),
@@ -175,7 +175,7 @@ fn transient(value: &Value) -> PrimarySpellTransient {
             enhanced_effects: value["enhancedEffects"].as_bool().unwrap(),
             lanes: std::array::from_fn(|index| {
                 let lane = &value["lanes"][index];
-                solomon_sim::hurricane::NativeHurricaneLane {
+                solomon_sim::hurricane::HurricaneLane {
                     angle_degrees: number(lane, "angleDegrees"),
                     angular_velocity_degrees: number(lane, "angularVelocityDegrees"),
                     radius: number(lane, "radius"),
@@ -204,7 +204,7 @@ fn transient(value: &Value) -> PrimarySpellTransient {
             birth_tick: integer(value, "birthTick"),
             charges: integer(value, "charges") as u32,
             origin: vector(&value["origin"]),
-            presentation_rng: NativeRng::new(9),
+            presentation_rng: Rng::new(9),
         }),
         "fire-ember" => PrimarySpellTransient::FireEmber(PrimarySpellFireEmber {
             common,
@@ -217,7 +217,7 @@ fn transient(value: &Value) -> PrimarySpellTransient {
             life: number(value, "life"),
             phase: number(value, "phase"),
             position: vector(&value["position"]),
-            spent_ember: NativeSpentEmber::None,
+            spent_ember: SpentEmber::None,
             vertical_velocity: number(value, "verticalVelocity"),
         }),
         "fire-explosion" => PrimarySpellTransient::FireExplosion(PrimarySpellFireExplosion {
@@ -239,7 +239,7 @@ fn transient(value: &Value) -> PrimarySpellTransient {
 }
 fn channel(value: &Value) -> PrimarySpellChannelEmission {
     let skill = &value["primarySkill"];
-    let common = NativePrimarySkillProfileBase {
+    let common = PrimarySkillProfileBase {
         damage_maximum: number(skill, "damageMaximum"),
         damage_minimum: number(skill, "damageMinimum"),
         damage_roll_count: number(skill, "damageRollCount"),
@@ -250,7 +250,7 @@ fn channel(value: &Value) -> PrimarySpellChannelEmission {
     let (kind, primary_skill) = if value["kind"] == "air" {
         (
             PrimarySpellChannelKind::Air,
-            NativePrimarySkillProfile::Air(NativeAirPrimarySkillProfile {
+            PrimarySkillProfile::Air(AirPrimarySkillProfile {
                 common,
                 arc_count: integer(skill, "arcCount") as u32,
                 disintegrate_chance: number(skill, "disintegrateChance"),
@@ -263,14 +263,14 @@ fn channel(value: &Value) -> PrimarySpellChannelEmission {
         let build_id = integer(skill, "buildId") as u32;
         (
             PrimarySpellChannelKind::Weld,
-            NativePrimarySkillProfile::Weld(NativeWeldPrimarySkillProfile {
+            PrimarySkillProfile::Weld(WeldPrimarySkillProfile {
                 common,
                 build_id,
-                cast_kind: NativeWeldCastKind::Channel,
+                cast_kind: WeldCastKind::Channel,
                 damage_factor: number(skill, "damageFactor"),
-                vector: NativeWeldPrimaryVector {
+                vector: WeldPrimaryVector {
                     build_id,
-                    cast_kind: NativeWeldCastKind::Channel,
+                    cast_kind: WeldCastKind::Channel,
                     values: values(&skill["vector"], "values")
                         .iter()
                         .map(|v| v.as_f64().unwrap())
@@ -281,7 +281,7 @@ fn channel(value: &Value) -> PrimarySpellChannelEmission {
     } else {
         (
             PrimarySpellChannelKind::Water,
-            NativePrimarySkillProfile::Water(NativeWaterPrimarySkillProfile {
+            PrimarySkillProfile::Water(WaterPrimarySkillProfile {
                 common,
                 armor_maximum: number(skill, "armorMaximum"),
                 armor_per_second: number(skill, "armorPerSecond"),
@@ -305,20 +305,18 @@ fn channel(value: &Value) -> PrimarySpellChannelEmission {
     };
     PrimarySpellChannelEmission {
         flame_lash_presentation: value.get("flameLashPresentation").map(|main| {
-            use solomon_sim::spells::weld::NativeFlameLashFactoryInput;
+            use solomon_sim::spells::weld::FlameLashFactoryInput;
             PrimarySpellFlameLashPresentation {
                 camera_displacement: main
                     .get("cameraDisplacement")
                     .map(|point| if point.is_null() { None } else { Some(vector(point)) }),
                 midpoint: main["midpoint"].as_object().map(|_| vector(&main["midpoint"])),
                 target_id: main["targetId"].as_str().map(String::from),
-                native_geometry: main.get("nativeGeometry").map(|geometry| {
-                    NativeFlameLashFactoryInput {
-                        start: vector(&geometry["start"]),
-                        control: vector(&geometry["control"]),
-                        end: vector(&geometry["end"]),
-                        offset: vector(&geometry["offset"]),
-                    }
+                native_geometry: main.get("nativeGeometry").map(|geometry| FlameLashFactoryInput {
+                    start: vector(&geometry["start"]),
+                    control: vector(&geometry["control"]),
+                    end: vector(&geometry["end"]),
+                    offset: vector(&geometry["offset"]),
                 }),
                 preclip_endpoint: main.get("preclipEndpoint").map(vector),
                 creator_registration: main.get("creatorRegistration").map(registration),
@@ -454,7 +452,7 @@ fn transient_row(effect: &PrimarySpellTransient) -> Value {
     json!({"id": common.id, "kind": kind, "age": common.age_ticks, "light": common.light_registration.map(registration_row),
         "registrations": common.painter_registrations.iter().copied().map(registration_row).collect::<Vec<_>>(), "detail": detail})
 }
-fn patch_row(patch: &NativeSecondaryTargetEffectPatch) -> Value {
+fn patch_row(patch: &SecondaryTargetEffectPatch) -> Value {
     let mut row = Map::new();
     for (key, value) in
         [("stunFactor", patch.stun_factor), ("coldSlowFactor", patch.cold_slow_factor)]
@@ -500,13 +498,13 @@ fn current_frost_missile_direct_area_and_terrain_contacts_replay_source() {
 #[test]
 fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panicking() {
     use solomon_sim::spells::weld::{
-        NativeWeldActorBirth, NativeWeldPersistentActorState, NativeWeldWorldActor,
-        create_native_weld_persistent_actor, release_native_weld_persistent_actor,
+        WeldActorBirth, WeldPersistentActorState, WeldWorldActor, create_weld_persistent_actor,
+        release_weld_persistent_actor,
     };
 
     for target_health in [1.0, 1.375, 20.0] {
         let mut order = WorldPainterOrder::default();
-        let mut rng = NativeRng::new(17);
+        let mut rng = Rng::new(17);
         let mut enemies = EnemyWorld::new("no-bind-boulder", 50);
         enemies.spawn(
             &[
@@ -526,8 +524,8 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
             actor.current_health = target_health;
             actor.config.maximum_health = target_health;
         }
-        let mut held = create_native_weld_persistent_actor(
-            NativeWeldActorBirth {
+        let mut held = create_weld_persistent_actor(
+            WeldActorBirth {
                 build_id: 1006,
                 direction: Vec2::new(1.0, 0.0),
                 id: 33,
@@ -539,20 +537,19 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
             },
             Some(&mut order),
         );
-        let NativeWeldPersistentActorState::EtherealBoulder(actor) = &mut held else {
+        let WeldPersistentActorState::EtherealBoulder(actor) = &mut held else {
             panic!("Ethereal Boulder build")
         };
         actor.scale = 0.5;
         actor.shell_scale = 0.5;
         actor.assembly_scale = 0.5;
-        let released =
-            release_native_weld_persistent_actor(held, 34, 4, &mut rng, Some(&mut order), &[]);
+        let released = release_weld_persistent_actor(held, 34, 4, &mut rng, Some(&mut order), &[]);
         let mut spells = SpellState {
             next_id: released.next_id,
             transients: released
                 .actors
                 .into_iter()
-                .map(|actor| PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)))
+                .map(|actor| PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)))
                 .collect(),
             ..SpellState::default()
         };
@@ -587,13 +584,13 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
                 .iter()
                 .filter(|effect| matches!(
                     effect,
-                    PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(_))
+                    PrimarySpellTransient::Weld(WeldWorldActor::BoulderDebris(_))
                 ))
                 .count(),
             16
         );
         assert!(spells.transients.iter().any(|effect| matches!(
-            effect, PrimarySpellTransient::Weld(NativeWeldWorldActor::Impact(actor))
+            effect, PrimarySpellTransient::Weld(WeldWorldActor::Impact(actor))
                 if actor.common.build_id == 1006
         )));
         #[cfg(feature = "persistence")]
@@ -608,13 +605,13 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
 #[test]
 fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
     use solomon_sim::spells::weld::{
-        NativeWeldActorBirth, NativeWeldHailstoneLocalPosition, NativeWeldHailstoneRockState,
-        NativeWeldPersistentActorState, NativeWeldWorldActor, create_native_weld_persistent_actor,
+        WeldActorBirth, WeldHailstoneLocalPosition, WeldHailstoneRockState,
+        WeldPersistentActorState, WeldWorldActor, create_weld_persistent_actor,
     };
 
     for target_health in [4.0, 20.0] {
         let mut order = WorldPainterOrder::default();
-        let mut rng = NativeRng::new(17);
+        let mut rng = Rng::new(17);
         let mut enemies = EnemyWorld::new("no-bind-hail", 50);
         enemies.spawn(
             &[
@@ -634,8 +631,8 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
             actor.current_health = target_health;
             actor.config.maximum_health = target_health;
         }
-        let mut held = create_native_weld_persistent_actor(
-            NativeWeldActorBirth {
+        let mut held = create_weld_persistent_actor(
+            WeldActorBirth {
                 build_id: 1008,
                 direction: Vec2::new(1.0, 0.0),
                 id: 33,
@@ -647,7 +644,7 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
             },
             Some(&mut order),
         );
-        let NativeWeldPersistentActorState::Hailstones(actor) = &mut held else {
+        let WeldPersistentActorState::Hailstones(actor) = &mut held else {
             panic!("Hailstones build")
         };
         actor.phase = PrimarySpellProjectilePhase::Flight;
@@ -658,10 +655,10 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
         actor.rocks = [0.0, 500.0]
             .into_iter()
             .enumerate()
-            .map(|(rock_id, x)| NativeWeldHailstoneRockState {
+            .map(|(rock_id, x)| WeldHailstoneRockState {
                 damage_remaining: 10.0,
                 decay: 1.0,
-                local_position: NativeWeldHailstoneLocalPosition { x, y: 0.0, z: 0.0 },
+                local_position: WeldHailstoneLocalPosition { x, y: 0.0, z: 0.0 },
                 phase: 0.0,
                 rock_id,
                 release_offset: Some(Vec2::new(x, 0.0)),
@@ -671,7 +668,7 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
             .collect();
         let mut spells = SpellState {
             next_id: 34,
-            transients: vec![PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(held))]
+            transients: vec![PrimarySpellTransient::Weld(WeldWorldActor::Persistent(held))]
                 .into_iter()
                 .collect(),
             ..SpellState::default()
@@ -707,8 +704,8 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
                 .all(|actor| actor.current_health == target_health)
         );
         let retained = spells.transients.iter().find(|effect| effect.common().id == 33).unwrap();
-        let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-            NativeWeldPersistentActorState::Hailstones(actor),
+        let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+            WeldPersistentActorState::Hailstones(actor),
         )) = retained
         else {
             panic!("the uncontacted Hailstone keeps its carrier")
@@ -791,8 +788,8 @@ fn replay_contacts(fixture: &str) {
                 &mut order,
             );
             enemies.set_arrow_chill_tumble_accumulator(1, 0.9);
-            let mut silk_rng = NativeRng::new(31);
-            let mut state = create_native_silk(
+            let mut silk_rng = Rng::new(31);
+            let mut state = create_silk(
                 Vec2::new(210.0, 250.0),
                 Vec2::new(500.0, 250.0),
                 Vec2::ZERO,
@@ -801,7 +798,7 @@ fn replay_contacts(fixture: &str) {
             )
             .state;
             for _ in 0..20 {
-                assert!(step_native_silk(&mut state));
+                assert!(step_silk(&mut state));
             }
             state.force_accumulator = 0.9;
             enemies.silks.push(EnemySilkActor {
@@ -833,7 +830,7 @@ fn replay_contacts(fixture: &str) {
                 grid_position: None,
                 id: text(value, "id"),
                 kind: PrimarySpellTargetKind::Scenery,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 position: vector(&value["position"]),
                 query_lane: PrimarySpellQueryLane::Grid,
@@ -851,7 +848,7 @@ fn replay_contacts(fixture: &str) {
             )
         };
         let multiplier = |_, _, _: &str| case["multiplier"].as_f64().unwrap_or(1.0);
-        let mut rng = NativeRng::new(17);
+        let mut rng = Rng::new(17);
         let frost_world_contacts: Vec<_> = values(case, "frostWorldContacts")
             .iter()
             .map(|value| {

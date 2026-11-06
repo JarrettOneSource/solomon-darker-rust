@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use solomon_sim::spells::ether::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,7 +62,7 @@ fn ether_blast_charge_health_pulse_and_particle_program_replay_the_website() {
     let fixture: Goldens =
         serde_json::from_str(include_str!("fixtures/website/ether-blast-goldens.json")).unwrap();
     for sample in fixture.charge_cases {
-        let actual = advance_native_ether_blast_charge(
+        let actual = advance_ether_blast_charge(
             sample.start,
             sample.capacity,
             sample.full_mana,
@@ -70,17 +70,17 @@ fn ether_blast_charge_health_pulse_and_particle_program_replay_the_website() {
         );
         assert_eq!(actual.charge, sample.charge);
         assert_eq!(actual.crossed_integer, sample.crossed_integer);
-        assert_eq!(native_ether_blast_release_charges(actual.charge), sample.released);
+        assert_eq!(ether_blast_release_charges(actual.charge), sample.released);
     }
     for sample in fixture.damage_cases {
-        assert_eq!(native_ether_blast_damage(sample.charges, sample.health), sample.damage);
+        assert_eq!(ether_blast_damage(sample.charges, sample.health), sample.damage);
     }
     assert_eq!(
-        native_ether_blast_pulse_origin(Vec2::new(100.1, -200.2), Vec2::new(0.6, 0.8)),
+        ether_blast_pulse_origin(Vec2::new(100.1, -200.2), Vec2::new(0.6, 0.8)),
         Vec2::new(fixture.origin.x, fixture.origin.y)
     );
-    let mut rng = NativeRng::new(7);
-    let particles = create_native_ether_blast_particle_program(&mut rng);
+    let mut rng = Rng::new(7);
+    let particles = create_ether_blast_particle_program(&mut rng);
     assert_eq!(rng.index_a, fixture.program.rng.index_a);
     assert_eq!(rng.index_b, fixture.program.rng.index_b);
     assert_eq!(rng.words.as_slice(), fixture.program.rng.words);
@@ -106,7 +106,7 @@ fn ether_blast_charge_health_pulse_and_particle_program_replay_the_website() {
     }
     for sample in fixture.frames {
         for (particle, expected) in particles.iter().zip(sample.frames) {
-            let actual = native_ether_blast_particle_frame(*particle, sample.age);
+            let actual = ether_blast_particle_frame(*particle, sample.age);
             assert_eq!([actual.alpha, actual.position.x, actual.position.y], expected);
         }
     }

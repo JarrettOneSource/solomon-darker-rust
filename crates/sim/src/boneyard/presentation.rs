@@ -17,7 +17,7 @@ pub struct BoneyardWorldTransform {
 /// `nativeEnemyWorldFeedbackTransform`: zoom around the local wizard's screen
 /// position, preserving its anchor while the surrounding world pulses.
 #[must_use]
-pub fn native_enemy_world_feedback_transform(
+pub fn enemy_world_feedback_transform(
     camera_center: Vec2,
     zoom: f64,
     viewport: Vec2,
@@ -40,7 +40,7 @@ pub fn native_enemy_world_feedback_transform(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeArenaDisplacementCover {
+pub struct ArenaDisplacementCover {
     pub position: Vec2,
     pub rectangles: [BoneyardBounds; 2],
 }
@@ -48,18 +48,18 @@ pub struct NativeArenaDisplacementCover {
 /// Stock screen strips cover the exposed edge of the displaced light field.
 /// Signed rectangle dimensions preserve the source's asymmetric edge behavior.
 #[must_use]
-pub fn native_arena_displacement_cover(
+pub fn arena_displacement_cover(
     displacement: Vec2,
     viewport: Vec2,
     complex_lighting: bool,
-) -> Option<NativeArenaDisplacementCover> {
+) -> Option<ArenaDisplacementCover> {
     let x = fround(displacement.x);
     let y = fround(displacement.y);
     let magnitude_squared = fround(x * x + y * y);
     if !complex_lighting || !magnitude_squared.is_finite() || magnitude_squared < 1.0 {
         return None;
     }
-    Some(NativeArenaDisplacementCover {
+    Some(ArenaDisplacementCover {
         position: Vec2::new(x, y),
         rectangles: [
             BoneyardBounds::new(fround(-x), fround(-y), fround(viewport.x + x + x), y),
@@ -188,7 +188,7 @@ pub struct GateArt {
 }
 
 #[must_use]
-pub fn native_gate_art(hinge: Vec2, tip: Vec2) -> GateArt {
+pub fn gate_art(hinge: Vec2, tip: Vec2) -> GateArt {
     let upper_hinge = Vec2::new(hinge.x, hinge.y - 87.0);
     let upper_tip = Vec2::new(tip.x, tip.y - 87.0);
     let midpoint = Vec2::new((hinge.x + tip.x) / 2.0, (hinge.y + tip.y) / 2.0);

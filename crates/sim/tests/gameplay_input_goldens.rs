@@ -3,7 +3,7 @@ use solomon_sim::Vec2;
 use solomon_sim::hud::HudRect;
 use solomon_sim::input::{
     BeltInputSource, GameplayAction, HeldBeltInputs, StandardGamepadSnapshot,
-    StandardGameplayState, project_native_stick_aim, project_native_world_pointer,
+    StandardGameplayState, project_stick_aim, project_world_pointer,
 };
 
 #[test]
@@ -104,7 +104,7 @@ fn native_pointer_and_stick_aim_use_the_actual_viewport_and_player_anchor() {
         );
         let viewport = Vec2::new(a[2]["width"].as_f64().unwrap(), a[2]["height"].as_f64().unwrap());
         assert_eq!(
-            numeric_values(projected(project_native_world_pointer(
+            numeric_values(projected(project_world_pointer(
                 point(&a[0]),
                 surface,
                 viewport,
@@ -118,7 +118,7 @@ fn native_pointer_and_stick_aim_use_the_actual_viewport_and_player_anchor() {
         let a = &case["args"];
         let viewport = Vec2::new(a[2]["width"].as_f64().unwrap(), a[2]["height"].as_f64().unwrap());
         assert_eq!(
-            numeric_values(projected(project_native_stick_aim(
+            numeric_values(projected(project_stick_aim(
                 point(&a[0]),
                 point(&a[1]),
                 viewport,

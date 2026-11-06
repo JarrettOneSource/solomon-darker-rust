@@ -7,41 +7,37 @@ use crate::enemies::projectiles::EnemyProjectileEffectKind;
 use crate::enemies::world::EnemyWorld;
 use crate::float::fround;
 use crate::painter::{PainterRegistration, WorldManagerLane};
-use crate::secondary::NativeSecondarySimulationState;
+use crate::secondary::SecondarySimulationState;
 use crate::spells::air::{
-    NativeAirLightPlan, build_native_air_contact_light_source, build_native_air_path_light_sources,
+    AirLightPlan, build_air_contact_light_source, build_air_path_light_sources,
 };
 use crate::spells::model::{PrimarySpellProjectile, PrimarySpellTransient, SpellState};
-use crate::spells::weld::{
-    NativeWeldMeteorPhase, NativeWeldPersistentActorState, NativeWeldWorldActor,
-};
+use crate::spells::weld::{WeldMeteorPhase, WeldPersistentActorState, WeldWorldActor};
 
 use super::super::lighting::enemy::{
-    NativeEnemyLightOwner, NativeEnemyProjectileEffectLightKind, native_enemy_light_sources,
-    native_enemy_projectile_effect_light_provider, native_enemy_projectile_light_provider,
+    EnemyLightOwner, EnemyProjectileEffectLightKind, enemy_light_sources,
+    enemy_projectile_effect_light_provider, enemy_projectile_light_provider,
 };
 use super::super::lighting::secondary::{
-    native_secondary_misc_light_source_at_age, native_secondary_provider_light_source_at_age,
+    secondary_misc_light_source_at_age, secondary_provider_light_source_at_age,
 };
 use super::super::lighting::weld::{
-    native_weld_meteor_light_source, native_weld_projectile_light_source,
-    native_weld_rock_light_source,
+    weld_meteor_light_source, weld_projectile_light_source, weld_rock_light_source,
 };
 use super::super::lighting::{
-    NativeBoneyardLightSource, ether_primary_impact_light_source, native_boulder_light_source,
-    native_fire_ember_light_source, native_fire_explosion_light_source,
-    native_fire_good_imp_light_source, native_fire_impact_light_source,
-    native_fire_patch_light_source, native_fireball_light_source, native_missile_light_source,
+    BoneyardLightSource, boulder_light_source, ether_primary_impact_light_source,
+    fire_ember_light_source, fire_explosion_light_source, fire_good_imp_light_source,
+    fire_impact_light_source, fire_patch_light_source, fireball_light_source, missile_light_source,
 };
 use super::{
     BoneyardWorldLightQuery, STOCK_VIEWPORT, WORLD_LIGHT_ZOOM, WorldLightOwner, WorldLightPlayer,
-    WorldLightScene, WorldMiscLightOwner, native_primary_view_bounds, native_region_point_gain,
+    WorldLightScene, WorldMiscLightOwner, primary_view_bounds, region_point_gain,
 };
 
 #[derive(Clone, Copy, Default)]
 pub struct BoneyardLightEnvironment<'a> {
     pub primary_spells: Option<&'a SpellState>,
-    pub secondary_abilities: Option<&'a NativeSecondarySimulationState>,
+    pub secondary_abilities: Option<&'a SecondarySimulationState>,
 }
 
 /// Logical queries use the accepted tick and current point gain. The renderer supplies its
@@ -71,7 +67,7 @@ pub fn boneyard_world_light_query(
     let cameras: Vec<_> = players
         .iter()
         .map(|player| {
-            native_primary_view_bounds(
+            primary_view_bounds(
                 scene.camera_bounds,
                 player.position,
                 player.viewport.unwrap_or(STOCK_VIEWPORT),
@@ -84,7 +80,7 @@ pub fn boneyard_world_light_query(
         let mut gain: f64 = 0.0;
         for camera in &cameras {
             let center = Vec2::new(camera.x + camera.width / 2.0, camera.y + camera.height / 2.0);
-            gain = gain.max(native_region_point_gain(position, center, camera.width, false));
+            gain = gain.max(region_point_gain(position, center, camera.width, false));
         }
         gain
     };
@@ -131,8 +127,7 @@ pub fn collect_boneyard_entity_lights(
     let mut providers = Vec::new();
     let mut misc = Vec::new();
     for actor in enemies.actors.iter() {
-        let sources =
-            native_enemy_light_sources(NativeEnemyLightOwner::from(actor), frame, multiple_shadows);
+        let sources = enemy_light_sources(EnemyLightOwner::from(actor), frame, multiple_shadows);
         if !sources.is_empty() {
             providers.push(WorldLightOwner {
                 registration: PainterRegistration {
@@ -152,14 +147,14 @@ pub fn collect_boneyard_entity_lights(
             fround(2.0 - effect.age_ticks as f64 * 0.004_999_999_888_241_291).clamp(0.0, 1.0);
         append(
             &mut providers,
-            Some(NativeBoneyardLightSource::new(effect.position, 3.0, intensity, multiple_shadows)),
+            Some(BoneyardLightSource::new(effect.position, 3.0, intensity, multiple_shadows)),
             effect.painter_registration,
         );
     }
     for spell in enemies.boss_spells.iter() {
         append(
             &mut providers,
-            super::super::lighting::native_boss_spell_light(spell, frame, multiple_shadows),
+            super::super::lighting::boss_spell_light(spell, frame, multiple_shadows),
             Some(spell.owner.painter_registration),
         );
     }
@@ -171,7 +166,7 @@ pub fn collect_boneyard_entity_lights(
                 continue;
             }
             let source = match spell {
-                PrimarySpellProjectile::Weld(spell) => native_weld_projectile_light_source(
+                PrimarySpellProjectile::Weld(spell) => weld_projectile_light_source(
                     spell.build_id,
                     common.id as usize,
                     common.position,
@@ -179,27 +174,21 @@ pub fn collect_boneyard_entity_lights(
                     multiple_shadows,
                 ),
                 PrimarySpellProjectile::Earth(_) => {
-                    native_boulder_light_source(common.position, common.charge, multiple_shadows)
+                    boulder_light_source(common.position, common.charge, multiple_shadows)
                 }
-                PrimarySpellProjectile::Ether(_) => native_missile_light_source(
-                    common.id as u32,
-                    common.position,
-                    frame,
-                    multiple_shadows,
-                ),
-                PrimarySpellProjectile::Fire(_) => native_fireball_light_source(
-                    common.id,
-                    common.position,
-                    frame,
-                    multiple_shadows,
-                ),
+                PrimarySpellProjectile::Ether(_) => {
+                    missile_light_source(common.id as u32, common.position, frame, multiple_shadows)
+                }
+                PrimarySpellProjectile::Fire(_) => {
+                    fireball_light_source(common.id, common.position, frame, multiple_shadows)
+                }
             };
             append(&mut providers, Some(source), Some(common.registration));
         }
     }
     for projectile in enemies.projectiles.iter() {
         let state = projectile.state();
-        let source = native_enemy_projectile_light_provider(
+        let source = enemy_projectile_light_provider(
             projectile.kind(),
             state.payload,
             state.id,
@@ -213,18 +202,16 @@ pub fn collect_boneyard_entity_lights(
         let state = &effect.state;
         let kind = match effect.kind {
             EnemyProjectileEffectKind::DemonFire { .. } => {
-                NativeEnemyProjectileEffectLightKind::DemonFire
+                EnemyProjectileEffectLightKind::DemonFire
             }
             EnemyProjectileEffectKind::DemonExplosionLitArray => {
-                NativeEnemyProjectileEffectLightKind::DemonExplosionLitArray
+                EnemyProjectileEffectLightKind::DemonExplosionLitArray
             }
-            EnemyProjectileEffectKind::FireBurst => NativeEnemyProjectileEffectLightKind::FireBurst,
-            EnemyProjectileEffectKind::GuidedImpact => {
-                NativeEnemyProjectileEffectLightKind::GuidedImpact
-            }
-            _ => NativeEnemyProjectileEffectLightKind::Unlit,
+            EnemyProjectileEffectKind::FireBurst => EnemyProjectileEffectLightKind::FireBurst,
+            EnemyProjectileEffectKind::GuidedImpact => EnemyProjectileEffectLightKind::GuidedImpact,
+            _ => EnemyProjectileEffectLightKind::Unlit,
         };
-        let source = native_enemy_projectile_effect_light_provider(
+        let source = enemy_projectile_effect_light_provider(
             kind,
             state.age_ticks,
             state.alpha,
@@ -242,26 +229,22 @@ pub fn collect_boneyard_entity_lights(
                 continue;
             }
             let source = match effect {
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(actor)) => {
-                    native_weld_meteor_light_source(
+                PrimarySpellTransient::Weld(WeldWorldActor::Meteor(actor)) => {
+                    weld_meteor_light_source(
                         actor.position,
                         actor.fall_height,
-                        actor.phase == NativeWeldMeteorPhase::Impact,
+                        actor.phase == WeldMeteorPhase::Impact,
                         actor.impact_ticks_remaining,
                         actor.impact_radius_scalar,
                     )
                 }
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(actor)) => {
+                PrimarySpellTransient::Weld(WeldWorldActor::Persistent(actor)) => {
                     let scale = match actor {
-                        NativeWeldPersistentActorState::EtherealBoulder(actor) => actor.scale,
-                        NativeWeldPersistentActorState::Hailstones(actor) => actor.scale,
-                        NativeWeldPersistentActorState::MeteorField(_) => continue,
+                        WeldPersistentActorState::EtherealBoulder(actor) => actor.scale,
+                        WeldPersistentActorState::Hailstones(actor) => actor.scale,
+                        WeldPersistentActorState::MeteorField(_) => continue,
                     };
-                    Some(native_weld_rock_light_source(
-                        actor.common().origin,
-                        scale,
-                        multiple_shadows,
-                    ))
+                    Some(weld_rock_light_source(actor.common().origin, scale, multiple_shadows))
                 }
                 PrimarySpellTransient::FirePatch(effect) => {
                     if common.age_ticks > 0 {
@@ -272,7 +255,7 @@ pub fn collect_boneyard_entity_lights(
                             .expect("Fire patch light has its native painter root");
                         append(
                             &mut providers,
-                            Some(native_fire_patch_light_source(
+                            Some(fire_patch_light_source(
                                 effect.position,
                                 effect.life,
                                 multiple_shadows,
@@ -282,26 +265,21 @@ pub fn collect_boneyard_entity_lights(
                     }
                     continue;
                 }
-                PrimarySpellTransient::FireEmber(effect) => Some(native_fire_ember_light_source(
-                    common.id,
-                    effect.position,
-                    effect.life,
-                    frame,
-                )),
-                PrimarySpellTransient::FireExplosion(effect) => native_fire_explosion_light_source(
+                PrimarySpellTransient::FireEmber(effect) => {
+                    Some(fire_ember_light_source(common.id, effect.position, effect.life, frame))
+                }
+                PrimarySpellTransient::FireExplosion(effect) => fire_explosion_light_source(
                     effect.origin,
                     common.age_ticks,
                     fire_explosion_point_gain(common.id, effect.origin),
                     multiple_shadows,
                 ),
-                PrimarySpellTransient::FireGoodImp(effect) => {
-                    Some(native_fire_good_imp_light_source(
-                        common.id,
-                        effect.position,
-                        effect.light_glow,
-                        frame,
-                    ))
-                }
+                PrimarySpellTransient::FireGoodImp(effect) => Some(fire_good_imp_light_source(
+                    common.id,
+                    effect.position,
+                    effect.light_glow,
+                    frame,
+                )),
                 PrimarySpellTransient::EtherImpact(effect) => {
                     Some(ether_primary_impact_light_source(effect.origin, common.age_ticks))
                 }
@@ -310,10 +288,10 @@ pub fn collect_boneyard_entity_lights(
                         .and_then(|ages| ages.get(&common.id))
                         .copied()
                         .unwrap_or(common.age_ticks as f64);
-                    Some(native_fire_impact_light_source(effect.origin, age))
+                    Some(fire_impact_light_source(effect.origin, age))
                 }
                 PrimarySpellTransient::Air(effect) => {
-                    let source = build_native_air_contact_light_source(
+                    let source = build_air_contact_light_source(
                         common.id,
                         common.age_ticks,
                         Vec2::new(
@@ -337,7 +315,7 @@ pub fn collect_boneyard_entity_lights(
                             append_ordinal: 0,
                             owner: WorldLightOwner {
                                 registration: owner,
-                                sources: build_native_air_path_light_sources(
+                                sources: build_air_path_light_sources(
                                     common.id,
                                     effect.birth_tick,
                                     effect.origin,
@@ -372,7 +350,7 @@ pub fn collect_boneyard_entity_lights(
             .unwrap_or(actor.age_ticks as f64);
         append(
             &mut providers,
-            native_secondary_provider_light_source_at_age(
+            secondary_provider_light_source_at_age(
                 actor,
                 age,
                 frame,
@@ -381,7 +359,7 @@ pub fn collect_boneyard_entity_lights(
             ),
             actor.light_registration,
         );
-        if let Some(source) = native_secondary_misc_light_source_at_age(actor, age) {
+        if let Some(source) = secondary_misc_light_source_at_age(actor, age) {
             let registration = actor
                 .light_registration
                 .expect("secondary MiscLight has its native owner registration");
@@ -403,7 +381,7 @@ pub fn collect_boneyard_entity_lights(
         let mut append_ordinal = 0;
         for actor in &secondary_actors {
             if actor.target_id == Some(pulse.owner_actor_id)
-                && native_secondary_misc_light_source_at_age(
+                && secondary_misc_light_source_at_age(
                     actor,
                     secondary_age_ticks
                         .and_then(|ages| ages.get(&actor.id))
@@ -422,7 +400,7 @@ pub fn collect_boneyard_entity_lights(
             append_ordinal,
             owner: WorldLightOwner {
                 registration: pulse.light_registration,
-                sources: build_native_air_path_light_sources(
+                sources: build_air_path_light_sources(
                     u64::from(pulse.seed),
                     pulse.tick,
                     pulse.source,
@@ -442,7 +420,7 @@ pub fn collect_boneyard_entity_lights(
 
 fn append(
     providers: &mut Vec<WorldLightOwner>,
-    source: Option<NativeBoneyardLightSource>,
+    source: Option<BoneyardLightSource>,
     registration: Option<PainterRegistration>,
 ) {
     if let Some(source) = source {
@@ -453,8 +431,8 @@ fn append(
     }
 }
 
-fn air_source(source: NativeAirLightPlan) -> NativeBoneyardLightSource {
-    NativeBoneyardLightSource::new(
+fn air_source(source: AirLightPlan) -> BoneyardLightSource {
+    BoneyardLightSource::new(
         source.position,
         source.radius,
         source.intensity,

@@ -40,8 +40,6 @@ pub mod ml_bot;
 pub mod mobile_ui;
 pub mod modding;
 pub mod movement;
-pub mod native_ui_notebox;
-pub mod native_ui_text;
 pub mod observer_activity;
 pub mod painter;
 #[cfg(feature = "persistence")]
@@ -67,6 +65,8 @@ pub mod social;
 pub mod spells;
 pub mod spline;
 pub mod tutorial_surface;
+pub mod ui_notebox;
+pub mod ui_text;
 pub mod viewport;
 pub mod world_labels;
 
@@ -74,4 +74,4 @@ pub use appearance::{StarterColorOwner, StarterEquipmentAppearance};
 pub use collision::{CollisionRectangle, SecondaryResponse, Vec2};
 pub use hub::{HubCollisionMove, HubSegment, HubWizard, HubWizardPlan};
 pub use movement::{EnemyActor, EnemyFamily, KnockbackState, PlayerActor, PlayerMovementState};
-pub use rng::NativeRng;
+pub use rng::Rng;

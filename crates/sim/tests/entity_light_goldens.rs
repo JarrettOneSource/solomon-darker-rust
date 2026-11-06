@@ -4,7 +4,7 @@ mod support;
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::lighting::NativeBoneyardLightSource;
+use solomon_sim::boneyard::lighting::BoneyardLightSource;
 use solomon_sim::boneyard::lighting::enemy::*;
 use solomon_sim::boneyard::lighting::secondary::*;
 use solomon_sim::boneyard::lighting::weld::*;
@@ -12,13 +12,13 @@ use solomon_sim::enemies::EnemyToken;
 use solomon_sim::enemies::model::EnemyLighting;
 use solomon_sim::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use solomon_sim::painter::WorldManagerLane;
-use solomon_sim::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
+use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
 
-fn source(value: NativeBoneyardLightSource) -> Value {
+fn source(value: BoneyardLightSource) -> Value {
     let mut result = json!({"castsDirectionalShadow":value.casts_directional_shadow,"intensity":value.intensity,
         "position":{"x":value.position.x,"y":value.position.y},"radius":value.radius});
     if let Some(scale) = value.raster_scale {
@@ -27,7 +27,7 @@ fn source(value: NativeBoneyardLightSource) -> Value {
     result
 }
 
-fn candidate(value: Option<NativeBoneyardLightProviderCandidate>) -> Value {
+fn candidate(value: Option<BoneyardLightProviderCandidate>) -> Value {
     value.map_or(Value::Null,|value|json!({"lane":match value.lane { WorldManagerLane::Actor => "actor",WorldManagerLane::Transient => "transient" },"source":source(value.source)}))
 }
 
@@ -37,7 +37,7 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
         serde_json::from_str(include_str!("fixtures/website/entity-light-goldens.json")).unwrap();
     for (index, row) in fixture["enemies"].as_array().unwrap().iter().enumerate() {
         let value = &row["owner"];
-        let owner = NativeEnemyLightOwner {
+        let owner = EnemyLightOwner {
             burning: value["burning"].as_bool().unwrap(),
             scale: value["scale"].as_f64().unwrap(),
             demon_skull_body_offset: point(&value["demonSkull"]["bodyOffset"]),
@@ -53,7 +53,7 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
                 provider_copies: value["lighting"]["providerCopies"].as_u64().unwrap() as u8,
             },
         };
-        let sources = native_enemy_light_sources(
+        let sources = enemy_light_sources(
             owner,
             row["frame"].as_u64().unwrap(),
             row["multipleShadows"].as_bool().unwrap(),
@@ -83,7 +83,7 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
             "poison" => EnemyProjectilePayload::Poison,
             _ => panic!("unknown payload"),
         };
-        let actual = native_enemy_projectile_light_provider(
+        let actual = enemy_projectile_light_provider(
             kind,
             payload,
             value["id"].as_u64().unwrap() as usize,
@@ -101,15 +101,13 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
     for (index, row) in fixture["effects"].as_array().unwrap().iter().enumerate() {
         let value = &row["owner"];
         let kind = match value["kind"].as_str().unwrap() {
-            "demon-fire" => NativeEnemyProjectileEffectLightKind::DemonFire,
-            "demon-explosion-lit-array" => {
-                NativeEnemyProjectileEffectLightKind::DemonExplosionLitArray
-            }
-            "fire-burst" => NativeEnemyProjectileEffectLightKind::FireBurst,
-            "guided-impact" => NativeEnemyProjectileEffectLightKind::GuidedImpact,
-            _ => NativeEnemyProjectileEffectLightKind::Unlit,
+            "demon-fire" => EnemyProjectileEffectLightKind::DemonFire,
+            "demon-explosion-lit-array" => EnemyProjectileEffectLightKind::DemonExplosionLitArray,
+            "fire-burst" => EnemyProjectileEffectLightKind::FireBurst,
+            "guided-impact" => EnemyProjectileEffectLightKind::GuidedImpact,
+            _ => EnemyProjectileEffectLightKind::Unlit,
         };
-        let actual = native_enemy_projectile_effect_light_provider(
+        let actual = enemy_projectile_effect_light_provider(
             kind,
             value["ageTicks"].as_u64().unwrap(),
             value["alpha"].as_f64().unwrap(),
@@ -127,11 +125,11 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
     }
     for (index, row) in fixture["secondary"].as_array().unwrap().iter().enumerate() {
         let value = &row["owner"];
-        let kind = NativeSecondaryActorKind::ALL
+        let kind = SecondaryActorKind::ALL
             .into_iter()
             .find(|kind| kind.as_str() == value["kind"].as_str().unwrap())
             .unwrap();
-        let mut actor = NativeSecondaryActorState::new(
+        let mut actor = SecondaryActorState::new(
             value["id"].as_u64().unwrap(),
             kind,
             "local".into(),
@@ -146,7 +144,7 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
         actor.phase = value["phase"].as_f64().unwrap();
         actor.scale = value["scale"].as_f64().unwrap();
         actor.slow_factor = value["slowFactor"].as_f64().unwrap();
-        let actual = native_secondary_provider_light_source(
+        let actual = secondary_provider_light_source(
             &actor,
             row["frame"].as_u64().unwrap(),
             row["multipleShadows"].as_bool().unwrap(),
@@ -159,7 +157,7 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
             &[],
         );
         support::assert_website_json(
-            &native_secondary_misc_light_source(&actor).map_or(Value::Null, source),
+            &secondary_misc_light_source(&actor).map_or(Value::Null, source),
             &row["misc"],
             &format!("secondary-misc[{index}]"),
             &[],
@@ -168,19 +166,19 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
     for (index, row) in fixture["weld"].as_array().unwrap().iter().enumerate() {
         let value = &row["owner"];
         let actual = match row["kind"].as_str().unwrap() {
-            "projectile" => Some(native_weld_projectile_light_source(
+            "projectile" => Some(weld_projectile_light_source(
                 value["buildId"].as_u64().unwrap() as u32,
                 value["id"].as_u64().unwrap() as usize,
                 point(&value["position"]),
                 row["frame"].as_u64().unwrap(),
                 row["multipleShadows"].as_bool().unwrap(),
             )),
-            "rock" => Some(native_weld_rock_light_source(
+            "rock" => Some(weld_rock_light_source(
                 point(&value["origin"]),
                 value["scale"].as_f64().unwrap(),
                 row["multipleShadows"].as_bool().unwrap(),
             )),
-            "meteor" => native_weld_meteor_light_source(
+            "meteor" => weld_meteor_light_source(
                 point(&value["position"]),
                 value["fallHeight"].as_f64().unwrap(),
                 value["phase"] == "impact",

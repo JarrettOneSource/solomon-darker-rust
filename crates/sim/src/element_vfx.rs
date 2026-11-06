@@ -107,16 +107,12 @@ const STEAM_ANCHORS: [[f64; 2]; 6] = [
 ];
 
 #[must_use]
-pub fn native_element_vfx_plan(
-    element: WizardElement,
-    tick: f64,
-    scale: f64,
-) -> Vec<ElementVfxDraw> {
-    native_element_vfx_plan_at_phase(element, tick.floor(), scale)
+pub fn element_vfx_plan(element: WizardElement, tick: f64, scale: f64) -> Vec<ElementVfxDraw> {
+    element_vfx_plan_at_phase(element, tick.floor(), scale)
 }
 
 #[must_use]
-pub fn native_element_vfx_plan_at_phase(
+pub fn element_vfx_plan_at_phase(
     element: WizardElement,
     phase: f64,
     scale: f64,
@@ -131,7 +127,7 @@ pub fn native_element_vfx_plan_at_phase(
 }
 
 #[must_use]
-pub fn native_selected_primary_element_vfx_plan(
+pub fn selected_primary_element_vfx_plan(
     skill_id: u32,
     tick: f64,
     scale: f64,
@@ -146,7 +142,7 @@ pub fn native_selected_primary_element_vfx_plan(
         _ => None,
     };
     if let Some(element) = element {
-        return native_element_vfx_plan_at_phase(element, tick, scale);
+        return element_vfx_plan_at_phase(element, tick, scale);
     }
     selected_weld_plan(skill_id, tick, scale)
 }
@@ -163,7 +159,7 @@ fn js_i32(value: f64) -> i32 {
     value.trunc().rem_euclid(4_294_967_296.0) as u32 as i32
 }
 
-fn native_hash(value: i32) -> u32 {
+fn integer_hash(value: i32) -> u32 {
     let mut mixed = value.wrapping_shl(21) ^ value;
     mixed ^= ((mixed as u32) >> 11) as i32;
     mixed = (mixed.wrapping_shl(4) ^ mixed).wrapping_mul(0x0a67_cfcf);
@@ -172,7 +168,7 @@ fn native_hash(value: i32) -> u32 {
 
 fn visual_random(tick: f64, channel: u32) -> f64 {
     let salted = js_i32(tick + 1.0) ^ (channel.wrapping_add(1).wrapping_mul(0x045d_9f3b) as i32);
-    f64::from(native_hash(salted)) / 2_147_483_648.0
+    f64::from(integer_hash(salted)) / 2_147_483_648.0
 }
 
 fn ether_plan(tick: f64, scale: f64) -> Vec<ElementVfxDraw> {
@@ -251,15 +247,15 @@ fn air_plan(tick: f64, scale: f64) -> Vec<ElementVfxDraw> {
     let primary = pulse(tick, 15.0, 3.5);
     let secondary = pulse(tick, 1.0, 3.5);
     let stage = frame(tick, 8, 1.0);
-    let mut hash = native_hash(js_i32((tick / 8.0).trunc()));
+    let mut hash = integer_hash(js_i32((tick / 8.0).trunc()));
     let angle = f64::from(hash % 36_000) / 360_000.0 * 360.0 * std::f64::consts::PI / 180.0;
-    hash = native_hash(hash as i32);
+    hash = integer_hash(hash as i32);
     let radius = f64::from(hash % 36_000) / 360_000.0 * 10.0;
-    hash = native_hash(hash as i32);
+    hash = integer_hash(hash as i32);
     let rotation = f64::from(hash % 36_000) / 360_000.0 * 360.0;
-    hash = native_hash(hash as i32);
+    hash = integer_hash(hash as i32);
     let particle_scale = (0.75 + f64::from(hash % 36_000) / 360_000.0 * 0.25) * scale;
-    hash = native_hash(hash as i32);
+    hash = integer_hash(hash as i32);
     let frame = (hash % 4) as usize;
     let alpha = float::sin(stage as f64 * std::f64::consts::PI / 8.0);
     vec![

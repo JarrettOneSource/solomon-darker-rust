@@ -6,8 +6,8 @@ use solomon_sim::hub::interaction::{
     HubInteractionId, HubNpcChatChoice, HubNpcChatContent, HubNpcChatNext, consume_hub_npc_speech,
     create_hub_npc_chat_content, hub_dialogue_record, hub_npc_chat_choices, hub_npc_question,
 };
-use solomon_sim::native_ui_text::{NativeUiFontName, wrap_native_ui_text_runs};
 use solomon_sim::player_panels::dialogue::{hub_chat_scroll_frame, hub_chat_text_runs};
+use solomon_sim::ui_text::{UiFontName, wrap_ui_text_runs};
 
 #[test]
 fn current_dialogue_one_shot_history_emphasis_and_accelerated_scroll_match_website() {
@@ -58,7 +58,7 @@ fn current_dialogue_one_shot_history_emphasis_and_accelerated_scroll_match_websi
         let actual: Vec<_> =
             runs.iter().map(|run| json!({"text":run.text,"italic":run.italic})).collect();
         assert_eq!(json!(actual), case["runs"]);
-        let lines = wrap_native_ui_text_runs(&runs, NativeUiFontName::Menu, 477.0);
+        let lines = wrap_ui_text_runs(&runs, UiFontName::Menu, 477.0);
         let actual: Vec<Vec<_>> = lines
             .iter()
             .map(|line| {

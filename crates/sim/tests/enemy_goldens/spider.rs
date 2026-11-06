@@ -20,13 +20,13 @@ fn spline(value: &Value) -> NaturalSpline {
     };
     NaturalSpline { extent: number(value, "extent"), x: axis(&value["x"]), y: axis(&value["y"]) }
 }
-pub(super) fn silk_state_json(state: &NativeSilkState) -> Value {
+pub(super) fn silk_state_json(state: &SilkState) -> Value {
     json!({"forceAccumulator":state.force_accumulator,"ageTicks":state.age_ticks,"phase":state.phase,"ended":state.ended,
         "position":point_json(state.position),"center":natural_spline_json(&state.center),"wave":natural_spline_json(&state.wave),
         "height":state.height,"alpha":state.alpha,"waveScale":state.wave_scale,"drift":point_json(state.drift),"driftVelocity":point_json(state.drift_velocity),"cocoonHealth":state.cocoon_health})
 }
-fn silk_state(value: &Value) -> NativeSilkState {
-    NativeSilkState {
+fn silk_state(value: &Value) -> SilkState {
+    SilkState {
         force_accumulator: number(value, "forceAccumulator"),
         age_ticks: value["ageTicks"].as_u64().unwrap(),
         phase: number(value, "phase"),
@@ -42,10 +42,10 @@ fn silk_state(value: &Value) -> NativeSilkState {
         cocoon_health: number(value, "cocoonHealth"),
     }
 }
-fn silk_creation_json(created: &NativeSilkCreation) -> Value {
+fn silk_creation_json(created: &SilkCreation) -> Value {
     json!({"state":silk_state_json(&created.state),"soundIndex":created.sound_index,"soundPitch":created.sound_pitch,"soundPosition":point_json(created.sound_position)})
 }
-fn assert_silk_creation_equal(created: &NativeSilkCreation, expected: &Value, label: &str) {
+fn assert_silk_creation_equal(created: &SilkCreation, expected: &Value, label: &str) {
     let mut actual = silk_creation_json(created);
     for axis in ["x", "y"] {
         assert_trig(
@@ -85,7 +85,7 @@ fn spider_state(value: &Value) -> SpiderBrain {
 fn assert_spider_sample(
     actual: &SpiderMovementResult,
     expected: &Value,
-    rng: &solomon_sim::NativeRng,
+    rng: &solomon_sim::Rng,
     label: &str,
 ) {
     let mut state = brain_json(&EnemyBrain::Spider(actual.state.clone()));
@@ -114,7 +114,7 @@ fn assert_spider_sample(
     }
     assert_json_equal(&json!(rng_record(rng)), &expected["rng"], &format!("{label} RNG"));
 }
-fn fade_line_json(state: &NativeFadeLineState) -> Value {
+fn fade_line_json(state: &FadeLineState) -> Value {
     json!({"start":point_json(state.start),"middle":point_json(state.middle),"end":point_json(state.end),"velocity":point_json(state.velocity),
         "opacity":state.opacity,"opacityLossPerTick":state.opacity_loss_per_tick})
 }
@@ -136,8 +136,8 @@ pub(super) fn dead_spider_json(state: &DeadSpiderState) -> Value {
 fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_website() {
     let goldens: Value = serde_json::from_str(&fixture("enemy-spider-goldens.json")).unwrap();
     for (index, case) in goldens["silkCases"].as_array().unwrap().iter().enumerate() {
-        let mut rng = solomon_sim::NativeRng::new(case["seed"].as_i64().unwrap());
-        let created = create_native_silk(
+        let mut rng = solomon_sim::Rng::new(case["seed"].as_i64().unwrap());
+        let created = create_silk(
             point_from_json(&case["position"]),
             point_from_json(&case["target"]["position"]),
             point_from_json(&case["target"]["velocityPerTick"]),
@@ -151,7 +151,7 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
         let mut state = Some(created.state);
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for step in 0..=1800 {
-            if step > 0 && state.as_mut().is_some_and(|state| !step_native_silk(state)) {
+            if step > 0 && state.as_mut().is_some_and(|state| !step_silk(state)) {
                 state = None;
             }
             if let Some(expected) =
@@ -172,7 +172,7 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
     }
     for case in goldens["movements"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
-        let mut rng = solomon_sim::NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = solomon_sim::Rng::new(case["seed"].as_i64().unwrap());
         let mut state = spider_state(&case["initial"]);
         let mut position = Vec2::new(150.0, 250.0);
         let mut heading = 0.0;
@@ -195,7 +195,7 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
             shared = shared.saturating_sub(1);
             let mut route =
                 |goal| SpiderRouteGoal { goal, following_route: true, turn_around: step % 50 == 0 };
-            let result = move_native_spider(
+            let result = move_spider(
                 &state,
                 SpiderMovementRequest {
                     route_goal: if case["route"].as_bool() == Some(true) {
@@ -263,7 +263,7 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
                 registration_ordinal: 17,
             },
         });
-        let mut rng = solomon_sim::NativeRng::new(777);
+        let mut rng = solomon_sim::Rng::new(777);
         let queries = std::cell::RefCell::new(Vec::new());
         let light_at = |position: Vec2| {
             let light = match mode {
@@ -324,13 +324,13 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
     let mut web = None;
     for sample in goldens["webSamples"].as_array().unwrap() {
         web = if sample["kind"] == "apply" {
-            Some(apply_native_webbed(web, number(sample, "strength")))
+            Some(apply_webbed(web, number(sample, "strength")))
         } else {
-            web.and_then(|web| step_native_webbed(web, Vec2::new(1.0, 0.0)))
+            web.and_then(|web| step_webbed(web, Vec2::new(1.0, 0.0)))
         };
         assert_json_equal(&webbed_json(web), &sample["state"], "webbed sequence");
         assert_json_equal(
-            &json!(native_webbed_movement_scale(web.as_ref())),
+            &json!(webbed_movement_scale(web.as_ref())),
             &sample["scale"],
             "webbed movement scale",
         );
@@ -338,21 +338,19 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
     for sample in goldens["cocoon"].as_array().unwrap() {
         let heading = number(sample, "heading");
         assert_json_equal(
-            &point_json(native_cocoon_position(Vec2::new(100.0, 200.0), heading)),
+            &point_json(cocoon_position(Vec2::new(100.0, 200.0), heading)),
             &sample["position"],
             "Cocoon position",
         );
-        assert_json_equal(&point_json(native_cocoon_tilt(heading)), &sample["tilt"], "Cocoon tilt");
+        assert_json_equal(&point_json(cocoon_tilt(heading)), &sample["tilt"], "Cocoon tilt");
     }
     for case in goldens["remains"].as_array().unwrap() {
         let heading = number(case, "heading");
-        let mut state = Some(create_native_dead_spider(Vec2::new(150.0, 250.0), heading));
-        let mut rng = solomon_sim::NativeRng::new(731);
+        let mut state = Some(create_dead_spider(Vec2::new(150.0, 250.0), heading));
+        let mut rng = solomon_sim::Rng::new(731);
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for step in 0..=2100 {
-            if step > 0
-                && state.as_mut().is_some_and(|state| !step_native_dead_spider(state, &mut rng))
-            {
+            if step > 0 && state.as_mut().is_some_and(|state| !step_dead_spider(state, &mut rng)) {
                 state = None;
             }
             if let Some(sample) =
@@ -364,7 +362,7 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
                     &format!("dead Spider heading {heading} step {step}"),
                 );
                 assert_json_equal(
-                    &json!(state.as_ref().and_then(native_dead_spider_entry)),
+                    &json!(state.as_ref().and_then(dead_spider_entry)),
                     &sample["entry"],
                     "dead Spider record",
                 );

@@ -5,7 +5,7 @@ use solomon_sim::Vec2;
 use solomon_sim::audio::combat::*;
 use solomon_sim::audio::{AudioCue, AudioEvent, AudioOptions};
 use solomon_sim::boneyard::loot::{BoneyardLootEvent, BoneyardLootEventType, BoneyardLootSound};
-use solomon_sim::enemies::boss_spell::{BossSpellKind, BossSpellOwner, NativeBossSpell};
+use solomon_sim::enemies::boss_spell::{BossSpell, BossSpellKind, BossSpellOwner};
 use solomon_sim::enemies::config::EnemyArenaScalars;
 use solomon_sim::enemies::model::*;
 use solomon_sim::enemies::path::EnemyNavigation;
@@ -14,7 +14,7 @@ use solomon_sim::enemies::{EnemyFlag, EnemySpawnIntent, EnemyToken};
 use solomon_sim::painter::{WorldManagerLane, WorldPainterOrder};
 use solomon_sim::profile::WizardElement;
 use solomon_sim::spells::casting::PlayerPrimaryCastState;
-use solomon_sim::spells::fire::{CreateNativeFirePatchOptions, create_native_fire_patch};
+use solomon_sim::spells::fire::{CreateFirePatchOptions, create_fire_patch};
 use solomon_sim::spells::model::{FirePatchType, SpellState};
 
 struct EmptyGeometry;
@@ -42,7 +42,7 @@ fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
 
-fn sound_json(request: Option<NativeEnemyEventSoundRequest>) -> Value {
+fn sound_json(request: Option<EnemyEventSoundRequest>) -> Value {
     request.map_or(Value::Null, |request| json!({ "cue": request.cue.as_str(), "playbackRate": request.playback_rate,
         "sourcePosition": request.source_position.map(|position| json!({ "x": position.x, "y": position.y })), "volume": request.volume }))
 }
@@ -122,10 +122,10 @@ fn ambient_world(value: &Value) -> EnemyWorld {
                 roll_loot_seed: None,
                 native_visibility: None,
                 projected_point_visible: None,
-                native_view_bounds: None,
+                view_bounds: None,
                 puppet_targets: &[],
                 light_at: None,
-                native_movement_view: None,
+                movement_view: None,
             },
             &mut order,
         );
@@ -143,8 +143,8 @@ fn ambient_world(value: &Value) -> EnemyWorld {
     for input in value["world"]["bossSpells"].as_array().unwrap() {
         let kind = match input["kind"].as_str().unwrap() {
             "green-fire" => {
-                let fire = create_native_fire_patch(
-                    CreateNativeFirePatchOptions {
+                let fire = create_fire_patch(
+                    CreateFirePatchOptions {
                         id: 1,
                         owner_id: "boss".to_owned(),
                         world_key: "boneyard:audio".to_owned(),
@@ -208,7 +208,7 @@ fn ambient_world(value: &Value) -> EnemyWorld {
             },
             kind => panic!("ambient fixture spell {kind}"),
         };
-        world.boss_spells.push(NativeBossSpell {
+        world.boss_spells.push(BossSpell {
             owner: BossSpellOwner {
                 age_ticks: 0,
                 damage: 0.0,
@@ -252,11 +252,11 @@ fn enemy_sound_routing_and_boss_ambient_mixes_match_the_source() {
         event.pitch = input["pitch"].as_f64();
         event.gain_scale = input["gainScale"].as_f64();
         event.source_position = input.get("sourcePosition").map(point);
-        compare(&sound_json(native_enemy_event_sound_request(&event)), &record["expected"]);
+        compare(&sound_json(enemy_event_sound_request(&event)), &record["expected"]);
     }
     for record in fixture["ambient"].as_array().unwrap() {
         let world = ambient_world(&record["input"]);
-        let requests = native_boneyard_enemy_ambient_requests(&world, 100, &|_| 0.8, &|_| 0.6);
+        let requests = boneyard_enemy_ambient_requests(&world, 100, &|_| 0.8, &|_| 0.6);
         let actual: Vec<_> = requests
             .iter()
             .map(|request| json!({ "cue": request.cue.as_str(), "gain": request.gain }))
@@ -278,7 +278,7 @@ fn enemy_sound_routing_and_boss_ambient_mixes_match_the_source() {
             tick: 1,
             event_type: BoneyardLootEventType::LootPickup,
         };
-        compare(&sound_json(native_loot_event_sound_request(&event)), &record["expected"]);
+        compare(&sound_json(loot_event_sound_request(&event)), &record["expected"]);
     }
     // Boss narration resumes from the authoritative remaining duration; the presentation
     // cursor does not own or advance the native voice clock.
@@ -291,7 +291,7 @@ fn enemy_sound_routing_and_boss_ambient_mixes_match_the_source() {
     world.boss_narration.ticks_remaining = 262;
     world.boss_narration.mix = 0.5;
     let primary = SpellState::default();
-    let secondary = solomon_sim::secondary::NativeSecondarySimulationState::new(1);
+    let secondary = solomon_sim::secondary::SecondarySimulationState::new(1);
     let frame = CombatAudioFrame {
         tick: 200,
         run_id: Some("audio-voice"),

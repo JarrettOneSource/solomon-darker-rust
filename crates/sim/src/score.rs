@@ -1,17 +1,17 @@
 //! Run score, streak and archive portrait from `core-kernels/hall-of-fame-score.ts`.
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::enemies::config::{
     ArrowType, EnemyConfig, EnemyFamilyConfig, MageElement, SkeletonWeapon,
 };
 use crate::float::fround;
 use crate::heading::heading_index;
 
-pub const NATIVE_SCORE_ARCHIVE_DEATH_TICK: u64 = 300;
+pub const SCORE_ARCHIVE_DEATH_TICK: u64 = 300;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHallOfFameRunState {
+pub struct HallOfFameRunState {
     pub awesomeness: u64,
     pub awesomest_kill: Option<String>,
     pub awesomest_kill_maximum_health: f64,
@@ -24,14 +24,14 @@ pub struct NativeHallOfFameRunState {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeHallOfFamePlayerScoreState {
+pub struct HallOfFamePlayerScoreState {
     pub current_health: f64,
     pub maximum_health: f64,
     pub level: u32,
     pub score_health_multiplier_enabled: bool,
 }
 
-impl NativeHallOfFameRunState {
+impl HallOfFameRunState {
     #[must_use]
     pub fn new(started_at_tick: u64) -> Self {
         Self {
@@ -68,9 +68,9 @@ impl NativeHallOfFameRunState {
     pub fn record_enemy_kill(
         &mut self,
         enemy: &EnemyConfig,
-        player: NativeHallOfFamePlayerScoreState,
+        player: HallOfFamePlayerScoreState,
         region_pulse_accumulator: f64,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
     ) {
         self.record_awesomest_kill(enemy, player, region_pulse_accumulator, gameplay_rng);
         self.record_ordinary_kill(player, region_pulse_accumulator);
@@ -80,42 +80,42 @@ impl NativeHallOfFameRunState {
     pub fn record_awesomest_kill(
         &mut self,
         enemy: &EnemyConfig,
-        player: NativeHallOfFamePlayerScoreState,
+        player: HallOfFamePlayerScoreState,
         region_pulse_accumulator: f64,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
     ) {
         if self.awesomest_kill_maximum_health > 0.0 {
             self.kill_streak += 1;
         }
         if enemy.maximum_health > self.awesomest_kill_maximum_health {
             let roll = gameplay_rng.draw_integer(5) as u64;
-            self.awesomeness += native_hall_of_fame_award(
+            self.awesomeness += hall_of_fame_award(
                 71 + roll * u64::from(player.level),
                 region_pulse_accumulator,
                 player,
                 self.kill_streak,
             );
-            self.awesomest_kill = Some(native_hall_of_fame_enemy_name(enemy));
+            self.awesomest_kill = Some(hall_of_fame_enemy_name(enemy));
             self.awesomest_kill_maximum_health = enemy.maximum_health;
         }
     }
 
     pub fn record_ordinary_kill(
         &mut self,
-        player: NativeHallOfFamePlayerScoreState,
+        player: HallOfFamePlayerScoreState,
         region_pulse_accumulator: f64,
     ) {
         self.awesomeness +=
-            native_hall_of_fame_award(1, region_pulse_accumulator, player, self.kill_streak);
+            hall_of_fame_award(1, region_pulse_accumulator, player, self.kill_streak);
         self.monsters_killed += 1;
     }
 }
 
 #[must_use]
-pub fn native_hall_of_fame_award(
+pub fn hall_of_fame_award(
     base_points: u64,
     region_pulse_accumulator: f64,
-    player: NativeHallOfFamePlayerScoreState,
+    player: HallOfFamePlayerScoreState,
     kill_streak: u64,
 ) -> u64 {
     let pulse_gate = (region_pulse_accumulator + 0.5).min(1.0).trunc() as u64;
@@ -133,7 +133,7 @@ pub fn native_hall_of_fame_award(
 }
 
 #[must_use]
-pub fn native_hall_of_fame_enemy_name(enemy: &EnemyConfig) -> String {
+pub fn hall_of_fame_enemy_name(enemy: &EnemyConfig) -> String {
     if let Some(name) = &enemy.recipe_name {
         return name.clone();
     }

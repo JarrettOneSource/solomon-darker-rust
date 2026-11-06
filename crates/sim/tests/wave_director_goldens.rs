@@ -59,7 +59,7 @@ fn spawn_snapshot(spawn: &EnemySpawnIntent) -> Value {
     };
     json!({
         "enemyToken": spawn.enemy_token.id(), "flags": spawn.flags.iter().map(|flag| flag.id()).collect::<Vec<_>>(),
-        "id": spawn.id, "locationPolicy": location, "nativeTypeId": spawn.native_type_id,
+        "id": spawn.id, "locationPolicy": location, "nativeTypeId": spawn.type_id,
         "position": { "x": spawn.position.x, "y": spawn.position.y }, "positionPolicy": policy_id(spawn.position_policy),
         "spawnTick": spawn.spawn_tick, "waveOrdinal": spawn.wave_ordinal,
         "authoredRecipe": spawn.authored_recipe.as_ref().map(recipe_snapshot), "flanking": spawn.flanking,

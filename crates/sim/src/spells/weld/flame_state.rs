@@ -4,16 +4,16 @@
 
 use crate::float::{cos, fround, sin};
 use crate::painter::PainterRegistration;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 /// Inclusive magnitude four reaches the stored cutoff on update eight. Birth
 /// already owns update one, leaving seven presentation updates to retain.
-pub const NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS: u64 = 7;
+pub const FLAME_CAMERA_MAX_PRESENTATION_TICKS: u64 = 7;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "lowercase"))]
-pub enum NativeFlameChannelRole {
+pub enum FlameChannelRole {
     Main,
     Chain,
 }
@@ -21,14 +21,14 @@ pub enum NativeFlameChannelRole {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "lowercase"))]
-pub enum NativeFlameRibbonBirth {
+pub enum FlameRibbonBirth {
     Short { width_factor: f64 },
     Long { phase_degrees: f64 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeFlamePathBirth {
+pub struct FlamePathBirth {
     pub intensity: f64,
     pub radius_factors: Vec<f64>,
     pub creator_registration: PainterRegistration,
@@ -37,48 +37,48 @@ pub struct NativeFlamePathBirth {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeFlameChannelBirth {
-    pub role: NativeFlameChannelRole,
+pub struct FlameChannelBirth {
+    pub role: FlameChannelRole,
     pub camera_displacement: Option<Vec2>,
     pub start: Vec2,
     pub control: Vec2,
     pub end: Vec2,
     pub offset: Vec2,
     pub width: f64,
-    pub ribbon: NativeFlameRibbonBirth,
-    pub path: NativeFlamePathBirth,
+    pub ribbon: FlameRibbonBirth,
+    pub path: FlamePathBirth,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind"))]
-pub enum NativeFlameChannelVisual {
+pub enum FlameChannelVisual {
     #[default]
     #[cfg_attr(feature = "persistence", serde(rename = "legacy-suppressed"))]
     LegacySuppressed,
     #[cfg_attr(feature = "persistence", serde(rename = "native-birth-v1"))]
-    NativeBirth(NativeFlameChannelBirth),
+    Birth(FlameChannelBirth),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeFlameFadeBirth {
+pub struct FlameFadeBirth {
     pub birth_alpha: f64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind"))]
-pub enum NativeFlameFadeVisual {
+pub enum FlameFadeVisual {
     #[default]
     #[cfg_attr(feature = "persistence", serde(rename = "legacy-suppressed"))]
     LegacySuppressed,
     #[cfg_attr(feature = "persistence", serde(rename = "native-birth-v1"))]
-    NativeBirth(NativeFlameFadeBirth),
+    Birth(FlameFadeBirth),
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeFlameCameraProposal {
+pub struct FlameCameraProposal {
     pub id: u64,
     pub birth_tick: u64,
     pub world_key: String,
@@ -87,7 +87,7 @@ pub struct NativeFlameCameraProposal {
 
 /// Native children have already received update one in a birth-tick snapshot.
 #[must_use]
-pub fn native_flame_fade_alpha(birth_alpha: f64, alpha_step: f64, age_ticks: u64) -> f64 {
+pub fn flame_fade_alpha(birth_alpha: f64, alpha_step: f64, age_ticks: u64) -> f64 {
     let mut alpha = birth_alpha;
     for _ in 0..=age_ticks {
         alpha = fround(alpha - alpha_step);
@@ -96,7 +96,7 @@ pub fn native_flame_fade_alpha(birth_alpha: f64, alpha_step: f64, age_ticks: u64
 }
 
 #[must_use]
-pub fn native_flame_fade_wrapper_intensity(birth_alpha: f64, age_ticks: u64) -> f64 {
+pub fn flame_fade_wrapper_intensity(birth_alpha: f64, age_ticks: u64) -> f64 {
     let mut intensity = birth_alpha;
     for _ in 0..=age_ticks {
         intensity = fround(intensity - 0.05_f32 as f64);
@@ -105,10 +105,7 @@ pub fn native_flame_fade_wrapper_intensity(birth_alpha: f64, age_ticks: u64) -> 
 }
 
 /// Normal-only Float(4), then unsigned UnitVector. A weak cast draws no words.
-pub fn draw_native_flame_camera_displacement(
-    rng: &mut NativeRng,
-    underpowered: bool,
-) -> Option<Vec2> {
+pub fn draw_flame_camera_displacement(rng: &mut Rng, underpowered: bool) -> Option<Vec2> {
     if underpowered {
         return None;
     }
@@ -123,19 +120,19 @@ pub fn draw_native_flame_camera_displacement(
 }
 
 #[must_use]
-pub fn native_camera_magnitude_squared(value: Vec2) -> f64 {
+pub fn camera_magnitude_squared(value: Vec2) -> f64 {
     fround(value.x * value.x + value.y * value.y)
 }
 
 /// Same-pass native decay. Equality at the stored .25 cutoff survives.
 #[must_use]
-pub fn decay_native_region_camera_displacement(value: Vec2, updates: u64) -> Vec2 {
+pub fn decay_region_camera_displacement(value: Vec2, updates: u64) -> Vec2 {
     let mut x = fround(value.x);
     let mut y = fround(value.y);
     for _ in 0..updates {
         x = fround(x * 0.75);
         y = fround(y * 0.75);
-        if native_camera_magnitude_squared(Vec2::new(x, y)) < 0.25 {
+        if camera_magnitude_squared(Vec2::new(x, y)) < 0.25 {
             return Vec2::ZERO;
         }
     }

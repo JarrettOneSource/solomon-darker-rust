@@ -7,8 +7,8 @@ mod projectiles;
 mod validation;
 
 use serde_json::{Value, json};
-use solomon_sim::boneyard::waves::{native_survival_programs, programs::SpiderState};
-use solomon_sim::{NativeRng, boneyard::BoneyardWorld};
+use solomon_sim::boneyard::waves::{programs::SpiderState, survival_programs};
+use solomon_sim::{Rng, boneyard::BoneyardWorld};
 
 use super::super::contract::{MAX_SAFE_INTEGER, record};
 use super::super::value::{decode, encode};
@@ -65,7 +65,7 @@ pub(super) fn normalize(
     world.insert("nextDeathWeaponId".into(), json!(next_weapon));
     let mut enemies = record(&value["enemies"], "game save Boneyard enemies")?.clone();
     let mut private_rng = finite(&enemies["rngState"], "game save Boneyard enemy RNG")? as u32;
-    let mut native_rng: NativeRng = decode(
+    let mut rng: Rng = decode(
         enemies
             .get("steeringRngState")
             .filter(|value| !value.is_null())
@@ -79,10 +79,9 @@ pub(super) fn normalize(
         &value["enemies"]["lastStepTick"],
         &loaded.source_sha256,
         &mut private_rng,
-        &mut native_rng,
+        &mut rng,
     )?;
-    let projectiles =
-        projectiles::normalize(&value["enemies"]["projectiles"], version, &mut native_rng)?;
+    let projectiles = projectiles::normalize(&value["enemies"]["projectiles"], version, &mut rng)?;
     let mut featured = if version < 34 || value["enemies"]["featuredBossId"].is_null() {
         Value::Null
     } else {
@@ -105,8 +104,7 @@ pub(super) fn normalize(
             })
             .collect();
         if !candidates.is_empty() {
-            featured =
-                candidates[native_rng.draw_integer(candidates.len() as i32) as usize]["id"].clone();
+            featured = candidates[rng.draw_integer(candidates.len() as i32) as usize]["id"].clone();
         }
     }
     if !featured.is_null()
@@ -199,7 +197,7 @@ pub(super) fn normalize(
         )?),
     );
     enemies.insert("rngState".into(), json!(private_rng));
-    enemies.insert("steeringRngState".into(), encode(&native_rng)?);
+    enemies.insert("steeringRngState".into(), encode(&rng)?);
     world.insert("enemies".into(), Value::Object(enemies));
     world.insert("encounter".into(), encounter(&value["encounter"], &defaults["encounter"])?);
     let tutorial = tutorial(value.get("tutorial").unwrap_or(&defaults["tutorial"]), version)?;
@@ -223,7 +221,7 @@ pub(super) fn normalize(
     if world.get("hallOfFameRuns").is_none_or(Value::is_null) {
         world.insert(
             "hallOfFameRuns".into(),
-            json!({owner:encode(&solomon_sim::score::NativeHallOfFameRunState::new(0))?}),
+            json!({owner:encode(&solomon_sim::score::HallOfFameRunState::new(0))?}),
         );
     }
     if version < 34 {
@@ -277,7 +275,7 @@ fn encounter(value: &Value, defaults: &Value) -> Result<Value, String> {
 
 fn tutorial(value: &Value, version: u64) -> Result<Value, String> {
     use solomon_sim::boneyard::tutorial::{
-        NATIVE_TUTORIAL_CAMERA_CLEANUP_TICKS, NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS,
+        TUTORIAL_CAMERA_CLEANUP_TICKS, TUTORIAL_CAMERA_LOCK_SETTLE_TICKS,
     };
     if value.is_null() {
         return Ok(Value::Null);
@@ -292,10 +290,8 @@ fn tutorial(value: &Value, version: u64) -> Result<Value, String> {
             .as_u64()
             .filter(|ticks| *ticks > 0 && *ticks <= MAX_SAFE_INTEGER)
         {
-            Some(remaining) if triggered => {
-                NATIVE_TUTORIAL_CAMERA_CLEANUP_TICKS as f64 - remaining as f64
-            }
-            _ if triggered => NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS as f64,
+            Some(remaining) if triggered => TUTORIAL_CAMERA_CLEANUP_TICKS as f64 - remaining as f64,
+            _ if triggered => TUTORIAL_CAMERA_LOCK_SETTLE_TICKS as f64,
             _ => 0.0,
         };
         source.insert("cameraLockAgeTicks".into(), json!(age));
@@ -318,7 +314,7 @@ fn waves(value: &Value, defaults: &Value, source_sha: &str, version: u64) -> Res
     let mut waves = record(value, "game save Boneyard waves")?.clone();
     if version < 33 {
         let definitions =
-            native_survival_programs(source_sha).map(|program| program.spiders).unwrap_or_default();
+            survival_programs(source_sha).map(|program| program.spiders).unwrap_or_default();
         let wave = finite(&value["waveOrdinal"], "game save wave ordinal")?;
         let phase = definitions
             .iter()

@@ -23,19 +23,19 @@ fn same_point(actual: Vec2, expected: &Value, name: &str) {
     same_number(actual.x, expected.x, name);
     same_number(actual.y, expected.y, name);
 }
-fn phase(value: &Value) -> NativeCollegeIntroPhase {
+fn phase(value: &Value) -> CollegeIntroPhase {
     match value.as_str().unwrap() {
-        "courtyard-walk" => NativeCollegeIntroPhase::CourtyardWalk,
-        "office-walk" => NativeCollegeIntroPhase::OfficeWalk,
-        "arch-dialogue" => NativeCollegeIntroPhase::ArchDialogue,
+        "courtyard-walk" => CollegeIntroPhase::CourtyardWalk,
+        "office-walk" => CollegeIntroPhase::OfficeWalk,
+        "arch-dialogue" => CollegeIntroPhase::ArchDialogue,
         other => panic!("fixture phase {other}"),
     }
 }
-fn intro(value: &Value) -> Option<NativeCollegeIntroState> {
+fn intro(value: &Value) -> Option<CollegeIntroState> {
     if value.is_null() {
         return None;
     }
-    Some(NativeCollegeIntroState {
+    Some(CollegeIntroState {
         contact_counter: value["contactCounter"].as_u64().unwrap() as u32,
         cover_alpha: number(&value["coverAlpha"]),
         dialogue_sequence: value["dialogueSequence"].as_u64().unwrap(),
@@ -73,7 +73,7 @@ fn read_wizard(value: &Value) -> HubWizard {
     }
     wizard
 }
-fn same_intro(actual: Option<NativeCollegeIntroState>, expected: &Value) {
+fn same_intro(actual: Option<CollegeIntroState>, expected: &Value) {
     let expected = intro(expected);
     assert_eq!(actual.is_some(), expected.is_some());
     if let (Some(actual), Some(expected)) = (actual, expected) {
@@ -95,7 +95,7 @@ fn same_intro(actual: Option<NativeCollegeIntroState>, expected: &Value) {
 fn paths_titles_contact_and_arm_operations_match_the_pinned_source() {
     let golden = fixture();
     for case in golden["paths"].as_array().unwrap() {
-        let actual = native_college_path_target(
+        let actual = college_path_target(
             phase(&case["phase"]),
             number(&case["cursor"]),
             point(&case["position"]),
@@ -103,7 +103,7 @@ fn paths_titles_contact_and_arm_operations_match_the_pinned_source() {
         same_number(actual.path_cursor, number(&case["pathCursor"]), "path cursor");
         same_point(actual.target, &case["target"], "path target");
         assert_eq!(
-            native_college_path_heading_index(
+            college_path_heading_index(
                 phase(&case["phase"]),
                 number(&case["cursor"]),
                 point(&case["position"])
@@ -112,21 +112,20 @@ fn paths_titles_contact_and_arm_operations_match_the_pinned_source() {
         );
     }
     for case in golden["titles"].as_array().unwrap() {
-        let actual =
-            native_college_title_presentation(number(&case["cursor"]), number(&case["cover"]));
+        let actual = college_title_presentation(number(&case["cursor"]), number(&case["cover"]));
         same_number(actual.alpha, number(&case["result"]["alpha"]), "title alpha");
         assert_eq!(actual.record, case["result"]["record"].as_u64().unwrap() as usize);
         same_number(actual.y, number(&case["result"]["y"]), "title y");
     }
     for case in golden["speeds"].as_array().unwrap() {
         same_number(
-            native_college_office_speed(number(&case["cursor"]), number(&case["speed"])),
+            college_office_speed(number(&case["cursor"]), number(&case["speed"])),
             number(&case["result"]),
             "office speed",
         );
     }
     for case in golden["contacts"].as_array().unwrap() {
-        let actual = native_college_contact_step(
+        let actual = college_contact_step(
             case["counter"].as_u64().unwrap() as u32,
             case["eligible"].as_bool().unwrap(),
         );
@@ -192,13 +191,10 @@ fn paths_titles_contact_and_arm_operations_match_the_pinned_source() {
 fn readiness_walk_dialogue_loadout_and_return_share_one_source_epoch() {
     let golden = fixture();
     let journey = &golden["journey"];
-    let mut wizard = HubWizard::at(NATIVE_COLLEGE_COURTYARD_PATH[0]);
-    wizard.heading_index = native_college_path_heading_index(
-        NativeCollegeIntroPhase::CourtyardWalk,
-        0.0,
-        wizard.position,
-    );
-    let mut intro = Some(NativeCollegeIntroState::new());
+    let mut wizard = HubWizard::at(COLLEGE_COURTYARD_PATH[0]);
+    wizard.heading_index =
+        college_path_heading_index(CollegeIntroPhase::CourtyardWalk, 0.0, wizard.position);
+    let mut intro = Some(CollegeIntroState::new());
     let mut pending = true;
     let mut exiting = false;
     let mut actions = journey["actions"].as_array().unwrap().iter().peekable();

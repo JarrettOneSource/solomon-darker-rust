@@ -1,30 +1,30 @@
 //! Current Source `renderer/primary-spell-weld-view.ts`: Flame's padded owner
 //! determines band count; the Region view only moves the first band and masks it.
 
-use super::NativeFlameLashBounds;
+use super::FlameLashBounds;
 use crate::float::fround;
-use crate::painter::native_zanim_split_band_height;
+use crate::painter::zanim_split_band_height;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeFlameLashSplitBand {
+pub struct FlameLashSplitBand {
     pub id: String,
-    pub clip: NativeFlameLashBounds,
+    pub clip: FlameLashBounds,
     pub painter_y: f64,
 }
 
-pub fn build_native_flame_lash_split_bands(
+pub fn build_flame_lash_split_bands(
     owner_id: &str,
-    bounds: NativeFlameLashBounds,
+    bounds: FlameLashBounds,
     enhanced_effects: bool,
-    region_view: Option<NativeFlameLashBounds>,
-) -> Result<Vec<NativeFlameLashSplitBand>, String> {
+    region_view: Option<FlameLashBounds>,
+) -> Result<Vec<FlameLashSplitBand>, String> {
     if owner_id.is_empty()
         || !valid_bounds(bounds)
         || region_view.is_some_and(|region| !valid_bounds(region))
     {
         return Err("Flame split requires finite nonnegative bounds and Region view".into());
     }
-    let height = native_zanim_split_band_height(enhanced_effects);
+    let height = zanim_split_band_height(enhanced_effects);
     let mut y = fround(region_view.map_or(bounds.y, |region| bounds.y.max(region.y)));
     let mut bands = Vec::new();
     let mut progress = bounds.y;
@@ -33,9 +33,9 @@ pub fn build_native_flame_lash_split_bands(
         if next <= progress || bands.len() >= 32_768 {
             return Err("Flame split exceeds its finite band progression budget".into());
         }
-        bands.push(NativeFlameLashSplitBand {
+        bands.push(FlameLashSplitBand {
             id: format!("{owner_id}:band-{}", bands.len()),
-            clip: NativeFlameLashBounds { x: 0.0, y, width: 10_000.0, height },
+            clip: FlameLashBounds { x: 0.0, y, width: 10_000.0, height },
             painter_y: fround(y + height),
         });
         y = fround(y + height);
@@ -46,16 +46,16 @@ pub fn build_native_flame_lash_split_bands(
 
 /// The actual draw mask can be empty while its admitted insertion still exists.
 #[must_use]
-pub fn native_flame_region_clipped_band(
-    band: NativeFlameLashBounds,
-    region: Option<NativeFlameLashBounds>,
-) -> NativeFlameLashBounds {
+pub fn flame_region_clipped_band(
+    band: FlameLashBounds,
+    region: Option<FlameLashBounds>,
+) -> FlameLashBounds {
     let Some(region) = region else {
         return band;
     };
     let x = band.x.max(region.x);
     let y = band.y.max(region.y);
-    NativeFlameLashBounds {
+    FlameLashBounds {
         x,
         y,
         width: ((band.x + band.width).min(region.x + region.width) - x).max(0.0),
@@ -63,7 +63,7 @@ pub fn native_flame_region_clipped_band(
     }
 }
 
-fn valid_bounds(bounds: NativeFlameLashBounds) -> bool {
+fn valid_bounds(bounds: FlameLashBounds) -> bool {
     bounds.x.is_finite()
         && bounds.y.is_finite()
         && bounds.width.is_finite()

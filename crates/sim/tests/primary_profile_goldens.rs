@@ -4,25 +4,24 @@
 mod stat_book;
 
 use serde_json::Value;
-use solomon_sim::equipment::NativeEquipmentModifiers;
+use solomon_sim::equipment::EquipmentModifiers;
 use solomon_sim::profile::offensive::{
-    NativeDamageResolutionLanes, NativeManaCostResolutionLanes, NativeOffensiveSpellFactors,
-    resolve_native_skill_damage, resolve_native_skill_mana_cost,
-    resolve_native_skill_mana_cost_value,
+    DamageResolutionLanes, ManaCostResolutionLanes, OffensiveSpellFactors, resolve_skill_damage,
+    resolve_skill_mana_cost, resolve_skill_mana_cost_value,
 };
 use solomon_sim::profile::primary::{
-    NativePrimarySkillProfile, NativePrimarySpellDamageUnit, NativePrimarySpellManaUnit,
-    NativeSpentEmber, native_primary_skill_profile_with_stat_book, native_primary_spell_descriptor,
-    native_primary_spell_summary_with_stat_book,
+    PrimarySkillProfile, PrimarySpellDamageUnit, PrimarySpellManaUnit, SpentEmber,
+    primary_skill_profile_with_stat_book, primary_spell_descriptor,
+    primary_spell_summary_with_stat_book,
 };
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
 
 fn number(value: &Value) -> f64 {
     value.as_f64().expect("a recorded finite number")
 }
 
-fn skillbook(value: &Value) -> NativeSkillBookState {
-    let mut book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+fn skillbook(value: &Value) -> SkillBookState {
+    let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
     for (rank, value) in
         book.effective_ranks.iter_mut().zip(value["effectiveRanks"].as_array().unwrap())
     {
@@ -40,14 +39,14 @@ fn skillbook(value: &Value) -> NativeSkillBookState {
     book
 }
 
-fn equipment(value: &Value) -> NativeEquipmentModifiers {
-    let mut modifiers = NativeEquipmentModifiers {
+fn equipment(value: &Value) -> EquipmentModifiers {
+    let mut modifiers = EquipmentModifiers {
         global_damage_flat: number(&value["globalDamageFlat"]),
         global_damage_multiplier: number(&value["globalDamageMultiplier"]),
         global_mana_cost_flat: number(&value["globalManaCostFlat"]),
         global_mana_cost_multiplier: number(&value["globalManaCostMultiplier"]),
         weld_effect: number(&value["weldEffect"]),
-        ..NativeEquipmentModifiers::default()
+        ..EquipmentModifiers::default()
     };
     for index in 0..8 {
         modifiers.class_damage_flat[index] = number(&value["classDamageFlat"][index]);
@@ -63,8 +62,8 @@ fn equipment(value: &Value) -> NativeEquipmentModifiers {
     modifiers
 }
 
-fn factors(value: &Value) -> NativeOffensiveSpellFactors {
-    NativeOffensiveSpellFactors {
+fn factors(value: &Value) -> OffensiveSpellFactors {
+    OffensiveSpellFactors {
         damage: number(&value["damage"]),
         mana_cost: number(&value["manaCost"]),
         global_flat_damage: value["globalFlatDamage"].as_f64().unwrap_or(0.0),
@@ -82,7 +81,7 @@ fn elemental_and_welded_cast_costs_and_damage_replay_the_website() {
         let book = skillbook(&case["skillBook"]);
         let factors = factors(&case["factors"]);
         let stat_book = stat_book::read(case.get("statBook"));
-        let profile = native_primary_skill_profile_with_stat_book(&book, &stat_book, &factors);
+        let profile = primary_skill_profile_with_stat_book(&book, &stat_book, &factors);
         let common = profile.common();
         let expected = &case["profile"];
         for (field, actual) in [
@@ -96,7 +95,7 @@ fn elemental_and_welded_cast_costs_and_damage_replay_the_website() {
             assert_eq!(actual, number(&expected[field]), "{} {field}", case["name"]);
         }
         assert_variant(&profile, expected, case["name"].as_str().unwrap());
-        let summary = native_primary_spell_summary_with_stat_book(&book, &stat_book, &factors);
+        let summary = primary_spell_summary_with_stat_book(&book, &stat_book, &factors);
         assert_eq!(
             [summary.damage_minimum, summary.damage_maximum, summary.mana_cost],
             [
@@ -107,29 +106,29 @@ fn elemental_and_welded_cast_costs_and_damage_replay_the_website() {
             "{} inventory summary",
             case["name"],
         );
-        let descriptor = native_primary_spell_descriptor(book.primary_skill_id, book.weld_build_id);
+        let descriptor = primary_spell_descriptor(book.primary_skill_id, book.weld_build_id);
         let expected = &case["descriptor"];
         assert_eq!(descriptor.name, expected["name"].as_str().unwrap());
         assert_eq!(descriptor.damage_range, expected["damageRange"].as_bool().unwrap());
         let damage_unit = match descriptor.damage_unit {
-            NativePrimarySpellDamageUnit::Bolt => "bolt",
-            NativePrimarySpellDamageUnit::Boulder => "boulder",
-            NativePrimarySpellDamageUnit::Impact => "impact",
-            NativePrimarySpellDamageUnit::Rock => "rock",
-            NativePrimarySpellDamageUnit::Second => "second",
+            PrimarySpellDamageUnit::Bolt => "bolt",
+            PrimarySpellDamageUnit::Boulder => "boulder",
+            PrimarySpellDamageUnit::Impact => "impact",
+            PrimarySpellDamageUnit::Rock => "rock",
+            PrimarySpellDamageUnit::Second => "second",
         };
         let mana_unit = match descriptor.mana_unit {
-            NativePrimarySpellManaUnit::Cast => "cast",
-            NativePrimarySpellManaUnit::Second => "sec",
+            PrimarySpellManaUnit::Cast => "cast",
+            PrimarySpellManaUnit::Second => "sec",
         };
         assert_eq!(damage_unit, expected["damageUnit"].as_str().unwrap());
         assert_eq!(mana_unit, expected["manaUnit"].as_str().unwrap());
     }
 }
 
-fn assert_variant(profile: &NativePrimarySkillProfile, expected: &Value, label: &str) {
+fn assert_variant(profile: &PrimarySkillProfile, expected: &Value, label: &str) {
     let fields = match profile {
-        NativePrimarySkillProfile::Ether(profile) => {
+        PrimarySkillProfile::Ether(profile) => {
             assert_eq!(expected["kind"], "ether");
             assert_eq!(profile.reacquires_target, expected["reacquiresTarget"].as_bool().unwrap());
             vec![
@@ -140,16 +139,16 @@ fn assert_variant(profile: &NativePrimarySkillProfile, expected: &Value, label: 
                 ("speedFactor", profile.speed_factor),
             ]
         }
-        NativePrimarySkillProfile::Fire(profile) => {
+        PrimarySkillProfile::Fire(profile) => {
             assert_eq!(expected["kind"], "fire");
             let ember = &expected["spentEmber"];
             match profile.spent_ember {
-                NativeSpentEmber::None => assert_eq!(ember["kind"], "none"),
-                NativeSpentEmber::Immolate { damage } => {
+                SpentEmber::None => assert_eq!(ember["kind"], "none"),
+                SpentEmber::Immolate { damage } => {
                     assert_eq!(ember["kind"], "immolate");
                     assert_eq!(damage, number(&ember["damage"]), "{label} Immolate damage");
                 }
-                NativeSpentEmber::Imp { damage, lifetime_ticks } => {
+                SpentEmber::Imp { damage, lifetime_ticks } => {
                     assert_eq!(ember["kind"], "imp");
                     assert_eq!(damage, number(&ember["damage"]), "{label} Imp damage");
                     assert_eq!(lifetime_ticks, ember["lifetimeTicks"].as_u64().unwrap());
@@ -163,7 +162,7 @@ fn assert_variant(profile: &NativePrimarySkillProfile, expected: &Value, label: 
                 ("explodeRadius", profile.explode_radius),
             ]
         }
-        NativePrimarySkillProfile::Air(profile) => {
+        PrimarySkillProfile::Air(profile) => {
             assert_eq!(expected["kind"], "air");
             vec![
                 ("arcCount", f64::from(profile.arc_count)),
@@ -173,7 +172,7 @@ fn assert_variant(profile: &NativePrimarySkillProfile, expected: &Value, label: 
                 ("stunMovementFactor", profile.stun_movement_factor),
             ]
         }
-        NativePrimarySkillProfile::Water(profile) => {
+        PrimarySkillProfile::Water(profile) => {
             assert_eq!(expected["kind"], "water");
             vec![
                 ("armorMaximum", profile.armor_maximum),
@@ -195,7 +194,7 @@ fn assert_variant(profile: &NativePrimarySkillProfile, expected: &Value, label: 
                 ("widenHalfDegrees", profile.widen_half_degrees),
             ]
         }
-        NativePrimarySkillProfile::Earth(profile) => {
+        PrimarySkillProfile::Earth(profile) => {
             assert_eq!(expected["kind"], "earth");
             vec![
                 ("growthFactor", profile.growth_factor),
@@ -205,7 +204,7 @@ fn assert_variant(profile: &NativePrimarySkillProfile, expected: &Value, label: 
                 ("toughness", profile.toughness),
             ]
         }
-        NativePrimarySkillProfile::Weld(profile) => {
+        PrimarySkillProfile::Weld(profile) => {
             assert_eq!(expected["kind"], "weld");
             assert_eq!(profile.build_id, expected["buildId"].as_u64().unwrap() as u32);
             assert_eq!(profile.cast_kind.as_str(), expected["castKind"].as_str().unwrap());
@@ -229,7 +228,7 @@ fn equipment_and_offensive_bonuses_keep_the_native_lane_order() {
         let skill_id = case["skillId"].as_u64().unwrap() as usize;
         let factors = factors(&case["factors"]);
         let damage = &case["damageLanes"];
-        let damage = NativeDamageResolutionLanes {
+        let damage = DamageResolutionLanes {
             actor_base_damage: number(&damage["actorBaseDamage"]),
             base_damage: number(&damage["baseDamage"]),
             global_flat_damage: number(&damage["globalFlatDamage"]),
@@ -241,7 +240,7 @@ fn equipment_and_offensive_bonuses_keep_the_native_lane_order() {
             element_or_class_multiplier: number(&damage["elementOrClassMultiplier"]),
         };
         let mana = &case["manaLanes"];
-        let mana = NativeManaCostResolutionLanes {
+        let mana = ManaCostResolutionLanes {
             base_mana_cost: number(&mana["baseManaCost"]),
             global_mana_reduction: number(&mana["globalManaReduction"]),
             global_flat_mana_cost: number(&mana["globalFlatManaCost"]),
@@ -253,17 +252,17 @@ fn equipment_and_offensive_bonuses_keep_the_native_lane_order() {
             element_multiplier: number(&mana["elementMultiplier"]),
         };
         assert_eq!(
-            resolve_native_skill_damage(skill_id, &factors, damage),
+            resolve_skill_damage(skill_id, &factors, damage),
             number(&case["damage"]),
             "skill {skill_id} damage order",
         );
         assert_eq!(
-            resolve_native_skill_mana_cost(skill_id, &factors, mana),
+            resolve_skill_mana_cost(skill_id, &factors, mana),
             number(&case["mana"]),
             "skill {skill_id} mana order",
         );
         assert_eq!(
-            resolve_native_skill_mana_cost_value(skill_id, 0.0, &factors),
+            resolve_skill_mana_cost_value(skill_id, 0.0, &factors),
             number(&case["freeMana"]),
             "a zero-cost skill stays free",
         );

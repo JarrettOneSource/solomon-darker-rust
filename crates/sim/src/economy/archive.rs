@@ -1,7 +1,7 @@
 //! Completed-run and Last Word retention from Website `core-kernels/hub-economy.ts`.
 //! The run owner supplies its carried-item policy; this module owns ids, packing and restock.
 
-use crate::appearance::roll_native_starter_equipment_appearance;
+use crate::appearance::roll_starter_equipment_appearance;
 use crate::profile::WizardElement;
 
 use super::inventory::{
@@ -12,7 +12,7 @@ use super::{
     HUB_STORAGE_SLOT_CAPACITY, HubEconomyState, HubInventoryItem, HubItemKind,
 };
 
-pub const NATIVE_RETAINED_SACK_SUFFIXES: [&str; 5] =
+pub const RETAINED_SACK_SUFFIXES: [&str; 5] =
     ["Earthly Possessions", "Stuff", "Dead Stuff", "Bag", "Loot"];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -44,8 +44,8 @@ impl HubEconomyState {
         contents.extend(ground_items);
         let contents = repack_inventory_root(contents);
         if !contents.is_empty() {
-            let suffix = NATIVE_RETAINED_SACK_SUFFIXES
-                [self.rng.draw_integer(NATIVE_RETAINED_SACK_SUFFIXES.len() as i32) as usize];
+            let suffix = RETAINED_SACK_SUFFIXES
+                [self.rng.draw_integer(RETAINED_SACK_SUFFIXES.len() as i32) as usize];
             let contents = pack_sack_contents(contents, &mut self.next_item_id);
             let retained = archive_sack(
                 self.next_item_id,
@@ -77,10 +77,8 @@ impl HubEconomyState {
         // Website draws the appearance from this state without feeding its returned RNG into
         // restock. Cloning preserves that separate draw lane instead of advancing shop draws.
         let mut appearance_rng = self.rng.clone();
-        let appearance = roll_native_starter_equipment_appearance(
-            &mut appearance_rng,
-            archive.starter_element.into(),
-        );
+        let appearance =
+            roll_starter_equipment_appearance(&mut appearance_rng, archive.starter_element.into());
         let (backpack, equipment, next_item_id) = starter_loadout(self.next_item_id, appearance);
         self.backpack = backpack;
         self.equipment = equipment;

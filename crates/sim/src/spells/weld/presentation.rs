@@ -4,17 +4,17 @@
 
 use super::*;
 use crate::Vec2;
-use crate::element_vfx::{ElementVfxBlend, native_element_vfx_plan_at_phase};
+use crate::element_vfx::{ElementVfxBlend, element_vfx_plan_at_phase};
 use crate::float;
 use crate::float::{atan2, fround};
 use crate::profile::WizardElement;
-use crate::spells::air::{NativeAirCoronaInput, NativeAirMesh, build_native_air_corona_plan};
+use crate::spells::air::{AirCoronaInput, AirMesh, build_air_corona_plan};
 use crate::spells::earth_presentation::{
     EarthBoulderPresentationState, earth_boulder_presentation_plan,
 };
-use crate::spells::fire_presentation::{NativeFireballPresentationState, native_fireball_plan};
+use crate::spells::fire_presentation::{FireballPresentationState, fireball_plan};
 use crate::spells::model::PrimarySpellProjectilePhase;
-use crate::spells::presentation::{NativeSpellSprite, SpellAtlas, SpellBlend, pack_spell_rgb};
+use crate::spells::presentation::{SpellAtlas, SpellBlend, SpellSprite, pack_spell_rgb};
 use crate::spells::water::{
     WaterFrostJetBlend, WaterFrostJetSprite, water_frost_jet_chaining_plan,
 };
@@ -22,7 +22,7 @@ use crate::spells::water::{
 const DEG: f64 = std::f64::consts::PI / 180.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldAffineMatrix {
+pub struct WeldAffineMatrix {
     pub a: f64,
     pub b: f64,
     pub c: f64,
@@ -32,43 +32,43 @@ pub struct NativeWeldAffineMatrix {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldSpriteDraw {
-    pub sprite: NativeSpellSprite,
-    pub matrix: Option<NativeWeldAffineMatrix>,
+pub struct WeldSpriteDraw {
+    pub sprite: SpellSprite,
+    pub matrix: Option<WeldAffineMatrix>,
     pub diffuse: bool,
 }
 
-impl NativeWeldSpriteDraw {
+impl WeldSpriteDraw {
     fn new(record: usize, scale: f64) -> Self {
-        Self { sprite: NativeSpellSprite::new(record, scale), matrix: None, diffuse: false }
+        Self { sprite: SpellSprite::new(record, scale), matrix: None, diffuse: false }
     }
 }
 
-impl From<NativeSpellSprite> for NativeWeldSpriteDraw {
-    fn from(sprite: NativeSpellSprite) -> Self {
+impl From<SpellSprite> for WeldSpriteDraw {
+    fn from(sprite: SpellSprite) -> Self {
         Self { sprite, matrix: None, diffuse: false }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeWeldMeshUvSpace {
+pub enum WeldMeshUvSpace {
     Record,
     BadGuysAtlas,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldMeshDraw {
+pub struct WeldMeshDraw {
     pub alpha: f64,
     pub blend: SpellBlend,
     pub colors: Option<Vec<u32>>,
-    pub mesh: NativeAirMesh,
+    pub mesh: AirMesh,
     pub record: usize,
     pub tint: u32,
-    pub uv_space: NativeWeldMeshUvSpace,
+    pub uv_space: WeldMeshUvSpace,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeWeldLineDraw {
+pub struct WeldLineDraw {
     pub alpha: f64,
     pub color: u32,
     pub end: Vec2,
@@ -77,19 +77,19 @@ pub struct NativeWeldLineDraw {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldVisualPlan {
-    pub lines: Vec<NativeWeldLineDraw>,
-    pub meshes: Vec<NativeWeldMeshDraw>,
+pub struct WeldVisualPlan {
+    pub lines: Vec<WeldLineDraw>,
+    pub meshes: Vec<WeldMeshDraw>,
     pub position: Vec2,
     pub region_light_point: Option<Vec2>,
     pub sort_bias: f64,
-    pub split_bounds: Option<NativeFlameLashBounds>,
-    pub sprites: Vec<NativeWeldSpriteDraw>,
-    pub underlays: Vec<NativeWeldSpriteDraw>,
+    pub split_bounds: Option<FlameLashBounds>,
+    pub sprites: Vec<WeldSpriteDraw>,
+    pub underlays: Vec<WeldSpriteDraw>,
     pub world_y: f64,
 }
 
-impl NativeWeldVisualPlan {
+impl WeldVisualPlan {
     fn at(position: Vec2) -> Self {
         Self {
             lines: Vec::new(),
@@ -106,42 +106,42 @@ impl NativeWeldVisualPlan {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum NativeWeldPresentationState<'a> {
-    Projectile(&'a NativeWeldProjectileState),
-    World(&'a NativeWeldWorldActor),
+pub enum WeldPresentationState<'a> {
+    Projectile(&'a WeldProjectileState),
+    World(&'a WeldWorldActor),
 }
 
 #[must_use]
-pub fn native_weld_visual_plan(
-    state: NativeWeldPresentationState<'_>,
+pub fn weld_visual_plan(
+    state: WeldPresentationState<'_>,
     frame: u64,
     puppet_hit: bool,
-) -> NativeWeldVisualPlan {
+) -> WeldVisualPlan {
     let age = match state {
-        NativeWeldPresentationState::Projectile(actor) => actor.common.age_ticks,
-        NativeWeldPresentationState::World(actor) => actor.common().owner.age_ticks,
+        WeldPresentationState::Projectile(actor) => actor.common.age_ticks,
+        WeldPresentationState::World(actor) => actor.common().owner.age_ticks,
     };
-    native_weld_visual_plan_at_age(state, frame, age as f64, puppet_hit)
+    weld_visual_plan_at_age(state, frame, age as f64, puppet_hit)
 }
 
 /// Sample the same compositor with a received-snapshot fractional age.
 #[must_use]
-pub fn native_weld_visual_plan_at_age(
-    state: NativeWeldPresentationState<'_>,
+pub fn weld_visual_plan_at_age(
+    state: WeldPresentationState<'_>,
     frame: u64,
     age: f64,
     puppet_hit: bool,
-) -> NativeWeldVisualPlan {
+) -> WeldVisualPlan {
     let actor = match state {
-        NativeWeldPresentationState::Projectile(projectile) => {
+        WeldPresentationState::Projectile(projectile) => {
             return projectile_plan(projectile, frame, age);
         }
-        NativeWeldPresentationState::World(actor) => actor,
+        WeldPresentationState::World(actor) => actor,
     };
     match actor {
-        NativeWeldWorldActor::Channel(actor) => channel_plan(actor, age),
-        NativeWeldWorldActor::BlizzardGlow(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.common.origin);
+        WeldWorldActor::Channel(actor) => channel_plan(actor, age),
+        WeldWorldActor::BlizzardGlow(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.common.origin);
             plan.sprites =
                 lightning_core(actor.common.owner.id, frame, actor.scale, 1.0, frame as f64 * DEG);
             for draw in &mut plan.sprites {
@@ -149,17 +149,17 @@ pub fn native_weld_visual_plan_at_age(
             }
             plan
         }
-        NativeWeldWorldActor::BlizzardChainFrost(actor) => {
+        WeldWorldActor::BlizzardChainFrost(actor) => {
             let water = water_frost_jet_chaining_plan(
                 actor.common.owner.id,
                 actor.common.owner.age_ticks,
                 actor.common.direction,
                 actor.common.origin,
             );
-            let mut plan = NativeWeldVisualPlan::at(water.position);
+            let mut plan = WeldVisualPlan::at(water.position);
             for draw in water.draws {
                 plan.sprites.push(
-                    NativeSpellSprite {
+                    SpellSprite {
                         alpha: draw.alpha,
                         blend: if draw.blend == WaterFrostJetBlend::Add {
                             SpellBlend::Add
@@ -172,7 +172,7 @@ pub fn native_weld_visual_plan_at_age(
                         ),
                         rotation: draw.rotation,
                         tint: pack_spell_rgb(draw.color[0], draw.color[1], draw.color[2]),
-                        ..NativeSpellSprite::new(
+                        ..SpellSprite::new(
                             if draw.sprite == WaterFrostJetSprite::Core { 30 } else { 28 },
                             draw.scale,
                         )
@@ -182,121 +182,113 @@ pub fn native_weld_visual_plan_at_age(
             }
             plan
         }
-        NativeWeldWorldActor::FlameLashFade(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.position);
-            if !matches!(actor.flame_visual, NativeFlameFadeVisual::NativeBirth(_))
-                || actor.alpha <= 0.0
-            {
+        WeldWorldActor::FlameLashFade(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.position);
+            if !matches!(actor.flame_visual, FlameFadeVisual::Birth(_)) || actor.alpha <= 0.0 {
                 return plan;
             }
-            let jitter = crate::random_domain::native_signed_random_float_from_words(
+            let jitter = crate::random_domain::signed_random_float_from_words(
                 visual_word(actor.common.owner.id, frame, 0x57370),
                 visual_word(actor.common.owner.id, frame, 0x57371),
                 0.25,
             );
             let scale = fround(actor.base_scale * fround(2.0 + jitter));
             plan.sort_bias =
-                if actor.variant == NativeWeldFlameLashFadeVariant::Chain { 50.0 } else { 100.0 };
+                if actor.variant == WeldFlameLashFadeVariant::Chain { 50.0 } else { 100.0 };
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: actor.alpha,
                     blend: SpellBlend::Add,
-                    ..NativeSpellSprite::new(35, scale)
+                    ..SpellSprite::new(35, scale)
                 }
                 .into(),
             );
             plan
         }
-        NativeWeldWorldActor::GroundSparkFade(actor) => {
+        WeldWorldActor::GroundSparkFade(actor) => {
             let seed = actor.seed;
-            let mut plan = NativeWeldVisualPlan::at(seed.position);
+            let mut plan = WeldVisualPlan::at(seed.position);
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: seed.alpha,
                     rotation: seed.rotation_degrees * DEG,
-                    ..NativeSpellSprite::new(seed.record, seed.scale)
+                    ..SpellSprite::new(seed.record, seed.scale)
                 }
                 .into(),
             );
             plan
         }
-        NativeWeldWorldActor::FrostFade(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.common.origin);
+        WeldWorldActor::FrostFade(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.common.origin);
             let alpha =
                 (1.0 - age * if actor.common.build_id == 1004 { 0.4 } else { 0.05 }).max(0.0);
             plan.sprites =
                 element_vfx_sprites(WizardElement::Water, frame as f64, actor.scale, alpha);
             plan
         }
-        NativeWeldWorldActor::HailChild(actor) => hail_child_plan(actor),
-        NativeWeldWorldActor::HailRockFade(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.position);
+        WeldWorldActor::HailChild(actor) => hail_child_plan(actor),
+        WeldWorldActor::HailRockFade(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.position);
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: (4.0 - age * 0.01).max(0.0),
                     rotation: actor.rotation_degrees * DEG,
-                    ..NativeSpellSprite::new(18, 0.5)
+                    ..SpellSprite::new(18, 0.5)
                 }
                 .into(),
             );
             plan
         }
-        NativeWeldWorldActor::Impact(actor) => impact_plan(actor, frame, age),
-        NativeWeldWorldActor::Meteor(actor) => meteor_plan(actor, frame, puppet_hit),
-        NativeWeldWorldActor::MeteorFlash(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.position);
+        WeldWorldActor::Impact(actor) => impact_plan(actor, frame, age),
+        WeldWorldActor::Meteor(actor) => meteor_plan(actor, frame, puppet_hit),
+        WeldWorldActor::MeteorFlash(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.position);
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: actor.alpha,
                     blend: SpellBlend::Add,
                     tint: 0xff8000,
-                    ..NativeSpellSprite::new(15, actor.scale)
+                    ..SpellSprite::new(15, actor.scale)
                 }
                 .into(),
             );
             plan
         }
-        NativeWeldWorldActor::MeteorMarker(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.common.origin);
+        WeldWorldActor::MeteorMarker(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.common.origin);
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: actor.alpha,
                     blend: SpellBlend::Add,
                     rotation: actor.rotation_degrees * DEG,
                     tint: 0xff0000 | ((actor.color_green * 255.0).round() as u32) << 8,
-                    ..NativeSpellSprite::new(51, actor.scale)
+                    ..SpellSprite::new(51, actor.scale)
                 }
                 .into(),
             );
             plan
         }
-        NativeWeldWorldActor::BoulderDebris(actor) => debris_plan(actor),
-        NativeWeldWorldActor::Persistent(actor) => match actor {
-            NativeWeldPersistentActorState::EtherealBoulder(actor) => {
+        WeldWorldActor::BoulderDebris(actor) => debris_plan(actor),
+        WeldWorldActor::Persistent(actor) => match actor {
+            WeldPersistentActorState::EtherealBoulder(actor) => {
                 ethereal_boulder_plan(actor, frame, age)
             }
-            NativeWeldPersistentActorState::Hailstones(actor) => hailstones_plan(actor, frame, age),
-            NativeWeldPersistentActorState::MeteorField(actor) => {
-                NativeWeldVisualPlan::at(actor.common.origin)
-            }
+            WeldPersistentActorState::Hailstones(actor) => hailstones_plan(actor, frame, age),
+            WeldPersistentActorState::MeteorField(actor) => WeldVisualPlan::at(actor.common.origin),
         },
-        NativeWeldWorldActor::Steam(actor) => steam_plan(actor),
+        WeldWorldActor::Steam(actor) => steam_plan(actor),
     }
 }
 
-fn projectile_plan(
-    state: &NativeWeldProjectileState,
-    frame: u64,
-    age: f64,
-) -> NativeWeldVisualPlan {
-    let mut plan = NativeWeldVisualPlan::at(state.common.position);
+fn projectile_plan(state: &WeldProjectileState, frame: u64, age: f64) -> WeldVisualPlan {
+    let mut plan = WeldVisualPlan::at(state.common.position);
     plan.region_light_point = Some(state.common.position);
     let id = state.common.id;
     let alpha = if state.underpowered { 0.5 } else { 1.0 };
     match state.build_id {
         1000 => {
-            let fire = native_fireball_plan(
-                NativeFireballPresentationState {
+            let fire = fireball_plan(
+                FireballPresentationState {
                     age_ticks: age,
                     direction: state.common.direction,
                     id,
@@ -305,34 +297,34 @@ fn projectile_plan(
                 },
                 frame,
             );
-            plan.sprites = fire.draws.into_iter().map(NativeWeldSpriteDraw::from).collect();
+            plan.sprites = fire.draws.into_iter().map(WeldSpriteDraw::from).collect();
         }
         1001 => {
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: alpha * (0.75 + visual_unit(id, frame, 0) * 0.25),
                     rotation: age * DEG,
-                    ..NativeSpellSprite::new(271 + ((age / 4.0).floor() % 12.0) as usize, 1.7)
+                    ..SpellSprite::new(271 + ((age / 4.0).floor() % 12.0) as usize, 1.7)
                 }
                 .into(),
             );
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: alpha * (0.2 + visual_unit(id, frame, 1) * 0.25),
                     blend: SpellBlend::Add,
                     rotation: visual_unit(id, frame, 2) * std::f64::consts::PI * 2.0,
                     tint: 0x80bfff,
-                    ..NativeSpellSprite::new(5, 1.0)
+                    ..SpellSprite::new(5, 1.0)
                 }
                 .into(),
             );
             let pulse = float::sin(age * 15.0 * DEG).abs() * 2.0;
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: alpha * (0.2 + visual_unit(id, frame, 3) * 0.25),
                     blend: SpellBlend::Add,
                     tint: 0xff80ff,
-                    ..NativeSpellSprite::new(110, pulse)
+                    ..SpellSprite::new(110, pulse)
                 }
                 .into(),
             );
@@ -340,13 +332,13 @@ fn projectile_plan(
                 state.frost_presentation_lanes.expect("Frost Missile owns two presentation lanes")
             {
                 plan.sprites.push(
-                    NativeSpellSprite {
+                    SpellSprite {
                         alpha,
                         blend: SpellBlend::Add,
                         rotation: lane.rotation_degrees * DEG,
                         scale: Vec2::new(lane.scale, lane.scale * lane.aspect),
                         tint: 0x80ffff,
-                        ..NativeSpellSprite::new(16, 1.0)
+                        ..SpellSprite::new(16, 1.0)
                     }
                     .into(),
                 );
@@ -364,7 +356,7 @@ fn projectile_plan(
                     rotation_affine(age * (-12.0)),
                 ]);
                 for matrix in [first, second] {
-                    let mut draw = NativeWeldSpriteDraw::new(87, 1.0);
+                    let mut draw = WeldSpriteDraw::new(87, 1.0);
                     draw.matrix = Some(matrix);
                     draw.sprite.alpha = alpha * 0.15;
                     draw.sprite.blend = SpellBlend::Add;
@@ -383,10 +375,10 @@ fn projectile_plan(
             );
             let body_scale = 1.25 + visual_unit(id, frame, 0x71) * 0.1;
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: alpha * visual_unit(id, frame, 0x70),
                     offset: Vec2::new(0.0, -10.0),
-                    ..NativeSpellSprite::new(70, body_scale)
+                    ..SpellSprite::new(70, body_scale)
                 }
                 .into(),
             );
@@ -403,27 +395,27 @@ fn projectile_plan(
     plan
 }
 
-fn channel_plan(state: &NativeWeldChannelActorState, age: f64) -> NativeWeldVisualPlan {
+fn channel_plan(state: &WeldChannelActorState, age: f64) -> WeldVisualPlan {
     if state.common.build_id == 1003 {
         // The constructor already consumed the first child update. Age one is
         // retained lifecycle state, but never receives a second ribbon draw.
-        let Some(NativeFlameChannelVisual::NativeBirth(birth)) = &state.flame_visual else {
-            return NativeWeldVisualPlan::at(Vec2::ZERO);
+        let Some(FlameChannelVisual::Birth(birth)) = &state.flame_visual else {
+            return WeldVisualPlan::at(Vec2::ZERO);
         };
         if age >= 1.0 {
-            return NativeWeldVisualPlan::at(Vec2::ZERO);
+            return WeldVisualPlan::at(Vec2::ZERO);
         }
-        let geometry = NativeFlameLashFactoryInput {
+        let geometry = FlameLashFactoryInput {
             start: birth.start,
             control: birth.control,
             end: birth.end,
             offset: birth.offset,
         };
         let (phase_degrees, short_width_factor) = match birth.ribbon {
-            NativeFlameRibbonBirth::Short { width_factor } => (0.0, Some(width_factor)),
-            NativeFlameRibbonBirth::Long { phase_degrees } => (phase_degrees, None),
+            FlameRibbonBirth::Short { width_factor } => (0.0, Some(width_factor)),
+            FlameRibbonBirth::Long { phase_degrees } => (phase_degrees, None),
         };
-        let ribbon = build_native_flame_lash_ribbon(NativeFlameLashRibbonInput {
+        let ribbon = build_flame_lash_ribbon(FlameLashRibbonInput {
             geometry,
             width: birth.width,
             weak: state.underpowered,
@@ -432,34 +424,34 @@ fn channel_plan(state: &NativeWeldChannelActorState, age: f64) -> NativeWeldVisu
             short_width_factor,
         })
         .expect("retained Flame birth has validated native geometry");
-        let mut plan = NativeWeldVisualPlan::at(Vec2::ZERO);
+        let mut plan = WeldVisualPlan::at(Vec2::ZERO);
         plan.split_bounds = Some(
-            native_flame_lash_factory_geometry(geometry)
+            flame_lash_factory_geometry(geometry)
                 .expect("retained Flame birth has validated native geometry")
                 .split_bounds,
         );
-        plan.meshes.push(NativeWeldMeshDraw {
+        plan.meshes.push(WeldMeshDraw {
             alpha: 1.0,
             blend: SpellBlend::Add,
             colors: Some(ribbon.colors),
-            mesh: NativeAirMesh {
+            mesh: AirMesh {
                 indices: ribbon.indices.into_iter().map(u32::from).collect(),
                 uvs: ribbon.uvs,
                 vertices: ribbon.vertices,
             },
             record: 25,
             tint: 0xffffff,
-            uv_space: NativeWeldMeshUvSpace::BadGuysAtlas,
+            uv_space: WeldMeshUvSpace::BadGuysAtlas,
         });
         return plan;
     }
-    let mut plan = NativeWeldVisualPlan::at(state.common.origin);
+    let mut plan = WeldVisualPlan::at(state.common.origin);
     let Some(endpoint) = state.endpoint else {
         return plan;
     };
     let endpoint =
         Vec2::new(endpoint.x - state.common.origin.x, endpoint.y - state.common.origin.y);
-    let beam = native_weld_blizzard_beam_plan(
+    let beam = weld_blizzard_beam_plan(
         state.common.birth_tick,
         endpoint,
         Vec2::ZERO,
@@ -471,11 +463,11 @@ fn channel_plan(state: &NativeWeldChannelActorState, age: f64) -> NativeWeldVisu
         for point in quad.vertices.as_chunks::<2>().0 {
             vertices.push(Vec2::new(point[0], point[1]));
         }
-        plan.meshes.push(NativeWeldMeshDraw {
+        plan.meshes.push(WeldMeshDraw {
             alpha: 1.0,
             blend: SpellBlend::Add,
             colors: None,
-            mesh: NativeAirMesh {
+            mesh: AirMesh {
                 indices: vec![0, 1, 2, 1, 3, 2],
                 uvs: vec![
                     Vec2::ZERO,
@@ -487,14 +479,14 @@ fn channel_plan(state: &NativeWeldChannelActorState, age: f64) -> NativeWeldVisu
             },
             record: quad.record,
             tint: beam.tint,
-            uv_space: NativeWeldMeshUvSpace::Record,
+            uv_space: WeldMeshUvSpace::Record,
         });
     }
     plan
 }
 
-fn impact_plan(state: &NativeWeldImpactActorState, frame: u64, age: f64) -> NativeWeldVisualPlan {
-    let mut plan = NativeWeldVisualPlan::at(state.position);
+fn impact_plan(state: &WeldImpactActorState, frame: u64, age: f64) -> WeldVisualPlan {
+    let mut plan = WeldVisualPlan::at(state.position);
     match state.common.build_id {
         1006 => {
             plan.sprites = element_vfx_sprites(
@@ -527,13 +519,9 @@ fn impact_plan(state: &NativeWeldImpactActorState, frame: u64, age: f64) -> Nati
     plan
 }
 
-fn meteor_plan(
-    state: &NativeWeldMeteorActorState,
-    frame: u64,
-    puppet_hit: bool,
-) -> NativeWeldVisualPlan {
-    let mut plan = NativeWeldVisualPlan::at(state.position);
-    if state.phase == NativeWeldMeteorPhase::Fall {
+fn meteor_plan(state: &WeldMeteorActorState, frame: u64, puppet_hit: bool) -> WeldVisualPlan {
+    let mut plan = WeldVisualPlan::at(state.position);
+    if state.phase == WeldMeteorPhase::Fall {
         let fall_offset = Vec2::new(0.0, fround(-768.0 * state.fall_height));
         let body_scale = if visual_unit(state.common.owner.id, frame, 0x5e16c0) < 0.5 {
             -state.body_scale
@@ -542,20 +530,20 @@ fn meteor_plan(
         };
         let corona_scale = 3.0 + visual_unit(state.common.owner.id, frame, 0) * 0.5;
         plan.sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 offset: fall_offset,
                 tint: 0xff8000,
-                ..NativeSpellSprite::new(15, corona_scale)
+                ..SpellSprite::new(15, corona_scale)
             }
             .into(),
         );
         plan.sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 blend: SpellBlend::Add,
                 offset: fall_offset,
                 rotation: (state.fall_heading_degrees * 0.5 + 180.0) * DEG,
                 scale: Vec2::new(body_scale, (state.body_scale * 2.0).max(0.0)),
-                ..NativeSpellSprite::new(50, 1.0)
+                ..SpellSprite::new(50, 1.0)
             }
             .into(),
         );
@@ -569,23 +557,23 @@ fn meteor_plan(
         let ground_alpha = (1.0 - state.fall_height).max(0.0) * 0.5;
         if ground_alpha > 0.0 {
             plan.underlays.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: ground_alpha,
                     atlas: SpellAtlas::DeadHawg,
                     scale: Vec2::new(2.0, 1.6),
-                    ..NativeSpellSprite::new(19, 1.0)
+                    ..SpellSprite::new(19, 1.0)
                 }
                 .into(),
             );
         }
     } else {
         plan.underlays.push(
-            NativeSpellSprite {
+            SpellSprite {
                 alpha: (state.impact_ticks_remaining as f64 / 100.0).min(1.0),
                 blend: SpellBlend::Add,
                 rotation: state.impact_rotation_degrees * DEG,
                 scale: Vec2::new(state.impact_radius_scalar, state.impact_radius_scalar * 0.8),
-                ..NativeSpellSprite::new(67, 1.0)
+                ..SpellSprite::new(67, 1.0)
             }
             .into(),
         );
@@ -593,46 +581,42 @@ fn meteor_plan(
     plan
 }
 
-fn debris_plan(state: &NativeWeldBoulderDebrisActorState) -> NativeWeldVisualPlan {
+fn debris_plan(state: &WeldBoulderDebrisActorState) -> WeldVisualPlan {
     let debris = &state.debris.common;
     let position = Vec2::new(
         fround(state.position.x + debris.position.x),
         fround(state.position.y + debris.position.y),
     );
-    let mut plan = NativeWeldVisualPlan::at(position);
+    let mut plan = WeldVisualPlan::at(position);
     plan.region_light_point = Some(position);
     plan.sort_bias = -15.0;
     if state.debris.enhanced_shadow && debris.height != 0.0 {
         plan.sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 alpha: debris.alpha.min(1.0),
                 offset: Vec2::new(0.0, 2.0),
                 rotation: debris.rotation_degrees * DEG,
                 scale: Vec2::new(debris.scale, debris.scale * 0.75),
                 tint: 0,
-                ..NativeSpellSprite::new(debris.record, 1.0)
+                ..SpellSprite::new(debris.record, 1.0)
             }
             .into(),
         );
     }
     plan.sprites.push(
-        NativeSpellSprite {
+        SpellSprite {
             alpha: debris.alpha.min(1.0),
             offset: Vec2::new(0.0, debris.height),
             rotation: debris.rotation_degrees * DEG,
             tint: 0xff0000 | ((debris.color_green * 255.0).trunc() as u32) << 8,
-            ..NativeSpellSprite::new(debris.record, debris.scale)
+            ..SpellSprite::new(debris.record, debris.scale)
         }
         .into(),
     );
     plan
 }
 
-fn ethereal_boulder_plan(
-    state: &NativeWeldEtherealBoulderState,
-    frame: u64,
-    age: f64,
-) -> NativeWeldVisualPlan {
+fn ethereal_boulder_plan(state: &WeldEtherealBoulderState, frame: u64, age: f64) -> WeldVisualPlan {
     let geometry = earth_boulder_presentation_plan(
         &EarthBoulderPresentationState {
             age_ticks: age,
@@ -652,25 +636,25 @@ fn ethereal_boulder_plan(
         vec![Vec2::ZERO]
     };
     let body_tint = pack_spell_rgb(geometry.body_alpha, geometry.body_alpha * 0.75, 1.0);
-    let mut plan = NativeWeldVisualPlan::at(state.common.origin);
+    let mut plan = WeldVisualPlan::at(state.common.origin);
     plan.region_light_point = Some(state.common.origin);
     plan.sort_bias = geometry.sort_bias;
     plan.sprites.push(
-        NativeSpellSprite {
+        SpellSprite {
             alpha: geometry.aura.alpha,
             offset: geometry.visual_offset,
             tint: pack_spell_rgb(1.0, 0.9, 1.0),
-            ..NativeSpellSprite::new(15, geometry.aura.scale)
+            ..SpellSprite::new(15, geometry.aura.scale)
         }
         .into(),
     );
     plan.sprites.push(
-        NativeSpellSprite {
+        SpellSprite {
             alpha: geometry.opening_flash.alpha,
             blend: SpellBlend::Add,
             offset: geometry.visual_offset,
             rotation: geometry.opening_flash.rotation,
-            ..NativeSpellSprite::new(86, geometry.opening_flash.scale)
+            ..SpellSprite::new(86, geometry.opening_flash.scale)
         }
         .into(),
     );
@@ -695,11 +679,11 @@ fn ethereal_boulder_plan(
                 plan.sprites.extend(sprites);
             } else {
                 plan.sprites.push(
-                    NativeSpellSprite {
+                    SpellSprite {
                         offset,
                         rotation: rock.rotation,
                         tint: body_tint,
-                        ..NativeSpellSprite::new(rock.record, (rock.stored_scale * 0.75).max(0.25))
+                        ..SpellSprite::new(rock.record, (rock.stored_scale * 0.75).max(0.25))
                     }
                     .into(),
                 );
@@ -715,7 +699,7 @@ fn ethereal_boulder_plan(
     plan
 }
 
-fn ethereal_boulder_held_centers(state: &NativeWeldEtherealBoulderState) -> Vec<Vec2> {
+fn ethereal_boulder_held_centers(state: &WeldEtherealBoulderState) -> Vec<Vec2> {
     let direction = state.common.direction;
     let perpendicular = Vec2::new(direction.y, -direction.x);
     let along = |amount: f64| Vec2::new(direction.x * amount, direction.y * amount);
@@ -734,21 +718,17 @@ fn ethereal_boulder_held_centers(state: &NativeWeldEtherealBoulderState) -> Vec<
     ordered.into_iter().map(|(_, center)| Vec2::new(fround(center.x), fround(center.y))).collect()
 }
 
-fn hailstones_plan(
-    state: &NativeWeldHailstonesState,
-    frame: u64,
-    age: f64,
-) -> NativeWeldVisualPlan {
-    let mut plan = NativeWeldVisualPlan::at(state.common.origin);
+fn hailstones_plan(state: &WeldHailstonesState, frame: u64, age: f64) -> WeldVisualPlan {
+    let mut plan = WeldVisualPlan::at(state.common.origin);
     plan.region_light_point = Some(state.common.origin);
     let held = state.phase == PrimarySpellProjectilePhase::Held;
     let opening_mix = (1.0 - age * 0.03500000014901161).max(0.0);
     if held {
         plan.sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 alpha: 0.35 + visual_unit(state.common.owner.id, frame, 0x611160) * 0.25,
                 tint: pack_spell_rgb(1.0, 1.0, 0.9),
-                ..NativeSpellSprite::new(15, state.scale * 4.1_f32 as f64)
+                ..SpellSprite::new(15, state.scale * 4.1_f32 as f64)
             }
             .into(),
         );
@@ -758,27 +738,27 @@ fn hailstones_plan(
         let offset = if held {
             Vec2::new(rock.local_position.x, rock.local_position.y)
         } else {
-            native_weld_hailstone_draw_offset(rock)
+            weld_hailstone_draw_offset(rock)
         };
         let scale = rock.visual_scale.max(0.45) * if held { 0.85 } else { 0.75 };
         plan.sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 offset,
                 tint: if held {
                     pack_spell_rgb(1.0 - opening_mix, 1.0 - opening_mix, 1.0 - opening_mix)
                 } else {
                     0xffffff
                 },
-                ..NativeSpellSprite::new(rock.sprite_record, scale)
+                ..SpellSprite::new(rock.sprite_record, scale)
             }
             .into(),
         );
         plan.sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 alpha: rock.phase * if held { 0.8 } else { 1.0 },
                 offset,
                 rotation: atan2(state.common.direction.y, state.common.direction.x),
-                ..NativeSpellSprite::new(32, 1.0)
+                ..SpellSprite::new(32, 1.0)
             }
             .into(),
         );
@@ -798,47 +778,44 @@ fn boulder_auxiliary_sprite(
     frame: u64,
     scale: f64,
     phase: PrimarySpellProjectilePhase,
-) -> NativeWeldSpriteDraw {
+) -> WeldSpriteDraw {
     if phase == PrimarySpellProjectilePhase::Held {
-        NativeSpellSprite {
+        SpellSprite {
             alpha: 0.25 + visual_unit(id, frame, 0x5e5530) * 0.5,
             tint: pack_spell_rgb(0.85, 1.0, 0.85),
-            ..NativeSpellSprite::new(15, scale * 2.5)
+            ..SpellSprite::new(15, scale * 2.5)
         }
         .into()
     } else {
-        NativeWeldSpriteDraw::new(67, scale * 2.5)
+        WeldSpriteDraw::new(67, scale * 2.5)
     }
 }
 
-fn hail_child_plan(state: &NativeWeldHailChildActorState) -> NativeWeldVisualPlan {
+fn hail_child_plan(state: &WeldHailChildActorState) -> WeldVisualPlan {
     match state {
-        NativeWeldHailChildActorState::Knockback(actor) => {
-            NativeWeldVisualPlan::at(actor.common.origin)
-        }
-        NativeWeldHailChildActorState::Flash(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.position);
-            plan.sprites.push(
-                NativeSpellSprite { alpha: actor.alpha, ..NativeSpellSprite::new(15, 1.0) }.into(),
-            );
+        WeldHailChildActorState::Knockback(actor) => WeldVisualPlan::at(actor.common.origin),
+        WeldHailChildActorState::Flash(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.position);
+            plan.sprites
+                .push(SpellSprite { alpha: actor.alpha, ..SpellSprite::new(15, 1.0) }.into());
             plan
         }
-        NativeWeldHailChildActorState::Line(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.start);
+        WeldHailChildActorState::Line(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.start);
             let midpoint = Vec2::new(
                 fround((actor.end.x - actor.start.x) * 0.5),
                 fround((actor.end.y - actor.start.y) * 0.5),
             );
             let end =
                 Vec2::new(fround(actor.end.x - actor.start.x), fround(actor.end.y - actor.start.y));
-            plan.lines.push(NativeWeldLineDraw {
+            plan.lines.push(WeldLineDraw {
                 alpha: actor.alpha * 0.5,
                 color: 0x00ffff,
                 end: midpoint,
                 start: Vec2::ZERO,
                 width: actor.width,
             });
-            plan.lines.push(NativeWeldLineDraw {
+            plan.lines.push(WeldLineDraw {
                 alpha: actor.alpha * actor.end_alpha,
                 color: 0xffffff,
                 end,
@@ -847,41 +824,41 @@ fn hail_child_plan(state: &NativeWeldHailChildActorState) -> NativeWeldVisualPla
             });
             plan
         }
-        NativeWeldHailChildActorState::TerrainParticle(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.position);
+        WeldHailChildActorState::TerrainParticle(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.position);
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: actor.alpha,
                     blend: SpellBlend::Add,
                     rotation: actor.rotation_degrees * DEG,
                     tint: actor.tint,
-                    ..NativeSpellSprite::new(45, actor.scale)
+                    ..SpellSprite::new(45, actor.scale)
                 }
                 .into(),
             );
             plan
         }
-        NativeWeldHailChildActorState::TerrainBouncer(actor) => {
-            let mut plan = NativeWeldVisualPlan::at(actor.position);
+        WeldHailChildActorState::TerrainBouncer(actor) => {
+            let mut plan = WeldVisualPlan::at(actor.position);
             if actor.enhanced_shadow && actor.height != 0.0 {
                 plan.sprites.push(
-                    NativeSpellSprite {
+                    SpellSprite {
                         alpha: actor.alpha.min(1.0),
                         offset: Vec2::new(0.0, 2.0),
                         rotation: actor.rotation_degrees * DEG,
                         scale: Vec2::new(actor.scale, actor.scale * 0.75),
                         tint: 0,
-                        ..NativeSpellSprite::new(32, 1.0)
+                        ..SpellSprite::new(32, 1.0)
                     }
                     .into(),
                 );
             }
             plan.sprites.push(
-                NativeSpellSprite {
+                SpellSprite {
                     alpha: actor.alpha.min(1.0),
                     offset: Vec2::new(0.0, actor.height),
                     rotation: actor.rotation_degrees * DEG,
-                    ..NativeSpellSprite::new(32, actor.scale)
+                    ..SpellSprite::new(32, actor.scale)
                 }
                 .into(),
             );
@@ -890,15 +867,15 @@ fn hail_child_plan(state: &NativeWeldHailChildActorState) -> NativeWeldVisualPla
     }
 }
 
-fn steam_plan(state: &NativeWeldSteamActorState) -> NativeWeldVisualPlan {
+fn steam_plan(state: &WeldSteamActorState) -> WeldVisualPlan {
     let scale = state.scale * 2.0;
-    let mut plan = NativeWeldVisualPlan::at(state.position);
-    if state.variant == NativeWeldSteamVariant::Over {
+    let mut plan = WeldVisualPlan::at(state.position);
+    if state.variant == WeldSteamVariant::Over {
         plan.sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 alpha: 0.25 * state.life.min(state.phase),
                 rotation: state.rotation_degrees * DEG,
-                ..NativeSpellSprite::new(76, scale)
+                ..SpellSprite::new(76, scale)
             }
             .into(),
         );
@@ -907,12 +884,12 @@ fn steam_plan(state: &NativeWeldSteamActorState) -> NativeWeldVisualPlan {
     let alpha = state.alpha_multiplier * (state.life * state.life).min(state.phase);
     let green = (1.0 - state.tint_fade).max(0.0);
     let blue = (1.0 - state.tint_fade * 4.0).max(0.0);
-    let draw = NativeWeldSpriteDraw::from(NativeSpellSprite {
+    let draw = WeldSpriteDraw::from(SpellSprite {
         alpha,
         blend: if state.tint_fade > 0.0 { SpellBlend::Add } else { SpellBlend::Normal },
         rotation: state.rotation_degrees * DEG,
         tint: pack_spell_rgb(1.0, green, blue),
-        ..NativeSpellSprite::new(76, scale)
+        ..SpellSprite::new(76, scale)
     });
     plan.sprites.push(draw);
     if state.tint_fade > 0.0 {
@@ -926,11 +903,11 @@ fn element_vfx_sprites(
     phase: f64,
     scale: f64,
     alpha: f64,
-) -> Vec<NativeWeldSpriteDraw> {
+) -> Vec<WeldSpriteDraw> {
     let mut sprites = Vec::new();
-    for draw in native_element_vfx_plan_at_phase(element, phase, scale) {
+    for draw in element_vfx_plan_at_phase(element, phase, scale) {
         sprites.push(
-            NativeSpellSprite {
+            SpellSprite {
                 alpha: alpha * draw.alpha,
                 blend: if draw.blend == ElementVfxBlend::Add {
                     SpellBlend::Add
@@ -940,7 +917,7 @@ fn element_vfx_sprites(
                 offset: Vec2::new(draw.x, draw.y),
                 rotation: draw.rotation * DEG,
                 tint: pack_spell_rgb(draw.color[0], draw.color[1], draw.color[2]),
-                ..NativeSpellSprite::new(draw.sprite.records()[draw.frame], draw.scale)
+                ..SpellSprite::new(draw.sprite.records()[draw.frame], draw.scale)
             }
             .into(),
         );
@@ -948,14 +925,8 @@ fn element_vfx_sprites(
     sprites
 }
 
-fn lightning_core(
-    id: u64,
-    frame: u64,
-    scale: f64,
-    alpha: f64,
-    angle: f64,
-) -> Vec<NativeWeldSpriteDraw> {
-    let corona = build_native_air_corona_plan(NativeAirCoronaInput {
+fn lightning_core(id: u64, frame: u64, scale: f64, alpha: f64, angle: f64) -> Vec<WeldSpriteDraw> {
+    let corona = build_air_corona_plan(AirCoronaInput {
         alpha,
         angle,
         center: Vec2::ZERO,
@@ -985,10 +956,10 @@ fn visual_word(id: u64, frame: u64, lane: u32) -> u32 {
     value
 }
 
-fn compose_affine(matrices: &[NativeWeldAffineMatrix]) -> NativeWeldAffineMatrix {
-    let mut left = NativeWeldAffineMatrix { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: 0.0, ty: 0.0 };
+fn compose_affine(matrices: &[WeldAffineMatrix]) -> WeldAffineMatrix {
+    let mut left = WeldAffineMatrix { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: 0.0, ty: 0.0 };
     for right in matrices {
-        left = NativeWeldAffineMatrix {
+        left = WeldAffineMatrix {
             a: left.a * right.a + left.c * right.b,
             b: left.b * right.a + left.d * right.b,
             c: left.a * right.c + left.c * right.d,
@@ -999,13 +970,13 @@ fn compose_affine(matrices: &[NativeWeldAffineMatrix]) -> NativeWeldAffineMatrix
     }
     left
 }
-fn translation_affine(x: f64, y: f64) -> NativeWeldAffineMatrix {
-    NativeWeldAffineMatrix { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: x, ty: y }
+fn translation_affine(x: f64, y: f64) -> WeldAffineMatrix {
+    WeldAffineMatrix { a: 1.0, b: 0.0, c: 0.0, d: 1.0, tx: x, ty: y }
 }
-fn scale_affine(x: f64, y: f64) -> NativeWeldAffineMatrix {
-    NativeWeldAffineMatrix { a: x, b: 0.0, c: 0.0, d: y, tx: 0.0, ty: 0.0 }
+fn scale_affine(x: f64, y: f64) -> WeldAffineMatrix {
+    WeldAffineMatrix { a: x, b: 0.0, c: 0.0, d: y, tx: 0.0, ty: 0.0 }
 }
-fn rotation_affine(degrees: f64) -> NativeWeldAffineMatrix {
+fn rotation_affine(degrees: f64) -> WeldAffineMatrix {
     let (sine, cosine) = float::sin_cos(degrees * DEG);
-    NativeWeldAffineMatrix { a: cosine, b: sine, c: -sine, d: cosine, tx: 0.0, ty: 0.0 }
+    WeldAffineMatrix { a: cosine, b: sine, c: -sine, d: cosine, tx: 0.0, ty: 0.0 }
 }

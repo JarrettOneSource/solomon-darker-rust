@@ -8,8 +8,8 @@ use super::PlayerLightingState;
 use super::harden::PendingPlayerHardenChip;
 use super::player_feedback::{
     PlayerDamageSoundRequest, PlayerStatusBurstRequest, PlayerStatusKind,
-    emit_boneyard_player_damage_sound, emit_player_status_burst, native_wizard_ouch_cooldown_ready,
-    player_sound_event,
+    emit_boneyard_player_damage_sound, emit_player_status_burst, player_sound_event,
+    wizard_ouch_cooldown_ready,
 };
 use crate::boneyard::BoneyardWorld;
 use crate::boneyard::encounter::SolomonPhase;
@@ -19,10 +19,10 @@ use crate::enemies::model::{
     EnemyEvent, EnemyEventKind, EnemyPlayerDamage, EnemyPlayerDamageSource, EnemySound, EnemyTarget,
 };
 use crate::enemies::targeting::boneyard_enemy_collision_radius;
-use crate::enemies::webbed::apply_native_webbed;
+use crate::enemies::webbed::apply_webbed;
 use crate::float::fround;
 use crate::harmful::{
-    NATIVE_FLASH_RESPONSE_RADIUS, PlayerHarmfulContactContext, PlayerIncomingDamage,
+    FLASH_RESPONSE_RADIUS, PlayerHarmfulContactContext, PlayerIncomingDamage,
     player_deflect_reflection_source_in_range, resolve_player_flash_response,
     resolve_player_harmful_contact,
 };
@@ -35,15 +35,15 @@ use crate::modding::extensions::{
 };
 use crate::painter::WorldPainterOrder;
 use crate::player::PlayerState;
-use crate::player_rescue::native_rescue_damage;
+use crate::player_rescue::rescue_damage;
 use crate::profile::player_poison_duration_seconds;
-use crate::secondary::NativePlayerFlashResponseInput;
-use crate::secondary::golem::{NATIVE_GOLEM_REFLECT_DISTANCE_SQUARED, NativeGolemIncomingDamage};
+use crate::secondary::PlayerFlashResponseInput;
+use crate::secondary::golem::{GOLEM_REFLECT_DISTANCE_SQUARED, GolemIncomingDamage};
 use crate::secondary::{
-    NativeSecondaryActorKind, NativeSecondaryPlayerDamageInput,
-    NativeSecondaryPlayerDamagePresentation, NativeSecondarySimulationState,
+    SecondaryActorKind, SecondaryPlayerDamageInput, SecondaryPlayerDamagePresentation,
+    SecondarySimulationState,
 };
-use crate::spells::boneyard::boneyard_native_secondary_targets;
+use crate::spells::boneyard::boneyard_secondary_targets;
 use crate::{HubWizard, Vec2};
 
 /// The parts of one participant that player contacts change, borrowed from the session.
@@ -58,10 +58,10 @@ pub struct PlayerContactContext<'a> {
     pub enhanced_effects: bool,
     pub players: &'a mut [PlayerContactPlayer<'a>],
     pub world: &'a mut BoneyardWorld,
-    pub secondary: &'a mut NativeSecondarySimulationState,
+    pub secondary: &'a mut SecondarySimulationState,
     pub tick: u64,
     pub painter_order: &'a mut WorldPainterOrder,
-    pub screen_flashes: &'a mut crate::screen_flash::NativeScreenFlashState,
+    pub screen_flashes: &'a mut crate::screen_flash::ScreenFlashState,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -145,14 +145,14 @@ struct ContactStep<'a, 'player> {
     enhanced_effects: bool,
     participant: &'a mut PlayerContactPlayer<'player>,
     world: &'a mut BoneyardWorld,
-    secondary: &'a mut NativeSecondarySimulationState,
+    secondary: &'a mut SecondarySimulationState,
     tick: u64,
     painter_order: &'a mut WorldPainterOrder,
     result: &'a mut PlayerContactResult,
     world_key: &'a str,
     admitted_statuses: &'a mut BTreeMap<String, AdmittedStatusKinds>,
     extensions: Option<&'a dyn GameSimulationExtensions>,
-    flashes: &'a mut crate::screen_flash::NativeScreenFlashWriter,
+    flashes: &'a mut crate::screen_flash::ScreenFlashWriter,
 }
 
 fn apply_golem_contact(
@@ -165,7 +165,7 @@ fn apply_golem_contact(
         .secondary
         .actors
         .iter_mut()
-        .find(|actor| actor.id == id && actor.kind == NativeSecondaryActorKind::Golem)
+        .find(|actor| actor.id == id && actor.kind == SecondaryActorKind::Golem)
     else {
         return;
     };
@@ -178,11 +178,11 @@ fn apply_golem_contact(
     let position = actor.position;
     let source = player_contact_source(context.world, damage);
     let in_range = source.is_some_and(|source| {
-        squared_distance(source.position, position) < NATIVE_GOLEM_REFLECT_DISTANCE_SQUARED
+        squared_distance(source.position, position) < GOLEM_REFLECT_DISTANCE_SQUARED
     });
     let received = context.secondary.apply_golem_damage(
         id,
-        NativeGolemIncomingDamage {
+        GolemIncomingDamage {
             primary_damage: damage.physical_damage,
             reflectable_physical_source_in_range: damage.physical_damage > 0.0 && in_range,
             secondary_damage: damage.magic_damage,
@@ -275,13 +275,13 @@ impl ContactStep<'_, '_> {
         let shield_active = self.shield_remaining() > 0.0;
         let first_shield_event = self.secondary.next_event_id;
         let intercepted = self.secondary.apply_player_damage(
-            NativeSecondaryPlayerDamageInput {
+            SecondaryPlayerDamageInput {
                 player_id: self.participant.player_id,
                 amount: contact.shield_damage,
                 tick: self.tick,
                 position,
                 world_key: self.world_key,
-                presentation: NativeSecondaryPlayerDamagePresentation {
+                presentation: SecondaryPlayerDamagePresentation {
                     physical: damage.physical_damage > 0.0 && damage.magic_damage <= 0.0,
                     enhanced_effects: self.enhanced_effects,
                 },
@@ -307,7 +307,7 @@ impl ContactStep<'_, '_> {
             if self.participant.player.progression.poison_immunity_ticks_remaining > 0 {
                 0.0
             } else {
-                native_rescue_damage(
+                rescue_damage(
                     fround(
                         damage.poison_contact_damage.unwrap_or(0.0)
                             * derived.poison_damage_factor
@@ -427,17 +427,14 @@ impl ContactStep<'_, '_> {
             && (!stoneskin || poison_contact_damage > 0.0)
             && let Some(response) = resolve_player_flash_response(&derived, &mut self.secondary.rng)
         {
-            let ids = boneyard_native_secondary_targets(
-                &self.world.enemies,
-                position,
-                NATIVE_FLASH_RESPONSE_RADIUS,
-            )
-            .iter()
-            .map(|target| target.id)
-            .collect::<Vec<_>>();
+            let ids =
+                boneyard_secondary_targets(&self.world.enemies, position, FLASH_RESPONSE_RADIUS)
+                    .iter()
+                    .map(|target| target.id)
+                    .collect::<Vec<_>>();
             let first_flash_event = self.secondary.next_event_id;
             self.secondary.materialize_player_flash_response(
-                NativePlayerFlashResponseInput {
+                PlayerFlashResponseInput {
                     owner_id: self.participant.player_id,
                     position,
                     response: &response,
@@ -550,7 +547,7 @@ impl ContactStep<'_, '_> {
             return;
         };
         let prior = self.world.enemies.webbed_players.get(self.participant.player_id).copied();
-        let web = apply_native_webbed(prior, strength);
+        let web = apply_webbed(prior, strength);
         self.world.enemies.webbed_players.insert(self.participant.player_id.into(), web);
         if web.severity == 3.0 && prior.map_or(0.0, |prior| prior.severity) < 3.0 {
             let position = self.participant.wizard.position;
@@ -566,7 +563,7 @@ impl ContactStep<'_, '_> {
                 velocity_per_tick: Vec2::ZERO,
             };
             // The source keeps the birth/counter changes but discards spawn-event publication.
-            drop(self.world.enemies.add_native_cocoon(
+            drop(self.world.enemies.add_cocoon(
                 self.participant.player_id,
                 position,
                 &[target],
@@ -599,7 +596,7 @@ impl ContactStep<'_, '_> {
             && capped_poison_damage == 0.0
             && filtered_health_damage > 0.0
             && dialogue_idle
-            && native_wizard_ouch_cooldown_ready(self.tick, world.player_ouch_deadline_tick)
+            && wizard_ouch_cooldown_ready(self.tick, world.player_ouch_deadline_tick)
         {
             let result = emit_boneyard_player_damage_sound(
                 &mut world.enemies,

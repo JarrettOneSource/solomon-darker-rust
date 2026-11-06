@@ -15,11 +15,11 @@ use crate::modding::extensions::{
 };
 use crate::player::PlayerState;
 use crate::profile::{
-    NATIVE_HAGATHA_LAST_WORD_DEATH_TICK, NativePotionKind, PlayerSkillActivity, WizardElement,
-    native_hagatha_drinker_should_use_health_potion, native_hagatha_drinker_should_use_mana_potion,
+    HAGATHA_LAST_WORD_DEATH_TICK, PlayerSkillActivity, PotionKind, WizardElement,
+    hagatha_drinker_should_use_health_potion, hagatha_drinker_should_use_mana_potion,
 };
 use crate::spells::casting::PlayerPrimaryCastState;
-use crate::{HubWizard, NativeRng};
+use crate::{HubWizard, Rng};
 
 const LAST_WORD_SELECTOR: u32 = 12;
 
@@ -49,7 +49,7 @@ impl PlayerState {
         let amount = if damage_already_scaled {
             amount
         } else {
-            crate::player_rescue::native_rescue_damage(
+            crate::player_rescue::rescue_damage(
                 fround(amount * self.derived_stats().incoming_damage_factor),
                 &self.combat.rescue_protection,
             )
@@ -66,7 +66,7 @@ impl PlayerState {
         if self.combat.try_debit_mana(cost) {
             return PlayerEntityManaDebitResult { accepted: true, auto_mana_potion_used: false };
         }
-        if !native_hagatha_drinker_should_use_mana_potion(
+        if !hagatha_drinker_should_use_mana_potion(
             &self.economy.owned_perk_selectors,
             self.combat.current_mana,
             self.combat.maximum_mana,
@@ -75,7 +75,7 @@ impl PlayerState {
         {
             return PlayerEntityManaDebitResult::default();
         }
-        self.progression.apply_potion(NativePotionKind::Mana, &mut self.combat);
+        self.progression.apply_potion(PotionKind::Mana, &mut self.combat);
         PlayerEntityManaDebitResult {
             accepted: self.combat.try_debit_mana(cost),
             auto_mana_potion_used: true,
@@ -94,13 +94,13 @@ impl PlayerState {
             ..PlayerEntityDamageResult::default()
         };
         if self.combat.life_state == PlayerLifeState::LethalPending
-            && native_hagatha_drinker_should_use_health_potion(
+            && hagatha_drinker_should_use_health_potion(
                 &self.economy.owned_perk_selectors,
                 self.combat.current_health,
             )
             && self.consume_drinker_potion(0)
         {
-            self.progression.apply_potion(NativePotionKind::Health, &mut self.combat);
+            self.progression.apply_potion(PotionKind::Health, &mut self.combat);
             self.combat.death_age_ticks = 0;
             self.combat.death_tick = 0;
             self.combat.life_state = PlayerLifeState::Alive;
@@ -129,8 +129,8 @@ impl PlayerState {
         let potion_id = project_inventory_items(&self.economy.backpack)
             .into_iter()
             .find(|entry| {
-                entry.item.native_type_id == 7001
-                    && entry.item.native_subtype == Some(subtype)
+                entry.item.type_id == 7001
+                    && entry.item.subtype == Some(subtype)
                     && entry.item.mod_content.is_none()
             })
             .map(|entry| entry.item.id);
@@ -153,7 +153,7 @@ pub struct PlayerCombatContext<'a> {
     pub blindness_ticks_remaining: f64,
     pub tick: u64,
     pub mana_ceiling: Option<f64>,
-    pub rng: &'a mut NativeRng,
+    pub rng: &'a mut Rng,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -219,7 +219,7 @@ pub fn step_player_combat_with_extensions(
         extensions,
         "filtered mana delta",
     )?;
-    let native_poison_damage = crate::player_rescue::native_rescue_damage(
+    let native_poison_damage = crate::player_rescue::rescue_damage(
         fround(
             player.combat.poison_damage_per_tick
                 * derived.poison_damage_factor
@@ -329,8 +329,8 @@ pub fn step_player_combat_with_extensions(
     result.emitted_death_burst = combat_tick.emitted_death_burst;
     if player.economy.owned_perk_selectors.contains(&LAST_WORD_SELECTOR) {
         result.last_word_burst = !player.combat.corpse_consumed
-            && before_death_tick < NATIVE_HAGATHA_LAST_WORD_DEATH_TICK
-            && player.combat.death_tick >= NATIVE_HAGATHA_LAST_WORD_DEATH_TICK;
+            && before_death_tick < HAGATHA_LAST_WORD_DEATH_TICK
+            && player.combat.death_tick >= HAGATHA_LAST_WORD_DEATH_TICK;
         result.last_word_archive = combat_tick.completed_death_presentation;
     }
     Ok(result)

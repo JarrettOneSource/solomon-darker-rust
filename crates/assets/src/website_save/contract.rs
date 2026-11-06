@@ -403,7 +403,7 @@ fn bounded_base64(value: &str) -> bool {
         && unpadded.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/'))
 }
 
-fn native_path_is_safe(path: &str) -> bool {
+fn path_is_safe(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     let game_state = lower.starts_with("solomondark/savegames/")
         && lower.ends_with("/gamestate.sav")
@@ -432,7 +432,7 @@ fn parse_native_source(value: &Value) -> Result<NativeSaveSource, String> {
     let mut retained_length = 0;
     for file in &source.retained_files {
         if (!file.base64.is_empty() && !bounded_base64(&file.base64))
-            || !native_path_is_safe(&file.path)
+            || !path_is_safe(&file.path)
             || !valid_sha256(&file.sha256)
             || !paths.insert(file.path.to_lowercase())
         {

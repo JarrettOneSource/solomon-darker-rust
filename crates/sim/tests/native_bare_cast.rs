@@ -3,31 +3,31 @@
 
 use solomon_sim::float::fround;
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
-use solomon_sim::profile::primary::{NativePrimarySkillProfile, native_primary_skill_profile};
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::{NativeSecondaryCastAction, step_native_secondary_cast_action};
-use solomon_sim::spells::casting::{NativePlayerWeaponKind, PlayerPrimaryCastState};
-use solomon_sim::spells::hand_cast::NativeHandCast1;
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
+use solomon_sim::profile::primary::{PrimarySkillProfile, primary_skill_profile};
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::secondary::{SecondaryCastAction, step_secondary_cast_action};
+use solomon_sim::spells::casting::{PlayerPrimaryCastState, PlayerWeaponKind};
+use solomon_sim::spells::hand_cast::HandCast1;
 use solomon_sim::spells::model::SpellState;
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 
-fn profile(element: WizardElement, weld: Option<u32>) -> NativePrimarySkillProfile {
-    let mut book = NativeSkillBookState::new(element, WizardDiscipline::Arcane);
+fn profile(element: WizardElement, weld: Option<u32>) -> PrimarySkillProfile {
+    let mut book = SkillBookState::new(element, WizardDiscipline::Arcane);
     if let Some(build) = weld {
         book.grant_weld_build(build);
     }
-    native_primary_skill_profile(&book, &NativeOffensiveSpellFactors::default())
+    primary_skill_profile(&book, &OffensiveSpellFactors::default())
 }
 
 #[allow(clippy::too_many_arguments)]
 fn step(
     spells: &mut SpellState,
     wizard: &mut HubWizard,
-    rng: &mut NativeRng,
-    profile: &NativePrimarySkillProfile,
-    weapon: Option<NativePlayerWeaponKind>,
+    rng: &mut Rng,
+    profile: &PrimarySkillProfile,
+    weapon: Option<PlayerWeaponKind>,
     tick: u64,
     eligible: bool,
     factor: f64,
@@ -72,11 +72,11 @@ fn step(
 
 #[test]
 fn only_accepted_no_item_one_shot_consumes_the_one_born_gameplay_word() {
-    for weapon in [None, Some(NativePlayerWeaponKind::Staff), Some(NativePlayerWeaponKind::Wand)] {
+    for weapon in [None, Some(PlayerWeaponKind::Staff), Some(PlayerWeaponKind::Wand)] {
         for eligible in [false, true] {
             let mut wizard = HubWizard::at(Vec2::ZERO);
             let mut spells = SpellState::default();
-            let mut rng = NativeRng::new(125);
+            let mut rng = Rng::new(125);
             let mut expected = rng.clone();
             if weapon.is_none() && eligible {
                 expected.draw_integer(4);
@@ -94,7 +94,7 @@ fn only_accepted_no_item_one_shot_consumes_the_one_born_gameplay_word() {
         let run = |weapon| {
             let mut wizard = HubWizard::at(Vec2::ZERO);
             let mut spells = SpellState::default();
-            let mut rng = NativeRng::new(125);
+            let mut rng = Rng::new(125);
             step(&mut spells, &mut wizard, &mut rng, &profile, weapon, 0, true, 1.0, 1.0, true);
             assert!(wizard.primary_cast.hand_cast.is_none());
             step(&mut spells, &mut wizard, &mut rng, &profile, weapon, 1, true, 0.0, 0.0, true);
@@ -112,7 +112,7 @@ fn only_accepted_no_item_one_shot_consumes_the_one_born_gameplay_word() {
         };
         assert_eq!(
             run(None),
-            run(Some(NativePlayerWeaponKind::Staff)),
+            run(Some(PlayerWeaponKind::Staff)),
             "{element:?} Constant has no HandCast1 opening draw"
         );
     }
@@ -133,7 +133,7 @@ fn born_bare_rates_marker_and_terminal_tick_follow_the_retail_program() {
         let rate = fround(fround(0.095_f32 as f64 * 1.5) * multiplier);
         let mut wizard = HubWizard::at(Vec2::ZERO);
         let mut spells = SpellState::default();
-        let mut rng = NativeRng::new(73);
+        let mut rng = Rng::new(73);
         step(&mut spells, &mut wizard, &mut rng, &profile, None, 0, true, 1.5, 1.0, true);
         let mut progress = 0.0;
         let mut emitted = false;
@@ -168,36 +168,36 @@ fn born_bare_rates_marker_and_terminal_tick_follow_the_retail_program() {
 #[test]
 fn zero_time_updates_pose_but_never_rerolls_opening_and_cast2_retains_its_terminal() {
     for seed in 0..16 {
-        let mut rng = NativeRng::new(seed);
+        let mut rng = Rng::new(seed);
         let mut oracle = rng.clone();
         let expected_pose = if oracle.draw_integer(4) == 1 { 3 } else { 0 };
-        let mut hand = NativeHandCast1::new(0.095_f32 as f64, 2, &mut rng);
+        let mut hand = HandCast1::new(0.095_f32 as f64, 2, &mut rng);
         assert_eq!(hand.pose(), 2, "constructor retains prior K");
         hand.step(0.0);
         assert_eq!(hand.pose(), expected_pose);
         assert_eq!(rng, oracle);
     }
-    let mut action = Some(NativeSecondaryCastAction::new(None));
+    let mut action = Some(SecondaryCastAction::new(None));
     assert_eq!(action.unwrap().hand.unwrap().pose, 0);
-    action = step_native_secondary_cast_action(action, 300.0, 0.0).action;
+    action = step_secondary_cast_action(action, 300.0, 0.0).action;
     assert_eq!(action.unwrap().hand.unwrap().pose, 1);
     assert_eq!(action.unwrap().progress, 0.0);
     let mut progress = 0.0;
     while progress < 6.0 {
         progress = fround(progress + 0.095_f32 as f64 * 0.5);
-        action = step_native_secondary_cast_action(action, 300.0, 0.5).action;
+        action = step_secondary_cast_action(action, 300.0, 0.5).action;
         assert_eq!(action.unwrap().progress, progress);
         assert_eq!(action.unwrap().hand.unwrap().done, progress >= 6.0);
     }
     assert_eq!(action.unwrap().hand.unwrap().pose, 3);
-    assert!(step_native_secondary_cast_action(action, 0.0, 1.0).action.is_none());
+    assert!(step_secondary_cast_action(action, 0.0, 1.0).action.is_none());
 }
 
 #[test]
 fn old_actions_default_without_rng_and_new_action_state_round_trips_exactly() {
     let mut cast = PlayerPrimaryCastState::default();
-    let mut rng = NativeRng::new(125);
-    cast.hand_cast = Some(NativeHandCast1::new(0.095_f32 as f64, 0, &mut rng));
+    let mut rng = Rng::new(125);
+    cast.hand_cast = Some(HandCast1::new(0.095_f32 as f64, 0, &mut rng));
     cast.action_tick = Some(0.0);
     cast.hand_cast.as_mut().unwrap().step(0.5);
     let saved = serde_json::to_value(&cast).unwrap();
@@ -216,10 +216,10 @@ fn old_actions_default_without_rng_and_new_action_state_round_trips_exactly() {
         invalid["hand_cast"][field] = value;
         assert!(serde_json::from_value::<PlayerPrimaryCastState>(invalid).is_err());
     }
-    let secondary = NativeSecondaryCastAction::new(None);
+    let secondary = SecondaryCastAction::new(None);
     let mut invalid = serde_json::to_value(secondary).unwrap();
     invalid["hand"]["pose"] = serde_json::json!(4);
-    assert!(serde_json::from_value::<NativeSecondaryCastAction>(invalid).is_err());
+    assert!(serde_json::from_value::<SecondaryCastAction>(invalid).is_err());
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn native_hand_class_query_rounds_each_store_without_changing_equipped_cadence()
             element: WizardElement::Ether,
             discipline: WizardDiscipline::Arcane,
         },
-        &mut NativeRng::new(125),
+        &mut Rng::new(125),
     );
     let modifiers = &mut player.skill_runtime.equipment_modifiers;
     modifiers.cast_speed_multiplier = 1.13_f32 as f64;
@@ -249,11 +249,11 @@ fn native_hand_class_query_rounds_each_store_without_changing_equipped_cadence()
 
 #[test]
 fn cast2_staff_marker_zero_and_wand_bare_marker_one_keep_native_endpoints() {
-    for weapon in [Some(NativePlayerWeaponKind::Staff), Some(NativePlayerWeaponKind::Wand), None] {
-        let mut action = Some(NativeSecondaryCastAction::new(weapon));
+    for weapon in [Some(PlayerWeaponKind::Staff), Some(PlayerWeaponKind::Wand), None] {
+        let mut action = Some(SecondaryCastAction::new(weapon));
         let mut pulses = Vec::new();
         for tick in 1..=15 {
-            let step = step_native_secondary_cast_action(action, 0.0, 1.0);
+            let step = step_secondary_cast_action(action, 0.0, 1.0);
             if step.marker_crossed {
                 pulses.push(tick);
             }
@@ -261,24 +261,24 @@ fn cast2_staff_marker_zero_and_wand_bare_marker_one_keep_native_endpoints() {
         }
         assert_eq!(
             pulses,
-            if weapon == Some(NativePlayerWeaponKind::Staff) { vec![1] } else { vec![11] }
+            if weapon == Some(PlayerWeaponKind::Staff) { vec![1] } else { vec![11] }
         );
-        let mut exact = NativeSecondaryCastAction::new(weapon);
-        exact.progress = if weapon == Some(NativePlayerWeaponKind::Staff) { 0.0 } else { 1.0 };
+        let mut exact = SecondaryCastAction::new(weapon);
+        exact.progress = if weapon == Some(PlayerWeaponKind::Staff) { 0.0 } else { 1.0 };
         if let Some(hand) = &mut exact.hand {
             hand.pose = 3;
         }
-        let stalled = step_native_secondary_cast_action(Some(exact), 0.0, 0.0);
+        let stalled = step_secondary_cast_action(Some(exact), 0.0, 0.0);
         if weapon.is_none() {
             assert!(!stalled.marker_crossed);
         }
-        let departed = step_native_secondary_cast_action(Some(exact), 0.0, 1.0);
+        let departed = step_secondary_cast_action(Some(exact), 0.0, 1.0);
         assert!(departed.marker_crossed, "native inclusive endpoint {weapon:?}");
     }
     let profile = profile(WizardElement::Ether, None);
     let mut wizard = HubWizard::at(Vec2::ZERO);
     let mut spells = SpellState::default();
-    let mut rng = NativeRng::new(125);
+    let mut rng = Rng::new(125);
     // Exact f32 .5 birth rate lands at1 and the native helper also admits departure.
     let factor = 0.5 / (0.095_f32 as f64);
     for tick in 0..=3 {

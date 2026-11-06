@@ -1,7 +1,7 @@
 //! Authored Hagatha tooltip rows from current hub-inventory-item-text.ts.
 // Recorded without modifying the source; item-text-goldens checks every row.
 
-pub(super) const HAGATHA_NATIVE_TOOLTIP_LINES: [&[&str]; 28] = [
+pub(super) const HAGATHA_TOOLTIP_LINES: [&[&str]; 28] = [
     &["Maximum life is always increased by 25%."],
     &["Maximum mana is always increased by 25%."],
     &["Walking and casting speed is increased by 10%."],

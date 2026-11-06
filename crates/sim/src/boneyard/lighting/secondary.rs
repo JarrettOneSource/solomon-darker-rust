@@ -1,22 +1,21 @@
 //! Secondary actor providers and MiscLight from `native-boneyard-light-model.ts`.
 
 use crate::float::fround;
-use crate::random_domain::native_random_float_from_word;
-use crate::secondary::{NativeSecondaryActorKind, NativeSecondaryActorState};
+use crate::random_domain::random_float_from_word;
+use crate::secondary::{SecondaryActorKind, SecondaryActorState};
 
 use super::{
-    NativeBoneyardLightSource, native_fire_patch_light_source, presentation_random,
-    presentation_random_word,
+    BoneyardLightSource, fire_patch_light_source, presentation_random, presentation_random_word,
 };
 
 #[must_use]
-pub fn native_secondary_provider_light_source(
-    actor: &NativeSecondaryActorState,
+pub fn secondary_provider_light_source(
+    actor: &SecondaryActorState,
     frame: u64,
     multiple_shadows: bool,
     point_gain: f64,
-) -> Option<NativeBoneyardLightSource> {
-    native_secondary_provider_light_source_at_age(
+) -> Option<BoneyardLightSource> {
+    secondary_provider_light_source_at_age(
         actor,
         actor.age_ticks as f64,
         frame,
@@ -28,24 +27,20 @@ pub fn native_secondary_provider_light_source(
 /// The display sampler supplies fractional age without changing logical light
 /// queries. Ether Fade retains the source's explicit floor before decay steps.
 #[must_use]
-pub fn native_secondary_provider_light_source_at_age(
-    actor: &NativeSecondaryActorState,
+pub fn secondary_provider_light_source_at_age(
+    actor: &SecondaryActorState,
     age_ticks: f64,
     frame: u64,
     multiple_shadows: bool,
     point_gain: f64,
-) -> Option<NativeBoneyardLightSource> {
-    use NativeSecondaryActorKind::*;
+) -> Option<BoneyardLightSource> {
+    use SecondaryActorKind::*;
     let (radius, intensity, casts_shadow) = match actor.kind {
         MovingFire | FirePatch => {
             if actor.radius <= 0.0 {
                 return None;
             }
-            return Some(native_fire_patch_light_source(
-                actor.position,
-                actor.radius,
-                multiple_shadows,
-            ));
+            return Some(fire_patch_light_source(actor.position, actor.radius, multiple_shadows));
         }
         RingFireExplosion => (fround(2.0 * point_gain.max(0.0)), 1.0, multiple_shadows),
         ElectricBurnFlare => {
@@ -57,7 +52,7 @@ pub fn native_secondary_provider_light_source_at_age(
         }
         RingFireFragment => (
             fround(
-                1.0 - native_random_float_from_word(
+                1.0 - random_float_from_word(
                     presentation_random_word(actor.id, frame as u32 ^ 0x6ac6_90c5),
                     0.25,
                 ),
@@ -97,33 +92,28 @@ pub fn native_secondary_provider_light_source_at_age(
         Comet => (2.0, 0.5, multiple_shadows),
         _ => return None,
     };
-    Some(NativeBoneyardLightSource::new(actor.position, radius, intensity, casts_shadow))
+    Some(BoneyardLightSource::new(actor.position, radius, intensity, casts_shadow))
 }
 
 #[must_use]
-pub fn native_secondary_misc_light_source(
-    actor: &NativeSecondaryActorState,
-) -> Option<NativeBoneyardLightSource> {
-    native_secondary_misc_light_source_at_age(actor, actor.age_ticks as f64)
+pub fn secondary_misc_light_source(actor: &SecondaryActorState) -> Option<BoneyardLightSource> {
+    secondary_misc_light_source_at_age(actor, actor.age_ticks as f64)
 }
 
 /// Burn lights become present after age zero, including a fractional display
 /// sample before the first complete tick. The source does not floor this test.
 #[must_use]
-pub fn native_secondary_misc_light_source_at_age(
-    actor: &NativeSecondaryActorState,
+pub fn secondary_misc_light_source_at_age(
+    actor: &SecondaryActorState,
     age_ticks: f64,
-) -> Option<NativeBoneyardLightSource> {
-    use NativeSecondaryActorKind::*;
+) -> Option<BoneyardLightSource> {
+    use SecondaryActorKind::*;
     match actor.kind {
-        MagicCircle if age_ticks < 1500.0 => Some(NativeBoneyardLightSource::new(
-            actor.position,
-            actor.scale * 0.5,
-            actor.alpha,
-            true,
-        )),
+        MagicCircle if age_ticks < 1500.0 => {
+            Some(BoneyardLightSource::new(actor.position, actor.scale * 0.5, actor.alpha, true))
+        }
         FireBurn | EtherBurn | ElectricBurn if age_ticks > 0.0 => {
-            Some(NativeBoneyardLightSource::new(actor.position, actor.radius, actor.alpha, false))
+            Some(BoneyardLightSource::new(actor.position, actor.radius, actor.alpha, false))
         }
         _ => None,
     }

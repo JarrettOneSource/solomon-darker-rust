@@ -5,25 +5,25 @@ use serde_json::{Value, json};
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::harden_effects::*;
 use solomon_sim::harmful::*;
-use solomon_sim::player_rescue::NativePlayerRescueProtection;
+use solomon_sim::player_rescue::PlayerRescueProtection;
 use solomon_sim::profile::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
-fn random_snapshot(rng: &NativeRng) -> Value {
+fn random_snapshot(rng: &Rng) -> Value {
     json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":&rng.words[..]})
 }
 
-fn shard_snapshot(body: NativeHardenShardBody) -> Value {
+fn shard_snapshot(body: HardenShardBody) -> Value {
     json!({"bounceVelocity":body.bounce_velocity,"enhancedShadow":body.enhanced_shadow,
         "height":body.height,"life":body.life,"position":body.position,"record":body.record,
         "rotationDegrees":body.rotation_degrees,"rotationStepDegrees":body.rotation_step_degrees,
         "velocity":body.velocity,"verticalVelocity":body.vertical_velocity})
 }
 
-fn effect_snapshot(effect: &NativeHardenEffect) -> Value {
+fn effect_snapshot(effect: &HardenEffect) -> Value {
     let (owner, kind, mut value) = match effect {
-        NativeHardenEffect::Shard { owner, body } => (owner, "harden-shard", shard_snapshot(*body)),
-        NativeHardenEffect::Burst { owner, alpha, position } => {
+        HardenEffect::Shard { owner, body } => (owner, "harden-shard", shard_snapshot(*body)),
+        HardenEffect::Burst { owner, alpha, position } => {
             (owner, "harden-burst", json!({"alpha":alpha,"position":position}))
         }
     };
@@ -63,7 +63,7 @@ fn current_harmful_contacts_keep_rescue_and_harden_random_order() {
         serde_json::from_str(include_str!("fixtures/website/current-harmful-contact-goldens.json"))
             .unwrap();
     assert_eq!(fixture["sourceRevision"], "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
-    let mut book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+    let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
     let economy = HubEconomyState::new(77, WizardElement::Ether);
     let base_runtime = PlayerSkillRuntimeState::new(&mut book, &economy);
     let progression = PlayerProgressionState::new(1);
@@ -71,7 +71,7 @@ fn current_harmful_contacts_keep_rescue_and_harden_random_order() {
     for (index, case) in fixture["contacts"].as_array().unwrap().iter().enumerate() {
         let spec = &case["spec"];
         let mut runtime = base_runtime.clone();
-        runtime.harden = NativeHardenState {
+        runtime.harden = HardenState {
             armor: spec["armor"].as_f64().unwrap(),
             coating: spec["coating"].as_f64().unwrap(),
         };
@@ -81,11 +81,11 @@ fn current_harmful_contacts_keep_rescue_and_harden_random_order() {
         stats.magic_resistance = 0.2;
         stats.incoming_damage_factor = 1.25;
         stats.deflect_chance_percent = spec["deflect"].as_f64().unwrap();
-        let protection = NativePlayerRescueProtection {
+        let protection = PlayerRescueProtection {
             fraction: case["fraction"].as_f64().unwrap(),
-            ..NativePlayerRescueProtection::default()
+            ..PlayerRescueProtection::default()
         };
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let result = resolve_player_harmful_contact(
             PlayerHarmfulContactContext {
                 runtime: &runtime,
@@ -116,9 +116,9 @@ fn current_harmful_contacts_keep_rescue_and_harden_random_order() {
         assert_source(&json!(chip), &case["hardenChip"], &format!("current chip {index}"));
     }
     for (index, case) in fixture["breakups"].as_array().unwrap().iter().enumerate() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let birth = create_native_harden_breakup(
-            NativeHardenBreakupInput {
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let birth = create_harden_breakup(
+            HardenBreakupInput {
                 coating: case["coating"].as_f64().unwrap(),
                 position: Vec2::new(123.25, -54.5),
                 owner_id: "player",
@@ -138,7 +138,7 @@ fn current_harmful_contacts_keep_rescue_and_harden_random_order() {
         );
         // The actual Source view keeps the inherited black shadow additive. It
         // shares the body's rotation and has no normal-blend darkening pass.
-        let plan = native_harden_effect_plan(&effects[0]);
+        let plan = harden_effect_plan(&effects[0]);
         let enhanced = case["enhancedEffects"].as_bool().unwrap();
         assert_eq!(plan.draws.len(), if enhanced { 2 } else { 1 });
         if enhanced {
@@ -150,9 +150,7 @@ fn current_harmful_contacts_keep_rescue_and_harden_random_order() {
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         for tick in 101..=850 {
             effects.retain_mut(|effect| {
-                step_native_harden_effect(effect, tick, &mut rng, |_| {
-                    !case["blocked"].as_bool().unwrap()
-                })
+                step_harden_effect(effect, tick, &mut rng, |_| !case["blocked"].as_bool().unwrap())
             });
             if samples.peek().is_some_and(|sample| sample["tick"].as_u64() == Some(tick)) {
                 assert_source(

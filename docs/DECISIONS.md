@@ -221,7 +221,7 @@ Recorded equal-input last-bit differences in sine and power are sufficient to
 change saved positions and effect lifetimes after repeated steps.
 
 Player-facing numeric text has its own rounding contract. Decimal labels preserve
-the binary value and decimal tie handling used by `native_tooltip_fixed`; for example,
+the binary value and decimal tie handling used by `tooltip_fixed`; for example,
 2.5 at zero places becomes 3, while 2.55 at one place becomes 2.5. Rust's default
 formatting can choose a different tie. Numeric presentation tests protect this
 behavior separately from simulation arithmetic.
@@ -237,7 +237,7 @@ a training runtime to the game.
 ## Display copies and immutable data
 
 Accepted session state owns commands, audio, checkpoints, and saves.
-`NativePresentationTimeline` owns bounded display history and fractional clocks.
+`PresentationTimeline` owns bounded display history and fractional clocks.
 Boneyard frames interpolate without extrapolation; College prediction is limited
 to one snapshot interval of local movement.
 

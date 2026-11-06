@@ -1,23 +1,23 @@
 //! One wizard's canonical components, composed as in `core-server/player-entity-store.ts`
 //! and `game-simulation.ts`. Movement belongs to the active world; secondary clocks belong
-//! to `NativeSecondarySimulationState::players`. Menus never own copies of these values.
+//! to `SecondarySimulationState::players`. Menus never own copies of these values.
 
 mod console;
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::belt::PlayerBeltComponent;
 use crate::combat::PlayerCombatState;
 use crate::economy::{
-    HubEconomyContext, HubEconomyResult, HubEconomyState, HubInventoryAction,
-    NativeUnforgeOutcomeKind, NativeUnforgeVitals, find_inventory_item,
+    HubEconomyContext, HubEconomyResult, HubEconomyState, HubInventoryAction, UnforgeOutcomeKind,
+    UnforgeVitals, find_inventory_item,
 };
-use crate::equipment::native_equipment_recipe_effects;
+use crate::equipment::equipment_recipe_effects;
 use crate::hub::interaction::BoastFailureProducer;
 use crate::profile::{
-    NativePotionKind, NativeSkillBookState, NewGameSelection, PlayerProgressionState,
-    PlayerSkillChoice, PlayerSkillDerivedStats, PlayerSkillRuntimeState, PlayerStatBookComponent,
-    draw_native_player_creation_offer_seed, native_skill_category,
-    player_skill_derived_stats_with_stat_book, refresh_player_combat_from_skill_stats,
+    NewGameSelection, PlayerProgressionState, PlayerSkillChoice, PlayerSkillDerivedStats,
+    PlayerSkillRuntimeState, PlayerStatBookComponent, PotionKind, SkillBookState,
+    draw_player_creation_offer_seed, player_skill_derived_stats_with_stat_book,
+    refresh_player_combat_from_skill_stats, skill_category,
 };
 
 /// Authored Hagatha selector values from `native-hagatha-effects.ts`.
@@ -29,7 +29,7 @@ const SORCERORS_CHARM: u32 = 17;
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerState {
     pub selection: NewGameSelection,
-    pub book: NativeSkillBookState,
+    pub book: SkillBookState,
     #[cfg_attr(feature = "persistence", serde(default))]
     pub stat_book: PlayerStatBookComponent,
     pub economy: HubEconomyState,
@@ -65,10 +65,10 @@ impl PlayerState {
     }
 
     #[must_use]
-    pub fn new(selection: NewGameSelection, gameplay_rng: &mut NativeRng) -> Self {
-        let offer_seed = draw_native_player_creation_offer_seed(gameplay_rng);
+    pub fn new(selection: NewGameSelection, gameplay_rng: &mut Rng) -> Self {
+        let offer_seed = draw_player_creation_offer_seed(gameplay_rng);
         let economy = HubEconomyState::new(i64::from(offer_seed), selection.element);
-        let mut book = NativeSkillBookState::new(selection.element, selection.discipline);
+        let mut book = SkillBookState::new(selection.element, selection.discipline);
         let stat_book = PlayerStatBookComponent::default();
         let skill_runtime =
             PlayerSkillRuntimeState::new_with_stat_book(&mut book, &stat_book, &economy);
@@ -106,7 +106,7 @@ impl PlayerState {
 
     /// `autofillPlayerEntitySkillSelections`: choices and derived combat capacities
     /// commit together. The caller resets the wizard's cast only if its primary changed.
-    pub fn autofill_skill_selections(&mut self, rng: &mut NativeRng) -> bool {
+    pub fn autofill_skill_selections(&mut self, rng: &mut Rng) -> bool {
         let previous = self.book.clone();
         self.skill_runtime.autofill_selections_with_stat_book(
             &mut self.book,
@@ -121,7 +121,7 @@ impl PlayerState {
     }
 
     pub fn select_primary(&mut self, skill_id: usize) -> bool {
-        if native_skill_category(skill_id) != Some(1)
+        if skill_category(skill_id) != Some(1)
             || self.book.effective_ranks.get(skill_id).is_none_or(|rank| *rank == 0)
         {
             return false;
@@ -177,7 +177,7 @@ impl PlayerState {
             // Equipment admission uses learned Creativity before equipment bonuses.
             creativity_rank: self.book.permanent_ranks[63],
             advanced_unlocks: self.book.advanced_unlocks,
-            vitals: NativeUnforgeVitals {
+            vitals: UnforgeVitals {
                 current_health: self.combat.current_health,
                 current_mana: self.combat.current_mana,
                 maximum_health: self.combat.maximum_health,
@@ -190,7 +190,7 @@ impl PlayerState {
     pub fn apply_inventory(
         &mut self,
         action: &HubInventoryAction,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
     ) -> PlayerInventoryResult {
         self.apply_inventory_with_extensions(action, gameplay_rng, None)
     }
@@ -198,7 +198,7 @@ impl PlayerState {
     pub fn apply_inventory_with_extensions(
         &mut self,
         action: &HubInventoryAction,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
         extensions: Option<&dyn crate::modding::extensions::GameSimulationExtensions>,
     ) -> PlayerInventoryResult {
         self.apply_inventory_with_dye_session(action, gameplay_rng, extensions, None)
@@ -207,9 +207,9 @@ impl PlayerState {
     pub fn apply_inventory_with_dye_session(
         &mut self,
         action: &HubInventoryAction,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
         extensions: Option<&dyn crate::modding::extensions::GameSimulationExtensions>,
-        dye_session: Option<&crate::economy::NativeInventoryDyeSession>,
+        dye_session: Option<&crate::economy::InventoryDyeSession>,
     ) -> PlayerInventoryResult {
         let previous_book = self.book.clone();
         let previous_revision = self.economy.revision;
@@ -230,9 +230,8 @@ impl PlayerState {
                 find_inventory_item(&self.economy.backpack, *item_id).is_some_and(|item| {
                     item.native_effects.as_ref().map_or_else(
                         || {
-                            item.recipe_index.is_some_and(|index| {
-                                !native_equipment_recipe_effects(index).is_empty()
-                            })
+                            item.recipe_index
+                                .is_some_and(|index| !equipment_recipe_effects(index).is_empty())
                         },
                         |effects| !effects.is_empty(),
                     )
@@ -296,13 +295,12 @@ impl PlayerState {
             _ => {}
         }
         if let Some(item) = consumed {
-            if item.native_type_id == 7001 {
+            if item.type_id == 7001 {
                 self.fail_boast_with_extensions(BoastFailureProducer::PotionUse, extensions);
                 result.consumed_stock_potion = item.mod_content.is_none();
             }
             if item.mod_content.is_none()
-                && let Some(kind) =
-                    item.native_subtype.and_then(NativePotionKind::from_native_subtype)
+                && let Some(kind) = item.subtype.and_then(PotionKind::from_subtype)
             {
                 self.progression.apply_potion(kind, &mut self.combat);
             }
@@ -312,25 +310,25 @@ impl PlayerState {
         }
         if let Some(outcome) = &result.transaction.unforge_outcome {
             match outcome.kind {
-                NativeUnforgeOutcomeKind::FullRejuvenation => {
+                UnforgeOutcomeKind::FullRejuvenation => {
                     self.combat.current_health = self.combat.maximum_health;
                     self.combat.current_mana = self.combat.maximum_mana;
                     self.progression.revision += 1;
                     result.reset_secondary_cooldowns = true;
                 }
-                NativeUnforgeOutcomeKind::MindDredge => self.progression.grant_mind_dredge(),
+                UnforgeOutcomeKind::MindDredge => self.progression.grant_mind_dredge(),
                 _ => {}
             }
         }
         if let Some(item) = read_book {
-            let outcome = match item.native_subtype {
+            let outcome = match item.subtype {
                 Some(2) => {
                     self.grant_bonus_skill_choice(gameplay_rng);
-                    crate::economy::NativeSkillBookOutcome::Choice
+                    crate::economy::SkillBookOutcome::Choice
                 }
                 Some(3) => {
                     let skill_id = self.increase_random_skill(gameplay_rng);
-                    crate::economy::NativeSkillBookOutcome::Rank { skill_id }
+                    crate::economy::SkillBookOutcome::Rank { skill_id }
                 }
                 _ => unreachable!("an accepted skill book has a native choice or rank subtype"),
             };
@@ -343,7 +341,7 @@ impl PlayerState {
         result
     }
 
-    pub fn grant_experience(&mut self, amount: f64, gameplay_rng: &mut NativeRng) {
+    pub fn grant_experience(&mut self, amount: f64, gameplay_rng: &mut Rng) {
         let previous = self.progression.pending_offer.as_ref().map(|offer| offer.sequence);
         self.progression.grant_experience(
             &self.book,
@@ -358,7 +356,7 @@ impl PlayerState {
     pub fn synchronize_level_milestone(
         &mut self,
         milestone: &crate::profile::SharedPlayerLevelMilestone,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
     ) -> Result<(), String> {
         let previous = self.progression.pending_offer.as_ref().map(|offer| offer.sequence);
         let charm = self.owns_sorcerors_charm();
@@ -373,11 +371,7 @@ impl PlayerState {
         Ok(())
     }
 
-    pub fn choose_skill(
-        &mut self,
-        choice: PlayerSkillChoice,
-        gameplay_rng: &mut NativeRng,
-    ) -> bool {
+    pub fn choose_skill(&mut self, choice: PlayerSkillChoice, gameplay_rng: &mut Rng) -> bool {
         let previous = self.book.clone();
         if !self.progression.choose_skill(
             &mut self.book,
@@ -407,11 +401,7 @@ impl PlayerState {
 
     /// `replacePlayerEntitySkillChoiceWithMod` opens/finalizes the next pending native
     /// offer after the authored host has accepted its own skill reward transaction.
-    pub fn replace_skill_with_mod(
-        &mut self,
-        offer_sequence: u64,
-        gameplay_rng: &mut NativeRng,
-    ) -> bool {
+    pub fn replace_skill_with_mod(&mut self, offer_sequence: u64, gameplay_rng: &mut Rng) -> bool {
         if !self.progression.replace_choice_with_mod(offer_sequence) {
             return false;
         }
@@ -426,11 +416,7 @@ impl PlayerState {
     }
 
     /// The Game host commits the seed draw only when the current offer accepts a reroll.
-    pub fn reroll_skill_offer(
-        &mut self,
-        offer_sequence: u64,
-        gameplay_rng: &mut NativeRng,
-    ) -> bool {
+    pub fn reroll_skill_offer(&mut self, offer_sequence: u64, gameplay_rng: &mut Rng) -> bool {
         if !self.owns_sorcerors_charm() {
             return false;
         }
@@ -450,11 +436,7 @@ impl PlayerState {
         true
     }
 
-    pub fn defer_skill_choice(
-        &mut self,
-        offer_sequence: u64,
-        gameplay_rng: &mut NativeRng,
-    ) -> bool {
+    pub fn defer_skill_choice(&mut self, offer_sequence: u64, gameplay_rng: &mut Rng) -> bool {
         let owned = self.owns_sorcerors_charm();
         if !self.progression.defer_choice(
             &self.book,
@@ -469,14 +451,14 @@ impl PlayerState {
         true
     }
 
-    fn apply_hagatha_purchase(&mut self, selectors: &[u32], gameplay_rng: &mut NativeRng) {
+    fn apply_hagatha_purchase(&mut self, selectors: &[u32], gameplay_rng: &mut Rng) {
         self.progression.hagatha_runtime.purchase(selectors);
         self.refresh_hagatha_skill_effects(gameplay_rng);
     }
 
     /// `refreshPlayerEntityHagathaSkillEffects`: restore owned skill effects without
     /// replaying purchase-only charges. An actual Weird Caster acquisition reseeds offers.
-    pub fn refresh_hagatha_skill_effects(&mut self, gameplay_rng: &mut NativeRng) -> Option<usize> {
+    pub fn refresh_hagatha_skill_effects(&mut self, gameplay_rng: &mut Rng) -> Option<usize> {
         let previous = self.book.clone();
         if self.economy.owned_perk_selectors.contains(&REVELATION) {
             self.book.apply_starting_revelation(self.selection.element);
@@ -546,12 +528,12 @@ impl PlayerState {
     /// The stock Tutorial replaces only its starter equipment and two starter potions.
     pub fn prepare_tutorial_loadout(&mut self) {
         use crate::economy::project_inventory_items;
-        use crate::profile::native_hagatha_revelation_rank;
+        use crate::profile::hagatha_revelation_rank;
 
         let previous = self.book.clone();
         self.book.permanent_ranks[11] = 0;
         self.book.effective_ranks[11] = 0;
-        let rank = native_hagatha_revelation_rank(1, &self.economy.owned_perk_selectors);
+        let rank = hagatha_revelation_rank(1, &self.economy.owned_perk_selectors);
         self.book.permanent_ranks[72] = self.book.permanent_ranks[72].max(rank);
         self.book.effective_ranks[72] = self.book.effective_ranks[72].max(rank);
         self.book.learned_skill_order.retain(|id| *id != 11 && *id != 72);
@@ -562,9 +544,7 @@ impl PlayerState {
         for subtype in [0, 1] {
             let potion_id = project_inventory_items(&self.economy.backpack)
                 .into_iter()
-                .find(|entry| {
-                    entry.item.native_type_id == 7001 && entry.item.native_subtype == Some(subtype)
-                })
+                .find(|entry| entry.item.type_id == 7001 && entry.item.subtype == Some(subtype))
                 .map(|entry| entry.item.id);
             if let Some(item_id) = potion_id {
                 let result = self
@@ -573,20 +553,19 @@ impl PlayerState {
                 assert!(result.accepted, "Tutorial starter potion must be discardable");
             }
         }
-        self.economy
-            .apply_starter_appearance(crate::appearance::NATIVE_TUTORIAL_EQUIPMENT_APPEARANCE);
+        self.economy.apply_starter_appearance(crate::appearance::TUTORIAL_EQUIPMENT_APPEARANCE);
         self.refresh(&previous);
         self.belt = PlayerBeltComponent::new(&self.book);
     }
 
-    pub fn grant_bonus_skill_choice(&mut self, rng: &mut NativeRng) {
+    pub fn grant_bonus_skill_choice(&mut self, rng: &mut Rng) {
         let previous = self.progression.pending_offer.as_ref().map(|offer| offer.sequence);
         let charm = self.owns_sorcerors_charm();
         self.progression.grant_bonus_skill_choice(&self.book, self.combat.maximum_mana, rng, charm);
         self.mark_new_offer_insight(previous, rng);
     }
 
-    pub fn increase_random_skill(&mut self, rng: &mut NativeRng) -> Option<usize> {
+    pub fn increase_random_skill(&mut self, rng: &mut Rng) -> Option<usize> {
         let previous = self.book.clone();
         let id = self.book.increase_random_learned_skill(rng)?;
         self.progression.apply_acquisition_offer_seeds(rng, 1);
@@ -621,8 +600,8 @@ impl PlayerState {
         appearance_owner: Option<crate::appearance::StarterColorOwner>,
     ) {
         if let Some(owner) = appearance_owner {
-            let appearance = crate::appearance::roll_native_starter_equipment_appearance(
-                &mut NativeRng::new(i64::from(offer_seed)),
+            let appearance = crate::appearance::roll_starter_equipment_appearance(
+                &mut Rng::new(i64::from(offer_seed)),
                 owner,
             );
             self.economy.apply_starter_appearance(appearance);
@@ -631,7 +610,7 @@ impl PlayerState {
         let advanced_unlocks = self.book.advanced_unlocks;
         let revision = self.progression.revision;
         self.selection = selection;
-        self.book = NativeSkillBookState::new(self.selection.element, self.selection.discipline);
+        self.book = SkillBookState::new(self.selection.element, self.selection.discipline);
         self.book.advanced_unlocks = advanced_unlocks;
         self.stat_book = PlayerStatBookComponent::default();
         self.skill_runtime = PlayerSkillRuntimeState::new_with_stat_book(
@@ -668,7 +647,7 @@ impl PlayerState {
         self.refresh(&previous);
     }
 
-    fn refresh(&mut self, previous: &NativeSkillBookState) {
+    fn refresh(&mut self, previous: &SkillBookState) {
         self.skill_runtime.refresh_with_stat_book(&mut self.book, &self.stat_book, &self.economy);
         self.belt.autofill_newly_learned(previous, &self.book);
         self.belt.refresh(&self.book, &self.economy);
@@ -688,11 +667,7 @@ impl PlayerState {
         self.economy.owned_perk_selectors.contains(&SORCERORS_CHARM)
     }
 
-    fn mark_new_offer_insight(
-        &mut self,
-        previous_sequence: Option<u64>,
-        gameplay_rng: &mut NativeRng,
-    ) {
+    fn mark_new_offer_insight(&mut self, previous_sequence: Option<u64>, gameplay_rng: &mut Rng) {
         if let Some(offer) = &mut self.progression.pending_offer
             && Some(offer.sequence) != previous_sequence
         {

@@ -70,7 +70,7 @@ fn enemy_constructor_stats_authored_recipes_and_ordered_flags_match_the_website(
     let goldens: ConfigGoldens =
         serde_json::from_str(&fixture("enemy-config-goldens.json")).unwrap();
     assert_eq!(
-        EnemyToken::ALL.map(|token| (token.id().to_owned(), token.native_type_id())),
+        EnemyToken::ALL.map(|token| (token.id().to_owned(), token.type_id())),
         goldens.tokens.as_slice()
     );
     assert_eq!(EnemyFlag::ALL.map(|flag| flag.id().to_owned()), goldens.flags.as_slice());
@@ -327,7 +327,7 @@ fn config_json(config: &EnemyConfig) -> Value {
         EnemyFamilyConfig::Cocoon => json!({"kind":"cocoon"}),
     };
     json!({
-        "numbers":[config.native_type_id,config.attack_speed,config.base_speed,config.chase_speed,
+        "numbers":[config.type_id,config.attack_speed,config.base_speed,config.chase_speed,
             config.collision_radius,config.experience,config.extra_damage,config.maximum_health,
             config.primary_damage,config.scale,config.secondary_damage,config.tertiary_damage],
         "enemyToken":config.enemy_token.id(),"flags":config.flags.iter().map(|flag|flag.id()).collect::<Vec<_>>(),
@@ -415,13 +415,13 @@ fn vector(point: [f64; 2]) -> Vec2 {
     Vec2::new(point[0], point[1])
 }
 
-fn rng_record(rng: &solomon_sim::NativeRng) -> Vec<f64> {
+fn rng_record(rng: &solomon_sim::Rng) -> Vec<f64> {
     let mut record = vec![rng.index_a as f64, rng.index_b as f64];
     record.extend(rng.words.iter().copied().map(f64::from));
     record
 }
 
-fn path_record(state: &solomon_sim::enemies::path::NativeEnemyPathState) -> [f64; 20] {
+fn path_record(state: &solomon_sim::enemies::path::EnemyPathState) -> [f64; 20] {
     let previous = state.route_previous_vector.unwrap_or(Vec2::ZERO);
     let waypoints = state.route_waypoints.unwrap_or([Vec2::ZERO; 2]);
     [
@@ -480,12 +480,12 @@ impl solomon_sim::enemies::path::EnemyNavigation for OracleNavigation {
 
 #[test]
 fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
-    use solomon_sim::NativeRng;
+    use solomon_sim::Rng;
     use solomon_sim::enemies::path::*;
     let goldens: PathGoldens = serde_json::from_str(&fixture("enemy-path-goldens.json")).unwrap();
     for case in &goldens.constructions {
-        let mut rng = NativeRng::new(case.seed);
-        let state = NativeEnemyPathState::new(&mut rng);
+        let mut rng = Rng::new(case.seed);
+        let state = EnemyPathState::new(&mut rng);
         assert_eq!(
             path_record(&state),
             case.state.as_slice(),
@@ -495,7 +495,7 @@ fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
         assert_eq!(rng_record(&rng), case.rng, "path constructor RNG seed {}", case.seed);
     }
     for (index, case) in goldens.steering.iter().enumerate() {
-        let mut state = NativeEnemyPathState::new(&mut NativeRng::new(case.seed));
+        let mut state = EnemyPathState::new(&mut Rng::new(case.seed));
         state.flank_ticks_remaining = if case.flank { 3 } else { 0 };
         let request = EnemySteeringRequest {
             actor_heading_deg: 359.0,
@@ -520,8 +520,8 @@ fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
                 _ => unreachable!(),
             },
         };
-        let goal = native_enemy_steering_goal(&state, &request);
-        let result = build_native_enemy_steering(state, request);
+        let goal = enemy_steering_goal(&state, &request);
+        let result = build_enemy_steering(state, request);
         let context = format!("steering case {index}");
         assert_trig(goal.x, case.goal[0], &context);
         assert_trig(goal.y, case.goal[1], &context);
@@ -531,8 +531,8 @@ fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
         assert_eq!(path_record(&result.state), case.state.as_slice(), "{context} state");
     }
     for case in &goldens.recovery {
-        let mut rng = NativeRng::new(case.seed);
-        let mut state = NativeEnemyPathState::new(&mut rng);
+        let mut rng = Rng::new(case.seed);
+        let mut state = EnemyPathState::new(&mut rng);
         state.speed_factor = 1.5;
         state.turn_factor = 1.4_f32 as f64;
         for (index, (expected, triggered)) in case.samples.iter().enumerate() {
@@ -558,7 +558,7 @@ fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
         assert_eq!(rng_record(&rng), case.rng, "recovery seed {} final RNG", case.seed);
     }
     for case in &goldens.routes {
-        let mut state = NativeEnemyPathState::new(&mut NativeRng::new(71));
+        let mut state = EnemyPathState::new(&mut Rng::new(71));
         let navigation = OracleNavigation {
             direct: case.mode == "direct",
             route: match case.mode.as_str() {
@@ -573,7 +573,7 @@ fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
             },
         };
         for (index, sample) in case.samples.iter().enumerate() {
-            let result = resolve_native_enemy_path_goal(
+            let result = resolve_enemy_path_goal(
                 state,
                 EnemyPathGoalRequest {
                     actor_position: vector(sample.position),
@@ -593,7 +593,7 @@ fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
         }
     }
     for case in &goldens.reorientation {
-        let mut state = NativeEnemyPathState::new(&mut NativeRng::new(71));
+        let mut state = EnemyPathState::new(&mut Rng::new(71));
         state.reorientation_ticks_remaining = 2;
         let mut heading = 17.0;
         for sample in &case.samples {
@@ -603,12 +603,12 @@ fn enemy_steering_routes_flanking_and_recovery_match_the_website() {
         }
     }
     for case in &goldens.ranges {
-        let mut rng = NativeRng::new(case.seed);
+        let mut rng = Rng::new(case.seed);
         assert_eq!(rng.draw_float_range(case.first, case.second), case.value);
         assert_eq!(rng_record(&rng), case.rng);
     }
     for (mode, expected) in goldens.target_refresh_ticks.iter().enumerate() {
-        assert_eq!(native_enemy_target_refresh_ticks(mode as u8), *expected);
+        assert_eq!(enemy_target_refresh_ticks(mode as u8), *expected);
     }
 }
 
@@ -647,29 +647,29 @@ struct VolleyCase {
 
 #[test]
 fn enemy_attack_ranges_and_private_seeded_arrow_volleys_match_the_website() {
-    use solomon_sim::NativeRng;
+    use solomon_sim::Rng;
     use solomon_sim::enemies::ranged::*;
     let goldens: RangedGoldens =
         serde_json::from_str(&fixture("enemy-ranged-goldens.json")).unwrap();
     for case in &goldens.ranges {
-        let mut rng = NativeRng::new(case.seed);
+        let mut rng = Rng::new(case.seed);
         let family = match case.family.as_str() {
             "archer" => RangedFamily::Archer,
             "mage" => RangedFamily::Mage,
             _ => unreachable!(),
         };
-        let mut range = construct_native_ranged_attack_range(family, case.mode, &mut rng);
+        let mut range = construct_ranged_attack_range(family, case.mode, &mut rng);
         assert_eq!(range.range, case.range);
         assert_eq!(range.range_easy_pending, case.pending);
         assert_eq!(rng_record(&rng), case.rng);
-        restore_native_range_easy_after_volley(&mut range);
+        restore_range_easy_after_volley(&mut range);
         assert_eq!(range.range, case.restored_range);
         assert_eq!(range.range_easy_pending, case.restored_pending);
     }
     for (index, case) in goldens.volleys.iter().enumerate() {
-        let mut rng = NativeRng::new(128);
+        let mut rng = Rng::new(128);
         let arrow_type = arrow_type(&case.arrow_type);
-        let volley = build_native_archer_volley(
+        let volley = build_archer_volley(
             ArcherVolleyRequest {
                 accuracy_mode: case.accuracy_mode,
                 arrow_type,
@@ -689,7 +689,7 @@ fn enemy_attack_ranges_and_private_seeded_arrow_volleys_match_the_website() {
         assert_eq!(volley.arrows.len(), case.arrows.len());
         for (arrow_index, (arrow, expected)) in volley.arrows.iter().zip(&case.arrows).enumerate() {
             assert_eq!(arrow.arrow_type, arrow_type);
-            let velocity = native_enemy_projectile_velocity(arrow.heading_deg, arrow.speed);
+            let velocity = enemy_projectile_velocity(arrow.heading_deg, arrow.speed);
             let actual = [
                 arrow.heading_deg,
                 arrow.lifetime_ticks as f64,
@@ -704,7 +704,7 @@ fn enemy_attack_ranges_and_private_seeded_arrow_volleys_match_the_website() {
         }
     }
     for (index, expected) in goldens.fan_offsets.iter().enumerate() {
-        assert_eq!(native_archer_fan_offset(index), *expected);
+        assert_eq!(archer_fan_offset(index), *expected);
     }
 }
 
@@ -725,8 +725,10 @@ struct ConstructionCase {
     head_facing: Vec<f64>,
     next_actor_id: usize,
     next_death_effect_id: usize,
-    next_native_cell_binding_order: usize,
-    next_native_registration_order: usize,
+    #[serde(rename = "nextNativeCellBindingOrder")]
+    next_cell_binding_order: usize,
+    #[serde(rename = "nextNativeRegistrationOrder")]
+    next_registration_order: usize,
     next_event_id: usize,
     featured_boss_id: Option<usize>,
     faculty_voice_controller: Value,
@@ -1075,7 +1077,7 @@ fn demon_skull_action_json(action: &solomon_sim::enemies::model::DemonSkullActio
     value
 }
 
-fn path_json(state: &solomon_sim::enemies::path::NativeEnemyPathState) -> Value {
+fn path_json(state: &solomon_sim::enemies::path::EnemyPathState) -> Value {
     json!({
         "baseTurnRate":state.base_turn_rate,"flankAngleDeg":state.flank_angle_deg,"flankRadius":state.flank_radius,
         "flankTicksRemaining":state.flank_ticks_remaining,"reorientationTicksRemaining":state.reorientation_ticks_remaining,
@@ -1148,7 +1150,7 @@ fn maggot_json(value: &solomon_sim::enemies::model::EnemyMaggotActor) -> Value {
     use solomon_sim::enemies::model::*;
     let mut record = json!({
         "hitFeedback":puppet_hit_json(&value.hit_feedback),"blizzardPushAccumulator":value.blizzard_push_accumulator,"blizzardPushLastTick":value.blizzard_push_last_tick,
-        "combatActive":value.combat_active,"nativeTreeQueryMember":value.native_tree_query_member,"collisionRadius":value.collision_radius,"currentHealth":value.current_health,
+        "combatActive":value.combat_active,"nativeTreeQueryMember":value.tree_query_member,"collisionRadius":value.collision_radius,"currentHealth":value.current_health,
         "deathOffsets":value.death_offsets.iter().copied().map(point_json).collect::<Vec<_>>(),"damage":value.damage,"deathEpoch":value.death_epoch,
         "deathStartedTick":value.death_started_tick,"deathTick":value.death_tick,"gaitPose":value.gait_pose,"headingDeg":value.heading_deg,
         "hurricaneContactCooldown":value.hurricane_contact_cooldown,"id":value.id,"emergenceTick":value.emergence_tick,"emergencePhase":value.emergence_phase,
@@ -1198,7 +1200,7 @@ fn spawn_intent(value: &Value) -> EnemySpawnIntent {
         .iter()
         .map(|flag| EnemyFlag::from_id(flag.as_str().unwrap()).unwrap())
         .collect();
-    intent.native_type_id = value["nativeTypeId"].as_u64().unwrap() as u16;
+    intent.type_id = value["nativeTypeId"].as_u64().unwrap() as u16;
     intent.authored_recipe = value.get("authoredRecipe").map(recipe);
     intent.flanking = value["flanking"].as_bool().unwrap_or(true);
     intent.pathfinding_mode = value["pathfindingMode"].as_u64().unwrap_or(1) as u8;
@@ -1256,12 +1258,7 @@ impl solomon_sim::enemies::world::EnemyGeometry for UnobstructedEnemyGeometry {
     fn resolve_movement(&self, request: solomon_sim::enemies::world::EnemyMovementRequest) -> Vec2 {
         request.requested_position
     }
-    fn line_obstruction(
-        &self,
-        _start: Vec2,
-        _end: Vec2,
-        _native_exclusion_mask: u32,
-    ) -> Option<Vec2> {
+    fn line_obstruction(&self, _start: Vec2, _end: Vec2, _exclusion_mask: u32) -> Option<Vec2> {
         None
     }
 }
@@ -1305,7 +1302,7 @@ fn all_native_enemy_family_constructors_caps_and_payloads_match_the_website() {
                 next_actor_ordinal: base.actor,
                 next_transient_ordinal: base.transient,
             });
-        let mut shared_rng = case.shared_loot_seed.map(solomon_sim::NativeRng::new);
+        let mut shared_rng = case.shared_loot_seed.map(solomon_sim::Rng::new);
         let mut roll_seed = |bound| shared_rng.as_mut().unwrap().draw_integer(bound as i32) as u32;
         let roll_loot_seed: Option<&mut dyn FnMut(u32) -> u32> =
             if case.shared_loot_seed.is_some() { Some(&mut roll_seed) } else { None };
@@ -1363,8 +1360,8 @@ fn all_native_enemy_family_constructors_caps_and_payloads_match_the_website() {
         );
         assert_eq!(world.next_actor_id, case.next_actor_id);
         assert_eq!(world.next_death_effect_id, case.next_death_effect_id);
-        assert_eq!(world.next_native_cell_binding_order, case.next_native_cell_binding_order);
-        assert_eq!(world.next_native_registration_order, case.next_native_registration_order);
+        assert_eq!(world.next_cell_binding_order, case.next_cell_binding_order);
+        assert_eq!(world.next_registration_order, case.next_registration_order);
         assert_eq!(world.next_event_id, case.next_event_id);
         assert_eq!(world.featured_boss_id, case.featured_boss_id);
         assert_eq!(world.spawned_actor_ids, case.spawned);
@@ -1771,7 +1768,7 @@ fn enemy_event_json(event: &solomon_sim::enemies::model::EnemyEvent) -> Value {
 fn primary_target_json(target: &solomon_sim::spells::targeting::PrimarySpellTarget) -> Value {
     json!({"active":target.active,"actorFlags":target.actor_flags,"attachment":point_json(target.attachment),
         "bodyRadius":target.body_radius,"cellBindingOrder":target.cell_binding_order,"id":target.id,
-        "headingDeg":target.heading_degrees,"kind":"enemy","nativePriority":target.native_priority,
+        "headingDeg":target.heading_degrees,"kind":"enemy","nativePriority":target.priority,
         "queryLane":"grid","pendingRemove":target.pending_remove,"position":point_json(target.position),
         "registrationOrder":target.registration_order})
 }
@@ -1867,7 +1864,7 @@ fn enemy_projectile_json(projectile: &solomon_sim::enemies::projectiles::EnemyPr
         "coldSlowTicks":state.cold_slow_ticks,"contactRadius":state.contact_radius,"damage":state.damage,"secondaryDamage":state.secondary_damage,
         "headingDeg":state.heading_deg,"hitPlayerIds":state.hit_player_ids,"homing":state.homing,"id":state.id,"lastStepTick":state.last_step_tick,
         "lightRegistration":state.light_registration.map(painter_registration_json),"lifetimeTicks":state.lifetime_ticks,"minimumSpeed":state.minimum_speed,
-        "nativeTypeId":state.native_type_id,"nativeCellBindingOrder":state.native_cell_binding_order,"nativeRegistrationOrder":state.native_registration_order,
+        "nativeTypeId":state.type_id,"nativeCellBindingOrder":state.native_cell_binding_order,"nativeRegistrationOrder":state.native_registration_order,
         "ownerActorId":state.owner_actor_id,"painterRegistration":painter_registration_json(state.painter_registration),"payload":state.payload.id(),
         "poisonDamage":state.poison_damage,"poisonDuration":state.poison_duration,"position":point_json(state.position),"speed":state.speed,
         "settledTicksRemaining":state.settled_ticks_remaining,"spawnTick":state.spawn_tick,"targetPlayerId":state.target_player_id,"turnSpeed":state.turn_speed,
@@ -1906,10 +1903,10 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
     use solomon_sim::boneyard::BoneyardBounds;
     use solomon_sim::enemies::demon_skull_actions::begin_demon_skull_action;
     use solomon_sim::enemies::demon_skull_controller::DemonSkullActionKind;
-    use solomon_sim::enemies::faculty_controller::create_native_faculty_action;
+    use solomon_sim::enemies::faculty_controller::create_faculty_action;
     use solomon_sim::enemies::model::*;
-    use solomon_sim::enemies::webbed::apply_native_webbed;
-    use solomon_sim::enemies::world::NativeEnemyMovementView;
+    use solomon_sim::enemies::webbed::apply_webbed;
+    use solomon_sim::enemies::world::EnemyMovementView;
     use solomon_sim::enemies::world::*;
     use solomon_sim::painter::WorldPainterOrder;
     let goldens: Value = serde_json::from_str(&fixture("enemy-ai-goldens.json.zlib")).unwrap();
@@ -1940,7 +1937,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
         let mut order = WorldPainterOrder { next_actor_ordinal: 100, next_transient_ordinal: 70 };
         let intents: Vec<_> =
             case["intents"].as_array().unwrap().iter().map(spawn_intent).collect();
-        let mut shared_loot_rng = case["sharedLootSeed"].as_i64().map(solomon_sim::NativeRng::new);
+        let mut shared_loot_rng = case["sharedLootSeed"].as_i64().map(solomon_sim::Rng::new);
         let mut roll_loot =
             |bound| shared_loot_rng.as_mut().unwrap().draw_integer(bound as i32) as u32;
         world.spawn(
@@ -1965,7 +1962,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                 "two-hand" => FacultyActionKind::TwoHand,
                 _ => panic!("recorded Faculty action"),
             };
-            let action = create_native_faculty_action(kind, &mut world.steering_rng);
+            let action = create_faculty_action(kind, &mut world.steering_rng);
             let EnemyBrain::Faculty(brain) = &mut world.actors[0].brain else {
                 panic!("Faculty action setup")
             };
@@ -2008,10 +2005,10 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                     roll_loot_seed: None,
                     native_visibility: None,
                     projected_point_visible: None,
-                    native_view_bounds: None,
+                    view_bounds: None,
                     puppet_targets: &[],
                     light_at: None,
-                    native_movement_view: None,
+                    movement_view: None,
                 },
                 speed,
             );
@@ -2025,13 +2022,8 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
         }
         world.last_step_tick = Some(10);
         if case["contactBirth"].as_bool() == Some(true) {
-            let _events = world.add_native_cocoon(
-                "hero",
-                players[0].position,
-                &players,
-                10,
-                Some(&mut order),
-            );
+            let _events =
+                world.add_cocoon("hero", players[0].position, &players, 10, Some(&mut order));
         }
         if case["opening"].as_bool() == Some(true) {
             let EnemyBrain::Coffin(brain) = &mut world.actors[0].brain else {
@@ -2066,7 +2058,7 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
             if case["removeCocoonAt"].as_u64() == Some(tick) {
                 world.remove_cocoon_owner("hero");
             }
-            let visible = |_position| NativeEnemyVisibility {
+            let visible = |_position| EnemyVisibility {
                 admitted: !case["offscreen"].as_bool().unwrap_or(false),
                 intensity: case["light"].as_f64().unwrap_or(1.0),
             };
@@ -2179,12 +2171,11 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                 },
                 native_visibility: Some(&visible),
                 projected_point_visible: Some(&projected),
-                native_view_bounds: (case["token"] == "DIREFACULTY"
-                    || case["token"] == "DEMONSKULL")
+                view_bounds: (case["token"] == "DIREFACULTY" || case["token"] == "DEMONSKULL")
                     .then_some(BoneyardBounds::new(0.0, 0.0, 1000.0, 1000.0)),
                 puppet_targets: &puppet_targets,
                 light_at: Some(&light_at),
-                native_movement_view: view.map(|view| NativeEnemyMovementView {
+                movement_view: view.map(|view| EnemyMovementView {
                     arena_bounds: BoneyardBounds::new(0.0, 0.0, 1000.0, 1000.0),
                     cameras: &cameras,
                     enhanced_effects: view != "basic",
@@ -2268,10 +2259,10 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
                         continue;
                     };
                     let prior = world.webbed_players.get(&damage.player_id).copied();
-                    let next = apply_native_webbed(prior, strength);
+                    let next = apply_webbed(prior, strength);
                     world.webbed_players.insert(damage.player_id.clone(), next);
                     if next.severity == 3.0 && prior.is_none_or(|prior| prior.severity < 3.0) {
-                        let _events = world.add_native_cocoon(
+                        let _events = world.add_cocoon(
                             &damage.player_id,
                             players[0].position,
                             &players,
@@ -2504,8 +2495,8 @@ fn enemy_approach_flight_contact_ejections_and_articulation_match_the_website() 
             for (actual, key) in [
                 (world.next_actor_id, "nextActorId"),
                 (world.next_synthetic_spawn_intent_id, "nextSyntheticSpawnIntentId"),
-                (world.next_native_cell_binding_order, "nextNativeCellBindingOrder"),
-                (world.next_native_registration_order, "nextNativeRegistrationOrder"),
+                (world.next_cell_binding_order, "nextNativeCellBindingOrder"),
+                (world.next_registration_order, "nextNativeRegistrationOrder"),
                 (world.next_projectile_id, "nextProjectileId"),
                 (world.next_mage_lightning_pulse_id, "nextMageLightningPulseId"),
                 (world.next_projectile_effect_id, "nextProjectileEffectId"),
@@ -2737,12 +2728,12 @@ fn damage_absorption_armor_breaks_restraints_and_terminal_brains_match_the_websi
 
 #[test]
 fn faculty_banter_rng_and_boss_stream_queue_timing_match_the_website() {
-    use solomon_sim::NativeRng;
+    use solomon_sim::Rng;
     use solomon_sim::enemies::voices::*;
     let goldens: VoiceGoldens =
         serde_json::from_str(&fixture("enemy-voices-goldens.json")).unwrap();
     for (index, case) in goldens.cases.iter().enumerate() {
-        let mut rng = NativeRng::new(case.seed);
+        let mut rng = Rng::new(case.seed);
         let mut state = Some(FacultyVoiceController { line: case.line, ticks_remaining: 1 });
         for sample in &case.samples {
             let stepped = state.expect("a living voice controller before this source sample").step(

@@ -3,16 +3,16 @@
 
 use crate::float;
 use crate::float::{atan2, fround, hypot};
-use crate::spells::targeting::native_heading_turn_direction;
-use crate::{NativeRng, Vec2};
+use crate::spells::targeting::heading_turn_direction;
+use crate::{Rng, Vec2};
 
-pub const NATIVE_GOLEM_RADIUS: f64 = 30.0;
-pub const NATIVE_GOLEM_PLACEMENT_RADIUS: f64 = 25.0;
-pub const NATIVE_GOLEM_REFLECT_DISTANCE_SQUARED: f64 = 6400.0;
+pub const GOLEM_RADIUS: f64 = 30.0;
+pub const GOLEM_PLACEMENT_RADIUS: f64 = 25.0;
+pub const GOLEM_REFLECT_DISTANCE_SQUARED: f64 = 6400.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeGolemPhase {
+pub enum GolemPhase {
     Active,
     Assembly,
     Attack,
@@ -21,7 +21,7 @@ pub enum NativeGolemPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryGolemState {
+pub struct SecondaryGolemState {
     pub action_heading_offset_degrees: f64,
     pub action_duration_ticks: u64,
     pub action_tick: u64,
@@ -41,7 +41,7 @@ pub struct NativeSecondaryGolemState {
     pub maximum_health: f64,
     pub orbit_direction: f64,
     pub orbit_heading_radians: Option<f64>,
-    pub phase: NativeGolemPhase,
+    pub phase: GolemPhase,
     pub pose_variant: u32,
     pub provoke_roll_bound: i32,
     pub reflect_factor: f64,
@@ -57,7 +57,7 @@ pub struct NativeSecondaryGolemState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeGolemBirthStats {
+pub struct GolemBirthStats {
     pub health: f64,
     pub damage_maximum: f64,
     pub iron: bool,
@@ -74,12 +74,12 @@ pub trait NativeGolemWorld {
     }
 }
 
-impl NativeSecondaryGolemState {
+impl SecondaryGolemState {
     #[must_use]
     pub fn new(
         position: Vec2,
         rotation_radians: f64,
-        stats: NativeGolemBirthStats,
+        stats: GolemBirthStats,
         world: &mut impl NativeGolemWorld,
     ) -> Self {
         let left =
@@ -106,7 +106,7 @@ impl NativeSecondaryGolemState {
             maximum_health: stats.health,
             orbit_direction: 0.0,
             orbit_heading_radians: None,
-            phase: NativeGolemPhase::Assembly,
+            phase: GolemPhase::Assembly,
             pose_variant: stats.pose_variant,
             provoke_roll_bound: 0,
             reflect_factor: stats.reflect_factor,
@@ -124,10 +124,10 @@ impl NativeSecondaryGolemState {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeGolemKernelActor {
+pub struct GolemKernelActor {
     pub age_ticks: u64,
     pub damage_minimum: f64,
-    pub golem: NativeSecondaryGolemState,
+    pub golem: SecondaryGolemState,
     pub id: u64,
     pub owner_id: String,
     pub position: Vec2,
@@ -136,7 +136,7 @@ pub struct NativeGolemKernelActor {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeGolemKernelTarget {
+pub struct GolemKernelTarget {
     pub id: usize,
     pub position: Vec2,
     pub radius: f64,
@@ -144,7 +144,7 @@ pub struct NativeGolemKernelTarget {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeGolemContact {
+pub struct GolemContact {
     pub damage: f64,
     pub heading_degrees: f64,
     pub movement_budget: f64,
@@ -153,25 +153,25 @@ pub struct NativeGolemContact {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeGolemKernelStepResult {
+pub struct GolemKernelStepResult {
     pub assembly_milestone: Option<u64>,
-    pub contact: Option<NativeGolemContact>,
+    pub contact: Option<GolemContact>,
     pub footstep: bool,
     pub provoke_started: bool,
 }
 
-pub fn step_native_secondary_golem(
-    actor: &mut NativeGolemKernelActor,
+pub fn step_secondary_golem(
+    actor: &mut GolemKernelActor,
     owner_position: Option<Vec2>,
-    targets: &[NativeGolemKernelTarget],
+    targets: &[GolemKernelTarget],
     world: &mut impl NativeGolemWorld,
-    rng: &mut NativeRng,
-) -> NativeGolemKernelStepResult {
+    rng: &mut Rng,
+) -> GolemKernelStepResult {
     let assembling = actor.age_ticks < 201;
     let previous_age = actor.age_ticks;
     actor.age_ticks += if assembling { 2 } else { 1 };
     if assembling {
-        actor.golem.phase = NativeGolemPhase::Assembly;
+        actor.golem.phase = GolemPhase::Assembly;
         actor.golem.left_foot = world.resolve_foot_target(
             actor.golem.left_foot,
             foot_target(actor.position, actor.rotation_radians, 0, 0.0),
@@ -183,7 +183,7 @@ pub fn step_native_secondary_golem(
         actor.golem.circle_slow_ticks = actor.golem.circle_slow_ticks.saturating_sub(1);
         actor.golem.left_foot_bob = Vec2::ZERO;
         actor.golem.right_foot_bob = Vec2::ZERO;
-        return NativeGolemKernelStepResult {
+        return GolemKernelStepResult {
             assembly_milestone: if matches!(previous_age, 0 | 50 | 100 | 200) {
                 Some(previous_age)
             } else {
@@ -194,19 +194,19 @@ pub fn step_native_secondary_golem(
             provoke_started: false,
         };
     }
-    if actor.golem.phase == NativeGolemPhase::Assembly {
-        actor.golem.phase = NativeGolemPhase::Active;
+    if actor.golem.phase == GolemPhase::Assembly {
+        actor.golem.phase = GolemPhase::Active;
     }
-    if actor.golem.phase == NativeGolemPhase::Provoke {
+    if actor.golem.phase == GolemPhase::Provoke {
         actor.golem.action_tick += 1;
         if actor.golem.action_tick < actor.golem.action_duration_ticks {
             return active_result(actor, None, false, world, rng);
         }
         actor.golem.action_duration_ticks = 0;
         actor.golem.action_tick = 0;
-        actor.golem.phase = NativeGolemPhase::Active;
+        actor.golem.phase = GolemPhase::Active;
     }
-    if actor.golem.phase == NativeGolemPhase::Attack {
+    if actor.golem.phase == GolemPhase::Attack {
         if let Some(target) = targets.iter().find(|target| Some(target.id) == actor.target_id) {
             actor.rotation_radians = turn_golem(actor, target.position, true);
         }
@@ -228,7 +228,7 @@ pub fn step_native_secondary_golem(
                         + fround(fround(-float::cos(backward)) * 20.0),
                 ),
             );
-            contact = Some(NativeGolemContact {
+            contact = Some(GolemContact {
                 damage,
                 heading_degrees,
                 movement_budget: 50.0,
@@ -242,7 +242,7 @@ pub fn step_native_secondary_golem(
         }
         actor.golem.action_duration_ticks = 0;
         actor.golem.action_tick = 0;
-        actor.golem.phase = NativeGolemPhase::Active;
+        actor.golem.phase = GolemPhase::Active;
         actor.golem.provoke_roll_bound = 75;
         let provoked = maybe_start_provoke(actor, rng);
         return active_result(actor, contact, provoked, world, rng);
@@ -265,11 +265,11 @@ pub fn step_native_secondary_golem(
     if let Some(target) = target {
         let distance =
             hypot(target.position.x - actor.position.x, target.position.y - actor.position.y);
-        if distance < target.radius + NATIVE_GOLEM_RADIUS + 20.0 {
+        if distance < target.radius + GOLEM_RADIUS + 20.0 {
             let duration = rng.draw_integer(20);
             actor.golem.action_duration_ticks = (90 - duration) as u64;
             actor.golem.action_tick = 0;
-            actor.golem.phase = NativeGolemPhase::Attack;
+            actor.golem.phase = GolemPhase::Attack;
             actor.golem.pose_variant = 1 - actor.golem.pose_variant;
             actor.rotation_radians = turn_golem(actor, target.position, true);
             return active_result(actor, None, false, world, rng);
@@ -315,25 +315,25 @@ pub fn step_native_secondary_golem(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeGolemIncomingDamage {
+pub struct GolemIncomingDamage {
     pub primary_damage: f64,
     pub reflectable_physical_source_in_range: bool,
     pub secondary_damage: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeGolemDamageResult {
-    pub actor: Option<NativeGolemKernelActor>,
+pub struct GolemDamageResult {
+    pub actor: Option<GolemKernelActor>,
     pub ignored: bool,
     pub killed: bool,
     pub reflected_damage: f64,
 }
 
 #[must_use]
-pub fn damage_native_secondary_golem(
-    mut actor: NativeGolemKernelActor,
-    damage: NativeGolemIncomingDamage,
-) -> NativeGolemDamageResult {
+pub fn damage_secondary_golem(
+    mut actor: GolemKernelActor,
+    damage: GolemIncomingDamage,
+) -> GolemDamageResult {
     assert!(
         damage.primary_damage.is_finite() && damage.primary_damage >= 0.0,
         "Golem incoming primary damage is finite and non-negative"
@@ -343,7 +343,7 @@ pub fn damage_native_secondary_golem(
         "Golem incoming secondary damage is finite and non-negative"
     );
     if actor.age_ticks < 400 {
-        return NativeGolemDamageResult {
+        return GolemDamageResult {
             actor: Some(actor),
             ignored: true,
             killed: false,
@@ -358,7 +358,7 @@ pub fn damage_native_secondary_golem(
     } else {
         0.0
     };
-    NativeGolemDamageResult {
+    GolemDamageResult {
         actor: if killed { None } else { Some(actor) },
         ignored: false,
         killed,
@@ -366,14 +366,14 @@ pub fn damage_native_secondary_golem(
     }
 }
 
-fn maybe_start_provoke(actor: &mut NativeGolemKernelActor, rng: &mut NativeRng) -> bool {
+fn maybe_start_provoke(actor: &mut GolemKernelActor, rng: &mut Rng) -> bool {
     let provoke = rng.draw_integer(actor.golem.provoke_roll_bound);
     if provoke != 70 && actor.golem.provoke_roll_bound != 0 {
         return false;
     }
     actor.golem.action_duration_ticks = 151;
     actor.golem.action_tick = 0;
-    actor.golem.phase = NativeGolemPhase::Provoke;
+    actor.golem.phase = GolemPhase::Provoke;
     actor.golem.provoke_roll_bound = 1200;
     true
 }
@@ -381,11 +381,11 @@ fn maybe_start_provoke(actor: &mut NativeGolemKernelActor, rng: &mut NativeRng) 
 fn contact_targets(
     origin: Vec2,
     rotation_radians: f64,
-    targets: &[NativeGolemKernelTarget],
+    targets: &[GolemKernelTarget],
 ) -> Vec<usize> {
     use crate::spells::targeting::{
         PrimaryConeQuery, PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
-        native_primary_cone_targets,
+        primary_cone_targets,
     };
     let mut rows = Vec::with_capacity(targets.len());
     for (index, target) in targets.iter().enumerate() {
@@ -400,14 +400,14 @@ fn contact_targets(
             grid_position: None,
             id: target.id.to_string(),
             kind: PrimarySpellTargetKind::Enemy,
-            native_priority: 0,
+            priority: 0,
             pending_remove: false,
             position: target.position,
             query_lane: PrimarySpellQueryLane::Grid,
             registration_order: order,
         });
     }
-    native_primary_cone_targets(PrimaryConeQuery {
+    primary_cone_targets(PrimaryConeQuery {
         actor_mask: 2,
         aim_direction: Vec2::new(float::sin(rotation_radians), -float::cos(rotation_radians)),
         half_angle_degrees: 90.0,
@@ -430,11 +430,11 @@ struct FootMotion {
 }
 
 fn advance_foot(
-    actor: &mut NativeGolemKernelActor,
+    actor: &mut GolemKernelActor,
     side: u64,
     mut foot: FootMotion,
     world: &mut impl NativeGolemWorld,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     footstep: &mut bool,
 ) -> FootMotion {
     if actor.golem.gait_tick % 100 == side * 50 {
@@ -464,9 +464,9 @@ fn advance_foot(
 }
 
 fn advance_articulation(
-    actor: &mut NativeGolemKernelActor,
+    actor: &mut GolemKernelActor,
     world: &mut impl NativeGolemWorld,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> bool {
     actor.golem.gait_tick += 1;
     let mut footstep = false;
@@ -501,10 +501,10 @@ fn advance_articulation(
     footstep
 }
 
-fn update_pose(golem: &mut NativeSecondaryGolemState) {
+fn update_pose(golem: &mut SecondaryGolemState) {
     golem.left_connector_offset = Vec2::ZERO;
     golem.right_connector_offset = Vec2::ZERO;
-    if golem.phase == NativeGolemPhase::Attack {
+    if golem.phase == GolemPhase::Attack {
         let left = golem.pose_variant == 0;
         if golem.action_tick <= 37 {
             golem.action_heading_offset_degrees =
@@ -516,7 +516,7 @@ fn update_pose(golem: &mut NativeSecondaryGolemState) {
             golem.left_limb_mode = if left { 2 } else { 1 };
             golem.right_limb_mode = if left { 1 } else { 2 };
         }
-    } else if golem.phase == NativeGolemPhase::Provoke && golem.action_tick > 100 {
+    } else if golem.phase == GolemPhase::Provoke && golem.action_tick > 100 {
         golem.action_heading_offset_degrees = 0.0;
         golem.left_connector_offset = Vec2::new(0.0, -12.0);
         golem.right_connector_offset = Vec2::new(0.0, -12.0);
@@ -543,10 +543,7 @@ fn foot_target(position: Vec2, rotation: f64, side: u64, forward: f64) -> Vec2 {
     )
 }
 
-fn nearest_target(
-    position: Vec2,
-    targets: &[NativeGolemKernelTarget],
-) -> Option<NativeGolemKernelTarget> {
+fn nearest_target(position: Vec2, targets: &[GolemKernelTarget]) -> Option<GolemKernelTarget> {
     let mut nearest = None;
     let mut nearest_distance = f64::INFINITY;
     for target in targets {
@@ -573,18 +570,18 @@ fn squared_distance(left: Vec2, right: Vec2) -> f64 {
 }
 
 fn active_result(
-    actor: &mut NativeGolemKernelActor,
-    contact: Option<NativeGolemContact>,
+    actor: &mut GolemKernelActor,
+    contact: Option<GolemContact>,
     provoke_started: bool,
     world: &mut impl NativeGolemWorld,
-    rng: &mut NativeRng,
-) -> NativeGolemKernelStepResult {
+    rng: &mut Rng,
+) -> GolemKernelStepResult {
     let footstep = advance_articulation(actor, world, rng);
     actor.golem.circle_slow_ticks = actor.golem.circle_slow_ticks.saturating_sub(1);
-    NativeGolemKernelStepResult { assembly_milestone: None, contact, footstep, provoke_started }
+    GolemKernelStepResult { assembly_milestone: None, contact, footstep, provoke_started }
 }
 
-fn turn_golem(actor: &NativeGolemKernelActor, target: Vec2, attacking: bool) -> f64 {
+fn turn_golem(actor: &GolemKernelActor, target: Vec2, attacking: bool) -> f64 {
     let target_degrees = native_heading(actor.position, target) * 180.0 / std::f64::consts::PI;
     let mut degrees = actor.rotation_radians * 180.0 / std::f64::consts::PI;
     let step = if actor.golem.circle_slow_ticks > 0 { 0.5 } else { 1.0 };
@@ -593,7 +590,7 @@ fn turn_golem(actor: &NativeGolemKernelActor, target: Vec2, attacking: bool) -> 
         if index > 0 && gap < 3.0 {
             break;
         }
-        let direction = native_heading_turn_direction(degrees, target_degrees);
+        let direction = heading_turn_direction(degrees, target_degrees);
         if direction == 0 {
             break;
         }

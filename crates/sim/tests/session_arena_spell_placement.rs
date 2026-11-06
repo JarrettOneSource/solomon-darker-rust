@@ -12,10 +12,10 @@ use solomon_sim::boneyard::{
 };
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::NativeSecondaryAbilityId;
+use solomon_sim::secondary::SecondaryAbilityId;
 use solomon_sim::session::{GameSession, GameSessionOptions, GameSessionTickContext};
 
-fn arena_session(north: bool, phase: ArenaPhase, skill: NativeSecondaryAbilityId) -> GameSession {
+fn arena_session(north: bool, phase: ArenaPhase, skill: SecondaryAbilityId) -> GameSession {
     let mut game = GameSession::new(
         "wizard".into(),
         NewGameSelection {
@@ -71,8 +71,8 @@ fn teleport_keeps_wizards_inside_the_active_arena_and_enemy_births_reachable() {
     for north in [true, false] {
         for phase in [ArenaPhase::Open, ArenaPhase::Locking, ArenaPhase::Sealed] {
             for seed in 1..=8 {
-                let mut game = arena_session(north, phase, NativeSecondaryAbilityId::Teleport);
-                game.secondary.rng = solomon_sim::NativeRng::new(seed);
+                let mut game = arena_session(north, phase, SecondaryAbilityId::Teleport);
+                game.secondary.rng = solomon_sim::Rng::new(seed);
                 let before = game.participants.get("wizard").unwrap().wizard.position;
                 assert!(game.activate_belt_slot("wizard", 0, None).transaction.accepted);
                 let position = game.participants.get("wizard").unwrap().wizard.position;
@@ -109,7 +109,7 @@ fn teleport_keeps_wizards_inside_the_active_arena_and_enemy_births_reachable() {
 fn phase_cannot_cross_a_closed_entrance_but_can_enter_an_open_one() {
     for north in [true, false] {
         for phase in [ArenaPhase::Open, ArenaPhase::Locking, ArenaPhase::Sealed] {
-            let mut game = arena_session(north, phase, NativeSecondaryAbilityId::Phasing);
+            let mut game = arena_session(north, phase, SecondaryAbilityId::Phasing);
             let position = Vec2::new(600.0, if north { 400.0 } else { 1375.0 });
             let participant = game.participants.get_mut("wizard").unwrap();
             participant.wizard.position = position;
@@ -129,7 +129,7 @@ fn phase_cannot_cross_a_closed_entrance_but_can_enter_an_open_one() {
 fn summoned_golems_resolve_their_body_inside_the_playable_arena() {
     for north in [true, false] {
         for phase in [ArenaPhase::Open, ArenaPhase::Locking, ArenaPhase::Sealed] {
-            let mut game = arena_session(north, phase, NativeSecondaryAbilityId::RaiseGolem);
+            let mut game = arena_session(north, phase, SecondaryAbilityId::RaiseGolem);
             let participant = game.participants.get_mut("wizard").unwrap();
             participant.wizard.position = Vec2::new(600.0, if north { 400.0 } else { 1375.0 });
             participant.wizard.heading_degrees = if north { 0.0 } else { 180.0 };
@@ -138,7 +138,7 @@ fn summoned_golems_resolve_their_body_inside_the_playable_arena() {
                 .secondary
                 .actors
                 .iter()
-                .find(|actor| actor.kind == solomon_sim::secondary::NativeSecondaryActorKind::Golem)
+                .find(|actor| actor.kind == solomon_sim::secondary::SecondaryActorKind::Golem)
                 .expect("Raise Golem must create its actor");
             let world = game.boneyard.as_ref().unwrap();
             assert!(
@@ -167,7 +167,7 @@ fn summoned_golems_resolve_their_body_inside_the_playable_arena() {
 fn walking_golems_keep_their_body_and_feet_inside_the_active_arena() {
     for north in [true, false] {
         for phase in [ArenaPhase::Open, ArenaPhase::Locking, ArenaPhase::Sealed] {
-            let mut game = arena_session(north, phase, NativeSecondaryAbilityId::RaiseGolem);
+            let mut game = arena_session(north, phase, SecondaryAbilityId::RaiseGolem);
             game.participants.get_mut("wizard").unwrap().wizard.position =
                 Vec2::new(600.0, if north { 400.0 } else { 1375.0 });
             assert!(game.activate_belt_slot("wizard", 0, None).transaction.accepted);
@@ -180,7 +180,7 @@ fn walking_golems_keep_their_body_and_feet_inside_the_active_arena() {
                 actor.age_ticks = 400;
                 actor.rotation_radians = rotation;
                 let golem = actor.golem.as_mut().unwrap();
-                golem.phase = solomon_sim::secondary::golem::NativeGolemPhase::Active;
+                golem.phase = solomon_sim::secondary::golem::GolemPhase::Active;
                 golem.orbit_heading_radians = Some(rotation);
                 golem.gait_tick = 99;
                 golem.left_foot = origin;

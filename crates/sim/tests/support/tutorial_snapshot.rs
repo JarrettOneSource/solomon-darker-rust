@@ -1,9 +1,9 @@
 //! The complete retained Tutorial state used by kernel and real-world replays.
 
 use serde_json::{Value, json};
-use solomon_sim::boneyard::tutorial::{NativeTutorialNarrationState, NativeTutorialState};
+use solomon_sim::boneyard::tutorial::{TutorialNarrationState, TutorialState};
 
-pub fn narration_row(narration: &NativeTutorialNarrationState) -> Value {
+pub fn narration_row(narration: &TutorialNarrationState) -> Value {
     json!({ "current": narration.current.as_ref().map(|event|json!({ "cue": event.cue.id(),
         "eventId": event.event_id, "speaker": event.speaker.id(), "text": event.text })),
         "nextEventId": narration.next_event_id,
@@ -11,7 +11,7 @@ pub fn narration_row(narration: &NativeTutorialNarrationState) -> Value {
         "ticksRemaining": narration.ticks_remaining })
 }
 
-pub fn state_row(state: &NativeTutorialState) -> Value {
+pub fn state_row(state: &TutorialState) -> Value {
     json!({
         "active": state.active, "cameraLockAgeTicks": state.camera_lock_age_ticks,
         "cameraLockTriggered": state.camera_lock_triggered, "cameraLockTicksRemaining": state.camera_lock_ticks_remaining,

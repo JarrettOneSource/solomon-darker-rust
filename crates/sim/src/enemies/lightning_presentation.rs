@@ -1,31 +1,30 @@
 //! Mage pulse factories and Faculty ribbons from `native-mage-lightning-pulse-presentation.ts`
 //! and `native-dark-lightning.ts`, reusing the canonical Air meshes and corona factories.
 
-use super::boss_spell::{BossSpellKind, NativeBossSpell};
+use super::boss_spell::{BossSpell, BossSpellKind};
 use super::projectiles::{MageLightningContact, MageLightningPulse};
 use crate::Vec2;
 use crate::spells::air::{
-    NativeAirCoronaInput, NativeAirCoronaPlan, NativeAirLightPlan, NativeAirLightningInput,
-    NativeAirPresentationRandom, NativeAirRibbonInput, NativeAirRibbonLayer,
-    build_native_air_corona_plan, build_native_air_lightning_plan,
-    build_native_air_path_light_sources, build_native_air_ribbon_with_style,
+    AirCoronaInput, AirCoronaPlan, AirLightPlan, AirLightningInput, AirPresentationRandom,
+    AirRibbonInput, AirRibbonLayer, build_air_corona_plan, build_air_lightning_plan,
+    build_air_path_light_sources, build_air_ribbon_with_style,
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnemyMageLightningPlan {
     pub age_ticks: u64,
-    pub body: Option<Vec<NativeAirRibbonLayer>>,
-    pub contact: NativeAirCoronaPlan,
+    pub body: Option<Vec<AirRibbonLayer>>,
+    pub contact: AirCoronaPlan,
     pub contact_target_player_id: Option<String>,
     pub endpoint: Vec2,
     pub midpoint: Vec2,
-    pub path_lights: Vec<NativeAirLightPlan>,
+    pub path_lights: Vec<AirLightPlan>,
     pub source: Vec2,
-    pub source_corona: Option<NativeAirCoronaPlan>,
+    pub source_corona: Option<AirCoronaPlan>,
 }
 
 #[must_use]
-pub fn native_mage_lightning_pulse_plan(
+pub fn mage_lightning_pulse_plan(
     pulse: &MageLightningPulse,
     presentation_tick: u64,
 ) -> Option<EnemyMageLightningPlan> {
@@ -36,7 +35,7 @@ pub fn native_mage_lightning_pulse_plan(
     };
     let alpha = *alphas.get(age as usize)?;
     let local = |point: Vec2| Vec2::new(point.x - pulse.source.x, point.y - pulse.source.y);
-    let factory = build_native_air_lightning_plan(NativeAirLightningInput {
+    let factory = build_air_lightning_plan(AirLightningInput {
         chained: false,
         enhanced_effects: pulse.enhanced_effects,
         age_ticks: age,
@@ -46,7 +45,7 @@ pub fn native_mage_lightning_pulse_plan(
         midpoint: local(pulse.midpoint),
         underpowered: false,
     });
-    let mut random = NativeAirPresentationRandom::new(u64::from(pulse.seed), 0x4d414745);
+    let mut random = AirPresentationRandom::new(u64::from(pulse.seed), 0x4d414745);
     let scale = base_scale + random.float(1.0) * 0.25;
     let angle = random.float(1.0) * std::f64::consts::PI * 2.0
         + age as f64 * (std::f64::consts::PI / 180.0);
@@ -56,7 +55,7 @@ pub fn native_mage_lightning_pulse_plan(
             (*local_offset, Some(target_player_id.clone()))
         }
     };
-    let contact = build_native_air_corona_plan(NativeAirCoronaInput {
+    let contact = build_air_corona_plan(AirCoronaInput {
         alpha,
         angle,
         center,
@@ -65,7 +64,7 @@ pub fn native_mage_lightning_pulse_plan(
         seed: u64::from(pulse.seed),
     });
     let path_lights = if age == 0 {
-        build_native_air_path_light_sources(
+        build_air_path_light_sources(
             u64::from(pulse.seed),
             pulse.tick,
             pulse.source,
@@ -92,7 +91,7 @@ pub fn native_mage_lightning_pulse_plan(
 
 /// The two dark ribbons are independent meshes with different native taper widths.
 #[must_use]
-pub fn native_dark_lightning_body(spell: &NativeBossSpell) -> Vec<NativeAirRibbonLayer> {
+pub fn dark_lightning_body(spell: &BossSpell) -> Vec<AirRibbonLayer> {
     let BossSpellKind::Blightning { endpoint, midpoint, enhanced_effects } = spell.kind else {
         panic!("Dark Lightning presentation requires Blightning");
     };
@@ -102,9 +101,9 @@ pub fn native_dark_lightning_body(spell: &NativeBossSpell) -> Vec<NativeAirRibbo
         Vec2::new(midpoint.x - origin.x, midpoint.y - origin.y),
         Vec2::new(endpoint.x - origin.x, endpoint.y - origin.y),
     ];
-    let common = NativeAirRibbonInput {
+    let common = AirRibbonInput {
         enhanced_effects,
-        ribbon_family: crate::spells::air::NativeAirRibbonFamily::Air,
+        ribbon_family: crate::spells::air::AirRibbonFamily::Air,
         points,
         id: spell.owner.id as u64,
         birth_tick: spell.owner.spawn_tick,
@@ -117,8 +116,8 @@ pub fn native_dark_lightning_body(spell: &NativeBossSpell) -> Vec<NativeAirRibbo
         taper_scale: 1.75,
     };
     vec![
-        build_native_air_ribbon_with_style(common),
-        build_native_air_ribbon_with_style(NativeAirRibbonInput {
+        build_air_ribbon_with_style(common),
+        build_air_ribbon_with_style(AirRibbonInput {
             width: 0.75,
             phase_offset: 15.0,
             tint: 0xff0000,

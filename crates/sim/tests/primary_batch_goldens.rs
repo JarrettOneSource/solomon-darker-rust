@@ -2,14 +2,14 @@
 use serde_json::{Value, json};
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
-use solomon_sim::profile::primary::native_primary_skill_profile;
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
+use solomon_sim::profile::primary::primary_skill_profile;
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::spells::casting::PlayerWeaponKind;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::targeting::*;
 use solomon_sim::spells::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/primary_rows.rs"]
 mod primary_rows;
@@ -59,9 +59,8 @@ fn ordered_players_share_one_primary_epoch_and_retained_owner_queries() {
                 _ => WizardElement::Water,
             };
             wizards.push(HubWizard::at(Vec2::new(100.0 + index as f64 * 70.0, 200.0)));
-            let book = NativeSkillBookState::new(element, WizardDiscipline::Arcane);
-            profiles
-                .push(native_primary_skill_profile(&book, &NativeOffensiveSpellFactors::default()));
+            let book = SkillBookState::new(element, WizardDiscipline::Arcane);
+            profiles.push(primary_skill_profile(&book, &OffensiveSpellFactors::default()));
             mana.push(definition["mana"].as_f64().unwrap());
             targets.push(vec![PrimarySpellTarget {
                 id: format!("enemy:{index}"),
@@ -74,14 +73,14 @@ fn ordered_players_share_one_primary_epoch_and_retained_owner_queries() {
                 heading_degrees: Some(0.0),
                 grid_position: None,
                 kind: PrimarySpellTargetKind::Enemy,
-                native_priority: 0,
+                priority: 0,
                 pending_remove: false,
                 query_lane: PrimarySpellQueryLane::Grid,
                 registration_order: index,
             }]);
         }
         let mut state = SpellState::default();
-        let mut rng = NativeRng::new(7);
+        let mut rng = Rng::new(7);
         let mut order = WorldPainterOrder { next_actor_ordinal: 49, next_transient_ordinal: 3 };
         for tick in 0..=160 {
             let active = |id: &str| {
@@ -126,7 +125,7 @@ fn ordered_players_share_one_primary_epoch_and_retained_owner_queries() {
                     && owner_id == "charlie"
                     && !(20..65).contains(&tick);
                 let authority = (!omitted).then_some(PrimarySpellCastAuthority {
-                    weapon_kind: Some(NativePlayerWeaponKind::Staff),
+                    weapon_kind: Some(PlayerWeaponKind::Staff),
                     alive: true,
                     available_mana: mana[index],
                     cast_progress_factor: 1.0,

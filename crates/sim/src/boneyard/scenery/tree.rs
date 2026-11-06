@@ -8,54 +8,54 @@ use crate::Vec2;
 use crate::boneyard::presentation::TreeOcclusion;
 use crate::boneyard::{BoneyardBounds, encounter::SolomonPhase};
 use crate::enemies::EnemyToken;
-use crate::enemies::actor_presentation::{NativeEnemyAnimationState, NativeEnemyCoffinState};
+use crate::enemies::actor_presentation::{EnemyAnimationState, EnemyCoffinState};
 use crate::float::fround as f;
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeTreeActorPoses {
-    pub players: Vec<NativeTreePlayerPose>,
-    pub enemies: Vec<NativeTreeEnemyPose>,
-    pub maggots: Vec<NativeTreeMaggotPose>,
+pub struct TreeActorPoses {
+    pub players: Vec<TreePlayerPose>,
+    pub enemies: Vec<TreeEnemyPose>,
+    pub maggots: Vec<TreeMaggotPose>,
     pub encounter: Option<(Vec2, SolomonPhase)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeTreePlayerPose {
+pub struct TreePlayerPose {
     pub id: String,
     pub position: Vec2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeTreeEnemyPose {
+pub struct TreeEnemyPose {
     pub id: usize,
     pub position: Vec2,
     pub enemy_token: EnemyToken,
-    pub native_type_id: u16,
-    pub animation_state: NativeEnemyAnimationState,
-    pub coffin_state: NativeEnemyCoffinState,
+    pub type_id: u16,
+    pub animation_state: EnemyAnimationState,
+    pub coffin_state: EnemyCoffinState,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeTreeMaggotPose {
+pub struct TreeMaggotPose {
     pub id: usize,
     pub position: Vec2,
-    pub native_tree_query_member: bool,
+    pub tree_query_member: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeTreeOcclusionFrame {
+pub struct TreeOcclusionFrame {
     pub actor_positions: Vec<Vec2>,
     pub camera_bounds: BoneyardBounds,
 }
 
 /// `BoneyardTreeOcclusionPresentation`: one view-owned clock for the loaded Trees.
 /// Missing delivered history never supplies a guessed occupant to an earlier scan.
-pub struct NativeTreeOcclusionPresentation {
+pub struct TreeOcclusionPresentation {
     trees: BTreeMap<String, TreeOcclusion>,
     last_tick: u64,
 }
 
-impl NativeTreeOcclusionPresentation {
+impl TreeOcclusionPresentation {
     #[must_use]
     pub fn new(trees: BTreeMap<String, TreeOcclusion>, start_tick: u64) -> Self {
         Self { trees, last_tick: start_tick }
@@ -69,9 +69,9 @@ impl NativeTreeOcclusionPresentation {
     pub fn update(
         &mut self,
         display_tick: f64,
-        current: &NativeTreeOcclusionFrame,
+        current: &TreeOcclusionFrame,
         retained_from: Option<u64>,
-        mut sample: impl FnMut(u64) -> Option<NativeTreeOcclusionFrame>,
+        mut sample: impl FnMut(u64) -> Option<TreeOcclusionFrame>,
     ) {
         if !display_tick.is_finite() || display_tick < 0.0 {
             return;
@@ -107,30 +107,26 @@ impl NativeTreeOcclusionPresentation {
 }
 
 #[must_use]
-pub fn native_tree_actor_positions(
-    poses: &NativeTreeActorPoses,
-    local_player_id: &str,
-) -> Vec<Vec2> {
+pub fn tree_actor_positions(poses: &TreeActorPoses, local_player_id: &str) -> Vec<Vec2> {
     let mut positions = Vec::new();
     // A dying local wizard retains its category/bank/cell until actual removal.
     if let Some(player) = poses.players.iter().find(|player| player.id == local_player_id) {
         positions.push(player.position);
     }
     for enemy in &poses.enemies {
-        if enemy.enemy_token.native_type_id() != enemy.native_type_id
-            || enemy.animation_state == NativeEnemyAnimationState::Death
+        if enemy.enemy_token.type_id() != enemy.type_id
+            || enemy.animation_state == EnemyAnimationState::Death
         {
             continue;
         }
-        if enemy.enemy_token == EnemyToken::Coffin
-            && enemy.coffin_state == NativeEnemyCoffinState::Hidden
+        if enemy.enemy_token == EnemyToken::Coffin && enemy.coffin_state == EnemyCoffinState::Hidden
         {
             continue;
         }
         positions.push(enemy.position);
     }
     for maggot in poses.maggots.iter() {
-        if maggot.native_tree_query_member {
+        if maggot.tree_query_member {
             positions.push(maggot.position);
         }
     }
@@ -143,7 +139,7 @@ pub fn native_tree_actor_positions(
 }
 
 #[must_use]
-pub fn native_tree_secondary_position(root: Vec2, camera: BoneyardBounds) -> Vec2 {
+pub fn tree_secondary_position(root: Vec2, camera: BoneyardBounds) -> Vec2 {
     let x = f(f(camera.x) + f(f(camera.width) * 0.5));
     let y = f(f(camera.y) + f(f(camera.height) * 0.5));
     let scale = 1.025_f32 as f64;

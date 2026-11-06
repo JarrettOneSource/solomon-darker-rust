@@ -3,10 +3,10 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::BoneyardBounds;
-use solomon_sim::boneyard::lighting::NativeBoneyardLightSource;
+use solomon_sim::boneyard::lighting::BoneyardLightSource;
 use solomon_sim::boneyard::world_light::{
     BoneyardWorldLightQuery, WorldLightOwner, WorldLightPlayer, WorldLightScene,
-    WorldMiscLightOwner, native_primary_view_bounds, native_region_point_gain,
+    WorldMiscLightOwner, primary_view_bounds, region_point_gain,
 };
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 
@@ -38,8 +38,8 @@ fn registration(value: &Value) -> PainterRegistration {
     }
 }
 
-fn source(value: &Value) -> NativeBoneyardLightSource {
-    NativeBoneyardLightSource {
+fn source(value: &Value) -> BoneyardLightSource {
+    BoneyardLightSource {
         intensity: number(&value["intensity"]),
         position: point(&value["position"]),
         radius: number(&value["radius"]),
@@ -130,7 +130,7 @@ fn all_participant_cameras_collect_native_light_owners_in_exact_manager_order() 
     }
     for case in fixture["views"].as_array().unwrap() {
         assert_eq!(
-            native_primary_view_bounds(
+            primary_view_bounds(
                 bounds(&case["bounds"]),
                 point(&case["focus"]),
                 point(&case["viewport"]),
@@ -142,7 +142,7 @@ fn all_participant_cameras_collect_native_light_owners_in_exact_manager_order() 
     }
     for case in fixture["gains"].as_array().unwrap() {
         assert_eq!(
-            native_region_point_gain(
+            region_point_gain(
                 point(&case["position"]),
                 point(&case["cameraCenter"]),
                 number(&case["width"]),

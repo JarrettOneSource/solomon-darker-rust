@@ -2,15 +2,15 @@
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::native_ui_text::NativeUiGlyphLayout;
 use solomon_sim::social::*;
+use solomon_sim::ui_text::UiGlyphLayout;
 use solomon_sim::world_labels::*;
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
 
-fn glyphs(glyphs: &[NativeUiGlyphLayout]) -> Value {
+fn glyphs(glyphs: &[UiGlyphLayout]) -> Value {
     json!(
         glyphs
             .iter()
@@ -67,7 +67,7 @@ fn nameplate_and_speech_layouts_match_the_source_bitmap_metrics() {
         assert_source(&glyphs(&actual.glyphs), &case["glyphs"]);
     }
     for case in fixture["messages"].as_array().unwrap() {
-        let actual = layout_native_world_speech(case["text"].as_str().unwrap());
+        let actual = layout_world_speech(case["text"].as_str().unwrap());
         assert_source(&json!(actual.width), &case["width"]);
         assert_source(&json!(actual.height), &case["height"]);
         assert_source(&json!(actual.glyph_count), &case["glyphCount"]);
@@ -78,7 +78,7 @@ fn nameplate_and_speech_layouts_match_the_source_bitmap_metrics() {
     }
     for case in fixture["health"].as_array().unwrap() {
         assert_source(
-            &json!(native_world_nameplate_health_ratio(
+            &json!(world_nameplate_health_ratio(
                 case["current"].as_f64().unwrap(),
                 case["maximum"].as_f64().unwrap(),
             )),
@@ -88,7 +88,7 @@ fn nameplate_and_speech_layouts_match_the_source_bitmap_metrics() {
     for case in fixture["projections"].as_array().unwrap() {
         let transform = &case["transform"];
         let viewport = &case["viewport"];
-        let actual = project_native_world_point(
+        let actual = project_world_point(
             point(&case["point"]),
             point(&transform["position"]),
             transform["scale"].as_f64().unwrap(),

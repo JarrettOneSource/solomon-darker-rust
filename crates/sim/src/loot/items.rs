@@ -1,41 +1,41 @@
 //! Loot item construction from Website `core-kernels/native-loot-items.ts`.
 //! All drops use the same inventory item model as College services and saved profiles.
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::appearance::{clamp_unit, rgb_tint};
-use crate::boneyard::waves::native_survival_programs;
 use crate::boneyard::waves::programs::BossKind;
+use crate::boneyard::waves::survival_programs;
 use crate::economy::{
     DOWSING_EQUIPMENT_RECIPES, EquipmentRecipe, EquipmentType, FOMENTIUS_STOCK_DEFINITIONS,
-    HubInventoryItem, HubItemKind, ItemRarity, NATIVE_SKILL_BOOK_DEFINITIONS, base_item,
+    HubInventoryItem, HubItemKind, ItemRarity, SKILL_BOOK_DEFINITIONS, base_item,
     create_equipment_inventory_item, create_fomentius_inventory_item,
-    create_native_skill_book_inventory_item,
+    create_skill_book_inventory_item,
 };
 use crate::enemies::EnemyToken;
-use crate::equipment::NATIVE_EQUIPMENT_SETS;
-use crate::equipment::random::generate_native_random_equipment_effects;
+use crate::equipment::EQUIPMENT_SETS;
+use crate::equipment::random::generate_random_equipment_effects;
 use crate::float::fround;
 
-use super::{NativeLootItemIds, NativeLootSelectionInput};
+use super::{LootItemIds, LootSelectionInput};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeGoodieContents {
+pub struct GoodieContents {
     pub gold: u64,
     pub items: Vec<HubInventoryItem>,
 }
 
 #[must_use]
-pub fn resolve_native_goodie_contents(
-    rng: &mut NativeRng,
-    item_ids: &mut NativeLootItemIds,
+pub fn resolve_goodie_contents(
+    rng: &mut Rng,
+    item_ids: &mut LootItemIds,
     selector: u32,
     player_level: u32,
     advanced_unlocks: &[bool; 8],
     owned_recipe_indexes: &[usize],
     ground_recipe_indexes: &[usize],
-) -> NativeGoodieContents {
+) -> GoodieContents {
     assert!(selector <= 17, "native Goodie selector is in0..18");
-    let mut contents = NativeGoodieContents { gold: 0, items: Vec::new() };
+    let mut contents = GoodieContents { gold: 0, items: Vec::new() };
     match selector {
         0..=3 => {
             for _ in 0..5 {
@@ -99,10 +99,10 @@ pub fn resolve_native_goodie_contents(
 }
 
 fn insert_goodie_item(items: &mut Vec<HubInventoryItem>, item: HubInventoryItem) {
-    if item.native_type_id == 7001
-        && let Some(stack) = items.iter_mut().find(|candidate| {
-            candidate.native_type_id == 7001 && candidate.native_subtype == item.native_subtype
-        })
+    if item.type_id == 7001
+        && let Some(stack) = items
+            .iter_mut()
+            .find(|candidate| candidate.type_id == 7001 && candidate.subtype == item.subtype)
     {
         stack.quantity += item.quantity;
         return;
@@ -112,9 +112,9 @@ fn insert_goodie_item(items: &mut Vec<HubInventoryItem>, item: HubInventoryItem)
 
 #[must_use]
 pub fn select_enemy_item(
-    rng: &mut NativeRng,
-    item_ids: &mut NativeLootItemIds,
-    input: &NativeLootSelectionInput<'_>,
+    rng: &mut Rng,
+    item_ids: &mut LootItemIds,
+    input: &LootSelectionInput<'_>,
     item_recipe_pool: Option<&[usize]>,
 ) -> Option<HubInventoryItem> {
     if let Some(indexes) = item_recipe_pool {
@@ -211,7 +211,7 @@ pub fn dire_boss_item_recipe_pool(
         return None;
     }
     let recipe_uid = recipe_uid?;
-    let programs = native_survival_programs(source_sha256?)?;
+    let programs = survival_programs(source_sha256?)?;
     let faculty = programs.bosses.iter().find(|definition| definition.kind == BossKind::Faculty)?;
     let recipe = faculty.recipes.iter().find(|recipe| recipe.uid == recipe_uid)?;
     let set_member = match recipe.name.as_str() {
@@ -220,7 +220,7 @@ pub fn dire_boss_item_recipe_pool(
         "Dire Aliss" => 16,
         _ => return None,
     };
-    let set = NATIVE_EQUIPMENT_SETS
+    let set = EQUIPMENT_SETS
         .iter()
         .find(|set| set.member_recipe_indices.contains(&set_member))
         .expect("each approved faculty Item pool names a retained equipment set");
@@ -232,8 +232,8 @@ pub fn dire_boss_item_recipe_pool(
 }
 
 fn random_equipment(
-    rng: &mut NativeRng,
-    item_ids: &mut NativeLootItemIds,
+    rng: &mut Rng,
+    item_ids: &mut LootItemIds,
     level: i32,
     advanced_unlocks: &[bool; 8],
 ) -> HubInventoryItem {
@@ -258,9 +258,8 @@ fn random_equipment(
     } else {
         None
     };
-    let generated =
-        generate_native_random_equipment_effects(rng, equipment_type, level, advanced_unlocks);
-    let native_type_id = match equipment_type {
+    let generated = generate_random_equipment_effects(rng, equipment_type, level, advanced_unlocks);
+    let type_id = match equipment_type {
         EquipmentType::Amulet => 7003,
         EquipmentType::Hat => 7005,
         EquipmentType::Ring => 7002,
@@ -272,7 +271,7 @@ fn random_equipment(
         item_ids.allocate(),
         HubItemKind::Equipment,
         &generated.name,
-        native_type_id,
+        type_id,
         None,
         &equipment_icon_records(equipment_type, selector as usize),
     );
@@ -280,11 +279,11 @@ fn random_equipment(
     item.generated_level = Some(generated.item_level);
     item.icon_tints = icon_tints;
     item.native_effects = Some(generated.effects);
-    item.native_selector = Some(selector);
+    item.selector = Some(selector);
     item
 }
 
-fn random_wearable_colors(rng: &mut NativeRng) -> [u32; 2] {
+fn random_wearable_colors(rng: &mut Rng) -> [u32; 2] {
     let mut color = random_clothing_color(rng).map(clamp_unit);
     if rng.draw_integer(4) == 1 {
         color = color.map(|channel| clamp_unit(channel * 1.85));
@@ -303,7 +302,7 @@ fn random_wearable_colors(rng: &mut NativeRng) -> [u32; 2] {
 }
 
 /// Retail `0x004630E0`: preserve out-of-range jitter until the caller's colour transform.
-fn random_clothing_color(rng: &mut NativeRng) -> [f64; 3] {
+fn random_clothing_color(rng: &mut Rng) -> [f64; 3] {
     let palette = [
         [1.0, 0.0, 0.0],
         [1.0, 0.5, 0.0],
@@ -338,8 +337,8 @@ fn equipment_icon_records(equipment_type: EquipmentType, selector: usize) -> Vec
 #[must_use]
 pub fn equipment_recipe_item(
     recipe: &EquipmentRecipe,
-    item_ids: &mut NativeLootItemIds,
-    rng: &mut NativeRng,
+    item_ids: &mut LootItemIds,
+    rng: &mut Rng,
 ) -> HubInventoryItem {
     let mut item = create_equipment_inventory_item(recipe, item_ids.allocate());
     if matches!(recipe.equipment_type, EquipmentType::Hat | EquipmentType::Robe) {
@@ -351,7 +350,7 @@ pub fn equipment_recipe_item(
         item.icon_tints =
             Some([Some(desaturate_named_color(primary)), Some(desaturate_named_color(secondary))]);
     }
-    item.native_selector = Some(match recipe.equipment_type {
+    item.selector = Some(match recipe.equipment_type {
         EquipmentType::Hat => recipe.icon_records[0] - 34,
         EquipmentType::Robe => recipe.icon_records[0] - 64,
         EquipmentType::Staff => recipe.icon_records[0] - 72,
@@ -384,30 +383,30 @@ fn desaturate_named_color(color: [f64; 3]) -> u32 {
 }
 
 #[must_use]
-pub fn potion_item(item_ids: &mut NativeLootItemIds, subtype: u32) -> HubInventoryItem {
+pub fn potion_item(item_ids: &mut LootItemIds, subtype: u32) -> HubInventoryItem {
     assert!(subtype <= 5, "native potion subtype is in0..6");
     let definition = FOMENTIUS_STOCK_DEFINITIONS
         .iter()
-        .find(|row| row.native_type_id == 7001 && row.native_subtype == subtype)
+        .find(|row| row.type_id == 7001 && row.subtype == subtype)
         .expect("all six native potion definitions are retained");
     let mut item = create_fomentius_inventory_item(definition, item_ids.allocate(), 1);
-    item.native_selector = Some(subtype);
+    item.selector = Some(subtype);
     item
 }
 
 #[must_use]
-pub fn misc_item(item_ids: &mut NativeLootItemIds, subtype: u32) -> HubInventoryItem {
+pub fn misc_item(item_ids: &mut LootItemIds, subtype: u32) -> HubInventoryItem {
     let mut item = match subtype {
         0 => {
             base_item(item_ids.allocate(), HubItemKind::Dye, "Fabric Dye Kit", 7012, Some(0), &[42])
         }
         1 => base_item(item_ids.allocate(), HubItemKind::Key, "Wizard Key", 7012, Some(1), &[43]),
-        2 | 3 => create_native_skill_book_inventory_item(
-            &NATIVE_SKILL_BOOK_DEFINITIONS[(subtype - 2) as usize],
+        2 | 3 => create_skill_book_inventory_item(
+            &SKILL_BOOK_DEFINITIONS[(subtype - 2) as usize],
             item_ids.allocate(),
         ),
         _ => panic!("native miscellaneous subtype is in0..4"),
     };
-    item.native_selector = Some(subtype);
+    item.selector = Some(subtype);
     item
 }

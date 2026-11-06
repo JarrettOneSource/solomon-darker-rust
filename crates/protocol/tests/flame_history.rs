@@ -2,7 +2,7 @@
 use serde_json::{Value, json};
 use solomon_protocol::flame_presentation::*;
 use solomon_sim::spells::model::PrimarySpellTransient;
-use solomon_sim::spells::weld::NativeWeldWorldActor;
+use solomon_sim::spells::weld::WeldWorldActor;
 
 #[path = "../../sim/tests/support/website_rows.rs"]
 mod website_rows;
@@ -46,13 +46,13 @@ fn actor_row(actor: &PrimarySpellTransient, birth: &FlamePresentationBirth) -> V
         "worldKey":common.owner.world_key,"origin":{"x":common.origin.x,"y":common.origin.y},
         "painterRegistrations":[root],"lightRegistration":if common.owner.light_registration.is_some(){root.clone()}else{Value::Null}});
     match actor {
-        NativeWeldWorldActor::Channel(channel) => {
+        WeldWorldActor::Channel(channel) => {
             let fields = json!({"kind":"weld-channel","flameVisual":recipe["birth"],"endpoint":channel.endpoint,
                 "midpoint":channel.midpoint,"targetId":channel.target_id,"underpowered":channel.underpowered,
                 "enhancedEffects":channel.enhanced_effects,"variant":channel.variant});
             row.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
         }
-        NativeWeldWorldActor::FlameLashFade(fade) => {
+        WeldWorldActor::FlameLashFade(fade) => {
             let fields = json!({"kind":"weld-flame-lash-fade","flameVisual":recipe["birth"],"alpha":fade.alpha,
                 "alphaStep":fade.alpha_step,"baseScale":fade.base_scale,"wrapperScalar":fade.wrapper_scalar,
                 "position":fade.position,"variant":recipe["variant"],"record":fade.record,

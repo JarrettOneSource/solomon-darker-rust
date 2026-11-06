@@ -3,23 +3,19 @@
 
 use crate::Vec2;
 use crate::hud::HudRect;
-use crate::native_ui_text::{
-    NativeUiFontName, NativeUiTextRun, measure_native_ui_text, native_ui_font,
-    wrap_native_ui_msg_box_text,
-};
 use crate::profile::{
-    NATIVE_SKILL_CATALOG, PlayerSkillOfferOption, native_skill_category, native_skill_root,
-    native_weld_build,
+    PlayerSkillOfferOption, SKILL_CATALOG, skill_category, skill_root, weld_build,
 };
+use crate::ui_text::{UiFontName, UiTextRun, measure_ui_text, ui_font, wrap_ui_msg_box_text};
 
-use super::format_native_skill_tooltip_line;
-use super::skill_text::native_skill_page_tint;
+use super::format_skill_tooltip_line;
+use super::skill_text::skill_page_tint;
 
-pub const NATIVE_SKILL_HOVER_CONTENT_MARGIN: f64 = 25.0;
-pub const NATIVE_SKILL_HOVER_LINE_GAP: f64 = 10.0;
+pub const SKILL_HOVER_CONTENT_MARGIN: f64 = 25.0;
+pub const SKILL_HOVER_LINE_GAP: f64 = 10.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSkillHoverLineKind {
+pub enum SkillHoverLineKind {
     Bonus,
     Boost,
     Category,
@@ -30,7 +26,7 @@ pub enum NativeSkillHoverLineKind {
     Title,
 }
 
-impl NativeSkillHoverLineKind {
+impl SkillHoverLineKind {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -47,20 +43,20 @@ impl NativeSkillHoverLineKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSkillHoverLine {
-    pub kind: NativeSkillHoverLineKind,
+pub struct SkillHoverLine {
+    pub kind: SkillHoverLineKind,
     pub text: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSkillHoverRenderedLine {
-    pub kind: NativeSkillHoverLineKind,
+pub struct SkillHoverRenderedLine {
+    pub kind: SkillHoverLineKind,
     pub sources: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSkillHoverBoxLayout {
-    pub rendered: Vec<NativeSkillHoverRenderedLine>,
+pub struct SkillHoverBoxLayout {
+    pub rendered: Vec<SkillHoverRenderedLine>,
     pub content_width: f64,
     pub rect: HudRect,
     pub line_height: f64,
@@ -73,13 +69,13 @@ enum InlineCommand {
 }
 
 #[must_use]
-pub fn native_skill_book_tooltip_lines(
+pub fn skill_book_tooltip_lines(
     skill_id: usize,
     permanent_rank: u32,
     effective_rank: u32,
-) -> Vec<NativeSkillHoverLine> {
-    use NativeSkillHoverLineKind as Kind;
-    let skill = &NATIVE_SKILL_CATALOG[skill_id];
+) -> Vec<SkillHoverLine> {
+    use SkillHoverLineKind as Kind;
+    let skill = &SKILL_CATALOG[skill_id];
     let mut lines = Vec::new();
     if effective_rank > permanent_rank {
         push_line(
@@ -100,7 +96,7 @@ pub fn native_skill_book_tooltip_lines(
         title.push_str(&format!(" _s(.7)_o(0,1){effective_rank}/{maximum}"));
     }
     push_line(&mut lines, Kind::Title, &title);
-    let category = native_skill_category(skill_id).expect("native tooltip skill category");
+    let category = skill_category(skill_id).expect("native tooltip skill category");
     push_line(
         &mut lines,
         Kind::Category,
@@ -115,12 +111,12 @@ pub fn native_skill_book_tooltip_lines(
     push_line(&mut lines, Kind::Spacer, "");
     push_line(&mut lines, Kind::Level, &format!("   Current Level: {effective_rank}"));
     for template in skill.stat_lines {
-        let value = format_native_skill_tooltip_line(template, skill, effective_rank);
+        let value = format_skill_tooltip_line(template, skill, effective_rank);
         push_line(&mut lines, Kind::Stat, &format!("   {value}"));
     }
     if category == 3 {
         for template in skill.bonus_lines {
-            let value = format_native_skill_tooltip_line(template, skill, effective_rank);
+            let value = format_skill_tooltip_line(template, skill, effective_rank);
             push_line(&mut lines, Kind::Bonus, &format!("   {value}"));
         }
     }
@@ -128,14 +124,14 @@ pub fn native_skill_book_tooltip_lines(
 }
 
 #[must_use]
-pub fn skill_picker_detail_lines(option: &PlayerSkillOfferOption) -> Vec<NativeSkillHoverLine> {
+pub fn skill_picker_detail_lines(option: &PlayerSkillOfferOption) -> Vec<SkillHoverLine> {
     let mut lines =
-        native_skill_book_tooltip_lines(option.skill_id, option.target_rank, option.target_rank);
+        skill_book_tooltip_lines(option.skill_id, option.target_rank, option.target_rank);
     if let Some(build_id) = option.weld_build_id {
-        let build = native_weld_build(build_id).expect("offered native weld build");
+        let build = weld_build(build_id).expect("offered native weld build");
         for line in &mut lines {
             match line.kind {
-                NativeSkillHoverLineKind::Title => {
+                SkillHoverLineKind::Title => {
                     let suffix = line
                         .text
                         .find(" _s(")
@@ -143,32 +139,29 @@ pub fn skill_picker_detail_lines(option: &PlayerSkillOfferOption) -> Vec<NativeS
                         .unwrap_or_default();
                     line.text = format!("{}{suffix}", build.synthetic_name.to_uppercase());
                 }
-                NativeSkillHoverLineKind::Description => {
-                    line.text = build.pair_description.to_owned()
-                }
+                SkillHoverLineKind::Description => line.text = build.pair_description.to_owned(),
                 _ => {}
             }
         }
     }
     if option.insight {
-        push_line(&mut lines, NativeSkillHoverLineKind::Bonus, "Insight Bonus: Skill +2");
+        push_line(&mut lines, SkillHoverLineKind::Bonus, "Insight Bonus: Skill +2");
     }
     lines
 }
 
-fn push_line(lines: &mut Vec<NativeSkillHoverLine>, kind: NativeSkillHoverLineKind, text: &str) {
-    lines.push(NativeSkillHoverLine { kind, text: text.to_owned() });
+fn push_line(lines: &mut Vec<SkillHoverLine>, kind: SkillHoverLineKind, text: &str) {
+    lines.push(SkillHoverLine { kind, text: text.to_owned() });
 }
 
 #[must_use]
-pub fn native_skill_hover_line_tint(kind: NativeSkillHoverLineKind, skill_id: usize) -> u32 {
-    let tint =
-        native_skill_page_tint(native_skill_root(skill_id).expect("native hover skill root"));
+pub fn skill_hover_line_tint(kind: SkillHoverLineKind, skill_id: usize) -> u32 {
+    let tint = skill_page_tint(skill_root(skill_id).expect("native hover skill root"));
     match kind {
-        NativeSkillHoverLineKind::Boost => 0xff80ff,
-        NativeSkillHoverLineKind::Bonus => 0xd9ba70,
-        NativeSkillHoverLineKind::Title => tint,
-        NativeSkillHoverLineKind::Category => {
+        SkillHoverLineKind::Boost => 0xff80ff,
+        SkillHoverLineKind::Bonus => 0xd9ba70,
+        SkillHoverLineKind::Title => tint,
+        SkillHoverLineKind::Category => {
             let channel = |shift: u32| ((((tint >> shift) & 0xff) as f64) * 0.75).round() as u32;
             channel(16) << 16 | channel(8) << 8 | channel(0)
         }
@@ -179,9 +172,9 @@ pub fn native_skill_hover_line_tint(kind: NativeSkillHoverLineKind, skill_id: us
 /// `nativeSkillExactTextRuns`: malformed commands remain literal text. Only the
 /// source's decimal grammar is accepted; exponent/plus/whitespace forms are not commands.
 #[must_use]
-pub fn native_skill_exact_text_runs(source: &str) -> Vec<NativeUiTextRun<'_>> {
+pub fn skill_exact_text_runs(source: &str) -> Vec<UiTextRun<'_>> {
     let mut runs = Vec::new();
-    let mut state = NativeUiTextRun::new("");
+    let mut state = UiTextRun::new("");
     state.scale = Some(1.0);
     let mut start = 0;
     let mut cursor = 0;
@@ -192,7 +185,7 @@ pub fn native_skill_exact_text_runs(source: &str) -> Vec<NativeUiTextRun<'_>> {
             continue;
         };
         if cursor > start {
-            runs.push(NativeUiTextRun { text: &source[start..cursor], ..state });
+            runs.push(UiTextRun { text: &source[start..cursor], ..state });
         }
         match command {
             InlineCommand::ToggleItalic => state.italic = !state.italic,
@@ -206,7 +199,7 @@ pub fn native_skill_exact_text_runs(source: &str) -> Vec<NativeUiTextRun<'_>> {
         start = cursor;
     }
     if cursor > start {
-        runs.push(NativeUiTextRun { text: &source[start..cursor], ..state });
+        runs.push(UiTextRun { text: &source[start..cursor], ..state });
     }
     runs
 }
@@ -249,14 +242,13 @@ fn is_source_decimal(source: &str) -> bool {
 }
 
 #[must_use]
-pub fn measure_native_skill_exact_text(source: &str) -> f64 {
+pub fn measure_skill_exact_text(source: &str) -> f64 {
     let mut line_width = 0.0_f64;
     let mut maximum_width = 0.0_f64;
-    for run in native_skill_exact_text_runs(source) {
+    for run in skill_exact_text_runs(source) {
         let parts: Vec<_> = run.text.split('\n').collect();
         for (index, part) in parts.iter().enumerate() {
-            line_width +=
-                measure_native_ui_text(part, NativeUiFontName::Body, run.scale.unwrap_or(1.0));
+            line_width += measure_ui_text(part, UiFontName::Body, run.scale.unwrap_or(1.0));
             maximum_width = maximum_width.max(line_width);
             if index + 1 < parts.len() {
                 line_width = 0.0;
@@ -267,35 +259,32 @@ pub fn measure_native_skill_exact_text(source: &str) -> f64 {
 }
 
 #[must_use]
-pub fn native_skill_hover_box_layout(
-    lines: &[NativeSkillHoverLine],
-    source: Vec2,
-) -> NativeSkillHoverBoxLayout {
+pub fn skill_hover_box_layout(lines: &[SkillHoverLine], source: Vec2) -> SkillHoverBoxLayout {
     let mut rendered = Vec::new();
     let mut content_width = 0.0_f64;
-    let line_height = native_ui_font(NativeUiFontName::Body).metrics[0];
+    let line_height = ui_font(UiFontName::Body).metrics[0];
     let mut content_height = 0.0;
     for (index, line) in lines.iter().enumerate() {
-        let text = if line.kind == NativeSkillHoverLineKind::Description {
-            wrap_native_ui_msg_box_text(&line.text, NativeUiFontName::Body, 380.0).join("\n")
+        let text = if line.kind == SkillHoverLineKind::Description {
+            wrap_ui_msg_box_text(&line.text, UiFontName::Body, 380.0).join("\n")
         } else {
             line.text.clone()
         };
-        let sources = if measure_native_skill_exact_text(&text) > 400.0 {
-            wrap_native_ui_msg_box_text(&text, NativeUiFontName::Body, 400.0)
+        let sources = if measure_skill_exact_text(&text) > 400.0 {
+            wrap_ui_msg_box_text(&text, UiFontName::Body, 400.0)
         } else {
             text.split('\n').map(str::to_owned).collect()
         };
         for text in &sources {
-            content_width = content_width.max(measure_native_skill_exact_text(text));
+            content_width = content_width.max(measure_skill_exact_text(text));
         }
         content_height += sources.len() as f64 * line_height;
         if index + 1 < lines.len() {
-            content_height += NATIVE_SKILL_HOVER_LINE_GAP;
+            content_height += SKILL_HOVER_LINE_GAP;
         }
-        rendered.push(NativeSkillHoverRenderedLine { kind: line.kind, sources });
+        rendered.push(SkillHoverRenderedLine { kind: line.kind, sources });
     }
-    let margin = NATIVE_SKILL_HOVER_CONTENT_MARGIN;
+    let margin = SKILL_HOVER_CONTENT_MARGIN;
     let width = content_width + margin * 2.0;
     let height = content_height + margin * 2.0;
     // Source uses max/min rather than clamp: very tall authored boxes still pin to25.
@@ -305,7 +294,7 @@ pub fn native_skill_hover_box_layout(
         y = source.y + 50.0;
     }
     y = margin.max((900.0 - margin - height).min(y));
-    NativeSkillHoverBoxLayout {
+    SkillHoverBoxLayout {
         rendered,
         content_width,
         rect: HudRect::new(x, y, width, height),

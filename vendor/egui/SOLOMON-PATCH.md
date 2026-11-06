@@ -55,10 +55,10 @@ resolves its target through the same widget hit test.
 The workspace selects this package with `[patch.crates-io]` and excludes it from
 application lint targets.
 
-Application regressions in `crates/web/src/gpu_ui/layer_tests.rs` cover paint,
+Application regressions in `crates/client/src/gpu_ui/layer_tests.rs` cover paint,
 input, modal order, reappearance, passive controls, disabled children, and cutouts.
-`crates/web/src/gpu_ui/input/cancel_tests.rs` covers cancellation and later taps.
-`crates/web/src/menu/widgets.rs` covers wheel pacing and focus reveal.
+`crates/client/src/gpu_ui/input/cancel_tests.rs` covers cancellation and later taps.
+`crates/client/src/menu/widgets.rs` covers wheel pacing and focus reveal.
 
 Paths in this section are relative to the repository root.
 An upgrade must retain these contracts or replace the patch with supported APIs.

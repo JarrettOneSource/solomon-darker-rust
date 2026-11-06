@@ -6,10 +6,10 @@ use std::f64::consts::PI;
 use crate::float::fround;
 use crate::player::PlayerState;
 
-pub const NATIVE_LEVEL_UP_PRESENTATION_DURATION_MS: f64 = 2390.0;
+pub const LEVEL_UP_PRESENTATION_DURATION_MS: f64 = 2390.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeLevelUpParticle {
+pub struct LevelUpParticle {
     pub alpha: f64,
     pub offset_x: f64,
     pub offset_y: f64,
@@ -18,10 +18,10 @@ pub struct NativeLevelUpParticle {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeLevelUpPresentationFrame {
+pub struct LevelUpPresentationFrame {
     pub emitting: bool,
     pub light_radius: f64,
-    pub particles: Vec<NativeLevelUpParticle>,
+    pub particles: Vec<LevelUpParticle>,
     pub tick: u64,
 }
 
@@ -29,14 +29,14 @@ pub struct NativeLevelUpPresentationFrame {
 /// setLevelUpPresentation/frame clock. A null offer stops admission, not a burst
 /// that already started. The wall-clock sample keeps running through the barrier.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeLevelUpPresentationTracker {
+pub struct LevelUpPresentationTracker {
     world_key: Option<String>,
     armed_id: Option<u64>,
     last_id: Option<u64>,
     started_at_ms: Option<f64>,
 }
 
-impl NativeLevelUpPresentationTracker {
+impl LevelUpPresentationTracker {
     pub fn reset(&mut self) {
         *self = Self::default();
     }
@@ -55,7 +55,7 @@ impl NativeLevelUpPresentationTracker {
         barrier_id: Option<u64>,
         frame_at_ms: f64,
         player_screen_y: f64,
-    ) -> Option<NativeLevelUpPresentationFrame> {
+    ) -> Option<LevelUpPresentationFrame> {
         if self.world_key.as_deref() != Some(world_key) {
             self.reset();
             self.world_key = Some(world_key.to_owned());
@@ -69,37 +69,37 @@ impl NativeLevelUpPresentationTracker {
         let id = self.armed_id?;
         let started = *self.started_at_ms.get_or_insert(frame_at_ms);
         let elapsed = frame_at_ms - started;
-        if elapsed >= NATIVE_LEVEL_UP_PRESENTATION_DURATION_MS {
+        if elapsed >= LEVEL_UP_PRESENTATION_DURATION_MS {
             self.armed_id = None;
             self.started_at_ms = None;
             return None;
         }
-        Some(native_level_up_presentation_frame(id, elapsed, player_screen_y))
+        Some(level_up_presentation_frame(id, elapsed, player_screen_y))
     }
 }
 
 /// BoneyardSceneLights only widens an admitted local-player light while the
 /// emitter is active. The additive offset uses the source's double 2.6 literal.
 #[must_use]
-pub fn native_level_up_player_light_radius(
+pub fn level_up_player_light_radius(
     overlay_effect_phase: f64,
-    frame: &NativeLevelUpPresentationFrame,
+    frame: &LevelUpPresentationFrame,
 ) -> Option<f64> {
     if !frame.emitting {
         return None;
     }
     Some(
-        (1.0 + overlay_effect_phase) * crate::boneyard::lighting::NATIVE_PLAYER_LIGHT_RADIUS
+        (1.0 + overlay_effect_phase) * crate::boneyard::lighting::PLAYER_LIGHT_RADIUS
             + (frame.light_radius - 2.6),
     )
 }
 
 #[must_use]
-pub fn native_level_up_presentation_frame(
+pub fn level_up_presentation_frame(
     presentation_id: u64,
     elapsed_ms: f64,
     player_screen_y: f64,
-) -> NativeLevelUpPresentationFrame {
+) -> LevelUpPresentationFrame {
     let tick = if elapsed_ms.is_finite() && elapsed_ms > 0.0 {
         (elapsed_ms / 10.0).floor() as u64
     } else {
@@ -134,7 +134,7 @@ pub fn native_level_up_presentation_frame(
         let lateral_fade = 1.0 - spawn_x.abs() / 30.0;
         let emitter_timer = 180 - birth_tick - 1;
         let birth_alpha = float::sin(emitter_timer as f64 * PI / 180.0);
-        particles.push(NativeLevelUpParticle {
+        particles.push(LevelUpParticle {
             alpha: birth_alpha.max(0.0) * lateral_fade * 0.75,
             offset_x: spawn_x,
             offset_y,
@@ -143,7 +143,7 @@ pub fn native_level_up_presentation_frame(
         });
     }
     let emitter_timer = 179_u64.saturating_sub(tick);
-    NativeLevelUpPresentationFrame {
+    LevelUpPresentationFrame {
         emitting: tick < 180,
         light_radius: 2.6 + float::sin(emitter_timer as f64 * PI / 180.0),
         particles,

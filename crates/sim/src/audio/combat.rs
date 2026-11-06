@@ -8,15 +8,12 @@ mod primary;
 mod skills;
 mod world;
 
-pub use primary::native_ether_impact_pitch;
-pub use skills::{
-    native_air_water_accepted_cast_audio, native_weld_cast_sound_cues, native_weld_loop_cues,
-};
+pub use primary::ether_impact_pitch;
+pub use skills::{air_water_accepted_cast_audio, weld_cast_sound_cues, weld_loop_cues};
 pub use world::{
     BONEYARD_ENEMY_AMBIENT_CUES, BONEYARD_FACULTY_DIALOGUE_CUES, BONEYARD_SOLOMON_DIALOGUE_CUES,
-    NativeEnemyEventSoundRequest, native_boneyard_enemy_ambient_requests,
-    native_enemy_event_sound_request, native_loot_event_sound_request,
-    native_solomon_dig_sound_request,
+    EnemyEventSoundRequest, boneyard_enemy_ambient_requests, enemy_event_sound_request,
+    loot_event_sound_request, solomon_dig_sound_request,
 };
 
 use std::collections::BTreeMap;
@@ -27,12 +24,12 @@ use crate::boneyard::loot::BoneyardLootEvent;
 use crate::enemies::model::EnemyEvent;
 use crate::enemies::world::EnemyWorld;
 use crate::profile::WizardElement;
-use crate::secondary::NativeSecondarySimulationState;
+use crate::secondary::SecondarySimulationState;
 use crate::spells::casting::PlayerPrimaryCastState;
 use crate::spells::model::SpellState;
-use crate::spells::staff::NativePlayerStaffContactEvent;
+use crate::spells::staff::PlayerStaffContactEvent;
 
-use super::{AudioCue, AudioEvent, AudioOptions, hub_audio_attenuation, native_footstep_cue};
+use super::{AudioCue, AudioEvent, AudioOptions, footstep_cue, hub_audio_attenuation};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CombatAudioLoop {
@@ -75,8 +72,8 @@ pub struct CombatAudioFrame<'a> {
     pub listener_id: &'a str,
     pub players: &'a [CombatAudioPlayer<'a>],
     pub primary: &'a SpellState,
-    pub secondary: &'a NativeSecondarySimulationState,
-    pub staff_contacts: &'a [NativePlayerStaffContactEvent],
+    pub secondary: &'a SecondarySimulationState,
+    pub staff_contacts: &'a [PlayerStaffContactEvent],
     pub enemies: Option<&'a EnemyWorld>,
     pub enemy_events: &'a [EnemyEvent],
     pub loot_events: &'a [BoneyardLootEvent],
@@ -195,12 +192,7 @@ impl CombatAudioCursor {
                 continue;
             }
             let Some(volume) = player_attenuation(frame, player.id) else { continue };
-            play(
-                output,
-                native_footstep_cue(player.footstep_tick as u32, player.id),
-                1.0,
-                volume * 0.5,
-            );
+            play(output, footstep_cue(player.footstep_tick as u32, player.id), 1.0, volume * 0.5);
         }
     }
 

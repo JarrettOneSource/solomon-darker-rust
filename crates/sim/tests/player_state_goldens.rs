@@ -1,7 +1,7 @@
 mod support;
 
 use serde_json::Value;
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::economy::{EquipmentSlot, HubInventoryAction};
 use solomon_sim::player::PlayerState;
 use solomon_sim::profile::{NewGameSelection, PlayerSkillChoice, WizardDiscipline, WizardElement};
@@ -28,7 +28,7 @@ fn player_commands_share_real_equipment_resources_skills_and_random_streams() {
             "mind" => WizardDiscipline::Mind,
             _ => unreachable!(),
         };
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let mut player = PlayerState::new(
             NewGameSelection { name: "Oracle".into(), element, discipline },
             &mut rng,

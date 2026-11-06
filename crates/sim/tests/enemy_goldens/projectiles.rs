@@ -38,13 +38,10 @@ impl EnemyGeometry for ProjectileFixtureGeometry<'_> {
     }
     fn projectile_world_blocked(&self, query: EnemyProjectileWorldQuery) -> bool {
         let request = match query {
-            EnemyProjectileWorldQuery::Line {
-                projectile_id,
-                start,
-                end,
-                native_exclusion_mask,
-            } => json!({"kind":"line",
-                "projectileId":projectile_id,"start":point_json(start),"end":point_json(end),"nativeExclusionMask":native_exclusion_mask,"radius":0}),
+            EnemyProjectileWorldQuery::Line { projectile_id, start, end, exclusion_mask } => {
+                json!({"kind":"line",
+                "projectileId":projectile_id,"start":point_json(start),"end":point_json(end),"nativeExclusionMask":exclusion_mask,"radius":0})
+            }
             EnemyProjectileWorldQuery::Point { projectile_id, position, radius } => {
                 json!({"kind":"point","projectileId":projectile_id,"position":point_json(position),"radius":radius})
             }
@@ -132,7 +129,7 @@ fn player_knockback_json(knockback: &EnemyPlayerKnockback) -> Value {
 
 fn assert_projectile_sample(
     world: &EnemyWorld,
-    combat: &solomon_sim::NativeRng,
+    combat: &solomon_sim::Rng,
     order: &WorldPainterOrder,
     sample: &Value,
     label: &str,
@@ -210,8 +207,8 @@ fn assert_projectile_sample(
         (world.next_projectile_id, "nextProjectileId"),
         (world.next_projectile_effect_id, "nextProjectileEffectId"),
         (world.next_event_id, "nextEventId"),
-        (world.next_native_cell_binding_order, "nextNativeCellBindingOrder"),
-        (world.next_native_registration_order, "nextNativeRegistrationOrder"),
+        (world.next_cell_binding_order, "nextNativeCellBindingOrder"),
+        (world.next_registration_order, "nextNativeRegistrationOrder"),
     ] {
         assert_json_equal(&json!(actual), &sample[key], label);
     }
@@ -295,7 +292,7 @@ fn projectile_world_queries_contacts_hazards_and_retirement_match_the_website() 
             world.projectiles.get_mut(0).unwrap().state_mut().target_player_id = None;
         }
         world.last_step_tick = Some(10);
-        let mut combat = solomon_sim::NativeRng::new(801);
+        let mut combat = solomon_sim::Rng::new(801);
         let mut samples = case["samples"].as_array().unwrap().iter().peekable();
         assert_projectile_sample(
             &world,
@@ -340,10 +337,10 @@ fn projectile_world_queries_contacts_hazards_and_retirement_match_the_website() 
                     roll_loot_seed: None,
                     native_visibility: None,
                     projected_point_visible: None,
-                    native_view_bounds: None,
+                    view_bounds: None,
                     puppet_targets: &[],
                     light_at: None,
-                    native_movement_view: None,
+                    movement_view: None,
                 },
                 &mut order,
             );

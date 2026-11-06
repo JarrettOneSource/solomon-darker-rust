@@ -2,40 +2,35 @@
 //! `native-weld-primary-runtime.ts`, `native-weld-flame-lash.ts`,
 //! `native-weld-ground-spark.ts` and `primary-spells.ts`.
 
-use super::blizzard::{NativeWeldBlizzardChainFrostState, NativeWeldBlizzardGlowState};
-use super::flame_state::{
-    NativeFlameChannelVisual, NativeFlameFadeBirth, NativeFlameFadeVisual, native_flame_fade_alpha,
-};
-use super::hail::{NativeWeldHailChildActorState, step_native_weld_hail_child};
+use super::blizzard::{WeldBlizzardChainFrostState, WeldBlizzardGlowState};
+use super::flame_state::{FlameChannelVisual, FlameFadeBirth, FlameFadeVisual, flame_fade_alpha};
+use super::hail::{WeldHailChildActorState, step_weld_hail_child};
 use super::meteor::{
-    NativeWeldMeteorActorState, NativeWeldMeteorMarkerState, step_native_weld_meteor,
-    step_native_weld_meteor_marker,
+    WeldMeteorActorState, WeldMeteorMarkerState, step_weld_meteor, step_weld_meteor_marker,
 };
-use super::model::{NativeWeldActorBase, NativeWeldActorBirth};
+use super::model::{WeldActorBase, WeldActorBirth};
 use super::persistent::{
-    NativeWeldEtherealBoulderState, NativeWeldFrostFadeActorState, NativeWeldPersistentActorState,
-    NativeWeldPersistentTraversal, step_native_weld_persistent_actor,
+    WeldEtherealBoulderState, WeldFrostFadeActorState, WeldPersistentActorState,
+    WeldPersistentTraversal, step_weld_persistent_actor,
 };
-use super::steam::{NativeWeldSteamActorState, step_native_weld_steam_actor};
+use super::steam::{WeldSteamActorState, step_weld_steam_actor};
 use crate::float::{cos, fround, sin};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::spells::earth_debris::{
-    NativeWeldBoulderDebrisParticleState, NativeWeldMeteorDebrisSeed,
-    create_native_weld_boulder_debris_particle,
-    create_native_weld_ethereal_boulder_breakup_debris_program,
-    step_native_weld_boulder_debris_particle,
+    WeldBoulderDebrisParticleState, WeldMeteorDebrisSeed, create_weld_boulder_debris_particle,
+    create_weld_ethereal_boulder_breakup_debris_program, step_weld_boulder_debris_particle,
 };
 use crate::spells::water::water_frost_jet_lifetime_ticks;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldChannelActorState {
-    pub common: NativeWeldActorBase,
+pub struct WeldChannelActorState {
+    pub common: WeldActorBase,
     #[cfg_attr(feature = "persistence", serde(default = "enhanced_effects_default"))]
     pub enhanced_effects: bool,
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
-    pub flame_visual: Option<NativeFlameChannelVisual>,
+    pub flame_visual: Option<FlameChannelVisual>,
     pub endpoint: Option<Vec2>,
     pub midpoint: Option<Vec2>,
     pub target_id: Option<String>,
@@ -43,26 +38,24 @@ pub struct NativeWeldChannelActorState {
     pub variant: u32,
 }
 
-pub struct NativeWeldChannelInput<'a> {
-    pub birth: NativeWeldActorBirth<'a>,
+pub struct WeldChannelInput<'a> {
+    pub birth: WeldActorBirth<'a>,
     pub endpoint: Option<Vec2>,
     pub midpoint: Option<Vec2>,
     pub target_id: Option<String>,
     pub underpowered: bool,
     pub enhanced_effects: bool,
-    pub flame_visual: Option<NativeFlameChannelVisual>,
+    pub flame_visual: Option<FlameChannelVisual>,
 }
 
 #[must_use]
-pub fn create_native_weld_channel_actor(
-    input: NativeWeldChannelInput<'_>,
-) -> NativeWeldChannelActorState {
+pub fn create_weld_channel_actor(input: WeldChannelInput<'_>) -> WeldChannelActorState {
     let flame_visual = if input.birth.build_id == 1003 {
         Some(input.flame_visual.unwrap_or_default())
     } else {
         None
     };
-    NativeWeldChannelActorState {
+    WeldChannelActorState {
         common: input.birth.actor(),
         enhanced_effects: input.enhanced_effects,
         flame_visual,
@@ -81,7 +74,7 @@ fn enhanced_effects_default() -> bool {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeWeldFlameLashFadeVariant {
+pub enum WeldFlameLashFadeVariant {
     Chain,
     Endpoint,
     Source,
@@ -89,39 +82,39 @@ pub enum NativeWeldFlameLashFadeVariant {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldFlameLashFadeState {
-    pub common: NativeWeldActorBase,
+pub struct WeldFlameLashFadeState {
+    pub common: WeldActorBase,
     pub alpha: f64,
     pub alpha_step: f64,
     pub base_scale: f64,
     pub color_green: f64,
     #[cfg_attr(feature = "persistence", serde(default))]
-    pub flame_visual: NativeFlameFadeVisual,
+    pub flame_visual: FlameFadeVisual,
     pub position: Vec2,
     pub record: usize,
     pub rotation_degrees: f64,
-    pub variant: NativeWeldFlameLashFadeVariant,
+    pub variant: WeldFlameLashFadeVariant,
     pub wrapper_scalar: f64,
 }
 
-pub struct NativeWeldFlameLashFadeInput<'a> {
-    pub birth: NativeWeldActorBirth<'a>,
+pub struct WeldFlameLashFadeInput<'a> {
+    pub birth: WeldActorBirth<'a>,
     pub alpha: f64,
-    pub variant: NativeWeldFlameLashFadeVariant,
+    pub variant: WeldFlameLashFadeVariant,
     pub enhanced_effects: bool,
 }
 
-pub fn create_native_weld_flame_lash_fade(
-    input: NativeWeldFlameLashFadeInput<'_>,
-    rng: &mut NativeRng,
+pub fn create_weld_flame_lash_fade(
+    input: WeldFlameLashFadeInput<'_>,
+    rng: &mut Rng,
     painters: Option<&mut WorldPainterOrder>,
-) -> NativeWeldFlameLashFadeState {
+) -> WeldFlameLashFadeState {
     let birth = input.birth;
-    let source = input.variant == NativeWeldFlameLashFadeVariant::Source;
+    let source = input.variant == WeldFlameLashFadeVariant::Source;
     // The first rotation is overwritten, but still consumes its native word.
     rng.draw_scaled_float(360.0, false);
     let rotation = rng.draw_scaled_float(360.0, false);
-    let color_green = if input.variant == NativeWeldFlameLashFadeVariant::Endpoint {
+    let color_green = if input.variant == WeldFlameLashFadeVariant::Endpoint {
         fround(1.0 - rng.draw_scaled_float(0.5, false))
     } else if source {
         1.0
@@ -155,13 +148,13 @@ pub fn create_native_weld_flame_lash_fade(
     let mut common = birth.actor();
     common.owner.painter_registrations.push(registration);
     common.owner.light_registration = if source { None } else { Some(registration) };
-    NativeWeldFlameLashFadeState {
+    WeldFlameLashFadeState {
         common,
-        alpha: native_flame_fade_alpha(birth_alpha, alpha_step, 0),
+        alpha: flame_fade_alpha(birth_alpha, alpha_step, 0),
         alpha_step,
         base_scale: fround((if source { 0.75 } else { 0.5 }) + scale),
         color_green,
-        flame_visual: NativeFlameFadeVisual::NativeBirth(NativeFlameFadeBirth { birth_alpha }),
+        flame_visual: FlameFadeVisual::Birth(FlameFadeBirth { birth_alpha }),
         position: Vec2::new(
             fround(birth.origin.x + fround(radial.x * radius)),
             fround(birth.origin.y + fround(radial.y * radius)),
@@ -175,7 +168,7 @@ pub fn create_native_weld_flame_lash_fade(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldGroundSparkFadeSeed {
+pub struct WeldGroundSparkFadeSeed {
     pub alpha: f64,
     pub alpha_step: f64,
     pub position: Vec2,
@@ -184,19 +177,19 @@ pub struct NativeWeldGroundSparkFadeSeed {
     pub scale: f64,
 }
 
-pub fn create_native_weld_ground_spark_fade_program(
-    projectile: &super::NativeWeldProjectileState,
-    rng: &mut NativeRng,
-) -> Vec<NativeWeldGroundSparkFadeSeed> {
+pub fn create_weld_ground_spark_fade_program(
+    projectile: &super::WeldProjectileState,
+    rng: &mut Rng,
+) -> Vec<WeldGroundSparkFadeSeed> {
     if projectile.build_id != 1009 {
         return Vec::new();
     }
-    let native_age = projectile.ground_spark_native_age_ticks.expect("GroundSpark owns native age");
-    let phase = sin(native_age as f64 * 12.0 * std::f64::consts::PI / 180.0).abs();
+    let age = projectile.ground_spark_age_ticks.expect("GroundSpark owns native age");
+    let phase = sin(age as f64 * 12.0 * std::f64::consts::PI / 180.0).abs();
     let rotation = rng.draw_scaled_float(360.0, false);
     let scale = rng.draw_scaled_float(0.1_f32 as f64, true);
     let weak_factor = if projectile.underpowered { 0.5 } else { 1.0 };
-    let mut fades = vec![NativeWeldGroundSparkFadeSeed {
+    let mut fades = vec![WeldGroundSparkFadeSeed {
         alpha: fround(0.75 * weak_factor),
         alpha_step: fround(0.1_f32 as f64 * weak_factor),
         position: Vec2::new(
@@ -218,7 +211,7 @@ pub fn create_native_weld_ground_spark_fade_program(
         } else {
             fround(fround(1.0 + alpha) + 0.5)
         };
-        fades.push(NativeWeldGroundSparkFadeSeed {
+        fades.push(WeldGroundSparkFadeSeed {
             alpha: fround(base_alpha * weak_factor),
             alpha_step: 0.1_f32 as f64,
             position: Vec2::new(
@@ -235,26 +228,26 @@ pub fn create_native_weld_ground_spark_fade_program(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldGroundSparkFadeActorState {
-    pub common: NativeWeldActorBase,
-    pub seed: NativeWeldGroundSparkFadeSeed,
+pub struct WeldGroundSparkFadeActorState {
+    pub common: WeldActorBase,
+    pub seed: WeldGroundSparkFadeSeed,
 }
 
 #[must_use]
-pub fn create_native_weld_ground_spark_fade_actor(
-    birth: NativeWeldActorBirth<'_>,
-    seed: NativeWeldGroundSparkFadeSeed,
-) -> NativeWeldGroundSparkFadeActorState {
-    NativeWeldGroundSparkFadeActorState {
-        common: NativeWeldActorBirth { origin: seed.position, ..birth }.actor(),
+pub fn create_weld_ground_spark_fade_actor(
+    birth: WeldActorBirth<'_>,
+    seed: WeldGroundSparkFadeSeed,
+) -> WeldGroundSparkFadeActorState {
+    WeldGroundSparkFadeActorState {
+        common: WeldActorBirth { origin: seed.position, ..birth }.actor(),
         seed,
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldImpactActorState {
-    pub common: NativeWeldActorBase,
+pub struct WeldImpactActorState {
+    pub common: WeldActorBase,
     pub alpha: f64,
     pub boulder_terminal_charge: Option<f64>,
     pub impact_sound_pitch: Option<f64>,
@@ -265,9 +258,9 @@ pub struct NativeWeldImpactActorState {
 }
 
 pub fn create_primary_spell_weld_impact(
-    birth: NativeWeldActorBirth<'_>,
-    rng: &mut NativeRng,
-) -> NativeWeldImpactActorState {
+    birth: WeldActorBirth<'_>,
+    rng: &mut Rng,
+) -> WeldImpactActorState {
     let mut pitch = None;
     let mut variant = None;
     let mut rotation = None;
@@ -286,7 +279,7 @@ pub fn create_primary_spell_weld_impact(
         _ => {}
     }
     let owns_fade = matches!(birth.build_id, 1001 | 1002 | 1009);
-    NativeWeldImpactActorState {
+    WeldImpactActorState {
         common: birth.actor(),
         alpha: if owns_fade { 2.0 } else { 0.0 },
         boulder_terminal_charge: None,
@@ -300,45 +293,45 @@ pub fn create_primary_spell_weld_impact(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldBoulderDebrisActorState {
-    pub common: NativeWeldActorBase,
-    pub debris: NativeWeldBoulderDebrisParticleState,
+pub struct WeldBoulderDebrisActorState {
+    pub common: WeldActorBase,
+    pub debris: WeldBoulderDebrisParticleState,
     pub position: Vec2,
 }
 
 #[must_use]
-pub fn create_native_weld_boulder_debris_actor(
-    birth: NativeWeldActorBirth<'_>,
-    debris: NativeWeldMeteorDebrisSeed,
-) -> NativeWeldBoulderDebrisActorState {
-    NativeWeldBoulderDebrisActorState {
+pub fn create_weld_boulder_debris_actor(
+    birth: WeldActorBirth<'_>,
+    debris: WeldMeteorDebrisSeed,
+) -> WeldBoulderDebrisActorState {
+    WeldBoulderDebrisActorState {
         common: birth.actor(),
-        debris: create_native_weld_boulder_debris_particle(debris, true),
+        debris: create_weld_boulder_debris_particle(debris, true),
         position: birth.origin,
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldHailRockFadeActorState {
-    pub common: NativeWeldActorBase,
+pub struct WeldHailRockFadeActorState {
+    pub common: WeldActorBase,
     pub position: Vec2,
     pub rotation_degrees: f64,
 }
 
 #[must_use]
-pub fn create_native_weld_hail_rock_fade_actor(
-    birth: NativeWeldActorBirth<'_>,
+pub fn create_weld_hail_rock_fade_actor(
+    birth: WeldActorBirth<'_>,
     position: Vec2,
     rotation_degrees: f64,
-) -> NativeWeldHailRockFadeActorState {
-    NativeWeldHailRockFadeActorState { common: birth.actor(), position, rotation_degrees }
+) -> WeldHailRockFadeActorState {
+    WeldHailRockFadeActorState { common: birth.actor(), position, rotation_degrees }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldMeteorFlashActorState {
-    pub common: NativeWeldActorBase,
+pub struct WeldMeteorFlashActorState {
+    pub common: WeldActorBase,
     pub alpha: f64,
     pub alpha_step: f64,
     pub position: Vec2,
@@ -347,12 +340,12 @@ pub struct NativeWeldMeteorFlashActorState {
 }
 
 #[must_use]
-pub fn create_native_weld_meteor_flash(
-    actor: &NativeWeldMeteorActorState,
+pub fn create_weld_meteor_flash(
+    actor: &WeldMeteorActorState,
     id: u64,
     tick: u64,
-) -> NativeWeldMeteorFlashActorState {
-    let birth = NativeWeldActorBirth {
+) -> WeldMeteorFlashActorState {
+    let birth = WeldActorBirth {
         build_id: 1007,
         direction: actor.common.direction,
         id,
@@ -362,7 +355,7 @@ pub fn create_native_weld_meteor_flash(
         vector: &actor.common.vector,
         world_key: &actor.common.owner.world_key,
     };
-    NativeWeldMeteorFlashActorState {
+    WeldMeteorFlashActorState {
         common: birth.actor(),
         alpha: 2.0,
         alpha_step: 0.1_f32 as f64,
@@ -374,27 +367,27 @@ pub fn create_native_weld_meteor_flash(
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeWeldWorldActor {
-    BlizzardChainFrost(NativeWeldBlizzardChainFrostState),
-    BlizzardGlow(NativeWeldBlizzardGlowState),
-    BoulderDebris(NativeWeldBoulderDebrisActorState),
-    Channel(NativeWeldChannelActorState),
-    FlameLashFade(NativeWeldFlameLashFadeState),
-    FrostFade(NativeWeldFrostFadeActorState),
-    GroundSparkFade(NativeWeldGroundSparkFadeActorState),
-    HailChild(NativeWeldHailChildActorState),
-    HailRockFade(NativeWeldHailRockFadeActorState),
-    Impact(NativeWeldImpactActorState),
-    Meteor(NativeWeldMeteorActorState),
-    MeteorFlash(NativeWeldMeteorFlashActorState),
-    MeteorMarker(NativeWeldMeteorMarkerState),
-    Persistent(NativeWeldPersistentActorState),
-    Steam(NativeWeldSteamActorState),
+pub enum WeldWorldActor {
+    BlizzardChainFrost(WeldBlizzardChainFrostState),
+    BlizzardGlow(WeldBlizzardGlowState),
+    BoulderDebris(WeldBoulderDebrisActorState),
+    Channel(WeldChannelActorState),
+    FlameLashFade(WeldFlameLashFadeState),
+    FrostFade(WeldFrostFadeActorState),
+    GroundSparkFade(WeldGroundSparkFadeActorState),
+    HailChild(WeldHailChildActorState),
+    HailRockFade(WeldHailRockFadeActorState),
+    Impact(WeldImpactActorState),
+    Meteor(WeldMeteorActorState),
+    MeteorFlash(WeldMeteorFlashActorState),
+    MeteorMarker(WeldMeteorMarkerState),
+    Persistent(WeldPersistentActorState),
+    Steam(WeldSteamActorState),
 }
 
-impl NativeWeldWorldActor {
+impl WeldWorldActor {
     #[must_use]
-    pub fn common(&self) -> &NativeWeldActorBase {
+    pub fn common(&self) -> &WeldActorBase {
         match self {
             Self::BlizzardChainFrost(actor) => &actor.common,
             Self::BlizzardGlow(actor) => &actor.common,
@@ -414,7 +407,7 @@ impl NativeWeldWorldActor {
         }
     }
 
-    pub fn common_mut(&mut self) -> &mut NativeWeldActorBase {
+    pub fn common_mut(&mut self) -> &mut WeldActorBase {
         match self {
             Self::BlizzardChainFrost(actor) => &mut actor.common,
             Self::BlizzardGlow(actor) => &mut actor.common,
@@ -436,38 +429,36 @@ impl NativeWeldWorldActor {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldWorldActorStep {
+pub struct WeldWorldActorStep {
     pub alive: bool,
-    pub debris: Vec<NativeWeldMeteorDebrisSeed>,
-    pub terrain_contact: Option<NativeWeldEtherealBoulderState>,
+    pub debris: Vec<WeldMeteorDebrisSeed>,
+    pub terrain_contact: Option<WeldEtherealBoulderState>,
 }
 
-pub fn step_native_weld_world_actor(
-    actor: &mut NativeWeldWorldActor,
-    rng: &mut NativeRng,
-    can_advance: &NativeWeldPersistentTraversal<'_>,
-) -> NativeWeldWorldActorStep {
+pub fn step_weld_world_actor(
+    actor: &mut WeldWorldActor,
+    rng: &mut Rng,
+    can_advance: &WeldPersistentTraversal<'_>,
+) -> WeldWorldActorStep {
     let mut debris = Vec::new();
     let mut terrain_contact = None;
     let alive = match actor {
-        NativeWeldWorldActor::BlizzardChainFrost(actor) => {
+        WeldWorldActor::BlizzardChainFrost(actor) => {
             let lifetime = water_frost_jet_lifetime_ticks(actor.common.owner.id);
             step_visible_age(&mut actor.common, lifetime)
         }
-        NativeWeldWorldActor::BlizzardGlow(_) => false,
-        NativeWeldWorldActor::FlameLashFade(actor) => {
+        WeldWorldActor::BlizzardGlow(_) => false,
+        WeldWorldActor::FlameLashFade(actor) => {
             let alive = step_alpha(&mut actor.common, &mut actor.alpha, actor.alpha_step);
             if alive {
                 actor.rotation_degrees = fround(actor.rotation_degrees + 1.0);
             }
             alive
         }
-        NativeWeldWorldActor::HailChild(actor) => step_native_weld_hail_child(actor, rng),
-        NativeWeldWorldActor::BoulderDebris(actor) => {
+        WeldWorldActor::HailChild(actor) => step_weld_hail_child(actor, rng),
+        WeldWorldActor::BoulderDebris(actor) => {
             let global_tick = actor.common.birth_tick + actor.common.owner.age_ticks + 1;
-            if let Some(body) =
-                step_native_weld_boulder_debris_particle(actor.debris, global_tick, rng)
-            {
+            if let Some(body) = step_weld_boulder_debris_particle(actor.debris, global_tick, rng) {
                 actor.common.owner.age_ticks += 1;
                 actor.debris = body;
                 true
@@ -475,47 +466,47 @@ pub fn step_native_weld_world_actor(
                 false
             }
         }
-        NativeWeldWorldActor::HailRockFade(actor) => step_visible_age(&mut actor.common, 400),
-        NativeWeldWorldActor::FrostFade(actor) => {
+        WeldWorldActor::HailRockFade(actor) => step_visible_age(&mut actor.common, 400),
+        WeldWorldActor::FrostFade(actor) => {
             let lifetime = if actor.common.build_id == 1004 { 3 } else { 20 };
             step_visible_age(&mut actor.common, lifetime)
         }
-        NativeWeldWorldActor::GroundSparkFade(actor) => {
+        WeldWorldActor::GroundSparkFade(actor) => {
             step_alpha(&mut actor.common, &mut actor.seed.alpha, actor.seed.alpha_step)
         }
-        NativeWeldWorldActor::MeteorMarker(actor) => step_native_weld_meteor_marker(actor),
-        NativeWeldWorldActor::MeteorFlash(actor) => {
+        WeldWorldActor::MeteorMarker(actor) => step_weld_meteor_marker(actor),
+        WeldWorldActor::MeteorFlash(actor) => {
             step_alpha(&mut actor.common, &mut actor.alpha, actor.alpha_step)
         }
-        NativeWeldWorldActor::Channel(actor) => step_visible_age(&mut actor.common, 2),
-        NativeWeldWorldActor::Steam(actor) => step_native_weld_steam_actor(actor),
-        NativeWeldWorldActor::Impact(actor) => {
+        WeldWorldActor::Channel(actor) => step_visible_age(&mut actor.common, 2),
+        WeldWorldActor::Steam(actor) => step_weld_steam_actor(actor),
+        WeldWorldActor::Impact(actor) => {
             actor.alpha =
                 if actor.alpha > 0.0 { fround(actor.alpha - 0.1_f32 as f64) } else { 0.0 };
             actor.alpha >= 0.0 && step_visible_age(&mut actor.common, 20)
         }
-        NativeWeldWorldActor::Meteor(actor) => {
-            let result = step_native_weld_meteor(actor, rng);
+        WeldWorldActor::Meteor(actor) => {
+            let result = step_weld_meteor(actor, rng);
             debris = result.1;
             result.0
         }
-        NativeWeldWorldActor::Persistent(actor) => {
-            let result = step_native_weld_persistent_actor(actor, can_advance);
+        WeldWorldActor::Persistent(actor) => {
+            let result = step_weld_persistent_actor(actor, can_advance);
             terrain_contact = result.1;
             result.0
         }
     };
-    NativeWeldWorldActorStep { alive, debris, terrain_contact }
+    WeldWorldActorStep { alive, debris, terrain_contact }
 }
 
 pub fn create_primary_spell_weld_boulder_terminal(
     first_id: u64,
-    actor: &NativeWeldEtherealBoulderState,
+    actor: &WeldEtherealBoulderState,
     tick: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     painters: &mut WorldPainterOrder,
-) -> Vec<NativeWeldWorldActor> {
-    let birth = NativeWeldActorBirth {
+) -> Vec<WeldWorldActor> {
+    let birth = WeldActorBirth {
         build_id: 1006,
         direction: actor.common.direction,
         id: first_id,
@@ -527,7 +518,7 @@ pub fn create_primary_spell_weld_boulder_terminal(
     };
     let mut common = birth.actor();
     common.owner.light_registration = Some(painters.register(WorldManagerLane::Transient));
-    let mut actors = vec![NativeWeldWorldActor::Impact(NativeWeldImpactActorState {
+    let mut actors = vec![WeldWorldActor::Impact(WeldImpactActorState {
         common,
         alpha: 2.0,
         boulder_terminal_charge: Some(actor.scale),
@@ -537,17 +528,15 @@ pub fn create_primary_spell_weld_boulder_terminal(
         presentation_rotation_degrees: None,
         presentation_scale: 2.0,
     })];
-    let debris = create_native_weld_ethereal_boulder_breakup_debris_program(actor.scale, rng);
+    let debris = create_weld_ethereal_boulder_breakup_debris_program(actor.scale, rng);
     for body in debris {
-        let birth = NativeWeldActorBirth { id: first_id + actors.len() as u64, ..birth };
-        actors.push(NativeWeldWorldActor::BoulderDebris(create_native_weld_boulder_debris_actor(
-            birth, body,
-        )));
+        let birth = WeldActorBirth { id: first_id + actors.len() as u64, ..birth };
+        actors.push(WeldWorldActor::BoulderDebris(create_weld_boulder_debris_actor(birth, body)));
     }
     actors
 }
 
-fn step_visible_age(common: &mut NativeWeldActorBase, lifetime: u64) -> bool {
+fn step_visible_age(common: &mut WeldActorBase, lifetime: u64) -> bool {
     if common.owner.age_ticks + 1 >= lifetime {
         return false;
     }
@@ -555,7 +544,7 @@ fn step_visible_age(common: &mut NativeWeldActorBase, lifetime: u64) -> bool {
     true
 }
 
-fn step_alpha(common: &mut NativeWeldActorBase, alpha: &mut f64, alpha_step: f64) -> bool {
+fn step_alpha(common: &mut WeldActorBase, alpha: &mut f64, alpha_step: f64) -> bool {
     *alpha = fround(*alpha - alpha_step);
     if *alpha <= 0.0 {
         return false;

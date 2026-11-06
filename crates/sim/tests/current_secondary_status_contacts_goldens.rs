@@ -18,19 +18,19 @@ use serde_json::{Value, json};
 use solomon_sim::belt::PlayerBeltComponent;
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::*;
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 
 struct World {
-    targets: Vec<NativeSecondaryTarget>,
+    targets: Vec<SecondaryTarget>,
 }
-impl NativeSecondaryWorld for World {
+impl SecondaryWorld for World {
     fn target_exists(&self, key: &str, id: usize) -> bool {
         key == "boneyard:oracle" && self.targets.iter().any(|target| target.id == id)
     }
-    fn target(&self, _: &str, id: usize) -> Option<NativeSecondaryTarget> {
+    fn target(&self, _: &str, id: usize) -> Option<SecondaryTarget> {
         self.targets.iter().find(|target| target.id == id).cloned()
     }
-    fn targets(&self, _: &str, center: Vec2, radius: f64) -> Vec<NativeSecondaryTarget> {
+    fn targets(&self, _: &str, center: Vec2, radius: f64) -> Vec<SecondaryTarget> {
         self.targets
             .iter()
             .filter(|target| {
@@ -42,8 +42,8 @@ impl NativeSecondaryWorld for World {
             .cloned()
             .collect()
     }
-    fn dampen_candidates(&self, _: &str, _: Vec2) -> NativeSecondaryDampenCandidates {
-        NativeSecondaryDampenCandidates::default()
+    fn dampen_candidates(&self, _: &str, _: Vec2) -> SecondaryDampenCandidates {
+        SecondaryDampenCandidates::default()
     }
     fn phasing_destination(&self, _: &str, _: Vec2, _: Vec2) -> Option<Vec2> {
         None
@@ -51,10 +51,10 @@ impl NativeSecondaryWorld for World {
     fn golem_movement(&self, _: &str, _: &str, _: Vec2, requested: Vec2, _: f64) -> Vec2 {
         requested
     }
-    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut NativeRng) -> Vec2 {
+    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut Rng) -> Vec2 {
         requested
     }
-    fn teleport_destination(&self, _: &str, _: &mut NativeRng) -> Vec2 {
+    fn teleport_destination(&self, _: &str, _: &mut Rng) -> Vec2 {
         Vec2::ZERO
     }
 }
@@ -68,11 +68,11 @@ fn fixture() -> Value {
     value
 }
 
-fn damage(value: &NativeSecondaryDamageContact) -> Value {
+fn damage(value: &SecondaryDamageContact) -> Value {
     let mut result = json!({"amount":value.amount,"kind":match value.kind {
-        NativeSecondaryDamageKind::Physical=>"physical",NativeSecondaryDamageKind::Magic=>"magic",
-        NativeSecondaryDamageKind::Fire=>"fire",NativeSecondaryDamageKind::Ice=>"ice",
-        NativeSecondaryDamageKind::Lightning=>"lightning",NativeSecondaryDamageKind::Acid=>"acid",
+        SecondaryDamageKind::Physical=>"physical",SecondaryDamageKind::Magic=>"magic",
+        SecondaryDamageKind::Fire=>"fire",SecondaryDamageKind::Ice=>"ice",
+        SecondaryDamageKind::Lightning=>"lightning",SecondaryDamageKind::Acid=>"acid",
     },"ownerId":value.owner_id,"sourceActorId":value.source_actor_id,"targetId":value.target_id});
     if value.ether_drain {
         result["etherDrain"] = json!(true);
@@ -88,8 +88,8 @@ fn damage(value: &NativeSecondaryDamageContact) -> Value {
     }
     if let Some(payload) = value.special_death_payload {
         result["specialDeathPayload"] = json!({"kind": match payload.kind {
-            solomon_sim::spells::special_death::NativeSpellSpecialDeathKind::Fire=>"fire",
-            solomon_sim::spells::special_death::NativeSpellSpecialDeathKind::Steam=>"steam",
+            solomon_sim::spells::special_death::SpellSpecialDeathKind::Fire=>"fire",
+            solomon_sim::spells::special_death::SpellSpecialDeathKind::Steam=>"steam",
         },"emberDamage":payload.ember_damage,"emberFragments":payload.ember_fragments,
         "explodeDamage":payload.explode_damage,"explodeRadius":payload.explode_radius,
         "privateSeed":payload.private_seed});
@@ -109,11 +109,11 @@ fn current_source_status_contacts_and_private_electric_births() {
     let belt = PlayerBeltComponent::new(&book);
     let wizard = HubWizard::at(Vec2::ZERO);
     for case in fixture["cases"].as_array().unwrap() {
-        let mut state = NativeSecondarySimulationState::new(case["seed"].as_i64().unwrap());
+        let mut state = SecondarySimulationState::new(case["seed"].as_i64().unwrap());
         if let Some(source) = case["actor"].as_object() {
-            let mut actor = NativeSecondaryActorState::new(
+            let mut actor = SecondaryActorState::new(
                 31,
-                NativeSecondaryActorKind::ElectricBurn,
+                SecondaryActorKind::ElectricBurn,
                 "player".into(),
                 "boneyard:oracle".into(),
                 Some(50),
@@ -128,7 +128,7 @@ fn current_source_status_contacts_and_private_electric_births() {
             state.actors.push(actor);
         }
         for row in case["patches"].as_array().unwrap() {
-            apply_native_secondary_target_effect(
+            apply_secondary_target_effect(
                 &mut state.target_effects,
                 "boneyard:oracle",
                 row["id"].as_u64().unwrap() as usize,
@@ -153,7 +153,7 @@ fn current_source_status_contacts_and_private_electric_births() {
             authority.input.quickbar = None;
             let players = BTreeMap::from([("player".into(), authority)]);
             let output = state.step(
-                &NativeSecondaryTickContext {
+                &SecondaryTickContext {
                     enhanced_effects: case["enhancedEffects"].as_bool(),
                     players: &players,
                     tick,

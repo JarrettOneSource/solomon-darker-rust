@@ -34,11 +34,11 @@ and learned bots resolve authored Boasts through the current world's prepared ru
 
 | Behavior | Owner | Verification |
 | --- | --- | --- |
-| World drawing, painter order, lights, shadows, and weather | `crates/web/src/` world views and simulation presentation plans | Geometry/material fixtures, GPU checks, and browser captures |
+| World drawing, painter order, lights, shadows, and weather | `crates/client/src/` world views and simulation presentation plans | Geometry/material fixtures, GPU checks, and browser captures |
 | Terrain, ground masks, dynamic stains, and environment apertures | Boneyard terrain/surface and web lighting owners | Ground geometry/material tests and GPU composition checks |
-| Fractional display state | `crates/web/src/presentation.rs`, protocol | Timeline, interpolation, endpoint, and draw-cadence checks |
+| Fractional display state | `crates/client/src/presentation.rs`, protocol | Timeline, interpolation, endpoint, and draw-cadence checks |
 | Menus, HUD, Inventory, Skillbook, and overlays | Shared client controllers and GPU UI | Layout/text/input regressions and browser journeys |
-| Keyboard, mouse, gamepad, and touch | `crates/web/src/input.rs` and navigation/controllers | Input fixtures and ordinary browser events |
+| Keyboard, mouse, gamepad, and touch | `crates/client/src/input.rs` and navigation/controllers | Input fixtures and ordinary browser events |
 | Sound, music, and narration playback | `sim::audio`, shared director and native/browser audio backends | Catalog/event tests, actual playback, and reload checks |
 | Save/Continue and local preferences | Client storage adapters and native persistence owner | Validation, revision conflict, restore, and packaged continuation checks |
 

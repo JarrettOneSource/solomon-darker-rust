@@ -6,7 +6,7 @@ use solomon_sim::boneyard::BoneyardBounds;
 use solomon_sim::boneyard::loot::*;
 use solomon_sim::economy::{EquipmentType, HubInventoryItem, HubItemKind, ItemRarity};
 use solomon_sim::enemies::model::EnemyDeathEffect;
-use solomon_sim::equipment::NativeEquipmentEffect;
+use solomon_sim::equipment::EquipmentEffect;
 use solomon_sim::loot::*;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 
@@ -33,35 +33,35 @@ fn phase_id(value: BoneyardGoodiePhase) -> u32 {
     }
 }
 
-fn bonus_id(value: NativeBonusKind) -> u32 {
+fn bonus_id(value: BonusKind) -> u32 {
     match value {
-        NativeBonusKind::SkillChoice => 0,
-        NativeBonusKind::SkillRank => 1,
-        NativeBonusKind::DamageX4 => 2,
+        BonusKind::SkillChoice => 0,
+        BonusKind::SkillRank => 1,
+        BonusKind::DamageX4 => 2,
     }
 }
 
-fn kind_name(value: NativeLootDropKind) -> &'static str {
+fn kind_name(value: LootDropKind) -> &'static str {
     match value {
-        NativeLootDropKind::Bonus => "bonus",
-        NativeLootDropKind::Gold => "gold",
-        NativeLootDropKind::Orb => "orb",
-        NativeLootDropKind::Sack => "sack",
+        LootDropKind::Bonus => "bonus",
+        LootDropKind::Gold => "gold",
+        LootDropKind::Orb => "orb",
+        LootDropKind::Sack => "sack",
     }
 }
 
-fn source_name(value: NativeLootDropSource) -> &'static str {
+fn source_name(value: LootDropSource) -> &'static str {
     match value {
-        NativeLootDropSource::Enemy => "enemy",
-        NativeLootDropSource::Goodie => "goodie",
-        NativeLootDropSource::Script => "script",
+        LootDropSource::Enemy => "enemy",
+        LootDropSource::Goodie => "goodie",
+        LootDropSource::Script => "script",
     }
 }
 
-fn orb_name(value: NativeOrbKind) -> &'static str {
+fn orb_name(value: OrbKind) -> &'static str {
     match value {
-        NativeOrbKind::Health => "health",
-        NativeOrbKind::Mana => "mana",
+        OrbKind::Health => "health",
+        OrbKind::Mana => "mana",
     }
 }
 
@@ -72,7 +72,7 @@ fn actor_snapshot(value: &BoneyardLootActor) -> Value {
         "bounceHeight":value.bounce_height,"bounceVelocity":value.bounce_velocity,"framePhase":value.frame_phase,
         "id":value.id,"item":value.item.as_ref().map(item_snapshot),"kind":kind_name(value.kind),
         "lastStepTick":value.last_step_tick.map_or(-1,|tick|tick as i64),"lifetimeTicksRemaining":value.lifetime_ticks_remaining,
-        "nativeTypeId":value.native_type_id,"orbKind":value.orb_kind.map(orb_name),"orbValue":value.orb_value,
+        "nativeTypeId":value.type_id,"orbKind":value.orb_kind.map(orb_name),"orbValue":value.orb_value,
         "painterRegistration":registration(value.painter_registration),"position":point_snapshot(value.position),
         "rotationDeg":value.rotation_deg,"scatterSeed":value.scatter_seed,"scatterActive":value.scatter_active,
         "scatterProgress":value.scatter_progress,"settledSoundEmitted":value.settled_sound_emitted,"source":source_name(value.source),
@@ -187,11 +187,11 @@ fn read_item(value: &Value) -> HubInventoryItem {
         inventory_slot: value["inventorySlot"].as_u64().map(|slot| slot as usize),
         kind,
         name: value["name"].as_str().unwrap().to_owned(),
-        native_subtype: value["nativeSubtype"].as_u64().map(|id| id as u32),
-        native_selector: value["nativeSelector"].as_u64().map(|id| id as u32),
+        subtype: value["nativeSubtype"].as_u64().map(|id| id as u32),
+        selector: value["nativeSelector"].as_u64().map(|id| id as u32),
         native_effects: value["nativeEffects"].as_array().map(|rows| {
             rows.iter()
-                .map(|effect| NativeEquipmentEffect {
+                .map(|effect| EquipmentEffect {
                     kind: effect["kind"].as_u64().unwrap() as u32,
                     magnitude: effect["magnitude"].as_f64().unwrap(),
                     operator: effect["operator"].as_u64().unwrap() as u32,
@@ -199,7 +199,7 @@ fn read_item(value: &Value) -> HubInventoryItem {
                 })
                 .collect()
         }),
-        native_type_id: value["nativeTypeId"].as_u64().unwrap() as u32,
+        type_id: value["nativeTypeId"].as_u64().unwrap() as u32,
         quantity: value["quantity"].as_u64().unwrap() as u32,
         rarity: value["rarity"].as_str().map(|value| match value {
             "Epic" => ItemRarity::Epic,
@@ -210,33 +210,33 @@ fn read_item(value: &Value) -> HubInventoryItem {
     }
 }
 
-fn read_drop(value: &Value) -> NativeLootDropSpec {
+fn read_drop(value: &Value) -> LootDropSpec {
     let kind = match value["kind"].as_str().unwrap() {
-        "bonus" => NativeLootDropKind::Bonus,
-        "gold" => NativeLootDropKind::Gold,
-        "orb" => NativeLootDropKind::Orb,
-        "sack" => NativeLootDropKind::Sack,
+        "bonus" => LootDropKind::Bonus,
+        "gold" => LootDropKind::Gold,
+        "orb" => LootDropKind::Orb,
+        "sack" => LootDropKind::Sack,
         _ => panic!("unknown ground actor kind"),
     };
-    let mut result = NativeLootDropSpec::new(
+    let mut result = LootDropSpec::new(
         kind,
         value["id"].as_u64().unwrap(),
         point(&value["position"]),
         match value["source"].as_str().unwrap() {
-            "enemy" => NativeLootDropSource::Enemy,
-            "goodie" => NativeLootDropSource::Goodie,
-            "script" => NativeLootDropSource::Script,
+            "enemy" => LootDropSource::Enemy,
+            "goodie" => LootDropSource::Goodie,
+            "script" => LootDropSource::Script,
             _ => panic!("unknown drop source"),
         },
     );
     result.activation_delay_ticks = value["activationDelayTicks"].as_i64().unwrap();
     result.amount = value["amount"].as_u64();
     result.bonus_kind =
-        value["bonusKind"].as_u64().map(|id| NativeBonusKind::from_id(id as u32).unwrap());
+        value["bonusKind"].as_u64().map(|id| BonusKind::from_id(id as u32).unwrap());
     result.item = if value["item"].is_null() { None } else { Some(read_item(&value["item"])) };
     result.orb_kind = value["orbKind"].as_str().map(|id| match id {
-        "health" => NativeOrbKind::Health,
-        "mana" => NativeOrbKind::Mana,
+        "health" => OrbKind::Health,
+        "mana" => OrbKind::Mana,
         _ => panic!("unknown orb"),
     });
     result.phase = value["phase"].as_f64().unwrap();
@@ -300,7 +300,7 @@ fn ground_loot_goodie_effects_pickups_and_completion_cleanup_replay_the_website(
                                 connected: row["connected"].as_bool().unwrap(),
                                 heading_index: row["headingIndex"].as_u64().unwrap() as usize,
                                 level: row["level"].as_u64().unwrap() as u32,
-                                modifiers: NativeLootModifiers {
+                                modifiers: LootModifiers {
                                     gold_amount: value["goldAmount"].as_f64().unwrap(),
                                     gold_chance: value["goldChance"].as_f64().unwrap(),
                                     item_chance: value["itemChance"].as_f64().unwrap(),
@@ -355,7 +355,7 @@ fn ground_loot_goodie_effects_pickups_and_completion_cleanup_replay_the_website(
                     ));
                 }
                 "remove-last-word" => {
-                    let last_word = current.native_hagatha_last_word_loot();
+                    let last_word = current.hagatha_last_word_loot();
                     output = json!({"actorIds":last_word.actor_ids,"gold":last_word.gold,"items":last_word.items.iter().map(item_snapshot).collect::<Vec<_>>()});
                     current.remove_actors(&last_word.actor_ids);
                 }
@@ -381,7 +381,7 @@ fn ground_loot_goodie_effects_pickups_and_completion_cleanup_replay_the_website(
                         "worldBadguyCount":input["worldBadguyCount"],"worldHasHealthPotionSack":input["worldHasHealthPotionSack"]});
                     wire_input["arena"]["lastSuccessfulItemLevel"] = json!(-1);
                     let selection =
-                        selection_input(&wire_input, &advanced, &owned, &NativeLootOpenPlacement);
+                        selection_input(&wire_input, &advanced, &owned, &LootOpenPlacement);
                     let program = if input["onDeathProgram"].is_null() {
                         None
                     } else {
@@ -441,12 +441,7 @@ fn ground_loot_goodie_effects_pickups_and_completion_cleanup_replay_the_website(
     let mut current = BoneyardLootStore::new("capacity", &[]);
     let mut order = WorldPainterOrder::default();
     current.next_actor_id = 2047;
-    let mut gold = NativeLootDropSpec::new(
-        NativeLootDropKind::Gold,
-        0,
-        Vec2::ZERO,
-        NativeLootDropSource::Enemy,
-    );
+    let mut gold = LootDropSpec::new(LootDropKind::Gold, 0, Vec2::ZERO, LootDropSource::Enemy);
     gold.amount = Some(1);
     let rejected = current.spawn_specs(vec![gold.clone(); 2048], 1, &mut order);
     assert_eq!(rejected, expected["filledRejected"].as_u64().unwrap() as usize);
@@ -494,11 +489,11 @@ fn explicit_goodie_interaction_consumes_one_nested_key_and_preserves_failed_atte
         store.interact_goodie(&mut economy, "local", Vec2::ZERO, 0, 200),
         BoneyardGoodieInteraction::MissingKey { event: None }
     ));
-    let mut ids = NativeLootItemIds::new(100);
+    let mut ids = LootItemIds::new(100);
     let key = misc_item(&mut ids, 1);
     let mut sack = economy.backpack[0].clone();
-    sack.native_type_id = 7008;
-    sack.native_subtype = Some(0);
+    sack.type_id = 7008;
+    sack.subtype = Some(0);
     sack.kind = HubItemKind::Sack;
     sack.name = "Sack".to_owned();
     sack.icon_records = vec![70];

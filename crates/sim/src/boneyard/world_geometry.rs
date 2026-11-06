@@ -8,28 +8,26 @@ use std::cell::{Cell, RefCell};
 use crate::actor_physics::{ActorPhysicsBody, ActorPhysicsWorld, resolve_unpushed_mover_motion};
 use crate::enemies::model::EnemyTerminalOutput;
 use crate::enemies::path::EnemyNavigation;
-pub use crate::enemies::world::NativeEnemyVisibility;
+pub use crate::enemies::world::EnemyVisibility;
 use crate::enemies::world::{
     EnemyGeometry, EnemyMovementPurpose, EnemyMovementRequest, EnemyProjectileWorldQuery,
     EnemySpawnPlacementRequest,
 };
 use crate::float::fround;
 use crate::hub::PLAYER_CHARACTER_RADIUS;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::BoneyardBounds;
 use super::collision::{
     BoneyardCollisionWorld, can_place_boneyard_body, first_boneyard_line_obstruction,
     first_boneyard_path_block_progress, resolve_boneyard_movement,
 };
-use super::feedback::{NATIVE_EXPLOSION_FEEDBACK_INTENSITY, NativeEnemyWorldFeedback};
-use super::lighting::{
-    NATIVE_LIGHT_OUTER_DISTANCE, NativeBoneyardLightSource, native_boneyard_light_scalar,
-};
+use super::feedback::{EXPLOSION_FEEDBACK_INTENSITY, EnemyWorldFeedback};
+use super::lighting::{BoneyardLightSource, LIGHT_OUTER_DISTANCE, boneyard_light_scalar};
 use super::navigation::{NavigationSet, RouteRequest};
 use super::projectile_world::{BoneyardProjectileViewport, BoneyardProjectileWorld};
 use super::spawn::{SpawnPlacement, SpawnPolicyContext, boneyard_spawn_position_is_offscreen};
-use super::world_light::{BoneyardWorldLightQuery, native_primary_view_bounds};
+use super::world_light::{BoneyardWorldLightQuery, primary_view_bounds};
 
 pub struct BoneyardPhysicsWorld<'a> {
     pub bounds: BoneyardBounds,
@@ -68,7 +66,7 @@ pub struct BoneyardGeometryInput<'a> {
     /// The `&self` enemy callbacks interleave impulses within this one world step. A Cell
     /// holds the copied pair of numbers only until the owner commits it after stepping;
     /// saved world state never contains this adapter or any hidden retained feedback.
-    pub feedback: &'a Cell<NativeEnemyWorldFeedback>,
+    pub feedback: &'a Cell<EnemyWorldFeedback>,
 }
 
 /// The source callbacks advance one ordered crowd as actors move. Interior mutability is
@@ -77,8 +75,8 @@ pub struct BoneyardEnemyGeometry<'a> {
     input: BoneyardGeometryInput<'a>,
     dynamic_bodies: RefCell<Vec<ActorPhysicsBody>>,
     projectile_world: BoneyardProjectileWorld<'a>,
-    native_views: Vec<BoneyardBounds>,
-    native_sources: Vec<NativeBoneyardLightSource>,
+    views: Vec<BoneyardBounds>,
+    stock_sources: Vec<BoneyardLightSource>,
 }
 
 impl<'a> BoneyardEnemyGeometry<'a> {
@@ -90,9 +88,9 @@ impl<'a> BoneyardEnemyGeometry<'a> {
             input.collision,
             input.projectile_viewports,
         );
-        let mut native_views = Vec::with_capacity(input.projectile_viewports.len());
+        let mut views = Vec::with_capacity(input.projectile_viewports.len());
         for viewport in input.projectile_viewports {
-            native_views.push(native_primary_view_bounds(
+            views.push(primary_view_bounds(
                 input.spawn_camera_bounds,
                 viewport.position,
                 viewport.viewport,
@@ -100,13 +98,13 @@ impl<'a> BoneyardEnemyGeometry<'a> {
                 0.0,
             ));
         }
-        let native_sources = input.world_light.accepted_sources().copied().collect();
+        let stock_sources = input.world_light.accepted_sources().copied().collect();
         Self {
             input,
             dynamic_bodies: RefCell::new(dynamic_bodies),
             projectile_world,
-            native_views,
-            native_sources,
+            views,
+            stock_sources,
         }
     }
 
@@ -118,30 +116,27 @@ impl<'a> BoneyardEnemyGeometry<'a> {
     /// `boneyard-enemy-visibility.ts`: admission uses the actor's native body rectangle
     /// and a circular light reach, followed by the radial scalar for its intensity.
     #[must_use]
-    pub fn native_visibility(&self, position: Vec2) -> NativeEnemyVisibility {
-        let onscreen = self.native_views.iter().any(|view| {
+    pub fn native_visibility(&self, position: Vec2) -> EnemyVisibility {
+        let onscreen = self.views.iter().any(|view| {
             position.x - 32.0 < view.x + view.width
                 && position.x + 32.0 > view.x
                 && position.y - 44.0 < view.y + view.height
                 && position.y + 12.0 > view.y
         });
         let admitted = onscreen
-            && self.native_sources.iter().any(|light| {
+            && self.stock_sources.iter().any(|light| {
                 let dx = position.x - light.position.x;
                 let dy = position.y - light.position.y;
-                dx * dx + dy * dy < (light.radius * NATIVE_LIGHT_OUTER_DISTANCE).powi(2)
+                dx * dx + dy * dy < (light.radius * LIGHT_OUTER_DISTANCE).powi(2)
             });
-        let intensity = if admitted {
-            native_boneyard_light_scalar(position, &self.native_sources)
-        } else {
-            0.0
-        };
-        NativeEnemyVisibility { admitted, intensity }
+        let intensity =
+            if admitted { boneyard_light_scalar(position, &self.stock_sources) } else { 0.0 };
+        EnemyVisibility { admitted, intensity }
     }
 
     #[must_use]
     pub fn projected_point_visible(&self, position: Vec2) -> bool {
-        self.native_views.iter().any(|view| {
+        self.views.iter().any(|view| {
             position.x >= view.x
                 && position.x <= view.x + view.width
                 && position.y >= view.y
@@ -150,13 +145,13 @@ impl<'a> BoneyardEnemyGeometry<'a> {
     }
 
     #[must_use]
-    pub fn native_view_bounds(&self) -> Option<BoneyardBounds> {
-        let first = self.native_views.first()?;
+    pub fn view_bounds(&self) -> Option<BoneyardBounds> {
+        let first = self.views.first()?;
         let mut left = first.x;
         let mut top = first.y;
         let mut right = first.x + first.width;
         let mut bottom = first.y + first.height;
-        for view in &self.native_views[1..] {
+        for view in &self.views[1..] {
             left = left.min(view.x);
             top = top.min(view.y);
             right = right.max(view.x + view.width);
@@ -241,7 +236,7 @@ impl EnemyGeometry for BoneyardEnemyGeometry<'_> {
     fn on_projectile_explosion(&self, position: Vec2) {
         if let Some(gain) = self.projectile_world.explosion_point_gain(position) {
             let mut feedback = self.input.feedback.get();
-            feedback.apply(fround(NATIVE_EXPLOSION_FEEDBACK_INTENSITY * gain));
+            feedback.apply(fround(EXPLOSION_FEEDBACK_INTENSITY * gain));
             self.input.feedback.set(feedback);
         }
     }
@@ -285,23 +280,19 @@ impl EnemyGeometry for BoneyardEnemyGeometry<'_> {
         position
     }
 
-    fn line_obstruction(&self, start: Vec2, end: Vec2, native_exclusion_mask: u32) -> Option<Vec2> {
+    fn line_obstruction(&self, start: Vec2, end: Vec2, exclusion_mask: u32) -> Option<Vec2> {
         first_boneyard_line_obstruction(
             start,
             end,
             self.input.active_bounds,
             self.input.collision,
             None,
-            native_exclusion_mask,
+            exclusion_mask,
             &[],
         )
     }
 
-    fn resolve_spawn_placement(
-        &self,
-        request: EnemySpawnPlacementRequest,
-        rng: &mut NativeRng,
-    ) -> Vec2 {
+    fn resolve_spawn_placement(&self, request: EnemySpawnPlacementRequest, rng: &mut Rng) -> Vec2 {
         let policy = EnemySpawnPolicy {
             input: &self.input,
             navigation_clearance: request.navigation_clearance,

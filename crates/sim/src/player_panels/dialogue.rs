@@ -1,7 +1,7 @@
 //! Current `hub-inventory-renderer.ts::renderChat` and `hubChatTextRuns`.
 //! A click changes only the presentation clock; authored speech and authority stay intact.
 
-use crate::native_ui_text::NativeUiTextRun;
+use crate::ui_text::UiTextRun;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubChatScrollFrame {
@@ -31,11 +31,11 @@ pub fn hub_chat_scroll_frame(
 
 /// Asterisk toggles native italic shear, including an unmatched final delimiter.
 #[must_use]
-pub fn hub_chat_text_runs(source: &str) -> Vec<NativeUiTextRun<'_>> {
+pub fn hub_chat_text_runs(source: &str) -> Vec<UiTextRun<'_>> {
     let mut runs = Vec::new();
     for (index, text) in source.split('*').enumerate() {
         if !text.is_empty() {
-            runs.push(NativeUiTextRun { italic: index % 2 == 1, ..NativeUiTextRun::new(text) });
+            runs.push(UiTextRun { italic: index % 2 == 1, ..UiTextRun::new(text) });
         }
     }
     runs

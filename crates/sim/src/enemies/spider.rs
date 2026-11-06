@@ -5,19 +5,19 @@ use super::effects::{
     BouncerOptions, DeathEffectOverrides, DeathEffectOwner, SimpleDeathEffectSpec,
 };
 use super::model::*;
-use super::movement::{positive_modulo, route_native_enemy_goal};
+use super::movement::{positive_modulo, route_enemy_goal};
 use super::path::PathRecoveryRequest;
-use super::silk::{EnemySilkActor, step_native_silk};
+use super::silk::{EnemySilkActor, step_silk};
 use super::spider_movement::*;
 use super::targeting::{boneyard_enemy_collision_radius, target_by_id};
-use super::webbed::{native_cocoon_position, step_native_webbed};
+use super::webbed::{cocoon_position, step_webbed};
 use super::world::{EnemyMovementPurpose, EnemyMovementRequest, EnemyStepContext, EnemyWorld};
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
-use crate::spells::targeting::{direction_from_heading, native_primary_cell_coordinate};
+use crate::spells::targeting::{direction_from_heading, primary_cell_coordinate};
 
 pub fn step_spider(
     world: &mut EnemyWorld,
@@ -34,7 +34,7 @@ pub fn step_spider(
         panic!("Spider config required");
     };
     let light_at = context.light_at.expect("Spider movement requires the native light sampler");
-    let view = context.native_movement_view;
+    let view = context.movement_view;
     let visible = view.is_none_or(|view| {
         view.cameras.iter().any(|camera| {
             actor.position.x + 100.0 >= camera.x
@@ -44,7 +44,7 @@ pub fn step_spider(
         })
     });
     let illuminated = view.is_none() || light_at(actor.position) > 0.0;
-    let clock = super::path::native_enemy_movement_clock(
+    let clock = super::path::enemy_movement_clock(
         actor.id,
         context.tick,
         visible,
@@ -78,7 +78,7 @@ pub fn step_spider(
         let mut route = |goal| {
             route_goal(actor, goal, target.map(|target| target.position), context, clock.cadence)
         };
-        let result = move_native_spider(
+        let result = move_spider(
             &brain,
             SpiderMovementRequest {
                 route_goal: Some(&mut route),
@@ -111,12 +111,12 @@ pub fn step_spider(
                 owner_actor_id: actor.id,
                 spawn_tick: context.tick,
                 state: silk.state,
-                native_registration_order: world.next_native_registration_order,
-                native_cell_binding_order: world.next_native_cell_binding_order,
+                native_registration_order: world.next_registration_order,
+                native_cell_binding_order: world.next_cell_binding_order,
                 painter_registration,
             });
-            world.next_native_registration_order += 1;
-            world.next_native_cell_binding_order += 1;
+            world.next_registration_order += 1;
+            world.next_cell_binding_order += 1;
             let mut event =
                 EnemyEvent::new(EnemyEventKind::EnemyActionSound, actor.id, context.tick);
             event.sound = Some(
@@ -201,7 +201,7 @@ fn route_goal(
     context: &EnemyStepContext<'_>,
     cadence: u64,
 ) -> SpiderRouteGoal {
-    let routed = route_native_enemy_goal(actor, raw, target, context, cadence);
+    let routed = route_enemy_goal(actor, raw, target, context, cadence);
     SpiderRouteGoal {
         goal: routed.goal,
         following_route: actor.path.route_ticks_remaining > 0,
@@ -260,7 +260,7 @@ pub fn step_cocoon_actor(
         return;
     }
     let owner = owner.unwrap();
-    actor.position = native_cocoon_position(owner.position, owner.heading_deg.unwrap_or(0.0));
+    actor.position = cocoon_position(owner.position, owner.heading_deg.unwrap_or(0.0));
     brain.owner_position = owner.position;
 }
 
@@ -285,7 +285,7 @@ impl EnemyWorld {
             else {
                 return false;
             };
-            if let Some(next) = step_native_webbed(*web, player.velocity_per_tick) {
+            if let Some(next) = step_webbed(*web, player.velocity_per_tick) {
                 *web = next;
                 true
             } else {
@@ -301,7 +301,7 @@ impl EnemyWorld {
             }
             let ended = actor.state.ended;
             let previous = actor.state.position;
-            if !step_native_silk(&mut actor.state) {
+            if !step_silk(&mut actor.state) {
                 return false;
             }
             let state = &mut actor.state;
@@ -344,13 +344,12 @@ impl EnemyWorld {
             }
             if !hit {
                 let mut binding = actor.native_cell_binding_order;
-                if native_primary_cell_coordinate(previous.x)
-                    != native_primary_cell_coordinate(state.position.x)
-                    || native_primary_cell_coordinate(previous.y)
-                        != native_primary_cell_coordinate(state.position.y)
+                if primary_cell_coordinate(previous.x) != primary_cell_coordinate(state.position.x)
+                    || primary_cell_coordinate(previous.y)
+                        != primary_cell_coordinate(state.position.y)
                 {
-                    binding = self.next_native_cell_binding_order;
-                    self.next_native_cell_binding_order += 1;
+                    binding = self.next_cell_binding_order;
+                    self.next_cell_binding_order += 1;
                 }
                 actor.native_cell_binding_order = binding;
             }

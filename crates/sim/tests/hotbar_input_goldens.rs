@@ -1,5 +1,5 @@
 use serde_json::Value;
-use solomon_sim::belt::NATIVE_BELT_SLOT_COUNT;
+use solomon_sim::belt::BELT_SLOT_COUNT;
 use solomon_sim::input::{BeltInputSource, HeldBeltInputs};
 
 #[test]
@@ -26,13 +26,13 @@ fn physical_bindings_keep_their_press_time_bank_until_release() {
                 let pressed = step["pressed"].as_bool().unwrap();
                 if kind == "gamepad" {
                     if gamepad_pressed != pressed {
-                        belt.sync_gamepad(pressed.then_some(bank * NATIVE_BELT_SLOT_COUNT));
+                        belt.sync_gamepad(pressed.then_some(bank * BELT_SLOT_COUNT));
                     }
                     gamepad_pressed = pressed;
                 } else if !pressed {
                     belt.release_source(source);
                 } else if belt.held_slot(source).is_none() {
-                    belt.hold(source, bank * NATIVE_BELT_SLOT_COUNT + slot);
+                    belt.hold(source, bank * BELT_SLOT_COUNT + slot);
                 }
             }
             let expected = step["expected"].as_u64().map(|slot| slot as usize);

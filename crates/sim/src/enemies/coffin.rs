@@ -1,10 +1,10 @@
 //! Coffin timed phases and pre-admission Maggot births from `enemies/coffin.ts`.
 use super::config::EnemyFamilyConfig;
 use super::effects::radial_vector;
-use super::maggots::native_maggot_death_offsets;
+use super::maggots::maggot_death_offsets;
 use super::model::*;
 use super::movement::positive_modulo;
-use super::path::{NativeEnemyPathState, native_enemy_target_refresh_ticks};
+use super::path::{EnemyPathState, enemy_target_refresh_ticks};
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
 use crate::float;
@@ -127,8 +127,8 @@ fn spawn_coffin_maggots(
         let position =
             Vec2::new(actor.position.x + x, actor.position.y + start.y - world.draw_unit() * 8.0);
         let hurricane = world.draw_integer(100);
-        let path = NativeEnemyPathState::new(&mut world.steering_rng);
-        let death_offsets = native_maggot_death_offsets(world);
+        let path = EnemyPathState::new(&mut world.steering_rng);
+        let death_offsets = maggot_death_offsets(world);
         let registration = order.register(WorldManagerLane::Actor);
         let id = world.next_actor_id;
         world.maggots.push(EnemyMaggotActor {
@@ -137,7 +137,7 @@ fn spawn_coffin_maggots(
             blizzard_push_accumulator: 0.0,
             blizzard_push_last_tick: None,
             combat_active: false,
-            native_tree_query_member: false,
+            tree_query_member: false,
             collision_radius: 8.0,
             current_health: maggot_health,
             death_offsets,
@@ -154,8 +154,8 @@ fn spawn_coffin_maggots(
             life_state: EnemyLifeState::Alive,
             registration_ordinal: registration.registration_ordinal,
             maximum_health: maggot_health,
-            native_cell_binding_order: world.next_native_cell_binding_order,
-            native_registration_order: world.next_native_registration_order,
+            native_cell_binding_order: world.next_cell_binding_order,
+            native_registration_order: world.next_registration_order,
             owner_coffin_actor_id: actor.id,
             poison_damage: maggot_poison_damage,
             poison_duration: if maggot_poison_damage > 0.0 { 10.0 } else { 0.0 },
@@ -176,13 +176,13 @@ fn spawn_coffin_maggots(
             last_movement_tick: None,
             next_attack_tick: context.tick + 10,
             next_movement_tick: context.tick + 1,
-            next_target_refresh_tick: context.tick + native_enemy_target_refresh_ticks(1),
+            next_target_refresh_tick: context.tick + enemy_target_refresh_ticks(1),
             path,
             movement_phase: MaggotMovementPhase::Emerging,
             target_player_id: None,
         });
-        world.next_native_cell_binding_order += 1;
-        world.next_native_registration_order += 1;
+        world.next_cell_binding_order += 1;
+        world.next_registration_order += 1;
         world.spawned_actor_ids.push(id);
         let mut event = EnemyEvent::new(EnemyEventKind::EnemySpawned, id, context.tick);
         event.target_player_id = Some(None);

@@ -8,7 +8,7 @@ use solomon_sim::spells::fire::*;
 use solomon_sim::spells::fire_presentation::*;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::presentation::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -19,7 +19,7 @@ fn point(value: Vec2) -> [f64; 2] {
 fn read_point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn sprite_row(draw: NativeSpellSprite) -> Value {
+fn sprite_row(draw: SpellSprite) -> Value {
     json!([
         draw.alpha,
         u32::from(draw.atlas == SpellAtlas::DeadHawg),
@@ -38,22 +38,22 @@ fn sprite_row(draw: NativeSpellSprite) -> Value {
         draw.tint
     ])
 }
-fn plan_row(plan: NativeSpellSpritePlan) -> Value {
+fn plan_row(plan: SpellSpritePlan) -> Value {
     let draws: Vec<Value> = plan.draws.into_iter().map(sprite_row).collect();
     json!({ "position": point(plan.position), "world_y": plan.world_y, "sort_bias": plan.sort_bias, "light": plan.region_light_point.map(point), "draws": draws })
 }
-fn mesh_row(mesh: &NativeAirMesh) -> Value {
+fn mesh_row(mesh: &AirMesh) -> Value {
     let vertices: Vec<[f64; 2]> = mesh.vertices.iter().copied().map(point).collect();
     let uvs: Vec<[f64; 2]> = mesh.uvs.iter().copied().map(point).collect();
     json!({ "indices": mesh.indices, "uvs": uvs, "vertices": vertices })
 }
-fn corona_row(corona: Option<NativeAirCoronaPlan>) -> Value {
+fn corona_row(corona: Option<AirCoronaPlan>) -> Value {
     corona.map_or(Value::Null, |corona| {
         let draws: Vec<Value> = corona.draws.into_iter().map(sprite_row).collect();
         json!({ "alpha": corona.alpha, "center": point(corona.center), "draws": draws })
     })
 }
-fn light_row(light: NativeAirLightPlan) -> Value {
+fn light_row(light: AirLightPlan) -> Value {
     json!([light.casts_directional_shadow, light.intensity, point(light.position), light.radius])
 }
 
@@ -147,8 +147,8 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                     17.0,
                 )
             }
-            "fireball" => native_fireball_plan(
-                NativeFireballPresentationState {
+            "fireball" => fireball_plan(
+                FireballPresentationState {
                     age_ticks: age as f64,
                     direction: Vec2::new(0.6, -0.8),
                     id: 7,
@@ -158,16 +158,16 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                 99,
             ),
             "fire-impact" => {
-                native_fire_impact_plan(&PrimarySpellFireImpact { common: common(age), origin })
+                fire_impact_plan(&PrimarySpellFireImpact { common: common(age), origin })
             }
-            "fire-particle" => native_fire_particle_plan(&PrimarySpellFireParticle {
+            "fire-particle" => fire_particle_plan(&PrimarySpellFireParticle {
                 enhanced_effects: true,
                 common: common(age),
                 direction: Vec2::new(0.6, -0.8),
                 origin,
                 variant: 3,
             }),
-            "fire-explosion" => native_fire_explosion_plan(
+            "fire-explosion" => fire_explosion_plan(
                 age as f64,
                 origin,
                 if age == 10 {
@@ -178,7 +178,7 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                 1.9,
                 0.7,
             ),
-            "fire-ember" => native_fire_ember_plan(
+            "fire-ember" => fire_ember_plan(
                 common(age).id,
                 -20.0,
                 if age == 0 { 2.0 } else { 0.4 },
@@ -187,7 +187,7 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                 99,
                 true,
             ),
-            "fire-patch" => native_fire_patch_plan(
+            "fire-patch" => fire_patch_plan(
                 &PrimarySpellFirePatch {
                     common: common(10),
                     atlas_phase: sample["phase"].as_f64().unwrap(),
@@ -208,8 +208,8 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                 99,
             ),
             "fire-good-imp" => {
-                let mut imp = spawn_native_fire_good_imp(
-                    SpawnNativeFireGoodImpOptions {
+                let mut imp = spawn_fire_good_imp(
+                    SpawnFireGoodImpOptions {
                         burn_damage: 10.0,
                         damage: 12.0,
                         id: 7,
@@ -218,7 +218,7 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                         position: origin,
                         world_key: "boneyard".into(),
                     },
-                    &mut NativeRng::new(7),
+                    &mut Rng::new(7),
                 );
                 imp.heading_degrees = 253.4;
                 imp.vertical_offset = -20.0;
@@ -226,7 +226,7 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                 imp.effect_phase = 9.2;
                 imp.contact_age_ticks = Some(5);
                 imp.contact_origin = Some(Vec2::new(105.0, 190.0));
-                native_fire_good_imp_plan(&imp)
+                fire_good_imp_plan(&imp)
             }
             _ => panic!("unrecognized native presentation {kind}"),
         };
@@ -241,7 +241,7 @@ fn lightning_float32_ribbons_coronas_and_light_sources_match_the_website() {
             .unwrap();
     for sample in fixture["airCases"].as_array().unwrap() {
         let input = &sample["input"];
-        let plan = build_native_air_lightning_plan(NativeAirLightningInput {
+        let plan = build_air_lightning_plan(AirLightningInput {
             chained: false,
             enhanced_effects: true,
             age_ticks: input["ageTicks"].as_u64().unwrap(),
@@ -284,7 +284,7 @@ fn lightning_float32_ribbons_coronas_and_light_sources_match_the_website() {
         compare_draws(&actual, &sample["plan"], "Air plan");
     }
     for sample in fixture["pathLights"].as_array().unwrap() {
-        let lights = build_native_air_path_light_sources(
+        let lights = build_air_path_light_sources(
             7,
             17,
             Vec2::new(100.0, 200.0),

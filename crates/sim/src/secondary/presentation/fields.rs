@@ -5,19 +5,17 @@ use super::types::*;
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
-use crate::secondary::{NativeSecondaryActorKind, NativeSecondaryPlayerState};
+use crate::secondary::SecondaryActorState;
+use crate::secondary::{SecondaryActorKind, SecondaryPlayerState};
 
 #[must_use]
-pub fn native_secondary_composite_owner_entries<'a>(
-    actors: impl Iterator<Item = &'a NativeSecondaryActorState> + Clone,
+pub fn secondary_composite_owner_entries<'a>(
+    actors: impl Iterator<Item = &'a SecondaryActorState> + Clone,
     world_key: &str,
 ) -> Vec<(u64, u64)> {
     let mut owners = Vec::new();
     for actor in actors.clone() {
-        if actor.world_key != world_key
-            || actor.kind != NativeSecondaryActorKind::LeviathanAppendage
-        {
+        if actor.world_key != world_key || actor.kind != SecondaryActorKind::LeviathanAppendage {
             continue;
         }
         if let Some(parent) = actor.hit_target_ids.first()
@@ -32,46 +30,46 @@ pub fn native_secondary_composite_owner_entries<'a>(
 }
 
 #[must_use]
-pub fn native_leviathan_composite_plan(scale: f64) -> NativeLeviathanCompositePlan {
-    NativeLeviathanCompositePlan {
-        clear: NativeLeviathanCompositeClear {
+pub fn leviathan_composite_plan(scale: f64) -> LeviathanCompositePlan {
+    LeviathanCompositePlan {
+        clear: LeviathanCompositeClear {
             color: 0,
-            height: NATIVE_LEVIATHAN_RENDER_TARGET_SIZE / 2.0,
-            width: NATIVE_LEVIATHAN_RENDER_TARGET_SIZE,
+            height: LEVIATHAN_RENDER_TARGET_SIZE / 2.0,
+            width: LEVIATHAN_RENDER_TARGET_SIZE,
             x: 0.0,
-            y: NATIVE_LEVIATHAN_RENDER_TARGET_SIZE / 2.0 + 32.0 * scale,
+            y: LEVIATHAN_RENDER_TARGET_SIZE / 2.0 + 32.0 * scale,
         },
-        mask: NativeLeviathanCompositeMask {
+        mask: LeviathanCompositeMask {
             clip_size: 1000.0,
-            clip_top: NATIVE_LEVIATHAN_RENDER_TARGET_SIZE / 2.0,
+            clip_top: LEVIATHAN_RENDER_TARGET_SIZE / 2.0,
             entry: 39,
             scale,
         },
         outputs: [
-            NativeLeviathanCompositeOutput { alpha: 1.0, blend: NativeSecondaryBlend::Normal },
-            NativeLeviathanCompositeOutput { alpha: 0.5, blend: NativeSecondaryBlend::Add },
+            LeviathanCompositeOutput { alpha: 1.0, blend: SecondaryBlend::Normal },
+            LeviathanCompositeOutput { alpha: 0.5, blend: SecondaryBlend::Add },
         ],
     }
 }
 
 #[must_use]
-pub fn native_player_magic_shield_plan(
-    player: Option<&NativeSecondaryPlayerState>,
+pub fn player_magic_shield_plan(
+    player: Option<&SecondaryPlayerState>,
     tick: f64,
-) -> NativePlayerMagicShieldPlan {
+) -> PlayerMagicShieldPlan {
     let Some(player) = player.filter(|player| player.magic_shield_absorb > 0.0) else {
-        return NativePlayerMagicShieldPlan {
+        return PlayerMagicShieldPlan {
             alpha: 0.0,
-            scale: NATIVE_PLAYER_MAGIC_SHIELD_SCALE,
+            scale: PLAYER_MAGIC_SHIELD_SCALE,
             tint: WHITE,
             visible: false,
         };
     };
     let pulse = player.magic_shield_pulse_ticks as f64 * 0.05;
-    NativePlayerMagicShieldPlan {
+    PlayerMagicShieldPlan {
         alpha: 0.5 * (pulse.max(1.0) - 1.0) + 0.25,
         scale: fround(
-            NATIVE_PLAYER_MAGIC_SHIELD_SCALE
+            PLAYER_MAGIC_SHIELD_SCALE
                 + (0.1_f32 as f64)
                     * float::sin(tick * 20.0 * std::f64::consts::PI / 180.0)
                     * pulse.min(1.0),
@@ -83,10 +81,10 @@ pub fn native_player_magic_shield_plan(
 
 #[must_use]
 pub fn plane_orb_mesh(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     frame: f64,
     enhanced_effects: bool,
-) -> NativeSecondaryMeshDraw {
+) -> SecondaryMeshDraw {
     let count = if enhanced_effects { 15 } else { 7 };
     let mut vertices = vec![0.0, 0.0];
     let mut uvs = vec![actor.position.x / 192.0, actor.position.y / 192.0];
@@ -114,12 +112,12 @@ pub fn plane_orb_mesh(
         let next = 1 + ((segment + 1) % count) * 2;
         indices.extend([0, inner, next, inner, outer, next, outer, next, next + 1]);
     }
-    NativeSecondaryMeshDraw {
+    SecondaryMeshDraw {
         alpha: actor.alpha,
-        blend: NativeSecondaryBlend::Normal,
+        blend: SecondaryBlend::Normal,
         indices,
         role: "plane-orb-ether-plane-mesh".into(),
-        texture: NativeSecondaryMeshTexture::EtherPlane,
+        texture: SecondaryMeshTexture::EtherPlane,
         tint: WHITE,
         uvs,
         vertex_colors: colors,
@@ -128,18 +126,15 @@ pub fn plane_orb_mesh(
 }
 
 #[must_use]
-pub fn prismatic_wave_draws(
-    actor: &NativeSecondaryActorState,
-    frame: f64,
-) -> Vec<NativeSecondarySpriteDraw> {
+pub fn prismatic_wave_draws(actor: &SecondaryActorState, frame: f64) -> Vec<SecondarySpriteDraw> {
     prismatic_wave_draws_at_age(actor, actor.age_ticks, frame)
 }
 
 pub(super) fn prismatic_wave_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
     frame: f64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let source = actor
         .presentation_rng
         .as_ref()
@@ -154,9 +149,9 @@ pub(super) fn prismatic_wave_draws_at_age(
             (completed * 19 + frame.trunc().max(0.0) as u64) as usize,
         );
         let flicker = rng.draw_scaled_float(0.5, false);
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 58);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 58);
         draw.alpha = fround(0.5 * actor.alpha * fround(0.5 + flicker));
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.role = "prismatic-spray-core".into();
         draw.rotation_radians = degrees_to_radians(actor.phase * actor.slow_factor);
         draw.scale_x = actor.slow_factor * actor.scale * 1.5;
@@ -194,10 +189,9 @@ pub(super) fn prismatic_wave_draws_at_age(
             }
             let distance = fround(radius * 30.0 + distance);
             let scale = fround(0.25 + scale);
-            let mut draw =
-                NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 111);
+            let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 111);
             draw.alpha = alpha.min(1.0);
-            draw.blend = NativeSecondaryBlend::Add;
+            draw.blend = SecondaryBlend::Add;
             draw.offset = Vec2::new(fround(direction.x * distance), fround(direction.y * distance));
             draw.role = format!("prismatic-radial-{emission}-{child}");
             draw.rotation_radians = degrees_to_radians(rotation);
@@ -220,13 +214,13 @@ pub(super) fn prismatic_wave_draws_at_age(
         let distance = fround(radius * 50.0 + distance);
         let speed = fround(0.15 + speed);
         let scale = fround(1.0 + scale);
-        let mut draw = NativeSecondarySpriteDraw::new(
+        let mut draw = SecondarySpriteDraw::new(
             actor,
-            NativeSecondaryAtlas::BadGuys,
+            SecondaryAtlas::BadGuys,
             if selector == 1 { 10 } else { 11 },
         );
         draw.alpha = alpha.min(1.0);
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.offset = Vec2::new(
             fround(direction.x * fround(distance + speed * elapsed as f64)),
             fround(direction.y * fround(distance + speed * elapsed as f64)),
@@ -242,16 +236,14 @@ pub(super) fn prismatic_wave_draws_at_age(
 }
 
 #[must_use]
-pub fn magic_circle_ring_draws(
-    actor: &NativeSecondaryActorState,
-) -> Vec<NativeSecondarySpriteDraw> {
+pub fn magic_circle_ring_draws(actor: &SecondaryActorState) -> Vec<SecondarySpriteDraw> {
     magic_circle_ring_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn magic_circle_ring_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let mut rng = actor
         .presentation_rng
         .clone()
@@ -286,9 +278,9 @@ pub(super) fn magic_circle_ring_draws_at_age(
             for _ in 0..elapsed {
                 rotation = fround(rotation + velocity);
             }
-            let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 48);
+            let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 48);
             draw.alpha = alpha.min(1.0);
-            draw.blend = NativeSecondaryBlend::Add;
+            draw.blend = SecondaryBlend::Add;
             draw.role = format!("magic-circle-ring-{emission}-{child}");
             draw.rotation_radians = degrees_to_radians(rotation);
             draw.scale_x = fround(actor.scale * factor);

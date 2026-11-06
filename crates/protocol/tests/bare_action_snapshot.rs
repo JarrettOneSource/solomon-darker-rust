@@ -2,10 +2,10 @@ use solomon_protocol::snapshot::{PreparedSnapshot, SnapshotReader, SnapshotWrite
 use solomon_protocol::{HostSnapshot, ServerMessage, SnapshotFrame};
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::{
-    NativeSecondaryCastAction, NativeSecondaryPlayerState, step_native_secondary_cast_action,
+    SecondaryCastAction, SecondaryPlayerState, step_secondary_cast_action,
 };
 use solomon_sim::session::{GameCheckpoint, GameSession, GameSessionOptions};
-use solomon_sim::spells::hand_cast::NativeHandCast1;
+use solomon_sim::spells::hand_cast::HandCast1;
 
 #[test]
 fn borrowed_snapshots_delta_and_reconnect_preserve_bare_actions_and_rng() {
@@ -18,21 +18,17 @@ fn borrowed_snapshots_delta_and_reconnect_preserve_bare_actions_and_rng() {
         },
         GameSessionOptions { combat_rng_seed: 125, ..Default::default() },
     );
-    let mut hand = NativeHandCast1::new(0.095_f32 as f64, 0, &mut session.combat_rng);
+    let mut hand = HandCast1::new(0.095_f32 as f64, 0, &mut session.combat_rng);
     hand.step(0.5);
     {
         let participant = session.participants.get_mut("wizard").unwrap();
         participant.wizard.primary_cast.hand_cast = Some(hand);
         participant.wizard.primary_cast.action_tick = Some(1.0);
     }
-    let secondary = NativeSecondaryPlayerState {
-        cast_action: step_native_secondary_cast_action(
-            Some(NativeSecondaryCastAction::new(None)),
-            0.0,
-            0.5,
-        )
-        .action,
-        ..NativeSecondaryPlayerState::default()
+    let secondary = SecondaryPlayerState {
+        cast_action: step_secondary_cast_action(Some(SecondaryCastAction::new(None)), 0.0, 0.5)
+            .action,
+        ..SecondaryPlayerState::default()
     };
     session.secondary.players.insert("wizard".into(), secondary);
     let mut writer = SnapshotWriter::default();

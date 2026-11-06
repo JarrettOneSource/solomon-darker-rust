@@ -7,7 +7,7 @@ use crate::boneyard::navigation::NavigationSet;
 use crate::boneyard::world::boneyard_goodie_spell_targets;
 use crate::boneyard::world_light::{
     BoneyardLightEnvironment, BoneyardWorldLightQuery, WorldLightPlayer, WorldLightScene,
-    boneyard_world_light_query, native_primary_view_bounds,
+    boneyard_world_light_query, primary_view_bounds,
 };
 use crate::enemies::path::EnemyNavigation;
 use crate::hub::regions::HubRegion;
@@ -15,18 +15,16 @@ use crate::hub::{HUB_CAMERA_SCALE, is_traversable_against_segments};
 use crate::line_obstruction::{
     line_capsule_obstruction, line_segment_obstruction, nearer_line_obstruction,
 };
-use crate::profile::primary::{
-    NativePrimarySkillProfile, native_primary_skill_profile_with_stat_book,
-};
-use crate::score::NativeHallOfFamePlayerScoreState;
+use crate::profile::primary::{PrimarySkillProfile, primary_skill_profile_with_stat_book};
+use crate::score::HallOfFamePlayerScoreState;
 use crate::spells::boneyard::{
     BoneyardPrimaryContactEpoch, BoneyardPrimaryContactPlayer, BoneyardPrimaryGeometry,
     boneyard_primary_scenery_targets, resolve_boneyard_primary_contacts_for_players,
 };
-use crate::spells::casting::NativePlayerWeaponKind;
+use crate::spells::casting::PlayerWeaponKind;
 use crate::spells::contacts::{BoneyardSpellCombatResult, BoneyardSpellDamageNotice};
 use crate::spells::model::PrimarySpellTickResult;
-use crate::spells::targeting::native_primary_view_ray_endpoint;
+use crate::spells::targeting::primary_view_ray_endpoint;
 use crate::spells::{
     PrimarySpellBatchTickResult, PrimarySpellCastAuthority, PrimarySpellEpochContext,
     PrimarySpellInput, PrimarySpellPlayer, PrimarySpellTraversalActor, PrimarySpellWorldContext,
@@ -39,8 +37,8 @@ impl GameSession {
         cast: &PrimarySpellTickResult,
         tick: u64,
     ) {
-        use crate::hurricane::native_hurricane_charge_tick;
-        use crate::profile::offensive::resolve_native_skill_damage_value;
+        use crate::hurricane::hurricane_charge_tick;
+        use crate::profile::offensive::resolve_skill_damage_value;
         use crate::profile::runtime::effective_skill_numeric_value;
         use crate::spells::air_water::{
             AirWaterPlayerVisualOwner, synchronize_air_water_player_visual_actors,
@@ -53,7 +51,7 @@ impl GameSession {
             let runtime = &player.skill_runtime;
             let factors = player.derived_stats().offensive_factors(runtime);
             let wizard = &participant.wizard;
-            let hurricane = native_hurricane_charge_tick(
+            let hurricane = hurricane_charge_tick(
                 runtime.hurricane_charge,
                 runtime.hurricane_refreshed,
                 runtime.hurricane_enabled,
@@ -64,12 +62,12 @@ impl GameSession {
             owners.push(AirWaterPlayerVisualOwner {
                 hurricane_charge: hurricane.next_charge,
                 hurricane_contact_charge: hurricane.contact_charge,
-                hurricane_damage_maximum: resolve_native_skill_damage_value(
+                hurricane_damage_maximum: resolve_skill_damage_value(
                     29,
                     effective_skill_numeric_value(&player.book, 29, "mDamage2"),
                     &factors,
                 ),
-                hurricane_damage_minimum: resolve_native_skill_damage_value(
+                hurricane_damage_minimum: resolve_skill_damage_value(
                     29,
                     effective_skill_numeric_value(&player.book, 29, "mDamage1"),
                     &factors,
@@ -150,7 +148,7 @@ impl GameSession {
                 focus: participant.wizard.position,
                 input: inputs[id],
                 primary_unset: self.hub_primary_unset(id),
-                profile: native_primary_skill_profile_with_stat_book(
+                profile: primary_skill_profile_with_stat_book(
                     &player.book,
                     &player.stat_book,
                     &derived.offensive_factors(&player.skill_runtime),
@@ -225,10 +223,10 @@ impl GameSession {
                         sample.region.size().x,
                         sample.region.size().y,
                     ));
-                    native_primary_view_ray_endpoint(
+                    primary_view_ray_endpoint(
                         start,
                         direction,
-                        native_primary_view_bounds(
+                        primary_view_bounds(
                             bounds,
                             sample.focus,
                             sample.input.viewport,
@@ -272,7 +270,7 @@ impl GameSession {
                 input: PrimarySpellInput { aim: sample.input.aim, primary: sample.input.primary },
                 context: PrimarySpellWorldContext {
                     enhanced_effects: self.enhanced_effects,
-                    flame_lash_view_bounds: Some(native_primary_view_bounds(
+                    flame_lash_view_bounds: Some(primary_view_bounds(
                         bounds.unwrap_or(crate::boneyard::BoneyardBounds::new(
                             0.0,
                             0.0,
@@ -378,7 +376,7 @@ impl GameSession {
                 let player = &participant.player;
                 participant.score.record_enemy_kill(
                     enemy,
-                    NativeHallOfFamePlayerScoreState {
+                    HallOfFamePlayerScoreState {
                         current_health: player.combat.current_health,
                         maximum_health: player.combat.maximum_health,
                         level: player.progression.level,
@@ -476,8 +474,8 @@ struct PrimaryPlayerSample {
     focus: Vec2,
     input: GameSessionInput,
     primary_unset: bool,
-    profile: NativePrimarySkillProfile,
-    weapon_kind: Option<NativePlayerWeaponKind>,
+    profile: PrimarySkillProfile,
+    weapon_kind: Option<PlayerWeaponKind>,
     alive: bool,
     available_mana: f64,
     cast_progress_factor: f64,

@@ -27,7 +27,7 @@ pub fn step_demon_skull(
         panic!("DemonSkull brain required")
     };
     let admitted = context.native_visibility.is_none_or(|visible| visible(actor.position).admitted);
-    prepare_native_demon_skull_tick(brain, admitted);
+    prepare_demon_skull_tick(brain, admitted);
     let effect = context.ability_effect(actor.id);
     let disrupted = effect.disrupted_ticks > 0;
     let fleeing = effect.flee_ticks > 0;
@@ -97,10 +97,10 @@ pub fn step_demon_skull(
         .filter(|target| target_eligible(target));
     let line_of_sight = target.is_some_and(|target| clear_line(context, actor, target.position));
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else { unreachable!() };
-    let step = step_native_demon_skull_controller(
+    let step = step_demon_skull_controller(
         brain,
         &mut world.steering_rng,
-        NativeDemonSkullControllerContext {
+        DemonSkullControllerContext {
             alternate_player: false,
             has_action: !brain.actions.is_empty(),
             heading_deg: actor.heading_deg,
@@ -138,7 +138,7 @@ fn clear_line(context: &EnemyStepContext<'_>, actor: &EnemyActor, end: Vec2) -> 
         projectile_id: actor.id,
         start: actor.position,
         end,
-        native_exclusion_mask: 0x380,
+        exclusion_mask: 0x380,
     })
 }
 fn squared(a: Vec2, b: Vec2) -> f64 {

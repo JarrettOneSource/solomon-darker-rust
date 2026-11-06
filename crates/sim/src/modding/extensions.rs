@@ -81,7 +81,7 @@ pub fn game_boast_rules<'a>(
     selection: &BoastSelection,
     extensions: Option<&'a dyn GameSimulationExtensions>,
 ) -> Option<BoastRules<'a>> {
-    crate::hub::interaction::native_boast_rules_for_selection(selection)
+    crate::hub::interaction::boast_rules_for_selection(selection)
         .or_else(|| extensions.and_then(|extensions| extensions.resolve_boast(selection)))
 }
 

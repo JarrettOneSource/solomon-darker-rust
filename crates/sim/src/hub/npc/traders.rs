@@ -2,7 +2,7 @@
 
 use crate::float;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 pub const DEFAULT_HUB_TRADER_ANIMATION_SEED: u32 = 0x5eed_c0de;
 const HAGATHA_ANCHORS: [Vec2; 8] = [
@@ -26,7 +26,7 @@ pub struct HubCommonTraderClock {
     pub active: bool,
     pub phase_degrees: f64,
     pub speed_degrees: f64,
-    pub rng: NativeRng,
+    pub rng: Rng,
 }
 
 impl HubCommonTraderClock {
@@ -36,7 +36,7 @@ impl HubCommonTraderClock {
             active: false,
             phase_degrees: 0.0,
             speed_degrees: 0.0,
-            rng: NativeRng::new(i64::from(seed)),
+            rng: Rng::new(i64::from(seed)),
         }
     }
 
@@ -157,7 +157,7 @@ pub struct HubHagathaClock {
     pub next_particle_id: u64,
     pub particles: Vec<HubHagathaParticle>,
     pub phase: f64,
-    pub rng: NativeRng,
+    pub rng: Rng,
     pub velocity: f64,
 }
 
@@ -168,7 +168,7 @@ impl HubHagathaClock {
             next_particle_id: 0,
             particles: Vec::new(),
             phase: 0.0,
-            rng: NativeRng::new(i64::from(seed)),
+            rng: Rng::new(i64::from(seed)),
             velocity: 0.05_f32 as f64,
         }
     }
@@ -229,12 +229,12 @@ pub struct HubSkorcha {
     pub hat_phase_degrees: f64,
     pub hat_rate_degrees_per_tick: f64,
     pub position: Vec2,
-    pub rng: NativeRng,
+    pub rng: Rng,
     pub variant: usize,
 }
 
 impl HubSkorcha {
-    fn at_variant(mut rng: NativeRng, variant: usize) -> Self {
+    fn at_variant(mut rng: Rng, variant: usize) -> Self {
         let dismissal_index = rng.draw_integer(3) as usize;
         Self {
             dismissal_index,
@@ -296,7 +296,7 @@ impl HubSkorcha {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct HubSkorchaSchedule {
-    pub rng: NativeRng,
+    pub rng: Rng,
     pub skorcha: Option<HubSkorcha>,
     pub transition_ticks_remaining: u64,
     hidden_ticks: Option<u64>,
@@ -322,7 +322,7 @@ impl HubSkorchaSchedule {
                 && visible_ticks.is_none_or(|ticks| ticks > 0),
             "Skorcha windows must contain a tick"
         );
-        let mut rng = NativeRng::new(i64::from(seed ^ 5007));
+        let mut rng = Rng::new(i64::from(seed ^ 5007));
         let skorcha = if rng.draw_integer(3) == 1 {
             let variant = rng.draw_integer(3) as usize;
             let skorcha = HubSkorcha::at_variant(rng.clone(), variant);

@@ -46,9 +46,9 @@ use crate::hub::npc::{HubCommonTraderClock, HubNpcState};
 use crate::modding::extensions::GameSimulationExtensions;
 use crate::modding::inventory::GameSimulationModEffect;
 use crate::painter::{PainterRegistration, WorldPainterOrder};
-use crate::secondary::NativeSecondarySimulationState;
+use crate::secondary::SecondarySimulationState;
 use crate::spells::model::SpellState;
-use crate::{HubWizard, NativeRng};
+use crate::{HubWizard, Rng};
 
 /// Distinct source RNG owners. Combat must never consume the gameplay/loot stream.
 #[derive(Clone, Copy, Debug)]
@@ -114,8 +114,8 @@ pub struct PlayerLevelUpBarrier {
 #[derive(Clone, Debug)]
 pub struct GameSession {
     /// Painting permission belongs to the open live menu, never a durable save.
-    pub inventory_dye_sessions: BTreeMap<String, crate::economy::NativeInventoryDyeSession>,
-    pub screen_flashes: crate::screen_flash::NativeScreenFlashState,
+    pub inventory_dye_sessions: BTreeMap<String, crate::economy::InventoryDyeSession>,
+    pub screen_flashes: crate::screen_flash::ScreenFlashState,
     pub enhanced_effects: bool,
     pub participants: BTreeMap<String, SessionParticipant>,
     /// Source entity/Record order. Sorted barrier cohorts deliberately use their own order.
@@ -127,9 +127,9 @@ pub struct GameSession {
     pub hub_trader_animation_seed: u32,
     pub hub_memorial: crate::hub::memorial::HubMemorialState,
     pub collision_rng: u32,
-    pub gameplay_rng: NativeRng,
-    pub combat_rng: NativeRng,
-    pub secondary: NativeSecondarySimulationState,
+    pub gameplay_rng: Rng,
+    pub combat_rng: Rng,
+    pub secondary: SecondarySimulationState,
     pub spells: SpellState,
     pub hall_of_fame_clock_started_at_tick: u64,
     pub painter_order: WorldPainterOrder,
@@ -149,8 +149,8 @@ pub struct GameSession {
 pub struct GameCheckpoint {
     // Network views admit the live menu state; file checkpoints deliberately omit it.
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing))]
-    pub inventory_dye_sessions: BTreeMap<String, crate::economy::NativeInventoryDyeSession>,
-    pub screen_flashes: crate::screen_flash::NativeScreenFlashState,
+    pub inventory_dye_sessions: BTreeMap<String, crate::economy::InventoryDyeSession>,
+    pub screen_flashes: crate::screen_flash::ScreenFlashState,
     pub enhanced_effects: bool,
     pub participants: BTreeMap<String, SessionParticipant>,
     pub participant_order: Vec<String>,
@@ -166,9 +166,9 @@ pub struct GameCheckpoint {
     #[cfg_attr(feature = "persistence", serde(default = "boxed_hub_memorial"))]
     pub hub_memorial: Box<crate::hub::memorial::HubMemorialState>,
     pub collision_rng: u32,
-    pub gameplay_rng: NativeRng,
-    pub combat_rng: NativeRng,
-    pub secondary: NativeSecondarySimulationState,
+    pub gameplay_rng: Rng,
+    pub combat_rng: Rng,
+    pub secondary: SecondarySimulationState,
     pub spells: SpellState,
     pub hall_of_fame_clock_started_at_tick: u64,
     pub painter_order: WorldPainterOrder,
@@ -347,10 +347,10 @@ const fn first_mod_consumable_use_id() -> u64 {
 
 fn validate_checkpoint(checkpoint: &GameCheckpoint) -> Result<(), String> {
     use crate::spells::model::PrimarySpellTransient;
-    use crate::spells::weld::{NativeWeldPersistentActorState, NativeWeldWorldActor};
+    use crate::spells::weld::{WeldPersistentActorState, WeldWorldActor};
     for actor in checkpoint.spells.transients.iter() {
-        if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-            NativeWeldPersistentActorState::EtherealBoulder(actor),
+        if let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+            WeldPersistentActorState::EtherealBoulder(actor),
         )) = actor
         {
             actor.validate_guidance()?;

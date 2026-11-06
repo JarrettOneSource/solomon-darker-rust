@@ -30,16 +30,16 @@ struct Input {
 }
 
 impl Input {
-    fn geometry(&self) -> NativeFlameLashFactoryInput {
-        NativeFlameLashFactoryInput {
+    fn geometry(&self) -> FlameLashFactoryInput {
+        FlameLashFactoryInput {
             start: self.start.vector(),
             control: self.control.vector(),
             end: self.end.vector(),
             offset: self.offset.vector(),
         }
     }
-    fn ribbon(&self) -> NativeFlameLashRibbonInput {
-        NativeFlameLashRibbonInput {
+    fn ribbon(&self) -> FlameLashRibbonInput {
+        FlameLashRibbonInput {
             geometry: self.geometry(),
             width: self.width,
             weak: self.weak,
@@ -126,10 +126,10 @@ struct Fixture {
     errors: Vec<ErrorCase>,
 }
 
-fn kind(kind: NativeFlameLashGeometryKind) -> &'static str {
+fn kind(kind: FlameLashGeometryKind) -> &'static str {
     match kind {
-        NativeFlameLashGeometryKind::Short => "short",
-        NativeFlameLashGeometryKind::Long => "long",
+        FlameLashGeometryKind::Short => "short",
+        FlameLashGeometryKind::Long => "long",
     }
 }
 
@@ -146,7 +146,7 @@ fn retained_native_flame_geometry_matches_current_source() {
     let fixture: Fixture =
         serde_json::from_str(include_str!("fixtures/website/flame-geometry-goldens.json")).unwrap();
     for (index, case) in fixture.cases.iter().enumerate() {
-        let actual = native_flame_lash_factory_geometry(case.input.geometry()).unwrap();
+        let actual = flame_lash_factory_geometry(case.input.geometry()).unwrap();
         let expected = &case.geometry;
         assert_eq!(kind(actual.kind), expected.kind, "geometry {index}");
         assert_eq!(actual.start, expected.start.vector());
@@ -160,21 +160,18 @@ fn retained_native_flame_geometry_matches_current_source() {
             [bounds.x, bounds.y, bounds.width, bounds.height],
             [expected_bounds.x, expected_bounds.y, expected_bounds.width, expected_bounds.height]
         );
-        let points =
-            native_flame_lash_path_points(&actual, NATIVE_FLAME_MAXIMUM_PATH_POINTS).unwrap();
+        let points = flame_lash_path_points(&actual, FLAME_MAXIMUM_PATH_POINTS).unwrap();
         let expected_points: Vec<_> = case.path_points.iter().map(|point| point.vector()).collect();
         assert_eq!(points, expected_points, "path {index}");
         assert_eq!(
-            native_flame_lash_ribbon_pair_count(&actual, true, NATIVE_FLAME_MAXIMUM_RIBBON_PAIRS)
-                .unwrap(),
+            flame_lash_ribbon_pair_count(&actual, true, FLAME_MAXIMUM_RIBBON_PAIRS).unwrap(),
             case.normal_pair_count
         );
         assert_eq!(
-            native_flame_lash_ribbon_pair_count(&actual, false, NATIVE_FLAME_MAXIMUM_RIBBON_PAIRS)
-                .unwrap(),
+            flame_lash_ribbon_pair_count(&actual, false, FLAME_MAXIMUM_RIBBON_PAIRS).unwrap(),
             case.coarse_pair_count
         );
-        let ribbon = build_native_flame_lash_ribbon(case.input.ribbon()).unwrap();
+        let ribbon = build_flame_lash_ribbon(case.input.ribbon()).unwrap();
         assert_eq!(kind(ribbon.kind), case.ribbon.kind);
         assert_eq!(flattened(&ribbon.vertices), case.ribbon.vertices, "vertices {index}");
         assert_eq!(ribbon.indices, case.ribbon.indices, "indices {index}");
@@ -183,33 +180,26 @@ fn retained_native_flame_geometry_matches_current_source() {
         assert_eq!(ribbon.parameters, case.ribbon.parameters, "parameters {index}");
     }
     for (tick, expected) in fixture.phases {
-        assert_eq!(native_flame_lash_birth_phase(tick), expected);
+        assert_eq!(flame_lash_birth_phase(tick), expected);
     }
     for expected in fixture.private_samples {
-        let actual = native_flame_lash_private_sample(expected.state);
+        let actual = flame_lash_private_sample(expected.state);
         assert_eq!(actual.angle_degrees, expected.angle_degrees);
         assert_eq!(actual.radius, expected.radius);
         assert_eq!(actual.next_state, expected.next_state);
     }
     for expected in fixture.splines {
         let points = expected.points.map(Point::vector);
-        assert_eq!(
-            native_flame_lash_spline_point(points, expected.parameter),
-            expected.point.vector()
-        );
-        assert_eq!(
-            native_flame_lash_spline_normal(points, expected.parameter),
-            expected.normal.vector()
-        );
+        assert_eq!(flame_lash_spline_point(points, expected.parameter), expected.point.vector());
+        assert_eq!(flame_lash_spline_normal(points, expected.parameter), expected.normal.vector());
     }
     for expected in fixture.errors {
         let geometry =
-            native_flame_lash_factory_geometry(fixture.cases[expected.index].input.geometry())
-                .unwrap();
+            flame_lash_factory_geometry(fixture.cases[expected.index].input.geometry()).unwrap();
         let error = if expected.operation == "path" {
-            native_flame_lash_path_points(&geometry, expected.budget).unwrap_err()
+            flame_lash_path_points(&geometry, expected.budget).unwrap_err()
         } else {
-            native_flame_lash_ribbon_pair_count(&geometry, true, expected.budget).unwrap_err()
+            flame_lash_ribbon_pair_count(&geometry, true, expected.budget).unwrap_err()
         };
         assert_eq!(error, expected.message);
     }

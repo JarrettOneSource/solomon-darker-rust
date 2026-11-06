@@ -106,7 +106,7 @@ const GOODIE_POLYGON: [Vec2; 4] = rectangle(-25.125, -8.625, 25.875, 16.875);
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollisionPolygon {
     pub points: Vec<Vec2>,
-    pub native_line_mask: u32,
+    pub line_mask: u32,
     pub source_id: Option<String>,
 }
 
@@ -114,7 +114,7 @@ pub struct CollisionPolygon {
 pub struct CollisionCircle {
     pub center: Vec2,
     pub radius: f64,
-    pub native_line_mask: u32,
+    pub line_mask: u32,
     pub source_id: Option<String>,
 }
 
@@ -123,7 +123,7 @@ pub struct CollisionSegment {
     pub start: Vec2,
     pub end: Vec2,
     pub radius: f64,
-    pub native_line_mask: u32,
+    pub line_mask: u32,
     pub source_id: Option<String>,
 }
 
@@ -158,7 +158,7 @@ impl BoneyardCollisionWorld {
                         world.circles.push(CollisionCircle {
                             center: *point,
                             radius: 10.0,
-                            native_line_mask: 0x700,
+                            line_mask: 0x700,
                             source_id: None,
                         });
                     }
@@ -212,7 +212,7 @@ impl BoneyardCollisionWorld {
             start: leaf.hinge,
             end: leaf.tip,
             radius: 0.0,
-            native_line_mask: 0x100,
+            line_mask: 0x100,
             source_id: None,
         }));
     }
@@ -224,7 +224,7 @@ impl CollisionScenery {
             start,
             end,
             radius,
-            native_line_mask: mask,
+            line_mask: mask,
             source_id: None,
         });
     }
@@ -235,7 +235,7 @@ impl CollisionScenery {
             2001 => self.circles.push(CollisionCircle {
                 center: object.position,
                 radius: if variant == 1 { 12.0 } else { 8.0 },
-                native_line_mask: 0x700,
+                line_mask: 0x700,
                 source_id: None,
             }),
             2009 => {
@@ -248,7 +248,7 @@ impl CollisionScenery {
                 self.circles.push(CollisionCircle {
                     center: object.position,
                     radius: if variant == 1 { 0.0 } else { 1.0 },
-                    native_line_mask: 0x600,
+                    line_mask: 0x600,
                     source_id: Some(source_id.clone()),
                 });
                 if object.overlay_variant.unwrap_or(0) >= 7 {
@@ -264,7 +264,7 @@ impl CollisionScenery {
                 self.circles.push(CollisionCircle {
                     center: object.position,
                     radius: 8.0,
-                    native_line_mask: 0x700,
+                    line_mask: 0x700,
                     source_id: None,
                 });
                 self.append_polygon(object.position, &GOODIE_POLYGON, 0x700, None);
@@ -282,7 +282,7 @@ impl CollisionScenery {
     ) {
         let points =
             local.iter().map(|point| Vec2::new(origin.x + point.x, origin.y + point.y)).collect();
-        self.polygons.push(CollisionPolygon { points, native_line_mask: mask, source_id });
+        self.polygons.push(CollisionPolygon { points, line_mask: mask, source_id });
     }
 }
 
@@ -326,18 +326,18 @@ pub fn first_boneyard_line_obstruction(
     bounds: BoneyardBounds,
     world: &BoneyardCollisionWorld,
     excluded_source_id: Option<&str>,
-    native_exclusion_mask: u32,
+    exclusion_mask: u32,
     ignored_source_ids: &[&str],
 ) -> Option<Vec2> {
     let excluded = |source_id: &Option<String>, mask: u32| {
         source_id
             .as_deref()
             .is_some_and(|id| Some(id) == excluded_source_id || ignored_source_ids.contains(&id))
-            || mask & native_exclusion_mask != 0
+            || mask & exclusion_mask != 0
     };
     let mut nearest = line_bounds_exit_obstruction(start, end, bounds);
     for polygon in world.polygons() {
-        if excluded(&polygon.source_id, polygon.native_line_mask) {
+        if excluded(&polygon.source_id, polygon.line_mask) {
             continue;
         }
         for (index, point) in polygon.points.iter().enumerate() {
@@ -353,7 +353,7 @@ pub fn first_boneyard_line_obstruction(
         }
     }
     for circle in world.circles() {
-        if !excluded(&circle.source_id, circle.native_line_mask) {
+        if !excluded(&circle.source_id, circle.line_mask) {
             nearest = nearer_line_obstruction(
                 nearest,
                 line_circle_obstruction(start, end, circle.center, circle.radius),
@@ -361,7 +361,7 @@ pub fn first_boneyard_line_obstruction(
         }
     }
     for segment in world.segments() {
-        if !excluded(&segment.source_id, segment.native_line_mask) {
+        if !excluded(&segment.source_id, segment.line_mask) {
             nearest = nearer_line_obstruction(
                 nearest,
                 line_capsule_obstruction(start, end, segment.start, segment.end, segment.radius),

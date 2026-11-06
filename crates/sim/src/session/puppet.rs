@@ -9,7 +9,7 @@ use crate::boneyard::world_light::BoneyardLightEnvironment;
 use crate::enemies::boss_spell::BossSpellKind;
 use crate::enemies::projectiles::EnemyProjectileKind;
 use crate::enemies::puppet_hits::{EnemyPuppetHitKind, boneyard_puppet_target};
-use crate::secondary::NativeSecondaryActorKind;
+use crate::secondary::SecondaryActorKind;
 use crate::spells::targeting::PrimarySpellQueryLane;
 
 impl GameSession {
@@ -29,18 +29,18 @@ impl GameSession {
         let mut live_bindings = HashSet::new();
         for id in &self.participant_order {
             live_bindings.insert(id.clone());
-            world.enemies.bind_native_query_target(
+            world.enemies.bind_query_target(
                 id,
                 self.participants.get(id).expect("participant exists").wizard.position,
             );
         }
         for actor in self.secondary.actors.iter() {
-            if actor.kind != NativeSecondaryActorKind::Golem || actor.world_key != world_key {
+            if actor.kind != SecondaryActorKind::Golem || actor.world_key != world_key {
                 continue;
             }
             let id = format!("golem:{}", actor.id);
             live_bindings.insert(id.clone());
-            world.enemies.bind_native_query_target(&id, actor.position);
+            world.enemies.bind_query_target(&id, actor.position);
         }
         world.enemies.bind_world_puppet_targets(&targets);
         for target in &targets {
@@ -62,7 +62,7 @@ impl GameSession {
             .collect();
         for (id, position) in skulls {
             live_bindings.insert(id.clone());
-            world.enemies.bind_native_query_target(&id, position);
+            world.enemies.bind_query_target(&id, position);
         }
         for projectile in world.enemies.projectiles.iter() {
             let arrow = projectile.kind() == EnemyProjectileKind::Arrow;

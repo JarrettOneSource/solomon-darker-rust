@@ -8,7 +8,7 @@ use crate::enemies::model::*;
 use crate::float;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum NativeEnemyAnimationState {
+pub enum EnemyAnimationState {
     #[default]
     Idle,
     Locomotion,
@@ -17,7 +17,7 @@ pub enum NativeEnemyAnimationState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeEnemyAction {
+pub enum EnemyAction {
     SkeletonClawA,
     SkeletonClawB,
     SkeletonWeapon,
@@ -37,7 +37,7 @@ pub enum NativeEnemyAction {
     DemonSkullScream,
 }
 
-impl NativeEnemyAction {
+impl EnemyAction {
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
@@ -65,7 +65,7 @@ impl NativeEnemyAction {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum NativeEnemyCoffinState {
+pub enum EnemyCoffinState {
     Hidden,
     #[default]
     Closed,
@@ -74,24 +74,24 @@ pub enum NativeEnemyCoffinState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemySpiderInput {
+pub struct EnemySpiderInput {
     pub body_heading_deg: f64,
     pub outline_alpha: f64,
     pub outline_tint: u32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeEnemyEffectInput {
+pub struct EnemyEffectInput {
     pub id: usize,
     pub layer: EnemySpriteLayer,
 }
 
 /// Renderer-only animation values. Whole-tick authority remains in `EnemyActor`.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeEnemyPresentationInput {
+pub struct EnemyPresentationInput {
     pub presentation_tick: f64,
-    pub state: NativeEnemyAnimationState,
-    pub action: Option<NativeEnemyAction>,
+    pub state: EnemyAnimationState,
+    pub action: Option<EnemyAction>,
     pub death_epoch: u64,
     pub action_progress: f64,
     pub alpha: f64,
@@ -100,14 +100,14 @@ pub struct NativeEnemyPresentationInput {
     pub coffin_pose: f64,
     pub coffin_rotation_radians: f64,
     pub coffin_scale_x: f64,
-    pub coffin_state: NativeEnemyCoffinState,
+    pub coffin_state: EnemyCoffinState,
     pub death_tick: f64,
     pub demon_front_extremity_offset: Vec2,
     pub demon_front_rotation_radians: f64,
     pub demon_rear_extremity_offset: Vec2,
     pub demon_rear_rotation_radians: f64,
     pub demon_shadow_offset: Vec2,
-    pub effects: Vec<NativeEnemyEffectInput>,
+    pub effects: Vec<EnemyEffectInput>,
     pub gait_pose: f64,
     pub hit_flash: f64,
     pub imp_body_rotation_radians: f64,
@@ -115,7 +115,7 @@ pub struct NativeEnemyPresentationInput {
     pub imp_effect_frame: f64,
     pub pike_target_offset: Option<Vec2>,
     pub shadow_lateral_offset: f64,
-    pub spider: Option<NativeEnemySpiderInput>,
+    pub spider: Option<EnemySpiderInput>,
     pub stride_phase_deg: f64,
     pub vertical_offset: f64,
     pub zombie_angular_offset_deg: f64,
@@ -129,23 +129,23 @@ pub struct NativeEnemyPresentationInput {
 }
 
 #[must_use]
-pub fn native_enemy_presentation_input(
+pub fn enemy_presentation_input(
     actor: &EnemyActor,
     context: EnemyActorAppearanceContext,
-) -> NativeEnemyPresentationInput {
+) -> EnemyPresentationInput {
     let action = if actor.life_state == EnemyLifeState::Alive { action(actor) } else { None };
     let state = if actor.life_state == EnemyLifeState::Dying {
-        NativeEnemyAnimationState::Death
+        EnemyAnimationState::Death
     } else if action.is_some() {
-        NativeEnemyAnimationState::Action
+        EnemyAnimationState::Action
     } else if actor.last_movement_tick.is_some_and(|tick| {
         context.tick.saturating_sub(tick) <= super::super::movement::MOVEMENT_CADENCE_TICKS
     }) {
-        NativeEnemyAnimationState::Locomotion
+        EnemyAnimationState::Locomotion
     } else {
-        NativeEnemyAnimationState::Idle
+        EnemyAnimationState::Idle
     };
-    let mut sample = NativeEnemyPresentationInput {
+    let mut sample = EnemyPresentationInput {
         presentation_tick: context.tick as f64,
         state,
         action,
@@ -249,19 +249,19 @@ pub fn native_enemy_presentation_input(
         }
         EnemyBrain::Coffin(brain) => {
             let (pose, state, vertical) = match brain.phase {
-                CoffinPhase::Hidden => (0.0, NativeEnemyCoffinState::Hidden, 15.0),
+                CoffinPhase::Hidden => (0.0, EnemyCoffinState::Hidden, 15.0),
                 CoffinPhase::Rising => (
                     (brain.phase_tick as f64 * 0.3).min(3.0),
-                    NativeEnemyCoffinState::Closed,
+                    EnemyCoffinState::Closed,
                     15.0 * brain.phase_ticks_remaining as f64 / 10.0,
                 ),
-                CoffinPhase::Holding => (3.0, NativeEnemyCoffinState::Closed, 0.0),
+                CoffinPhase::Holding => (3.0, EnemyCoffinState::Closed, 0.0),
                 CoffinPhase::Opening => (
                     (3.0 + brain.phase_tick as f64 * 0.2).min(12.0),
-                    NativeEnemyCoffinState::Opening,
+                    EnemyCoffinState::Opening,
                     0.0,
                 ),
-                CoffinPhase::Open | CoffinPhase::Death => (12.0, NativeEnemyCoffinState::Open, 0.0),
+                CoffinPhase::Open | CoffinPhase::Death => (12.0, EnemyCoffinState::Open, 0.0),
             };
             sample.coffin_pose = pose;
             sample.coffin_state = state;
@@ -277,7 +277,7 @@ pub fn native_enemy_presentation_input(
                     target.position.y - actor.position.y,
                 )
             });
-            sample.spider = Some(NativeEnemySpiderInput {
+            sample.spider = Some(EnemySpiderInput {
                 body_heading_deg: ((brain.body_heading_deg % 360.0) + 360.0) % 360.0,
                 outline_alpha: if context.spider_target.is_some()
                     && context.spider_exposure > 0.5
@@ -309,7 +309,7 @@ pub fn native_enemy_presentation_input(
     }
     if actor.life_state == EnemyLifeState::Alive && actor.shield_health > 0.0 {
         let wobble = actor.shield_pulse.min(1.0);
-        sample.effects.push(NativeEnemyEffectInput {
+        sample.effects.push(EnemyEffectInput {
             id: actor.id * 4,
             layer: EnemySpriteLayer {
                 alpha: 0.5 * (actor.shield_pulse.max(1.0) - 1.0) + 0.25,
@@ -327,8 +327,8 @@ pub fn native_enemy_presentation_input(
     sample
 }
 
-fn action(actor: &EnemyActor) -> Option<NativeEnemyAction> {
-    use NativeEnemyAction as Action;
+fn action(actor: &EnemyActor) -> Option<EnemyAction> {
+    use EnemyAction as Action;
     match &actor.brain {
         EnemyBrain::Skeleton(brain) if brain.phase == SkeletonPhase::Attack => {
             Some(match brain.action {
@@ -371,7 +371,7 @@ fn action(actor: &EnemyActor) -> Option<NativeEnemyAction> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeMaggotState {
+pub enum MaggotState {
     Bite,
     Death,
     Emerging,
@@ -379,7 +379,7 @@ pub enum NativeMaggotState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeMaggotPresentationInput {
+pub struct MaggotPresentationInput {
     pub alpha: f64,
     pub current_health: f64,
     pub death_tick: f64,
@@ -389,26 +389,23 @@ pub struct NativeMaggotPresentationInput {
     pub hit_flash: f64,
     pub pose: f64,
     pub position: Vec2,
-    pub state: NativeMaggotState,
+    pub state: MaggotState,
     pub vertical_offset: f64,
     pub visual_scale: f64,
 }
 
 #[must_use]
-pub fn native_maggot_presentation_input(
-    maggot: &EnemyMaggotActor,
-    tick: u64,
-) -> NativeMaggotPresentationInput {
+pub fn maggot_presentation_input(maggot: &EnemyMaggotActor, tick: u64) -> MaggotPresentationInput {
     let state = if maggot.last_attack_tick.is_some_and(|attack| tick.saturating_sub(attack) < 6) {
-        NativeMaggotState::Bite
+        MaggotState::Bite
     } else if maggot.life_state == EnemyLifeState::Dying {
-        NativeMaggotState::Death
+        MaggotState::Death
     } else if maggot.movement_phase == MaggotMovementPhase::Emerging {
-        NativeMaggotState::Emerging
+        MaggotState::Emerging
     } else {
-        NativeMaggotState::Crawl
+        MaggotState::Crawl
     };
-    NativeMaggotPresentationInput {
+    MaggotPresentationInput {
         alpha: 1.0,
         current_health: maggot.current_health,
         death_tick: maggot.death_tick as f64,

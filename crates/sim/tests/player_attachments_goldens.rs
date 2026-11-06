@@ -21,8 +21,8 @@ fn enchant_staff_and_orb_banks_replay_source_attachments() {
     for case in fixture["staff"].as_array().unwrap() {
         let input = &case["input"];
         let frame = &case["frame"];
-        let actual = native_enchant_staff_draw_plan(NativeEnchantStaffDrawInput {
-            attachment: NativeStaffAttachmentFrame {
+        let actual = enchant_staff_draw_plan(EnchantStaffDrawInput {
+            attachment: StaffAttachmentFrame {
                 start: point(&frame["start"]),
                 end: point(&frame["end"]),
                 front: frame["front"].as_bool().unwrap(),
@@ -34,7 +34,7 @@ fn enchant_staff_and_orb_banks_replay_source_attachments() {
             },
             heading_index: integer(input, "headingIndex"),
             living: input["living"].as_bool().unwrap(),
-            native_staff: input["nativeStaff"].as_bool().unwrap(),
+            staff: input["nativeStaff"].as_bool().unwrap(),
             pose: integer(input, "pose"),
             selected_primary_skill_id: input["selectedPrimarySkillId"].as_u64().map(|id| id as u32),
             selector: integer(input, "selector"),
@@ -65,7 +65,7 @@ fn enchant_staff_and_orb_banks_replay_source_attachments() {
     }
     for row in fixture["weldColors"].as_array().unwrap() {
         assert_eq!(
-            native_enchant_staff_glow_tint(Some(52), Some(integer(row, "build") as u32)),
+            enchant_staff_glow_tint(Some(52), Some(integer(row, "build") as u32)),
             Some(integer(row, "tint") as u32)
         );
     }

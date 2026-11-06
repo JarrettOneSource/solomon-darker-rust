@@ -40,8 +40,8 @@ pub struct PlayerEventSnapshot {
 pub struct BoneyardEventSnapshot {
     pub waves: Option<WaveEventSnapshot>,
     pub last_enemy_event_id: usize,
-    pub enemy_events: Vec<NativeEnemyEventSnapshot>,
-    pub actors: Vec<NativeEnemyActorEventSnapshot>,
+    pub enemy_events: Vec<EnemyEventSnapshot>,
+    pub actors: Vec<EnemyActorEventSnapshot>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -54,10 +54,10 @@ pub struct WaveEventSnapshot {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEnemyEventSnapshot {
+pub struct EnemyEventSnapshot {
     pub actor_id: usize,
     pub event_id: usize,
-    pub kind: NativeEnemySemanticEventKind,
+    pub kind: EnemySemanticEventKind,
     pub target_player_id: Option<String>,
     pub tick: u64,
     pub source_position: Option<Vec2>,
@@ -65,16 +65,17 @@ pub struct NativeEnemyEventSnapshot {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeEnemySemanticEventKind {
+pub enum EnemySemanticEventKind {
     Spawned,
     Death,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEnemyActorEventSnapshot {
+pub struct EnemyActorEventSnapshot {
     pub id: usize,
-    pub native_type_id: u16,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+    pub type_id: u16,
     pub position: Vec2,
 }
 
@@ -94,20 +95,20 @@ impl GameSimulationEventSnapshot {
         let world = state.boneyard.as_ref().map(|world| {
             let mut actors = Vec::with_capacity(world.enemies.actors.len());
             for actor in world.enemies.actors.iter() {
-                actors.push(NativeEnemyActorEventSnapshot {
+                actors.push(EnemyActorEventSnapshot {
                     id: actor.id,
-                    native_type_id: actor.config.native_type_id,
+                    type_id: actor.config.type_id,
                     position: actor.position,
                 });
             }
             let mut enemy_events = Vec::new();
             for event in &world.enemy_events {
                 let kind = match event.kind {
-                    EnemyEventKind::EnemySpawned => NativeEnemySemanticEventKind::Spawned,
-                    EnemyEventKind::EnemyDeath => NativeEnemySemanticEventKind::Death,
+                    EnemyEventKind::EnemySpawned => EnemySemanticEventKind::Spawned,
+                    EnemyEventKind::EnemyDeath => EnemySemanticEventKind::Death,
                     _ => continue,
                 };
-                enemy_events.push(NativeEnemyEventSnapshot {
+                enemy_events.push(EnemyEventSnapshot {
                     actor_id: event.actor_id,
                     event_id: event.event_id,
                     kind,
@@ -210,8 +211,8 @@ pub fn derive_web_lua_events(
                 continue;
             }
             let name = match row.kind {
-                NativeEnemySemanticEventKind::Spawned => "enemy.spawned",
-                NativeEnemySemanticEventKind::Death => "enemy.death",
+                EnemySemanticEventKind::Spawned => "enemy.spawned",
+                EnemySemanticEventKind::Death => "enemy.death",
             };
             if !includes(name) {
                 continue;
@@ -230,10 +231,7 @@ pub fn derive_web_lua_events(
                 [
                     ("actor_id", number(row.actor_id as u64)),
                     ("content_id", number(0)),
-                    (
-                        "enemy_type",
-                        number(u64::from(actor.map_or(0, |actor| actor.native_type_id))),
-                    ),
+                    ("enemy_type", number(u64::from(actor.map_or(0, |actor| actor.type_id)))),
                     ("event", text(name)),
                     ("event_id", number(row.event_id as u64)),
                     (

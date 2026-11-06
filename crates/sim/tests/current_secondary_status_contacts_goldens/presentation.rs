@@ -2,18 +2,18 @@
 use super::{fixture, native_bits, support};
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::boneyard::lighting::secondary::native_secondary_provider_light_source;
-use solomon_sim::secondary::electric_burn::native_electric_burn_arc_plan;
+use solomon_sim::boneyard::lighting::secondary::secondary_provider_light_source;
+use solomon_sim::secondary::electric_burn::electric_burn_arc_plan;
 use solomon_sim::secondary::presentation::*;
 use solomon_sim::secondary::*;
-use solomon_sim::spells::air::NativeAirRibbonLayer;
+use solomon_sim::spells::air::AirRibbonLayer;
 
-fn read_actor(value: &Value) -> NativeSecondaryActorState {
-    let kind = NativeSecondaryActorKind::ALL
+fn read_actor(value: &Value) -> SecondaryActorState {
+    let kind = SecondaryActorKind::ALL
         .into_iter()
         .find(|kind| Some(kind.as_str()) == value["kind"].as_str())
         .unwrap();
-    let mut actor = NativeSecondaryActorState::new(
+    let mut actor = SecondaryActorState::new(
         value["id"].as_u64().unwrap(),
         kind,
         value["ownerId"].as_str().unwrap().into(),
@@ -41,7 +41,7 @@ fn read_actor(value: &Value) -> NativeSecondaryActorState {
 fn flat(points: &[Vec2]) -> Vec<f64> {
     points.iter().flat_map(|point| [point.x, point.y]).collect()
 }
-fn ribbon(layer: &NativeAirRibbonLayer) -> Value {
+fn ribbon(layer: &AirRibbonLayer) -> Value {
     let branch=layer.branch.as_ref().map(|branch|json!({"geometryRecord":branch.geometry_record,
         "indices":branch.mesh.indices,"mirrorX":branch.mirror_x,"scale":branch.scale,
         "textureRecord":branch.texture_record,"uvs":flat(&branch.mesh.uvs),"vertices":flat(&branch.mesh.vertices)}));
@@ -50,9 +50,9 @@ fn ribbon(layer: &NativeAirRibbonLayer) -> Value {
         "phaseOffset":layer.phase_offset,"textureRecord":layer.texture_record,"tint":layer.tint,
         "uvs":flat(&layer.mesh.uvs),"vertices":flat(&layer.mesh.vertices),"width":layer.width})
 }
-fn sprite(draw: &NativeSecondarySpriteDraw) -> Value {
+fn sprite(draw: &SecondarySpriteDraw) -> Value {
     json!({"alpha":draw.alpha,"atlas":draw.atlas.as_str(),"blend":match draw.blend {
-        NativeSecondaryBlend::Normal=>"normal",NativeSecondaryBlend::Add=>"add"},"entry":draw.entry,
+        SecondaryBlend::Normal=>"normal",SecondaryBlend::Add=>"add"},"entry":draw.entry,
         "offset":support::point_snapshot(draw.offset),"role":draw.role,
         "rotationRadians":draw.rotation_radians,"scaleX":draw.scale_x,"scaleY":draw.scale_y,"tint":draw.tint})
 }
@@ -61,23 +61,23 @@ fn sprite(draw: &NativeSecondarySpriteDraw) -> Value {
 fn electric_coronas_body_factory_and_light_plan_match_source() {
     for row in fixture()["presentations"].as_array().unwrap() {
         let actor = read_actor(&row["actor"]);
-        let plan = native_secondary_presentation_plan(&actor, 0.5, 0.75);
-        let body = (actor.kind == NativeSecondaryActorKind::ElectricBurnArc)
-            .then(|| native_electric_burn_arc_plan(&actor, actor.age_ticks as f64, actor.enhanced))
+        let plan = secondary_presentation_plan(&actor, 0.5, 0.75);
+        let body = (actor.kind == SecondaryActorKind::ElectricBurnArc)
+            .then(|| electric_burn_arc_plan(&actor, actor.age_ticks as f64, actor.enhanced))
             .flatten()
             .map(|plan| json!({"layers":plan.body.iter().map(ribbon).collect::<Vec<_>>()}));
-        let light = native_secondary_provider_light_source(&actor, 5, true, 0.75).map(|light| {
+        let light = secondary_provider_light_source(&actor, 5, true, 0.75).map(|light| {
             json!({
             "castsDirectionalShadow":light.casts_directional_shadow,"intensity":light.intensity,
             "position":support::point_snapshot(light.position),"radius":light.radius})
         });
         let actual = json!({"draws":plan.draws.iter().map(sprite).collect::<Vec<_>>(),
-            "queueFamily":match plan.queue_family {NativeSecondaryQueueFamily::OrdinaryDynamic=>"ordinary-dynamic",NativeSecondaryQueueFamily::Zanim=>"zanim"},
+            "queueFamily":match plan.queue_family {SecondaryQueueFamily::OrdinaryDynamic=>"ordinary-dynamic",SecondaryQueueFamily::Zanim=>"zanim"},
             "root":support::point_snapshot(plan.root),"sortBias":plan.sort_bias,"worldY":plan.world_y,"body":body,
-            "lightDisposition":match native_secondary_light_disposition(&actor) {
-                NativeSecondaryLightDisposition::ActorProvider=>"actor-provider",NativeSecondaryLightDisposition::Misc=>"misc",
-                NativeSecondaryLightDisposition::None=>"none",NativeSecondaryLightDisposition::TransientProvider=>"transient-provider"},
-            "painterLane":match native_secondary_painter_manager_lane(actor.kind) {
+            "lightDisposition":match secondary_light_disposition(&actor) {
+                SecondaryLightDisposition::ActorProvider=>"actor-provider",SecondaryLightDisposition::Misc=>"misc",
+                SecondaryLightDisposition::None=>"none",SecondaryLightDisposition::TransientProvider=>"transient-provider"},
+            "painterLane":match secondary_painter_manager_lane(actor.kind) {
                 solomon_sim::painter::WorldManagerLane::Actor=>"actor",solomon_sim::painter::WorldManagerLane::Transient=>"transient"},"light":light});
         native_bits::compare(
             &actual,
@@ -91,7 +91,7 @@ fn electric_coronas_body_factory_and_light_plan_match_source() {
 fn electric_arc_painters_match_actual_source_view_across_quality_and_retirement() {
     for row in fixture()["arcViews"].as_array().unwrap() {
         let actor = read_actor(&row["actor"]);
-        let plan = native_electric_burn_arc_plan(
+        let plan = electric_burn_arc_plan(
             &actor,
             actor.age_ticks as f64,
             row["enhancedEffects"].as_bool().unwrap(),

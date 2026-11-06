@@ -9,8 +9,8 @@ use std::fmt;
 
 use crate::enemies::SpawnPositionPolicy;
 use crate::float::{fround, hypot};
-use crate::random_domain::native_random_float_from_word;
-use crate::{NativeRng, Vec2};
+use crate::random_domain::random_float_from_word;
+use crate::{Rng, Vec2};
 
 use super::BoneyardBounds;
 use super::collision::{
@@ -96,7 +96,7 @@ impl SpawnPlacement<'_> {
         let maximum_radius = hypot(self.bounds.width, self.bounds.height) + self.radius * 2.0;
         let mut ring_radius = self.radius;
         while ring_radius <= maximum_radius {
-            let sample_count = native_spawn_ring_sample_count(ring_radius, self.radius);
+            let sample_count = spawn_ring_sample_count(ring_radius, self.radius);
             for index in 0..sample_count {
                 let candidate = ring_candidate(origin, angle, index, sample_count, ring_radius);
                 if self.is_mobile(candidate) {
@@ -111,7 +111,7 @@ impl SpawnPlacement<'_> {
     pub fn resolve_native(
         self,
         policy: SpawnPositionPolicy,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         context: &impl SpawnPolicyContext,
     ) -> Result<Vec2, NoSpawnPlacement> {
         self.validate_radius();
@@ -126,7 +126,7 @@ impl SpawnPlacement<'_> {
         let maximum_radius = hypot(self.bounds.width, self.bounds.height) + self.radius * 2.0;
         while ring_radius <= maximum_radius {
             let angle = search_rng.draw_scaled_float(360.0, false);
-            let sample_count = native_spawn_ring_sample_count(ring_radius, self.radius);
+            let sample_count = spawn_ring_sample_count(ring_radius, self.radius);
             for index in 0..sample_count {
                 let candidate =
                     ring_candidate(self.position, angle, index, sample_count, ring_radius);
@@ -209,7 +209,7 @@ impl SpawnPlacement<'_> {
 }
 
 #[must_use]
-pub fn native_spawn_ring_sample_count(ring_radius: f64, radius_step: f64) -> usize {
+pub fn spawn_ring_sample_count(ring_radius: f64, radius_step: f64) -> usize {
     (std::f64::consts::PI * (ring_radius + radius_step) / ring_radius).trunc().max(1.0) as usize
 }
 
@@ -247,7 +247,7 @@ fn semantic_spawn_angle(position: Vec2, radius: f64) -> f64 {
     for value in [position.x, position.y, radius] {
         hash = (hash ^ (value as f32).to_bits()).wrapping_mul(0x0100_0193);
     }
-    native_random_float_from_word(hash, 360.0)
+    random_float_from_word(hash, 360.0)
 }
 
 fn circle_inside_bounds(position: Vec2, bounds: BoneyardBounds, radius: f64) -> bool {

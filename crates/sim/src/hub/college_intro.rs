@@ -6,7 +6,7 @@
 use std::sync::LazyLock;
 
 use crate::appearance::{
-    StarterColorOwner, StarterEquipmentAppearance, roll_native_starter_equipment_appearance,
+    StarterColorOwner, StarterEquipmentAppearance, roll_starter_equipment_appearance,
 };
 use crate::float::{fround, hypot};
 use crate::heading::{heading_degrees_from_vector, heading_index};
@@ -14,9 +14,9 @@ use crate::hub::interaction::HubInteractionId;
 use crate::hub::regions::{HubRegion, HubTransitionPhase, plan_hub_scripted_movement};
 use crate::hub::{HubWizard, HubWizardPlan, PLAYER_CHARACTER_RADIUS};
 use crate::spline::NaturalSpline;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_COLLEGE_COURTYARD_PATH: [Vec2; 10] = [
+pub const COLLEGE_COURTYARD_PATH: [Vec2; 10] = [
     Vec2::new(972.0, 1044.0),
     Vec2::new(1074.0, 839.0),
     Vec2::new(1119.0, 611.0),
@@ -28,7 +28,7 @@ pub const NATIVE_COLLEGE_COURTYARD_PATH: [Vec2; 10] = [
     Vec2::new(956.0, 105.0),
     Vec2::new(957.0, 27.0),
 ];
-pub const NATIVE_COLLEGE_OFFICE_PATH: [Vec2; 7] = [
+pub const COLLEGE_OFFICE_PATH: [Vec2; 7] = [
     Vec2::new(400.0, 773.0),
     Vec2::new(380.0, 722.0),
     Vec2::new(263.0, 636.0),
@@ -39,9 +39,9 @@ pub const NATIVE_COLLEGE_OFFICE_PATH: [Vec2; 7] = [
 ];
 
 static COURTYARD_SPLINE: LazyLock<NaturalSpline> =
-    LazyLock::new(|| NaturalSpline::new(&NATIVE_COLLEGE_COURTYARD_PATH));
+    LazyLock::new(|| NaturalSpline::new(&COLLEGE_COURTYARD_PATH));
 static OFFICE_SPLINE: LazyLock<NaturalSpline> =
-    LazyLock::new(|| NaturalSpline::new(&NATIVE_COLLEGE_OFFICE_PATH));
+    LazyLock::new(|| NaturalSpline::new(&COLLEGE_OFFICE_PATH));
 static TITLE_SPLINE: LazyLock<NaturalSpline> = LazyLock::new(|| {
     NaturalSpline::new(&[
         Vec2::ZERO,
@@ -55,13 +55,13 @@ static TITLE_SPLINE: LazyLock<NaturalSpline> = LazyLock::new(|| {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeCollegeIntroPhase {
+pub enum CollegeIntroPhase {
     CourtyardWalk,
     OfficeWalk,
     ArchDialogue,
 }
 
-impl NativeCollegeIntroPhase {
+impl CollegeIntroPhase {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -74,23 +74,23 @@ impl NativeCollegeIntroPhase {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeCollegeIntroState {
+pub struct CollegeIntroState {
     pub contact_counter: u32,
     pub cover_alpha: f64,
     pub dialogue_sequence: u64,
     pub office_speed: f64,
     pub path_cursor: f64,
-    pub phase: NativeCollegeIntroPhase,
+    pub phase: CollegeIntroPhase,
     pub title_cursor: f64,
 }
 
-impl Default for NativeCollegeIntroState {
+impl Default for CollegeIntroState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl NativeCollegeIntroState {
+impl CollegeIntroState {
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -99,28 +99,28 @@ impl NativeCollegeIntroState {
             dialogue_sequence: 0,
             office_speed: 1.0,
             path_cursor: 0.0,
-            phase: NativeCollegeIntroPhase::CourtyardWalk,
+            phase: CollegeIntroPhase::CourtyardWalk,
             title_cursor: 0.0,
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeCollegePathTarget {
+pub struct CollegePathTarget {
     pub path_cursor: f64,
     pub target: Vec2,
 }
 
 #[must_use]
-pub fn native_college_path_target(
-    phase: NativeCollegeIntroPhase,
+pub fn college_path_target(
+    phase: CollegeIntroPhase,
     source_cursor: f64,
     position: Vec2,
-) -> NativeCollegePathTarget {
+) -> CollegePathTarget {
     let (spline, minimum, offset) = match phase {
-        NativeCollegeIntroPhase::CourtyardWalk => (&*COURTYARD_SPLINE, 1.0, 0.0),
-        NativeCollegeIntroPhase::OfficeWalk => (&*OFFICE_SPLINE, 0.0, 102.5),
-        NativeCollegeIntroPhase::ArchDialogue => panic!("College dialogue has no walking path"),
+        CollegeIntroPhase::CourtyardWalk => (&*COURTYARD_SPLINE, 1.0, 0.0),
+        CollegeIntroPhase::OfficeWalk => (&*OFFICE_SPLINE, 0.0, 102.5),
+        CollegeIntroPhase::ArchDialogue => panic!("College dialogue has no walking path"),
     };
     let mut path_cursor = source_cursor.max(minimum).min(spline.extent);
     let sample = |cursor| {
@@ -132,30 +132,22 @@ pub fn native_college_path_target(
         path_cursor = (path_cursor + 0.25).min(spline.extent);
         target = sample(path_cursor);
     }
-    NativeCollegePathTarget { path_cursor, target }
+    CollegePathTarget { path_cursor, target }
 }
 
 #[must_use]
-pub fn native_college_path_heading_index(
-    phase: NativeCollegeIntroPhase,
-    cursor: f64,
-    position: Vec2,
-) -> usize {
-    heading_index(native_college_path_heading_degrees(phase, cursor, position))
+pub fn college_path_heading_index(phase: CollegeIntroPhase, cursor: f64, position: Vec2) -> usize {
+    heading_index(college_path_heading_degrees(phase, cursor, position))
 }
 
 #[must_use]
-pub fn native_college_path_heading_degrees(
-    phase: NativeCollegeIntroPhase,
-    cursor: f64,
-    position: Vec2,
-) -> f64 {
-    let target = native_college_path_target(phase, cursor, position).target;
+pub fn college_path_heading_degrees(phase: CollegeIntroPhase, cursor: f64, position: Vec2) -> f64 {
+    let target = college_path_target(phase, cursor, position).target;
     fround(heading_degrees_from_vector(target.x - position.x, target.y - position.y))
 }
 
-pub fn step_native_college_title(state: &mut NativeCollegeIntroState) {
-    if state.phase != NativeCollegeIntroPhase::CourtyardWalk {
+pub fn step_college_title(state: &mut CollegeIntroState) {
+    if state.phase != CollegeIntroPhase::CourtyardWalk {
         return;
     }
     state.cover_alpha = fround(state.cover_alpha - fround(0.0005)).max(0.0);
@@ -163,22 +155,19 @@ pub fn step_native_college_title(state: &mut NativeCollegeIntroState) {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeCollegeTitlePresentation {
+pub struct CollegeTitlePresentation {
     pub alpha: f64,
     pub record: usize,
     pub y: f64,
 }
 
 #[must_use]
-pub fn native_college_title_presentation(
-    title_cursor: f64,
-    cover_alpha: f64,
-) -> NativeCollegeTitlePresentation {
+pub fn college_title_presentation(title_cursor: f64, cover_alpha: f64) -> CollegeTitlePresentation {
     let alpha = TITLE_SPLINE.evaluate(title_cursor).x.clamp(0.0, 1.0);
     if title_cursor <= 4.0 {
-        NativeCollegeTitlePresentation { alpha, record: 7, y: 250.0 }
+        CollegeTitlePresentation { alpha, record: 7, y: 250.0 }
     } else {
-        NativeCollegeTitlePresentation {
+        CollegeTitlePresentation {
             alpha: ((1.0 - cover_alpha.clamp(0.0, 1.0)) * alpha).clamp(0.0, 1.0),
             record: 9,
             y: 450.0,
@@ -187,7 +176,7 @@ pub fn native_college_title_presentation(
 }
 
 #[must_use]
-pub fn native_college_office_speed(path_cursor: f64, current_speed: f64) -> f64 {
+pub fn college_office_speed(path_cursor: f64, current_speed: f64) -> f64 {
     if path_cursor <= 4.0 {
         return 1.0;
     }
@@ -199,28 +188,28 @@ pub fn native_college_office_speed(path_cursor: f64, current_speed: f64) -> f64 
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeCollegeContactStep {
+pub struct CollegeContactStep {
     pub activate: bool,
     pub counter: u32,
 }
 
 #[must_use]
-pub const fn native_college_contact_step(counter: u32, eligible: bool) -> NativeCollegeContactStep {
+pub const fn college_contact_step(counter: u32, eligible: bool) -> CollegeContactStep {
     if !eligible {
-        return NativeCollegeContactStep { activate: false, counter: 0 };
+        return CollegeContactStep { activate: false, counter: 0 };
     }
     let next = counter + 2;
     if next > 10 {
-        NativeCollegeContactStep { activate: true, counter: 0 }
+        CollegeContactStep { activate: true, counter: 0 }
     } else {
-        NativeCollegeContactStep { activate: false, counter: next }
+        CollegeContactStep { activate: false, counter: next }
     }
 }
 
 #[must_use]
-pub fn hub_college_intro_unstarted(intro: Option<&NativeCollegeIntroState>) -> bool {
+pub fn hub_college_intro_unstarted(intro: Option<&CollegeIntroState>) -> bool {
     intro.is_some_and(|intro| {
-        intro.phase == NativeCollegeIntroPhase::CourtyardWalk && intro.title_cursor == 0.0
+        intro.phase == CollegeIntroPhase::CourtyardWalk && intro.title_cursor == 0.0
     })
 }
 
@@ -237,7 +226,7 @@ pub fn hub_college_admission_pre_loadout(wizard: &HubWizard, pending: bool) -> b
 #[must_use]
 pub fn hub_college_admission_primary_unset(
     wizard: &HubWizard,
-    intro: Option<&NativeCollegeIntroState>,
+    intro: Option<&CollegeIntroState>,
     pending: bool,
 ) -> bool {
     hub_college_admission_pre_loadout(wizard, pending)
@@ -252,7 +241,7 @@ pub fn hub_college_admission_primary_unset(
 #[must_use]
 pub fn hub_participant_onboarding_collision_bypass_active(
     wizard: &HubWizard,
-    intro: Option<&NativeCollegeIntroState>,
+    intro: Option<&CollegeIntroState>,
     pending: bool,
 ) -> bool {
     pending
@@ -283,7 +272,7 @@ pub struct HubCollegeIntroArmPlan {
 #[must_use]
 pub fn plan_hub_college_intro_arm(
     wizard: &HubWizard,
-    intro: Option<&NativeCollegeIntroState>,
+    intro: Option<&CollegeIntroState>,
     pending: bool,
     offer_seed: u32,
     selected_primary_id: i32,
@@ -294,26 +283,19 @@ pub fn plan_hub_college_intro_arm(
     let already_passed =
         intro.is_none() && (wizard.region != HubRegion::Courtyard || wizard.transition.is_some());
     let begin = !already_passed && intro.is_none();
-    let position = NATIVE_COLLEGE_COURTYARD_PATH[0];
+    let position = COLLEGE_COURTYARD_PATH[0];
     let spawn = begin.then(|| HubCollegeIntroSpawn {
         position,
-        heading_degrees: native_college_path_heading_degrees(
-            NativeCollegeIntroPhase::CourtyardWalk,
+        heading_degrees: college_path_heading_degrees(
+            CollegeIntroPhase::CourtyardWalk,
             0.0,
             position,
         ),
-        heading_index: native_college_path_heading_index(
-            NativeCollegeIntroPhase::CourtyardWalk,
-            0.0,
-            position,
-        ),
+        heading_index: college_path_heading_index(CollegeIntroPhase::CourtyardWalk, 0.0, position),
     });
-    let mut random = NativeRng::new(i64::from(offer_seed));
+    let mut random = Rng::new(i64::from(offer_seed));
     Some(HubCollegeIntroArmPlan {
-        appearance: roll_native_starter_equipment_appearance(
-            &mut random,
-            StarterColorOwner::College,
-        ),
+        appearance: roll_starter_equipment_appearance(&mut random, StarterColorOwner::College),
         reset_primary_cast: begin
             || intro.is_some()
             || (hub_college_admission_primary_unset(wizard, intro, true)
@@ -324,7 +306,7 @@ pub fn plan_hub_college_intro_arm(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HubParticipantMovementPlan {
-    pub college_target: Option<NativeCollegePathTarget>,
+    pub college_target: Option<CollegePathTarget>,
     /// None delegates to the session's ordinary input plan.
     pub plan: Option<HubWizardPlan>,
 }
@@ -344,19 +326,19 @@ pub struct HubParticipantStepResult {
 #[must_use]
 pub fn plan_hub_participant_movement(
     wizard: &HubWizard,
-    intro: Option<&NativeCollegeIntroState>,
+    intro: Option<&CollegeIntroState>,
     renderer_ready: bool,
 ) -> HubParticipantMovementPlan {
     let college_walk = intro.filter(|intro| {
-        intro.phase != NativeCollegeIntroPhase::ArchDialogue
+        intro.phase != CollegeIntroPhase::ArchDialogue
             && wizard
                 .transition
                 .is_none_or(|transition| transition.phase != HubTransitionPhase::Outgoing)
     });
     let college_target = college_walk
-        .map(|intro| native_college_path_target(intro.phase, intro.path_cursor, wizard.position));
+        .map(|intro| college_path_target(intro.phase, intro.path_cursor, wizard.position));
     let waiting = (intro.is_some() && !renderer_ready)
-        || intro.is_some_and(|intro| intro.phase == NativeCollegeIntroPhase::ArchDialogue)
+        || intro.is_some_and(|intro| intro.phase == CollegeIntroPhase::ArchDialogue)
         || wizard
             .transition
             .is_some_and(|transition| transition.phase == HubTransitionPhase::CollegeLoadout);
@@ -364,7 +346,7 @@ pub fn plan_hub_participant_movement(
         Some(plan_hub_scripted_movement(wizard.position, wizard.position, 1.0))
     } else if let Some(target) = college_target {
         let speed = college_walk
-            .filter(|intro| intro.phase == NativeCollegeIntroPhase::OfficeWalk)
+            .filter(|intro| intro.phase == CollegeIntroPhase::OfficeWalk)
             .map_or(1.0, |intro| intro.office_speed);
         Some(plan_hub_scripted_movement(wizard.position, target.target, speed))
     } else {
@@ -383,8 +365,8 @@ pub fn plan_hub_participant_movement(
 /// only when this result reports that the confirmed courtyard entrance has finished.
 pub fn step_hub_participant_movement(
     wizard: &mut HubWizard,
-    intro: &mut Option<NativeCollegeIntroState>,
-    target: Option<NativeCollegePathTarget>,
+    intro: &mut Option<CollegeIntroState>,
+    target: Option<CollegePathTarget>,
     options: HubParticipantStepOptions,
 ) -> HubParticipantStepResult {
     if intro.is_some() && !options.renderer_ready {
@@ -392,7 +374,7 @@ pub fn step_hub_participant_movement(
     }
     let previous_region = wizard.region;
     let previous_transition = wizard.transition;
-    let office_walk = intro.is_some_and(|intro| intro.phase == NativeCollegeIntroPhase::OfficeWalk);
+    let office_walk = intro.is_some_and(|intro| intro.phase == CollegeIntroPhase::OfficeWalk);
     wizard.step_transition_for_college(options.college_intro_pending, office_walk);
     let clear_college_intro_pending = options.college_intro_pending
         && previous_transition.is_some_and(|transition| {
@@ -404,39 +386,38 @@ pub fn step_hub_participant_movement(
         && wizard.transition.is_none();
     if let Some(intro) = intro {
         if let Some(target) = target
-            && intro.phase != NativeCollegeIntroPhase::ArchDialogue
+            && intro.phase != CollegeIntroPhase::ArchDialogue
         {
-            if intro.phase == NativeCollegeIntroPhase::OfficeWalk {
-                intro.office_speed =
-                    native_college_office_speed(target.path_cursor, intro.office_speed);
+            if intro.phase == CollegeIntroPhase::OfficeWalk {
+                intro.office_speed = college_office_speed(target.path_cursor, intro.office_speed);
             }
             intro.path_cursor = target.path_cursor;
         }
-        step_native_college_title(intro);
+        step_college_title(intro);
         if previous_region == HubRegion::Courtyard && wizard.region == HubRegion::Office {
             intro.contact_counter = 0;
             intro.office_speed = 1.0;
             intro.path_cursor = 0.0;
-            intro.phase = NativeCollegeIntroPhase::OfficeWalk;
+            intro.phase = CollegeIntroPhase::OfficeWalk;
         }
-        if intro.phase == NativeCollegeIntroPhase::OfficeWalk {
+        if intro.phase == CollegeIntroPhase::OfficeWalk {
             let target = target.map_or(wizard.position, |target| target.target);
-            let contact = native_college_contact_step(
+            let contact = college_contact_step(
                 intro.contact_counter,
-                native_college_arch_contact_eligible(wizard.position, target),
+                college_arch_contact_eligible(wizard.position, target),
             );
             intro.contact_counter = contact.counter;
             if contact.activate {
                 intro.dialogue_sequence += 1;
-                intro.phase = NativeCollegeIntroPhase::ArchDialogue;
+                intro.phase = CollegeIntroPhase::ArchDialogue;
             }
         }
     }
     HubParticipantStepResult { clear_college_intro_pending }
 }
 
-pub fn acknowledge_hub_college_intro_dialogue(intro: &mut Option<NativeCollegeIntroState>) -> bool {
-    if intro.is_some_and(|intro| intro.phase == NativeCollegeIntroPhase::ArchDialogue) {
+pub fn acknowledge_hub_college_intro_dialogue(intro: &mut Option<CollegeIntroState>) -> bool {
+    if intro.is_some_and(|intro| intro.phase == CollegeIntroPhase::ArchDialogue) {
         *intro = None;
         true
     } else {
@@ -456,7 +437,7 @@ pub fn confirm_hub_college_intro_loadout(wizard: &mut HubWizard) -> bool {
 }
 
 #[must_use]
-pub fn native_college_arch_contact_eligible(position: Vec2, target: Vec2) -> bool {
+pub fn college_arch_contact_eligible(position: Vec2, target: Vec2) -> bool {
     let arch = HubInteractionId::ArchChancellor.definition(true).geometry;
     let dx = arch.position.x - position.x;
     let dy = arch.position.y - position.y;

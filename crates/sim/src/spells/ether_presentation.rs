@@ -1,7 +1,7 @@
 //! MagicMissile's double-pass compositor from `renderer/primary-spell-ether-native.ts`.
 
 use super::model::{PrimarySpellEtherImpact, PrimarySpellEtherPierceStreak};
-use super::presentation::{NativeSpellSprite, NativeSpellSpritePlan, SpellBlend};
+use super::presentation::{SpellBlend, SpellSprite, SpellSpritePlan};
 use super::visual::visual_hash;
 use crate::Vec2;
 use crate::float;
@@ -14,7 +14,7 @@ pub fn ether_primary_flight_plan(
     speed: f64,
     visual_scale: f64,
     underpowered: bool,
-) -> NativeSpellSpritePlan {
+) -> SpellSpritePlan {
     let phase = random(id, 0, 0) * 360.0 + age_ticks * speed * 3.0;
     let mut plan = ether_primary_compositor_plan(
         id,
@@ -28,7 +28,7 @@ pub fn ether_primary_flight_plan(
 }
 
 #[must_use]
-pub fn ether_primary_impact_plan(state: &PrimarySpellEtherImpact) -> NativeSpellSpritePlan {
+pub fn ether_primary_impact_plan(state: &PrimarySpellEtherImpact) -> SpellSpritePlan {
     let mut fade = 2.0;
     for _ in 0..=state.common.age_ticks {
         fade = fround(fade - 0.1_f32 as f64);
@@ -47,19 +47,17 @@ pub fn ether_primary_impact_plan(state: &PrimarySpellEtherImpact) -> NativeSpell
 }
 
 #[must_use]
-pub fn ether_primary_pierce_streak_plan(
-    state: &PrimarySpellEtherPierceStreak,
-) -> NativeSpellSpritePlan {
+pub fn ether_primary_pierce_streak_plan(state: &PrimarySpellEtherPierceStreak) -> SpellSpritePlan {
     let mut alpha = 1.0;
     for _ in 0..state.common.age_ticks {
         alpha = fround(alpha - 0.1_f32 as f64);
     }
-    let mut plan = NativeSpellSpritePlan::at(state.origin);
-    plan.draws.push(NativeSpellSprite {
+    let mut plan = SpellSpritePlan::at(state.origin);
+    plan.draws.push(SpellSprite {
         alpha: alpha.max(0.0),
         blend: SpellBlend::Add,
         rotation: state.heading_degrees * std::f64::consts::PI / 180.0,
-        ..NativeSpellSprite::new(53, state.visual_scale)
+        ..SpellSprite::new(53, state.visual_scale)
     });
     plan
 }
@@ -72,7 +70,7 @@ pub fn ether_primary_compositor_plan(
     phase: f64,
     overall_scale: f64,
     alpha_multiplier: f64,
-) -> NativeSpellSpritePlan {
+) -> SpellSpritePlan {
     let mut channel = 0;
     let mut draw_random = || {
         channel += 1;
@@ -80,23 +78,23 @@ pub fn ether_primary_compositor_plan(
     };
     let sampled_scale = (1.0 + draw_random() * 0.5) * overall_scale;
     let core_pulse = 0.15 * sin_degrees(15.0 * phase).abs();
-    let mut plan = NativeSpellSpritePlan::at(Vec2::ZERO);
+    let mut plan = SpellSpritePlan::at(Vec2::ZERO);
     for _ in 0..2 {
-        plan.draws.push(NativeSpellSprite {
+        plan.draws.push(SpellSprite {
             alpha: 0.2 + draw_random() * 0.25,
             tint: 0xff80ff,
-            ..NativeSpellSprite::new(110, (2.5 + core_pulse) * sampled_scale)
+            ..SpellSprite::new(110, (2.5 + core_pulse) * sampled_scale)
         });
-        plan.draws.push(NativeSpellSprite {
+        plan.draws.push(SpellSprite {
             alpha: 0.35 + draw_random() * 0.55,
             tint: 0xff80ff,
-            ..NativeSpellSprite::new(110, (1.5 + core_pulse) * sampled_scale)
+            ..SpellSprite::new(110, (1.5 + core_pulse) * sampled_scale)
         });
-        plan.draws.push(NativeSpellSprite {
+        plan.draws.push(SpellSprite {
             alpha: 0.35 * sin_degrees(5.0 * phase).abs(),
             blend: SpellBlend::Add,
             rotation: 50.0 * sampled_scale * sin_degrees(phase) * std::f64::consts::PI / 180.0,
-            ..NativeSpellSprite::new(111, (1.0 + draw_random() * 0.1) * sampled_scale)
+            ..SpellSprite::new(111, (1.0 + draw_random() * 0.1) * sampled_scale)
         });
         let count = (draw_random() * 10.0).floor() as usize + 2;
         for _ in 0..count {
@@ -106,20 +104,20 @@ pub fn ether_primary_compositor_plan(
             let alpha = draw_random() * 0.75;
             // The source samples degrees before the view converts them to radians.
             let rotation = draw_random() * 360.0 * std::f64::consts::PI / 180.0;
-            plan.draws.push(NativeSpellSprite {
+            plan.draws.push(SpellSprite {
                 alpha,
                 blend: SpellBlend::Add,
                 offset: Vec2::new(float::sin(angle) * radius, -float::cos(angle) * radius),
                 rotation,
-                ..NativeSpellSprite::new(111, scale)
+                ..SpellSprite::new(111, scale)
             });
         }
-        plan.draws.push(NativeSpellSprite {
+        plan.draws.push(SpellSprite {
             alpha: 0.55 * sin_degrees(8.0 * phase).abs(),
             blend: SpellBlend::Add,
             rotation: 50.0 * sampled_scale * sin_degrees(0.5 * phase) * std::f64::consts::PI
                 / 180.0,
-            ..NativeSpellSprite::new(112, (1.0 + draw_random() * 0.3) * sampled_scale)
+            ..SpellSprite::new(112, (1.0 + draw_random() * 0.3) * sampled_scale)
         });
     }
     if alpha_multiplier != 1.0 {

@@ -10,7 +10,7 @@ use crate::enemies::model::{
 };
 use crate::float;
 use crate::float::fround;
-use crate::loot::{NativeLootDropKind, NativeLootPlacement};
+use crate::loot::{LootDropKind, LootPlacement};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
 use super::{BoneyardGoodieState, BoneyardLootActor, BoneyardLootStore};
@@ -22,7 +22,7 @@ impl BoneyardLootStore {
         tick: u64,
         painter_order: &mut WorldPainterOrder,
     ) {
-        if actor.kind == NativeLootDropKind::Gold {
+        if actor.kind == LootDropKind::Gold {
             for (index, loss, tint) in
                 [(0, 0.05_f32 as f64, 0xd9ba70), (1, 0.1_f32 as f64, 0xffffff)]
             {
@@ -39,7 +39,7 @@ impl BoneyardLootStore {
                 effect.tint = tint;
                 self.effects.push(effect);
             }
-        } else if actor.kind == NativeLootDropKind::Orb {
+        } else if actor.kind == LootDropKind::Orb {
             let mut effect =
                 self.new_loot_effect(actor.id, actor.position, 15, tick, painter_order);
             effect.alpha_loss_per_tick = 0.05_f32 as f64;
@@ -196,7 +196,7 @@ impl BoneyardLootStore {
         }
     }
 
-    pub(super) fn step_effects(&mut self, placement: &dyn NativeLootPlacement, tick: u64) {
+    pub(super) fn step_effects(&mut self, placement: &dyn LootPlacement, tick: u64) {
         let mut effects = std::mem::take(&mut self.effects);
         effects.retain_mut(|effect| self.step_effect(effect, placement, tick));
         self.effects = effects;
@@ -205,7 +205,7 @@ impl BoneyardLootStore {
     fn step_effect(
         &mut self,
         effect: &mut EnemyDeathEffect,
-        placement: &dyn NativeLootPlacement,
+        placement: &dyn LootPlacement,
         tick: u64,
     ) -> bool {
         effect.age_ticks += 1;

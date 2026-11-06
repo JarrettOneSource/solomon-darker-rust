@@ -2,7 +2,7 @@
 //! `core-server/native-ether-drain-world.ts` and `boneyard-world-placement.ts`.
 
 use crate::spells::model::PrimarySpellTransient;
-use crate::spells::weld::{NativeWeldHailChildActorState, NativeWeldWorldActor};
+use crate::spells::weld::{WeldHailChildActorState, WeldWorldActor};
 
 use super::*;
 use crate::Vec2;
@@ -10,29 +10,29 @@ use crate::boneyard::BoneyardWorld;
 use crate::combat::PlayerLifeState;
 use crate::enemies::model::{EnemyDeathEffectKind, EnemyEventKind, EnemyLifeState};
 use crate::float::fround;
-use crate::loot::NativeLootDropKind;
+use crate::loot::LootDropKind;
 use crate::secondary::ether_drain::*;
-use crate::secondary::{NativeSecondaryActorKind as Kind, NativeSecondarySimulationState};
-use crate::spells::boneyard::boneyard_native_secondary_targets;
+use crate::secondary::{SecondaryActorKind as Kind, SecondarySimulationState};
+use crate::spells::boneyard::boneyard_secondary_targets;
 
 /// Source callbacks see the accepted pre-secondary store. This copied query
 /// projection lets the single mutable secondary owner advance without aliasing it.
 pub(super) struct SessionEtherDrainSnapshot {
-    pub targets: Vec<NativeEtherDrainTarget>,
-    pub animations: Vec<NativeEtherDrainWorldAnimationTarget>,
+    pub targets: Vec<EtherDrainTarget>,
+    pub animations: Vec<EtherDrainWorldAnimationTarget>,
 }
 impl SessionEtherDrainSnapshot {
     pub fn capture(session: &GameSession) -> Option<Self> {
         let world = session.boneyard.as_ref()?;
         let key = format!("boneyard:{}", world.loaded.run_id);
         let mut targets = Vec::new();
-        for target in boneyard_native_secondary_targets(&world.enemies, Vec2::ZERO, f64::MAX) {
-            targets.push(NativeEtherDrainTarget {
+        for target in boneyard_secondary_targets(&world.enemies, Vec2::ZERO, f64::MAX) {
+            targets.push(EtherDrainTarget {
                 activation_delay_ticks: 0,
-                force_factor: native_ether_drain_enemy_force_factor(&target.family),
+                force_factor: ether_drain_enemy_force_factor(&target.family),
                 native_flags: target.native_flags.unwrap_or(2),
                 position: target.position,
-                reference: NativeEtherDrainTargetRef::Enemy {
+                reference: EtherDrainTargetRef::Enemy {
                     id: target.id as u64,
                     registration_ordinal: target.light_registration.registration_ordinal,
                 },
@@ -40,12 +40,12 @@ impl SessionEtherDrainSnapshot {
         }
         for maggot in world.enemies.maggots.iter() {
             if maggot.life_state == EnemyLifeState::Alive && !maggot.combat_active {
-                targets.push(NativeEtherDrainTarget {
+                targets.push(EtherDrainTarget {
                     activation_delay_ticks: 0,
                     force_factor: 1.0,
                     native_flags: 2,
                     position: maggot.position,
-                    reference: NativeEtherDrainTargetRef::Enemy {
+                    reference: EtherDrainTargetRef::Enemy {
                         id: maggot.id as u64,
                         registration_ordinal: maggot.registration_ordinal,
                     },
@@ -59,24 +59,24 @@ impl SessionEtherDrainSnapshot {
             {
                 continue;
             }
-            targets.push(NativeEtherDrainTarget {
+            targets.push(EtherDrainTarget {
                 activation_delay_ticks: 0,
                 force_factor: 1.0,
                 native_flags: 0x801,
                 position: participant.wizard.position,
-                reference: NativeEtherDrainTargetRef::Player { id: id.clone() },
+                reference: EtherDrainTargetRef::Player { id: id.clone() },
             });
         }
         for actor in world.loot.actors.iter() {
-            if !matches!(actor.kind, NativeLootDropKind::Gold | NativeLootDropKind::Sack) {
+            if !matches!(actor.kind, LootDropKind::Gold | LootDropKind::Sack) {
                 continue;
             }
-            targets.push(NativeEtherDrainTarget {
+            targets.push(EtherDrainTarget {
                 activation_delay_ticks: actor.activation_delay_ticks,
                 force_factor: 1.0,
                 native_flags: 0x400,
                 position: actor.position,
-                reference: NativeEtherDrainTargetRef::Loot {
+                reference: EtherDrainTargetRef::Loot {
                     id: actor.id as u64,
                     registration_ordinal: actor.painter_registration.registration_ordinal,
                 },
@@ -84,12 +84,12 @@ impl SessionEtherDrainSnapshot {
         }
         for actor in session.secondary.actors.iter() {
             if actor.kind == Kind::Golem && actor.world_key == key && actor.golem.is_some() {
-                targets.push(NativeEtherDrainTarget {
+                targets.push(EtherDrainTarget {
                     activation_delay_ticks: 0,
                     force_factor: 0.25,
                     native_flags: 0x800,
                     position: actor.position,
-                    reference: NativeEtherDrainTargetRef::Golem { id: actor.id },
+                    reference: EtherDrainTargetRef::Golem { id: actor.id },
                 });
             }
         }
@@ -107,17 +107,17 @@ impl SessionEtherDrainSnapshot {
 fn capture_world_animations(
     world: &BoneyardWorld,
     primary: &crate::spells::model::PrimaryTransients,
-    secondary: &NativeSecondarySimulationState,
-) -> Vec<NativeEtherDrainWorldAnimationTarget> {
+    secondary: &SecondarySimulationState,
+) -> Vec<EtherDrainWorldAnimationTarget> {
     let mut targets = Vec::new();
     let mut push = |bounce_velocity, position, reference| {
-        targets.push(NativeEtherDrainWorldAnimationTarget { bounce_velocity, position, reference });
+        targets.push(EtherDrainWorldAnimationTarget { bounce_velocity, position, reference });
     };
     for actor in &world.death_weapons {
         push(
             actor.motion.bounce_velocity,
             actor.motion.position,
-            NativeEtherDrainWorldAnimationRef::DeathWeapon { id: actor.id },
+            EtherDrainWorldAnimationRef::DeathWeapon { id: actor.id },
         );
     }
     for effect in &world.enemies.death_effects {
@@ -131,7 +131,7 @@ fn capture_world_animations(
             push(
                 effect.bounce_velocity,
                 effect.position,
-                NativeEtherDrainWorldAnimationRef::EnemyDeathEffect { id: effect.id as u64 },
+                EtherDrainWorldAnimationRef::EnemyDeathEffect { id: effect.id as u64 },
             );
         }
     }
@@ -140,16 +140,15 @@ fn capture_world_animations(
         if effect.common().world_key != key {
             continue;
         }
-        let reference =
-            NativeEtherDrainWorldAnimationRef::PrimaryTransient { id: effect.common().id };
+        let reference = EtherDrainWorldAnimationRef::PrimaryTransient { id: effect.common().id };
         match effect {
             PrimarySpellTransient::WaterHail(actor) => {
                 push(actor.saved_bounce_velocity, actor.position, reference)
             }
-            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                NativeWeldHailChildActorState::TerrainBouncer(actor),
+            PrimarySpellTransient::Weld(WeldWorldActor::HailChild(
+                WeldHailChildActorState::TerrainBouncer(actor),
             )) => push(actor.bounce_velocity, actor.position, reference),
-            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(actor)) => {
+            PrimarySpellTransient::Weld(WeldWorldActor::BoulderDebris(actor)) => {
                 push(actor.debris.bounce_velocity, actor.position, reference)
             }
             _ => {}
@@ -167,7 +166,7 @@ fn capture_world_animations(
                     push(
                         fragment.motion.bounce_velocity,
                         fragment.motion.position,
-                        NativeEtherDrainWorldAnimationRef::GolemFragment { id: actor.id, index },
+                        EtherDrainWorldAnimationRef::GolemFragment { id: actor.id, index },
                     );
                 }
             }
@@ -178,11 +177,7 @@ fn capture_world_animations(
             Kind::CometDebris | Kind::StoneskinChip => actor.endpoint.y,
             _ => continue,
         };
-        push(
-            bounce,
-            actor.position,
-            NativeEtherDrainWorldAnimationRef::SecondaryActor { id: actor.id },
-        );
+        push(bounce, actor.position, EtherDrainWorldAnimationRef::SecondaryActor { id: actor.id });
     }
     targets
 }
@@ -190,7 +185,7 @@ fn capture_world_animations(
 impl GameSession {
     pub(super) fn apply_ether_drain_world_animation_forces(
         &mut self,
-        contacts: &[NativeEtherDrainWorldAnimationContact],
+        contacts: &[EtherDrainWorldAnimationContact],
     ) {
         let Some(world) = &mut self.boneyard else { return };
         for contact in contacts {
@@ -198,7 +193,7 @@ impl GameSession {
                 Vec2::new(fround(point.x + contact.delta.x), fround(point.y + contact.delta.y))
             };
             match contact.reference {
-                NativeEtherDrainWorldAnimationRef::DeathWeapon { id } => {
+                EtherDrainWorldAnimationRef::DeathWeapon { id } => {
                     world.death_weapons.retain_mut(|actor| {
                         if actor.id != id {
                             return true;
@@ -210,7 +205,7 @@ impl GameSession {
                         true
                     })
                 }
-                NativeEtherDrainWorldAnimationRef::EnemyDeathEffect { id } => {
+                EtherDrainWorldAnimationRef::EnemyDeathEffect { id } => {
                     world.enemies.death_effects.retain_mut(|effect| {
                         if effect.id as u64 != id {
                             return true;
@@ -222,7 +217,7 @@ impl GameSession {
                         true
                     })
                 }
-                NativeEtherDrainWorldAnimationRef::GolemFragment { id, index } => {
+                EtherDrainWorldAnimationRef::GolemFragment { id, index } => {
                     if let Some(actor) = self
                         .secondary
                         .actors
@@ -238,7 +233,7 @@ impl GameSession {
                         }
                     }
                 }
-                NativeEtherDrainWorldAnimationRef::PrimaryTransient { id } => {
+                EtherDrainWorldAnimationRef::PrimaryTransient { id } => {
                     self.spells.transients.retain_mut(|effect| {
                         if effect.common().id != id {
                             return true;
@@ -250,17 +245,15 @@ impl GameSession {
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimarySpellTransient::Weld(NativeWeldWorldActor::HailChild(
-                                NativeWeldHailChildActorState::TerrainBouncer(actor),
+                            PrimarySpellTransient::Weld(WeldWorldActor::HailChild(
+                                WeldHailChildActorState::TerrainBouncer(actor),
                             )) => {
                                 if contact.consume {
                                     return false;
                                 }
                                 actor.position = shift(actor.position);
                             }
-                            PrimarySpellTransient::Weld(NativeWeldWorldActor::BoulderDebris(
-                                actor,
-                            )) => {
+                            PrimarySpellTransient::Weld(WeldWorldActor::BoulderDebris(actor)) => {
                                 if contact.consume {
                                     return false;
                                 }
@@ -272,7 +265,7 @@ impl GameSession {
                         true
                     })
                 }
-                NativeEtherDrainWorldAnimationRef::SecondaryActor { id } => {
+                EtherDrainWorldAnimationRef::SecondaryActor { id } => {
                     self.secondary.actors.retain_mut(|actor| {
                         if actor.id != id {
                             return true;
@@ -304,14 +297,14 @@ impl GameSession {
             let combat = &mut participant.player.combat;
             if combat.life_state != PlayerLifeState::Dying
                 || combat.corpse_consumed
-                || combat.death_tick < NATIVE_ETHER_DRAIN_CORPSE_TIMER_TICKS
+                || combat.death_tick < ETHER_DRAIN_CORPSE_TIMER_TICKS
             {
                 continue;
             }
             for (field_id, position) in &fields {
                 let dx = fround(position.x - participant.wizard.position.x);
                 let dy = fround(position.y - participant.wizard.position.y);
-                if fround(dx * dx + dy * dy) < NATIVE_ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED {
+                if fround(dx * dx + dy * dy) < ETHER_DRAIN_CONSUMPTION_DISTANCE_SQUARED {
                     self.secondary.pulse_ether_drain(*field_id, 2.0, tick, false);
                     combat.corpse_consumed = true;
                 }
@@ -324,7 +317,7 @@ impl GameSession {
 impl GameSession {
     pub(super) fn apply_ether_drain_forces_and_player_contacts(
         &mut self,
-        contacts: &[NativeEtherDrainContact],
+        contacts: &[EtherDrainContact],
         tick: u64,
         extensions: Option<&dyn GameSimulationExtensions>,
     ) -> Result<(), String> {
@@ -355,8 +348,8 @@ impl GameSession {
                 continue;
             }
             let player_id = match &contact.target {
-                NativeEtherDrainTargetRef::Player { id } => id.clone(),
-                NativeEtherDrainTargetRef::Golem { id } => format!("golem:{id}"),
+                EtherDrainTargetRef::Player { id } => id.clone(),
+                EtherDrainTargetRef::Golem { id } => format!("golem:{id}"),
                 _ => continue,
             };
             let Some(field) =
@@ -416,7 +409,7 @@ impl GameSession {
 impl GameSession {
     pub(super) fn apply_ether_drain_enemy_contacts(
         &mut self,
-        contacts: &[NativeEtherDrainContact],
+        contacts: &[EtherDrainContact],
         tick: u64,
     ) {
         let Some(world) = &self.boneyard else { return };
@@ -430,7 +423,7 @@ impl GameSession {
             .collect();
         let mut captures = Vec::new();
         for contact in contacts {
-            let NativeEtherDrainTargetRef::Enemy { id, .. } = contact.target else { continue };
+            let EtherDrainTargetRef::Enemy { id, .. } = contact.target else { continue };
             if contact.amount <= 0.0 {
                 continue;
             }
@@ -443,7 +436,7 @@ impl GameSession {
                     .find(|actor| actor.id as u64 == id)
                     .map(|actor| actor.position)
             });
-            let capturable = native_ether_drain_captures_family(
+            let capturable = ether_drain_captures_family(
                 victim.as_ref().map_or("MAGGOT", |actor| actor.config.enemy_token.id()),
             );
             let field = position
@@ -458,9 +451,9 @@ impl GameSession {
                 .map(|(id, _)| *id);
             let factor = victim.as_ref().map_or(1.0, |actor| {
                 self.participants.get(&contact.owner_id).map_or(1.0, |owner| {
-                    crate::profile::native_hagatha_boss_damage_factor(
+                    crate::profile::hagatha_boss_damage_factor(
                         &owner.player.economy.owned_perk_selectors,
-                        u32::from(actor.config.native_type_id),
+                        u32::from(actor.config.type_id),
                     )
                 })
             });
@@ -481,9 +474,7 @@ impl GameSession {
                 && let Some(field) = field
             {
                 let image = victim.as_ref().and_then(|actor| {
-                    crate::enemies::actor_presentation::native_ether_drain_captured_image(
-                        actor, tick,
-                    )
+                    crate::enemies::actor_presentation::ether_drain_captured_image(actor, tick)
                 });
                 captures.push((field, image));
             }
@@ -501,11 +492,11 @@ impl GameSession {
 // World callbacks run after the secondary actor pass has enrolled its births.
 // Their flares must own painters before this completed tick reaches a renderer.
 fn enroll_flare_births(
-    secondary: &mut NativeSecondarySimulationState,
+    secondary: &mut SecondarySimulationState,
     order: &mut crate::painter::WorldPainterOrder,
     first_id: u64,
 ) {
-    crate::secondary::enroll_native_secondary_painter_owners(
+    crate::secondary::enroll_secondary_painter_owners(
         secondary.actors.iter_mut().filter(|actor| actor.id >= first_id),
         order,
     );

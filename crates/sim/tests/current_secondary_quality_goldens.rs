@@ -7,7 +7,7 @@ mod support;
 use serde_json::{Value, json};
 use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::secondary::{NativeSecondarySimulationState, NativeSecondaryTickContext};
+use solomon_sim::secondary::{SecondarySimulationState, SecondaryTickContext};
 use solomon_sim::{HubWizard, Vec2};
 use std::collections::BTreeMap;
 #[test]
@@ -27,7 +27,7 @@ fn active_secondary_births_follow_current_global_quality_and_retained_owner_fall
         // Source's omitted scenery callback returns an empty collection.
         let empty = json!({"scenery":[]});
         let mut world = support::World { case: &empty, targets: Vec::new() };
-        let mut state = NativeSecondarySimulationState::new(91);
+        let mut state = SecondarySimulationState::new(91);
         let mut order = WorldPainterOrder::default();
         let initial_quality = case["initialQuality"].as_bool().unwrap();
         let frames = case["frames"].as_array().unwrap();
@@ -39,7 +39,7 @@ fn active_secondary_births_follow_current_global_quality_and_retained_owner_fall
             authority.input.quickbar = if tick == 1 { Some(0) } else { None };
             let players = BTreeMap::from([("player".to_owned(), authority)]);
             state.step(
-                &NativeSecondaryTickContext {
+                &SecondaryTickContext {
                     enhanced_effects: Some(if tick <= 200 {
                         initial_quality
                     } else {

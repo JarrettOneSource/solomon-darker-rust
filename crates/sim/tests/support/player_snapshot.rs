@@ -1,13 +1,13 @@
 //! Canonical player component projection shared by command and session replays.
 
 use serde_json::{Value, json};
-use solomon_sim::{NativeRng, player::PlayerState};
+use solomon_sim::{Rng, player::PlayerState};
 
-pub fn rng_snapshot(rng: &NativeRng) -> Value {
+pub fn rng_snapshot(rng: &Rng) -> Value {
     json!({"indexA": rng.index_a, "indexB": rng.index_b, "words": &rng.words[..]})
 }
 
-pub fn snapshot(player: &PlayerState, rng: &NativeRng) -> Value {
+pub fn snapshot(player: &PlayerState, rng: &Rng) -> Value {
     let book = &player.book;
     let economy = &player.economy;
     let progression = &player.progression;
@@ -46,7 +46,7 @@ pub fn snapshot(player: &PlayerState, rng: &NativeRng) -> Value {
             "weldComponentRanks": book.weld_component_ranks,
         },
         "gold": economy.gold,
-        "inventory": economy.backpack.iter().map(|item| [item.id, u64::from(item.native_type_id), u64::from(item.quantity)]).collect::<Vec<_>>(),
+        "inventory": economy.backpack.iter().map(|item| [item.id, u64::from(item.type_id), u64::from(item.quantity)]).collect::<Vec<_>>(),
         "equipped": equipped,
         "economyRevision": economy.revision, "ownedPerks": economy.owned_perk_selectors,
         "economyRng": rng_snapshot(&economy.rng), "gameRng": rng_snapshot(rng),

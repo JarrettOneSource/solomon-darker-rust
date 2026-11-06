@@ -3,21 +3,18 @@
 //! and finalize afterward so Hail and Aura consume the native combat stream in order.
 use crate::spells::model::PrimarySpellTransient;
 
-use super::{
-    create_native_water_aura_actor, create_native_water_hail_actor, step_native_water_hail_actor,
-};
+use super::{create_water_aura_actor, create_water_hail_actor, step_water_hail_actor};
 use crate::hurricane::{
-    NativeHurricanePresentationProgram, create_native_hurricane_presentation,
-    step_native_hurricane_presentation,
+    HurricanePresentationProgram, create_hurricane_presentation, step_hurricane_presentation,
 };
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
-use crate::profile::primary::NativePrimarySkillProfile;
+use crate::profile::primary::PrimarySkillProfile;
 use crate::spells::effects::transient_base;
 use crate::spells::model::*;
 use crate::spells::water::{
     WaterFrostJetKind, water_frost_jet_kind, water_frost_jet_particle_count,
 };
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -35,7 +32,7 @@ pub fn synchronize_air_water_player_visual_actors(
     spells: &mut SpellState,
     owners: &[AirWaterPlayerVisualOwner],
     tick: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     channel_emissions: &[PrimarySpellChannelEmission],
     order: Option<&mut WorldPainterOrder>,
     enhanced_effects: bool,
@@ -99,11 +96,11 @@ pub fn synchronize_air_water_player_visual_actors(
             && actor.common.world_key == owner.world_key
             && owner.hurricane_contact_charge > 0.0
         {
-            let mut program = NativeHurricanePresentationProgram {
+            let mut program = HurricanePresentationProgram {
                 lanes: actor.lanes,
                 phase_degrees: actor.phase_degrees,
             };
-            step_native_hurricane_presentation(&mut program, owner.hurricane_contact_charge, rng);
+            step_hurricane_presentation(&mut program, owner.hurricane_contact_charge, rng);
             actor.common.age_ticks += 1;
             actor.enhanced_effects = enhanced_effects;
             actor.charge = owner.hurricane_charge;
@@ -116,7 +113,7 @@ pub fn synchronize_air_water_player_visual_actors(
             hurricane_order.insert(actor.common.id, hurricane_order.len());
             continue;
         }
-        let program = create_native_hurricane_presentation(rng);
+        let program = create_hurricane_presentation(rng);
         let mut common = transient_base(spells.next_id, &owner.owner_id, &owner.world_key, None);
         common.painter_registrations.push(order.register(WorldManagerLane::Actor));
         spells.next_id += 1;
@@ -144,7 +141,7 @@ pub fn synchronize_air_water_player_visual_actors(
         _ => (0, 0),
     });
     for emission in channel_emissions {
-        let NativePrimarySkillProfile::Water(profile) = &emission.primary_skill else {
+        let PrimarySkillProfile::Water(profile) = &emission.primary_skill else {
             continue;
         };
         if emission.kind != PrimarySpellChannelKind::Water
@@ -182,7 +179,7 @@ pub fn synchronize_air_water_player_visual_actors(
             let common =
                 transient_base(spells.next_id, &emission.owner_id, &emission.world_key, None);
             let mut hail =
-                create_native_water_hail_actor(common, tick, emission.origin, actor.direction, rng);
+                create_water_hail_actor(common, tick, emission.origin, actor.direction, rng);
             hail.common.painter_registrations.push(order.register(WorldManagerLane::Actor));
             spells.transients.push(PrimarySpellTransient::WaterHail(hail));
             spells.next_id += 1;
@@ -194,12 +191,12 @@ pub fn finalize_air_water_player_visual_actors(
     spells: &mut SpellState,
     channel_emissions: &[PrimarySpellChannelEmission],
     tick: u64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     order: &mut WorldPainterOrder,
 ) {
-    if tick.is_multiple_of(crate::cold_aura::NATIVE_COLD_AURA_PERIOD_TICKS) {
+    if tick.is_multiple_of(crate::cold_aura::COLD_AURA_PERIOD_TICKS) {
         for emission in channel_emissions {
-            let NativePrimarySkillProfile::Water(profile) = &emission.primary_skill else {
+            let PrimarySkillProfile::Water(profile) = &emission.primary_skill else {
                 continue;
             };
             if emission.kind != PrimarySpellChannelKind::Water
@@ -210,7 +207,7 @@ pub fn finalize_air_water_player_visual_actors(
             }
             let common =
                 transient_base(spells.next_id, &emission.owner_id, &emission.world_key, None);
-            let mut aura = create_native_water_aura_actor(
+            let mut aura = create_water_aura_actor(
                 common,
                 tick,
                 emission.query_origin,
@@ -224,6 +221,6 @@ pub fn finalize_air_water_player_visual_actors(
     }
     spells.transients.retain_mut(|effect| {
         let PrimarySpellTransient::WaterHail(actor) = effect else { return true };
-        actor.birth_tick == tick || step_native_water_hail_actor(actor, rng)
+        actor.birth_tick == tick || step_water_hail_actor(actor, rng)
     });
 }

@@ -3,20 +3,19 @@ use serde_json::{Value, json};
 use solomon_sim::enemies::config::{EnemyArenaScalars, EnemyConfigRandom, evaluate_enemy_config};
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::score::{
-    NativeHallOfFamePlayerScoreState, NativeHallOfFameRunState, native_hall_of_fame_award,
-    native_hall_of_fame_enemy_name,
+    HallOfFamePlayerScoreState, HallOfFameRunState, hall_of_fame_award, hall_of_fame_enemy_name,
 };
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
-fn snapshot(score: &NativeHallOfFameRunState) -> Value {
+fn snapshot(score: &HallOfFameRunState) -> Value {
     json!({"awesomeness":score.awesomeness,"awesomestKill":score.awesomest_kill,
         "awesomestKillMaximumHealth":score.awesomest_kill_maximum_health,"elapsedTicks":score.elapsed_ticks,
         "killStreak":score.kill_streak,"monstersKilled":score.monsters_killed,
         "portraitHeadingIndex":score.portrait_heading_index,"portraitScale":score.portrait_scale,
         "startedAtTick":score.started_at_tick})
 }
-fn player(value: &Value) -> NativeHallOfFamePlayerScoreState {
-    NativeHallOfFamePlayerScoreState {
+fn player(value: &Value) -> HallOfFamePlayerScoreState {
+    HallOfFamePlayerScoreState {
         current_health: value["currentHealth"].as_f64().unwrap(),
         maximum_health: value["maximumHealth"].as_f64().unwrap(),
         level: value["level"].as_u64().unwrap() as u32,
@@ -45,13 +44,10 @@ fn run_score_streak_and_archive_preserve_source_random_draws_and_awards() {
         })
         .collect();
     for (index, enemy) in enemies.iter().enumerate() {
-        assert_eq!(
-            native_hall_of_fame_enemy_name(enemy),
-            fixture["names"][index].as_str().unwrap()
-        );
+        assert_eq!(hall_of_fame_enemy_name(enemy), fixture["names"][index].as_str().unwrap());
     }
-    let mut rng = NativeRng::new(17);
-    let mut score = NativeHallOfFameRunState::new(100);
+    let mut rng = Rng::new(17);
+    let mut score = HallOfFameRunState::new(100);
     let mut records = fixture["records"].as_array().unwrap().iter().peekable();
     for tick in 0..450 {
         score.record_enemy_kill(
@@ -76,7 +72,7 @@ fn run_score_streak_and_archive_preserve_source_random_draws_and_awards() {
     support::assert_website_json(&snapshot(&score), &fixture["archived"], "archive", &[]);
     for case in fixture["awards"].as_array().unwrap() {
         assert_eq!(
-            native_hall_of_fame_award(71, 0.5, player(&case["player"]), 999),
+            hall_of_fame_award(71, 0.5, player(&case["player"]), 999),
             case["expected"].as_u64().unwrap()
         );
     }

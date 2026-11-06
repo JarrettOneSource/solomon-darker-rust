@@ -3,24 +3,24 @@
 use super::*;
 #[path = "sample_json.rs"]
 mod sample_json;
-use solomon_sim::boneyard::shadows::NativeShadowRecord;
+use solomon_sim::boneyard::shadows::ShadowRecord;
 use solomon_sim::enemies::actor_presentation::*;
 use solomon_sim::enemies::attack_presentation::{
-    EnemyRawFireBurstKind, native_enemy_raw_fire_burst_sample, native_imp_landing_flare_sample,
+    EnemyRawFireBurstKind, enemy_raw_fire_burst_sample, imp_landing_flare_sample,
 };
-use solomon_sim::enemies::boss_presentation::native_boss_spell_plan;
-use solomon_sim::enemies::death_presentation::native_enemy_death_effect_plan;
+use solomon_sim::enemies::boss_presentation::boss_spell_plan;
+use solomon_sim::enemies::death_presentation::enemy_death_effect_plan;
 use solomon_sim::enemies::lightning_presentation::{
-    native_dark_lightning_body, native_mage_lightning_pulse_plan,
+    dark_lightning_body, mage_lightning_pulse_plan,
 };
 use solomon_sim::enemies::model::{EnemyActor, EnemyMaggotActor};
-use solomon_sim::enemies::projectile_presentation::native_enemy_projectile_effect_plan;
-use solomon_sim::enemies::rain_presentation::NativeRainCloud;
+use solomon_sim::enemies::projectile_presentation::enemy_projectile_effect_plan;
+use solomon_sim::enemies::rain_presentation::RainCloud;
 use solomon_sim::enemies::tendrils::HeartmongerTendrils;
-use solomon_sim::enemies::underlay::native_enemy_underlay_plan;
-use solomon_sim::enemies::web_presentation::native_silk_mesh;
+use solomon_sim::enemies::underlay::enemy_underlay_plan;
+use solomon_sim::enemies::web_presentation::silk_mesh;
 use solomon_sim::enemies::world::EnemyWorld;
-use solomon_sim::spells::air::{NativeAirCoronaPlan, NativeAirRibbonLayer};
+use solomon_sim::spells::air::{AirCoronaPlan, AirRibbonLayer};
 use std::collections::BTreeMap;
 
 pub(super) struct EnemyPresentationGoldens {
@@ -36,7 +36,7 @@ pub(super) struct EnemyPresentationGoldens {
     mesh_indices: BTreeMap<String, Vec<usize>>,
     checked_meshes: usize,
     tendrils: BTreeMap<String, HeartmongerTendrils>,
-    rain: BTreeMap<String, NativeRainCloud>,
+    rain: BTreeMap<String, RainCloud>,
 }
 
 fn key(group: &str, name: &str, tick: u64, id: usize) -> String {
@@ -186,7 +186,7 @@ impl EnemyPresentationGoldens {
                     .as_object()
                     .map(|_| point_from_json(&input["pikeTargetPosition"])),
             };
-            let sample = native_enemy_presentation_input(&actor, context);
+            let sample = enemy_presentation_input(&actor, context);
             let endpoint_key =
                 format!("{}:{}", record_key, record["hitOverride"].as_bool().unwrap());
             assert_plan(
@@ -194,7 +194,7 @@ impl EnemyPresentationGoldens {
                 &self.animation_endpoints[&endpoint_key],
                 &format!("{endpoint_key}.animation"),
             );
-            let plan = native_enemy_actor_plan(&actor, context, self);
+            let plan = enemy_actor_plan(&actor, context, self);
             let actual = json!({"facing":plan.facing,"rootScale":plan.root_scale,
                 "layers":plan.layers.iter().map(layer_json).collect::<Vec<_>>(),
                 "segments":plan.segments.iter().map(segment_json).collect::<Vec<_>>(),
@@ -210,7 +210,7 @@ impl EnemyPresentationGoldens {
                 .as_array()
                 .unwrap()
                 .iter()
-                .map(|row| NativeShadowRecord {
+                .map(|row| ShadowRecord {
                     base_alpha: number(row, "baseAlpha"),
                     behind_scalar: number(row, "behindScalar"),
                     direction: point_from_json(&row["direction"]),
@@ -220,7 +220,7 @@ impl EnemyPresentationGoldens {
                     source_radius: number(row, "sourceRadius"),
                 })
                 .collect::<Vec<_>>();
-            let underlay = native_enemy_underlay_plan(
+            let underlay = enemy_underlay_plan(
                 &actor,
                 tick,
                 &shadow_records,
@@ -241,8 +241,7 @@ impl EnemyPresentationGoldens {
             if let solomon_sim::enemies::model::EnemyBrain::Heartmonger(brain) = &actor.brain {
                 let state_key = format!("{group}:{name}:{}", actor.id);
                 let state = self.tendrils.entry(state_key).or_insert_with(|| {
-                    let mut rng =
-                        solomon_sim::NativeRng::new(actor.id as i64 + actor.spawn_tick as i64);
+                    let mut rng = solomon_sim::Rng::new(actor.id as i64 + actor.spawn_tick as i64);
                     HeartmongerTendrils::new(actor.position, actor.heading_deg, &mut rng)
                 });
                 let facing =
@@ -273,7 +272,7 @@ impl EnemyPresentationGoldens {
             let record_key = key("projectile", name, tick, effect.state.id);
             let Some(index) = self.effect_indices[0].get(&record_key) else { continue };
             let record = &self.source["effects"]["projectile"][index];
-            let plan = native_enemy_projectile_effect_plan(effect, number(record, "pointGain"));
+            let plan = enemy_projectile_effect_plan(effect, number(record, "pointGain"));
             let glow = plan.ground_glow.map(|glow| {
                 json!({"alpha":glow.alpha,"position":point_json(glow.position),
                 "scale":glow.scale,"tint":glow.tint})
@@ -287,7 +286,7 @@ impl EnemyPresentationGoldens {
             let record_key = key("death", name, tick, effect.id);
             let Some(index) = self.effect_indices[1].get(&record_key) else { continue };
             let record = &self.source["effects"]["death"][index];
-            let plan = native_enemy_death_effect_plan(effect, 900.0);
+            let plan = enemy_death_effect_plan(effect, 900.0);
             let actual = if matches!(
                 effect.kind,
                 solomon_sim::enemies::model::EnemyDeathEffectKind::Banish
@@ -311,7 +310,7 @@ impl EnemyPresentationGoldens {
                 let state = self
                     .rain
                     .entry(format!("{name}:{}", spell.owner.id))
-                    .or_insert_with(|| NativeRainCloud::new(spell, tick));
+                    .or_insert_with(|| RainCloud::new(spell, tick));
                 Some(state.update(spell, tick))
             } else {
                 None
@@ -319,7 +318,7 @@ impl EnemyPresentationGoldens {
             let record_key = key("boss", name, tick, spell.owner.id);
             let Some(index) = self.effect_indices[2].get(&record_key) else { continue };
             let record = &self.source["effects"]["boss"][index];
-            let plan = native_boss_spell_plan(spell, tick, 900.0);
+            let plan = boss_spell_plan(spell, tick, 900.0);
             let actual = json!({"gradients":plan.gradients.iter().map(gradient_json).collect::<Vec<_>>(),
                 "layers":plan.layers.iter().map(layer_json).collect::<Vec<_>>()});
             assert_plan(&actual, &record["expected"], &record_key);
@@ -338,10 +337,8 @@ impl EnemyPresentationGoldens {
             let Some(indices) = self.mesh_indices.get(&record_key) else { continue };
             for index in indices {
                 let record = &self.source["meshes"][index];
-                let plan = native_mage_lightning_pulse_plan(
-                    pulse,
-                    record["presentationTick"].as_u64().unwrap(),
-                );
+                let plan =
+                    mage_lightning_pulse_plan(pulse, record["presentationTick"].as_u64().unwrap());
                 let actual = plan.map_or(Value::Null,|plan| {
                     let corona = corona_json(plan.contact);
                     let contact = match plan.contact_target_player_id {
@@ -370,8 +367,8 @@ impl EnemyPresentationGoldens {
             for index in indices {
                 let record = &self.source["meshes"][index];
                 let sample = record["presentationTick"].as_u64().unwrap();
-                let mut rng = solomon_sim::NativeRng::new((silk.id as u64 ^ sample) as i64);
-                let plan = native_silk_mesh(
+                let mut rng = solomon_sim::Rng::new((silk.id as u64 ^ sample) as i64);
+                let plan = silk_mesh(
                     &silk.state,
                     &|p| (p.x / 800.0 + p.y / 1600.0).clamp(0.0, 1.0),
                     &mut rng,
@@ -387,7 +384,7 @@ impl EnemyPresentationGoldens {
             let Some(indices) = self.mesh_indices.get(&record_key) else { continue };
             for index in indices {
                 let record = &self.source["meshes"][index];
-                let body = native_dark_lightning_body(spell);
+                let body = dark_lightning_body(spell);
                 let actual = json!({"layers":body.iter().map(ribbon_json).collect::<Vec<_>>()});
                 assert_plan(&actual, &record["expected"], &record_key);
                 self.checked_meshes += 1;
@@ -399,7 +396,7 @@ impl EnemyPresentationGoldens {
         let record_key = key("ai", name, tick, maggot.id);
         let Some(index) = self.maggot_index.get(&record_key) else { return };
         let record = &self.source["maggots"][index];
-        let layers = native_maggot_plan(maggot, tick, record["complexLighting"].as_bool().unwrap());
+        let layers = maggot_plan(maggot, tick, record["complexLighting"].as_bool().unwrap());
         let actual = json!(layers.iter().map(layer_json).collect::<Vec<_>>());
         assert_plan(&actual, &record["expected"], &record_key);
         self.checked_maggots += 1;
@@ -412,7 +409,7 @@ impl EnemyPresentationGoldens {
                 let age = sample["ageTicks"].as_u64().unwrap();
                 let kind = sample["kind"].as_str().unwrap();
                 let actual = if kind == "imp-landing-flare" {
-                    native_imp_landing_flare_sample(id,age).map_or(Value::Null,|sample|json!({
+                    imp_landing_flare_sample(id,age).map_or(Value::Null,|sample|json!({
                         "alpha":sample.alpha,"green":sample.green,"scaleX":sample.scale_x,"scaleY":sample.scale_y}))
                 } else {
                     let kind = if kind == "imp-contact" {
@@ -420,7 +417,7 @@ impl EnemyPresentationGoldens {
                     } else {
                         EnemyRawFireBurstKind::DemonBombMuzzle
                     };
-                    native_enemy_raw_fire_burst_sample(kind,id,age).map_or(Value::Null,|sample|json!({
+                    enemy_raw_fire_burst_sample(kind,id,age).map_or(Value::Null,|sample|json!({
                         "frameEntry":sample.frame_entry,"frameRotationRadians":sample.frame_rotation_radians,
                         "glowAlpha":sample.glow_alpha,"scale":sample.scale,"verticalOffset":sample.vertical_offset}))
                 };
@@ -466,7 +463,7 @@ fn flat_points(points: &[solomon_sim::Vec2]) -> Vec<f64> {
     points.iter().flat_map(|point| [point.x, point.y]).collect()
 }
 
-fn ribbon_json(layer: &NativeAirRibbonLayer) -> Value {
+fn ribbon_json(layer: &AirRibbonLayer) -> Value {
     let branch = layer.branch.as_ref().map(|branch| {
         json!({"geometryRecord":branch.geometry_record,
         "indices":branch.mesh.indices,"mirrorX":branch.mirror_x,"scale":branch.scale,
@@ -483,7 +480,7 @@ fn ribbon_json(layer: &NativeAirRibbonLayer) -> Value {
     row
 }
 
-fn corona_json(corona: NativeAirCoronaPlan) -> Value {
+fn corona_json(corona: AirCoronaPlan) -> Value {
     json!({"alpha":corona.alpha,"center":point_json(corona.center),
         "circles":corona.draws[..4].iter().map(|draw|json!({"alpha":draw.alpha,"record":draw.record,
             "scale":draw.scale.x,"tint":draw.tint})).collect::<Vec<_>>(),

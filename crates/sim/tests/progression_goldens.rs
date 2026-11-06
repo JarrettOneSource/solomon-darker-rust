@@ -2,14 +2,14 @@
 
 use serde_json::{Value, json};
 use solomon_sim::profile::{
-    NativePotionKind, NativeSkillBookState, PlayerProgressionState, PlayerSkillChoice,
-    PlayerSkillOffer, WizardDiscipline, WizardElement, boneyard_enemy_experience_award,
-    build_player_skill_offer, draw_native_player_creation_offer_seed,
+    PlayerProgressionState, PlayerSkillChoice, PlayerSkillOffer, PotionKind, SkillBookState,
+    WizardDiscipline, WizardElement, boneyard_enemy_experience_award, build_player_skill_offer,
+    draw_player_creation_offer_seed,
 };
-use solomon_sim::{NativeRng, combat::PlayerCombatState};
+use solomon_sim::{Rng, combat::PlayerCombatState};
 
-fn read_rng(value: &Value) -> NativeRng {
-    let mut rng = NativeRng::new(0);
+fn read_rng(value: &Value) -> Rng {
+    let mut rng = Rng::new(0);
     rng.index_a = value["indexA"].as_u64().unwrap() as usize;
     rng.index_b = value["indexB"].as_u64().unwrap() as usize;
     rng.words = value["words"]
@@ -22,10 +22,10 @@ fn read_rng(value: &Value) -> NativeRng {
         .unwrap();
     rng
 }
-fn rng_snapshot(value: &NativeRng) -> Value {
+fn rng_snapshot(value: &Rng) -> Value {
     json!({"indexA":value.index_a,"indexB":value.index_b,"words":&value.words[..]})
 }
-fn read_book(value: &Value) -> NativeSkillBookState {
+fn read_book(value: &Value) -> SkillBookState {
     let ranks = |key: &str| {
         value[key]
             .as_array()
@@ -36,7 +36,7 @@ fn read_book(value: &Value) -> NativeSkillBookState {
             .try_into()
             .unwrap()
     };
-    NativeSkillBookState {
+    SkillBookState {
         advanced_unlocks: value["advancedUnlocks"]
             .as_array()
             .unwrap()
@@ -67,7 +67,7 @@ fn read_book(value: &Value) -> NativeSkillBookState {
         }),
     }
 }
-fn book_snapshot(value: &NativeSkillBookState) -> Value {
+fn book_snapshot(value: &SkillBookState) -> Value {
     json!({"advancedUnlocks":value.advanced_unlocks,"disciplineRoot":value.discipline_root,
         "effectiveRanks":&value.effective_ranks[..],"elementRoot":value.element_root,
         "learnedSkillOrder":value.learned_skill_order,"permanentRanks":&value.permanent_ranks[..],
@@ -194,11 +194,11 @@ fn native_skill_offers_level_journeys_and_experience_rewards_replay_the_website(
             .into_iter()
             .find(|element| Some(element.as_str()) == journey["element"].as_str())
             .unwrap();
-        let mut rng = NativeRng::new(12345);
-        let offer_seed = draw_native_player_creation_offer_seed(&mut rng);
+        let mut rng = Rng::new(12345);
+        let offer_seed = draw_player_creation_offer_seed(&mut rng);
         let mut state = PlayerProgressionState::new(offer_seed);
         let mut combat = PlayerCombatState::new();
-        let mut book = NativeSkillBookState::new(element, WizardDiscipline::Arcane);
+        let mut book = SkillBookState::new(element, WizardDiscipline::Arcane);
         assert_snapshot(
             &progression_snapshot(&state, &combat),
             &initial["state"],
@@ -280,10 +280,7 @@ fn native_potions_purchase_effects_and_deferred_skill_choices_replay_the_website
             let mut skill_id = None;
             match action["type"].as_str().unwrap() {
                 "potion" => state.apply_potion(
-                    NativePotionKind::from_native_subtype(
-                        action["subtype"].as_u64().unwrap() as u32
-                    )
-                    .unwrap(),
+                    PotionKind::from_subtype(action["subtype"].as_u64().unwrap() as u32).unwrap(),
                     &mut combat,
                 ),
                 "step-potions" => {
@@ -391,9 +388,9 @@ fn native_potions_purchase_effects_and_deferred_skill_choices_replay_the_website
 #[test]
 fn purchased_hagatha_modifiers_bosses_and_drinker_boundaries_replay_the_website() {
     use solomon_sim::profile::{
-        NATIVE_HAGATHA_FACTORS, NativeHagathaRuntimeState, native_hagatha_boss_damage_factor,
-        native_hagatha_derived_modifiers, native_hagatha_drinker_should_use_health_potion,
-        native_hagatha_drinker_should_use_mana_potion, native_hagatha_revelation_rank,
+        HAGATHA_FACTORS, HagathaRuntimeState, hagatha_boss_damage_factor,
+        hagatha_derived_modifiers, hagatha_drinker_should_use_health_potion,
+        hagatha_drinker_should_use_mana_potion, hagatha_revelation_rank,
     };
 
     fn selectors(value: &Value) -> Vec<u32> {
@@ -418,7 +415,7 @@ fn purchased_hagatha_modifiers_bosses_and_drinker_boundaries_replay_the_website(
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/progression-goldens.json")).unwrap();
     let fixture = &fixture["hagathaEffects"];
-    let factors = NATIVE_HAGATHA_FACTORS;
+    let factors = HAGATHA_FACTORS;
     assert_snapshot(
         &json!({
             "bareHandsDamage": factors.bare_hands_damage,
@@ -439,12 +436,12 @@ fn purchased_hagatha_modifiers_bosses_and_drinker_boundaries_replay_the_website(
         "native Hagatha factors",
     );
     for case in fixture["modifiers"].as_array().unwrap() {
-        let runtime = NativeHagathaRuntimeState {
+        let runtime = HagathaRuntimeState {
             cheat_death_charges: case["runtime"]["cheatDeathCharges"].as_u64().unwrap() as u32,
             reverie_active: case["runtime"]["reverieActive"].as_bool().unwrap(),
             serendipity_active: case["runtime"]["serendipityActive"].as_bool().unwrap(),
         };
-        let modifiers = native_hagatha_derived_modifiers(
+        let modifiers = hagatha_derived_modifiers(
             &selectors(&case["owned"]),
             runtime,
             case["weaponEquipped"].as_bool().unwrap(),
@@ -467,7 +464,7 @@ fn purchased_hagatha_modifiers_bosses_and_drinker_boundaries_replay_the_website(
     }
     for case in fixture["bosses"].as_array().unwrap() {
         assert_eq!(
-            native_hagatha_boss_damage_factor(
+            hagatha_boss_damage_factor(
                 &selectors(&case["owned"]),
                 case["nativeTypeId"].as_u64().unwrap() as u32,
             ),
@@ -476,7 +473,7 @@ fn purchased_hagatha_modifiers_bosses_and_drinker_boundaries_replay_the_website(
     }
     for case in fixture["drinkerHealth"].as_array().unwrap() {
         assert_eq!(
-            native_hagatha_drinker_should_use_health_potion(
+            hagatha_drinker_should_use_health_potion(
                 &selectors(&case["owned"]),
                 number(&case["currentHealth"]),
             ),
@@ -485,7 +482,7 @@ fn purchased_hagatha_modifiers_bosses_and_drinker_boundaries_replay_the_website(
     }
     for case in fixture["drinkerMana"].as_array().unwrap() {
         assert_eq!(
-            native_hagatha_drinker_should_use_mana_potion(
+            hagatha_drinker_should_use_mana_potion(
                 &selectors(&case["owned"]),
                 number(&case["currentMana"]),
                 number(&case["maximumMana"]),
@@ -496,7 +493,7 @@ fn purchased_hagatha_modifiers_bosses_and_drinker_boundaries_replay_the_website(
     }
     for case in fixture["revelation"].as_array().unwrap() {
         assert_eq!(
-            native_hagatha_revelation_rank(
+            hagatha_revelation_rank(
                 case["rank"].as_u64().unwrap() as u32,
                 &selectors(&case["owned"]),
             ),

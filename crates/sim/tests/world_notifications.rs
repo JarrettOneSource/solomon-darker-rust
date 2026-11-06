@@ -2,14 +2,14 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::loot::messages::{
-    NativeLootMessagePresentation, NativeWorldNotificationInput, NativeWorldNotificationSource,
-    native_world_notifications_visible,
+    LootMessagePresentation, WorldNotificationInput, WorldNotificationSource,
+    world_notifications_visible,
 };
 use solomon_sim::boneyard::loot::{BoneyardLootEvent, BoneyardLootEventType, BoneyardLootSound};
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::economy::{
-    HubActionFeedback, HubActionFeedbackAction, NativeSkillBookFeedbackCursor,
-    NativeSkillBookOutcome, native_skill_book_result_text,
+    HubActionFeedback, HubActionFeedbackAction, SkillBookFeedbackCursor, SkillBookOutcome,
+    skill_book_result_text,
 };
 
 #[test]
@@ -23,7 +23,7 @@ fn the_current_notification_program_replays_the_unmodified_source_exactly() {
     let mut records = 0;
     for scenario in scenarios {
         let name = scenario["name"].as_str().unwrap();
-        let mut presentation = NativeLootMessagePresentation::new(0);
+        let mut presentation = LootMessagePresentation::new(0);
         for (index, record) in scenario["records"].as_array().unwrap().iter().enumerate() {
             records += 1;
             if let Some(tick) = record["sample"].as_u64() {
@@ -33,7 +33,7 @@ fn the_current_notification_program_replays_the_unmodified_source_exactly() {
                     .map(|visual| {
                         let message = &visual.message;
                         let id = message.event_id as i64;
-                        let id = if message.key.source == NativeWorldNotificationSource::Book {
+                        let id = if message.key.source == WorldNotificationSource::Book {
                             -id
                         } else {
                             id
@@ -65,12 +65,12 @@ fn the_current_notification_program_replays_the_unmodified_source_exactly() {
                     })
                 } else {
                     let event = &record["notification"];
-                    presentation.consume_text(&NativeWorldNotificationInput {
+                    presentation.consume_text(&WorldNotificationInput {
                         source: match event["source"].as_str().unwrap() {
-                            "loot" => NativeWorldNotificationSource::Loot,
-                            "book" => NativeWorldNotificationSource::Book,
-                            "combat" => NativeWorldNotificationSource::Combat,
-                            "secondary" => NativeWorldNotificationSource::Secondary,
+                            "loot" => WorldNotificationSource::Loot,
+                            "book" => WorldNotificationSource::Book,
+                            "combat" => WorldNotificationSource::Combat,
+                            "secondary" => WorldNotificationSource::Secondary,
                             source => panic!("unknown source {source}"),
                         },
                         event_id: event["eventId"].as_i64().unwrap().unsigned_abs(),
@@ -94,26 +94,25 @@ fn the_current_notification_program_replays_the_unmodified_source_exactly() {
             _ => unreachable!(),
         };
         assert_eq!(
-            native_world_notifications_visible(life, case["combat"].as_bool().unwrap()),
+            world_notifications_visible(life, case["combat"].as_bool().unwrap()),
             case["visible"].as_bool().unwrap()
         );
     }
     for case in fixture["text"].as_array().unwrap() {
-        let actual = native_skill_book_result_text(case["skillId"].as_u64().unwrap() as usize);
+        let actual = skill_book_result_text(case["skillId"].as_u64().unwrap() as usize);
         if let Some(text) = case["text"].as_str() {
             assert_eq!(actual.unwrap(), text);
         } else {
             assert_eq!(actual.unwrap_err(), case["error"].as_str().unwrap());
         }
     }
-    let mut cursor =
-        NativeSkillBookFeedbackCursor::new(feedback(&fixture["cursor"]["initial"]).as_ref());
+    let mut cursor = SkillBookFeedbackCursor::new(feedback(&fixture["cursor"]["initial"]).as_ref());
     for (index, record) in fixture["cursor"]["records"].as_array().unwrap().iter().enumerate() {
         let receipt = cursor.consume(feedback(&record["input"]).as_ref());
         let actual = receipt.map(|receipt| {
             let outcome = match receipt.outcome {
-                NativeSkillBookOutcome::Choice => json!({"kind":"choice"}),
-                NativeSkillBookOutcome::Rank { skill_id } => {
+                SkillBookOutcome::Choice => json!({"kind":"choice"}),
+                SkillBookOutcome::Rank { skill_id } => {
                     json!({"kind":"rank","skillId":skill_id})
                 }
             };
@@ -156,8 +155,8 @@ fn feedback(value: &Value) -> Option<HubActionFeedback> {
         },
         sequence: value["sequence"].as_u64().unwrap(),
         skill_book_outcome: value["skillBookOutcome"]["kind"].as_str().map(|kind| match kind {
-            "choice" => NativeSkillBookOutcome::Choice,
-            "rank" => NativeSkillBookOutcome::Rank {
+            "choice" => SkillBookOutcome::Choice,
+            "rank" => SkillBookOutcome::Rank {
                 skill_id: value["skillBookOutcome"]["skillId"].as_u64().map(|id| id as usize),
             },
             _ => unreachable!(),
@@ -173,13 +172,13 @@ fn feedback(value: &Value) -> Option<HubActionFeedback> {
 
 #[test]
 fn equal_ids_from_distinct_notification_lanes_keep_the_newest_row_active() {
-    let mut presentation = NativeLootMessagePresentation::new(0);
+    let mut presentation = LootMessagePresentation::new(0);
     for (source, tick, text) in [
-        (NativeWorldNotificationSource::Loot, 1, "Health Potion"),
-        (NativeWorldNotificationSource::Combat, 2, "CHEAT DEATH!"),
-        (NativeWorldNotificationSource::Secondary, 3, "Overloaded Mana!"),
+        (WorldNotificationSource::Loot, 1, "Health Potion"),
+        (WorldNotificationSource::Combat, 2, "CHEAT DEATH!"),
+        (WorldNotificationSource::Secondary, 3, "Overloaded Mana!"),
     ] {
-        assert!(presentation.consume_text(&NativeWorldNotificationInput {
+        assert!(presentation.consume_text(&WorldNotificationInput {
             source,
             event_id: 1,
             tick,
@@ -198,10 +197,10 @@ fn equal_ids_from_distinct_notification_lanes_keep_the_newest_row_active() {
 
 #[test]
 fn the_current_projection_rounds_scale_without_changing_the_historical_loot_api() {
-    let mut presentation = NativeLootMessagePresentation::new(0);
+    let mut presentation = LootMessagePresentation::new(0);
     for (event_id, tick, text) in [(1, 1, "Health Potion"), (2, 2, "DAMAGE x4")] {
-        presentation.consume_text(&NativeWorldNotificationInput {
-            source: NativeWorldNotificationSource::Loot,
+        presentation.consume_text(&WorldNotificationInput {
+            source: WorldNotificationSource::Loot,
             event_id,
             tick,
             text,
@@ -222,7 +221,7 @@ fn notification_visibility_admits_lethal_pending_but_respects_death_and_combat_a
         (Some(PlayerLifeState::Spectating), false),
         (None, false),
     ] {
-        assert_eq!(native_world_notifications_visible(life, true), expected);
-        assert!(!native_world_notifications_visible(life, false));
+        assert_eq!(world_notifications_visible(life, true), expected);
+        assert!(!world_notifications_visible(life, false));
     }
 }

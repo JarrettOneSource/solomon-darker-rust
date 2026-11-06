@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'../..');
-const fontProbePath='crates/web/src/gpu_ui/edit/font_run/browser.rs';
+const fontProbePath='crates/client/src/gpu_ui/edit/font_run/browser.rs';
 function rustFiles(directory) {
   return fs.readdirSync(directory,{withFileTypes:true}).flatMap(entry=>{
     const filename=path.join(directory,entry.name);

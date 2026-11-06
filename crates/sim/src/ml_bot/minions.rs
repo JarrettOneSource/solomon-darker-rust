@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 
 use crate::Vec2;
 use crate::float::hypot;
-use crate::secondary::golem::NativeGolemPhase;
-use crate::secondary::{NativeSecondaryActorKind, NativeSecondarySimulationState};
+use crate::secondary::golem::GolemPhase;
+use crate::secondary::{SecondaryActorKind, SecondarySimulationState};
 
 use super::numbers::{distance_squared, normalized, ratio, unsigned, write};
 use super::spec::scales;
@@ -18,7 +18,7 @@ pub struct MlBotPolicyMinionObservation {
 }
 
 pub fn observe_ml_bot_policy_minions(
-    secondary: &NativeSecondarySimulationState,
+    secondary: &SecondarySimulationState,
     player_id: &str,
     position: Vec2,
     quickbar: &[Option<usize>; 8],
@@ -28,7 +28,7 @@ pub fn observe_ml_bot_policy_minions(
         .actors
         .iter()
         .filter(|actor| {
-            actor.kind == NativeSecondaryActorKind::Golem
+            actor.kind == SecondaryActorKind::Golem
                 && actor.golem.is_some()
                 && actor.world_key == world_key
         })
@@ -59,10 +59,10 @@ pub fn observe_ml_bot_policy_minions(
                 ratio(golem.current_health, golem.maximum_health),
                 unsigned(golem.maximum_health, scales::HP),
                 f64::from(golem.iron),
-                f64::from(golem.phase == NativeGolemPhase::Assembly),
-                f64::from(golem.phase == NativeGolemPhase::Active),
-                f64::from(golem.phase == NativeGolemPhase::Attack),
-                f64::from(golem.phase == NativeGolemPhase::Provoke),
+                f64::from(golem.phase == GolemPhase::Assembly),
+                f64::from(golem.phase == GolemPhase::Active),
+                f64::from(golem.phase == GolemPhase::Attack),
+                f64::from(golem.phase == GolemPhase::Provoke),
                 f64::from(actor.target_id.is_some()),
                 unsigned(golem.reflect_factor, scales::MULTIPLIER),
                 unsigned(actor.age_ticks as f64 / scales::TICK_RATE, scales::MINION_AGE_SECONDS),

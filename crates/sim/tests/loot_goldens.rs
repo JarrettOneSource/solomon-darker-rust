@@ -8,11 +8,11 @@ mod support;
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{EquipmentType, HubInventoryItem};
-use solomon_sim::equipment::NativeEquipmentEffect;
-use solomon_sim::equipment::random::generate_native_random_equipment_effects;
-use solomon_sim::loot::items::{resolve_native_goodie_contents, select_enemy_item};
+use solomon_sim::equipment::EquipmentEffect;
+use solomon_sim::equipment::random::generate_random_equipment_effects;
+use solomon_sim::loot::items::{resolve_goodie_contents, select_enemy_item};
 use solomon_sim::loot::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[test]
 fn current_goodie_equipment_avoids_recipes_already_on_the_ground() {
@@ -21,8 +21,8 @@ fn current_goodie_equipment_avoids_recipes_already_on_the_ground() {
     for (index, expected) in fixture["currentGoodies"].as_array().unwrap().iter().enumerate() {
         let input = &expected["input"];
         let mut rng = read_rng(&input["sharedRng"]);
-        let mut ids = NativeLootItemIds::new(17);
-        let result = resolve_native_goodie_contents(
+        let mut ids = LootItemIds::new(17);
+        let result = resolve_goodie_contents(
             &mut rng,
             &mut ids,
             10,
@@ -51,11 +51,11 @@ fn current_named_enemy_items_and_original_faculty_pools_match_source() {
         let owned = indexes(&source["participant"]["ownedRecipeIndexes"]);
         let ground = indexes(&source["groundRecipeIndexes"]);
         let pool = source["itemRecipePool"].as_array().map(|_| indexes(&source["itemRecipePool"]));
-        let mut input = selection_input(source, &advanced, &owned, &NativeLootOpenPlacement);
+        let mut input = selection_input(source, &advanced, &owned, &LootOpenPlacement);
         input.ground_recipe_indexes = &ground;
         input.item_recipe_pool = pool.as_deref();
         let mut rng = read_rng(&source["sharedRng"]);
-        let mut ids = NativeLootItemIds::new(1);
+        let mut ids = LootItemIds::new(1);
         let item = select_enemy_item(&mut rng, &mut ids, &input, input.item_recipe_pool);
         support::assert_website_json(
             &json!({"item":item.as_ref().map(item_snapshot),"sharedRng":rng_snapshot(&rng)}),
@@ -85,12 +85,12 @@ fn current_named_enemy_items_and_original_faculty_pools_match_source() {
     }
 }
 
-fn rng_snapshot(rng: &NativeRng) -> Value {
+fn rng_snapshot(rng: &Rng) -> Value {
     json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":rng.words.as_slice()})
 }
 
-fn read_rng(value: &Value) -> NativeRng {
-    let mut rng = NativeRng::new(1);
+fn read_rng(value: &Value) -> Rng {
+    let mut rng = Rng::new(1);
     rng.index_a = value["indexA"].as_u64().unwrap() as usize;
     rng.index_b = value["indexB"].as_u64().unwrap() as usize;
     for (word, source) in rng.words.iter_mut().zip(value["words"].as_array().unwrap()) {
@@ -99,7 +99,7 @@ fn read_rng(value: &Value) -> NativeRng {
     rng
 }
 
-fn effects_snapshot(effects: &[NativeEquipmentEffect]) -> Value {
+fn effects_snapshot(effects: &[EquipmentEffect]) -> Value {
     json!(
         effects
             .iter()
@@ -112,8 +112,8 @@ fn effects_snapshot(effects: &[NativeEquipmentEffect]) -> Value {
 fn item_snapshot(item: &HubInventoryItem) -> Value {
     let mut result = json!({
         "equipmentType":item.equipment_type.map(EquipmentType::as_str), "iconRecords":item.icon_records,
-        "id":item.id,"kind":item.kind.as_str(),"name":item.name,"nativeSubtype":item.native_subtype,
-        "nativeTypeId":item.native_type_id,"quantity":item.quantity,"rarity":item.rarity.map(|rarity| match rarity {
+        "id":item.id,"kind":item.kind.as_str(),"name":item.name,"nativeSubtype":item.subtype,
+        "nativeTypeId":item.type_id,"quantity":item.quantity,"rarity":item.rarity.map(|rarity| match rarity {
             solomon_sim::economy::ItemRarity::Epic => "Epic", solomon_sim::economy::ItemRarity::Rare => "Rare" }),
         "recipeIndex":item.recipe_index,
     });
@@ -129,7 +129,7 @@ fn item_snapshot(item: &HubInventoryItem) -> Value {
     if let Some(slot) = item.inventory_slot {
         result["inventorySlot"] = json!(slot);
     }
-    if let Some(selector) = item.native_selector {
+    if let Some(selector) = item.selector {
         result["nativeSelector"] = json!(selector);
     }
     if let Some(effects) = &item.native_effects {
@@ -138,30 +138,30 @@ fn item_snapshot(item: &HubInventoryItem) -> Value {
     result
 }
 
-fn category_name(category: NativeLootCategory) -> &'static str {
+fn category_name(category: LootCategory) -> &'static str {
     match category {
-        NativeLootCategory::Key => "key",
-        NativeLootCategory::Orb => "orb",
-        NativeLootCategory::Gold => "gold",
-        NativeLootCategory::Item => "item",
-        NativeLootCategory::Potion => "potion",
-        NativeLootCategory::Powerup => "powerup",
+        LootCategory::Key => "key",
+        LootCategory::Orb => "orb",
+        LootCategory::Gold => "gold",
+        LootCategory::Item => "item",
+        LootCategory::Potion => "potion",
+        LootCategory::Powerup => "powerup",
     }
 }
 
-fn drop_snapshot(drop: &NativeLootDropSpec) -> Value {
+fn drop_snapshot(drop: &LootDropSpec) -> Value {
     let mut result = json!({"activationDelayTicks":drop.activation_delay_ticks,"id":drop.id,
-        "kind":match drop.kind { NativeLootDropKind::Bonus => "bonus", NativeLootDropKind::Gold => "gold", NativeLootDropKind::Orb => "orb", NativeLootDropKind::Sack => "sack" },
-        "nativeTypeId":drop.native_type_id,"phase":drop.phase,"position":{"x":drop.position.x,"y":drop.position.y},
-        "source":match drop.source { NativeLootDropSource::Enemy => "enemy", NativeLootDropSource::Goodie => "goodie", NativeLootDropSource::Script => "script" }});
+        "kind":match drop.kind { LootDropKind::Bonus => "bonus", LootDropKind::Gold => "gold", LootDropKind::Orb => "orb", LootDropKind::Sack => "sack" },
+        "nativeTypeId":drop.type_id,"phase":drop.phase,"position":{"x":drop.position.x,"y":drop.position.y},
+        "source":match drop.source { LootDropSource::Enemy => "enemy", LootDropSource::Goodie => "goodie", LootDropSource::Script => "script" }});
     if let Some(amount) = drop.amount {
         result["amount"] = json!(amount);
     }
     if let Some(bonus) = drop.bonus_kind {
         result["bonusKind"] = json!(match bonus {
-            NativeBonusKind::SkillChoice => 0,
-            NativeBonusKind::SkillRank => 1,
-            NativeBonusKind::DamageX4 => 2,
+            BonusKind::SkillChoice => 0,
+            BonusKind::SkillRank => 1,
+            BonusKind::DamageX4 => 2,
         });
     }
     if let Some(item) = &drop.item {
@@ -169,8 +169,8 @@ fn drop_snapshot(drop: &NativeLootDropSpec) -> Value {
     }
     if let Some(orb) = drop.orb_kind {
         result["orbKind"] = json!(match orb {
-            NativeOrbKind::Health => "health",
-            NativeOrbKind::Mana => "mana",
+            OrbKind::Health => "health",
+            OrbKind::Mana => "mana",
         });
     }
     if let Some(rotation) = drop.rotation_deg {
@@ -188,7 +188,7 @@ fn drop_snapshot(drop: &NativeLootDropSpec) -> Value {
     result
 }
 
-fn materialization_snapshot(value: &NativeLootMaterialization, rng: &NativeRng) -> Value {
+fn materialization_snapshot(value: &LootMaterialization, rng: &Rng) -> Value {
     json!({"drops":value.drops.iter().map(drop_snapshot).collect::<Vec<_>>(),
         "lastSuccessfulItemLevel":value.last_successful_item_level,"nextKeyDropLevel":value.next_key_drop_level,
         "sharedRng":rng_snapshot(rng)})
@@ -213,19 +213,18 @@ fn selection_input<'a>(
     value: &Value,
     advanced: &'a [bool; 8],
     owned: &'a [usize],
-    placement: &'a dyn NativeLootPlacement,
-) -> NativeLootSelectionInput<'a> {
+    placement: &'a dyn LootPlacement,
+) -> LootSelectionInput<'a> {
     let arena = &value["arena"];
     let participant = &value["participant"];
     let modifiers = &participant["modifiers"];
     let policies = &value["policies"];
-    let policy =
-        |key: &str| NativeLootPolicy::from_id(policies[key].as_u64().unwrap() as u32).unwrap();
-    NativeLootSelectionInput {
+    let policy = |key: &str| LootPolicy::from_id(policies[key].as_u64().unwrap() as u32).unwrap();
+    LootSelectionInput {
         actor_seed: value["actorSeed"].as_u64().unwrap() as u32,
         ground_recipe_indexes: &[],
         item_recipe_pool: None,
-        arena: NativeLootArenaInput {
+        arena: LootArenaInput {
             disable_mask: arena["disableMask"].as_u64().unwrap() as u32,
             item_level_maximum: arena["itemLevelMaximum"].as_i64().unwrap() as i32,
             item_level_minimum: arena["itemLevelMinimum"].as_i64().unwrap() as i32,
@@ -237,16 +236,16 @@ fn selection_input<'a>(
         explicit_gold_amount: value["explicitGoldAmount"].as_u64(),
         drop_delay_context: value["dropDelayContext"].as_i64().unwrap(),
         inventory_has_health_potion: value["inventoryHasHealthPotion"].as_bool().unwrap(),
-        key: NativeLootKeyInput {
+        key: LootKeyInput {
             current: value["key"]["current"].as_u64().unwrap() as u32,
             level: value["key"]["level"].as_u64().unwrap() as u32,
             remaining: value["key"]["remaining"].as_u64().unwrap() as usize,
         },
         nearby_mask_two_count: value["nearbyMaskTwoCount"].as_u64().unwrap() as usize,
-        participant: NativeLootParticipantInput {
+        participant: LootParticipantInput {
             advanced_unlocks: advanced,
             level: participant["level"].as_u64().unwrap() as u32,
-            modifiers: NativeLootModifiers {
+            modifiers: LootModifiers {
                 gold_amount: modifiers["goldAmount"].as_f64().unwrap(),
                 gold_chance: modifiers["goldChance"].as_f64().unwrap(),
                 item_chance: modifiers["itemChance"].as_f64().unwrap(),
@@ -260,7 +259,7 @@ fn selection_input<'a>(
             slot: participant["slot"].as_u64().unwrap() as usize,
         },
         placement,
-        policies: NativeLootPolicies {
+        policies: LootPolicies {
             gold: policy("gold"),
             item: policy("item"),
             orb: policy("orb"),
@@ -278,24 +277,22 @@ fn selection_input<'a>(
     }
 }
 
-fn action(value: &Value) -> NativeLootScriptAction {
+fn action(value: &Value) -> LootScriptAction {
     match value["kind"].as_str().unwrap() {
-        "drop-gold" => {
-            NativeLootScriptAction::DropGold { amount: value["amount"].as_i64().unwrap() }
-        }
-        "drop-random-gold" => NativeLootScriptAction::DropRandomGold {
+        "drop-gold" => LootScriptAction::DropGold { amount: value["amount"].as_i64().unwrap() },
+        "drop-random-gold" => LootScriptAction::DropRandomGold {
             minimum: value["minimum"].as_i64().unwrap() as i32,
             maximum: value["maximum"].as_i64().unwrap() as i32,
         },
-        "drop-item" => NativeLootScriptAction::DropItem {
+        "drop-item" => LootScriptAction::DropItem {
             recipe_index: value["recipeIndex"].as_u64().unwrap() as usize,
         },
-        "drop-key" => NativeLootScriptAction::DropKey,
-        "drop-potion" => NativeLootScriptAction::DropPotion {
-            subtype: value["subtype"].as_u64().unwrap() as u32,
-        },
+        "drop-key" => LootScriptAction::DropKey,
+        "drop-potion" => {
+            LootScriptAction::DropPotion { subtype: value["subtype"].as_u64().unwrap() as u32 }
+        }
         "drop-random-item" => {
-            NativeLootScriptAction::DropRandomItem { mode: value["mode"].as_u64().unwrap() as u32 }
+            LootScriptAction::DropRandomItem { mode: value["mode"].as_u64().unwrap() as u32 }
         }
         other => panic!("unknown script action {other}"),
     }
@@ -315,8 +312,8 @@ fn loot_categories_items_goodies_and_random_equipment_replay_the_website() {
             "amulet" => EquipmentType::Amulet,
             other => panic!("unknown equipment {other}"),
         };
-        let mut rng = NativeRng::new(row["seed"].as_i64().unwrap());
-        let actual = generate_native_random_equipment_effects(
+        let mut rng = Rng::new(row["seed"].as_i64().unwrap());
+        let actual = generate_random_equipment_effects(
             &mut rng,
             equipment_type,
             row["level"].as_i64().unwrap() as i32,
@@ -342,7 +339,7 @@ fn loot_categories_items_goodies_and_random_equipment_replay_the_website() {
                     || point.y > 230.0
             };
             let input = selection_input(value, &advanced, &owned, &placement);
-            let (category, private_rng) = select_native_loot_candidate(&input);
+            let (category, private_rng) = select_loot_candidate(&input);
             let path = format!("{family}[{index}]");
             support::assert_website_json(
                 &json!({"category":category.map(category_name),"privateRng":rng_snapshot(&private_rng)}),
@@ -351,10 +348,10 @@ fn loot_categories_items_goodies_and_random_equipment_replay_the_website() {
                 &[],
             );
             let mut rng = read_rng(&value["sharedRng"]);
-            let mut ids = NativeLootItemIds::new(1);
+            let mut ids = LootItemIds::new(1);
             let actual = if family == "scripts" {
                 materialization_snapshot(
-                    &materialize_native_loot_script_action(
+                    &materialize_loot_script_action(
                         &input,
                         action(&row["action"]),
                         &mut rng,
@@ -363,7 +360,7 @@ fn loot_categories_items_goodies_and_random_equipment_replay_the_website() {
                     &rng,
                 )
             } else {
-                let result = roll_native_enemy_loot(&input, &mut rng, &mut ids);
+                let result = roll_enemy_loot(&input, &mut rng, &mut ids);
                 let mut actual = materialization_snapshot(&result.materialization, &rng);
                 actual["emergencyPotionAttempted"] = json!(result.emergency_potion_attempted);
                 actual["selectedCategory"] = json!(result.selected_category.map(category_name));
@@ -376,8 +373,8 @@ fn loot_categories_items_goodies_and_random_equipment_replay_the_website() {
     for (index, row) in fixture["goodies"].as_array().unwrap().iter().enumerate() {
         let input = &row["input"];
         let mut rng = read_rng(&input["sharedRng"]);
-        let mut ids = NativeLootItemIds::new(17);
-        let result = resolve_native_goodie_contents(
+        let mut ids = LootItemIds::new(17);
+        let result = resolve_goodie_contents(
             &mut rng,
             &mut ids,
             input["selector"].as_u64().unwrap() as u32,
@@ -395,9 +392,8 @@ fn loot_categories_items_goodies_and_random_equipment_replay_the_website() {
         assert_eq!(ids.next_id, row["nextItemId"].as_u64().unwrap());
     }
     for row in fixture["keys"].as_array().unwrap() {
-        let mut rng = NativeRng::new(row["seed"].as_i64().unwrap());
-        let level =
-            advance_native_key_drop_level(&mut rng, row["current"].as_u64().unwrap() as u32);
+        let mut rng = Rng::new(row["seed"].as_i64().unwrap());
+        let level = advance_key_drop_level(&mut rng, row["current"].as_u64().unwrap() as u32);
         support::assert_website_json(
             &json!({"level":level,"sharedRng":rng_snapshot(&rng)}),
             &row["expected"],

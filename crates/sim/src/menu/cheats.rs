@@ -16,7 +16,7 @@ pub const CHEAT_MENU_CATALOG_QUERY: &str = "local developer = type(sd.dev) == 't
 pub struct CheatMenuEnemyDescriptor {
     pub base: String,
     pub key: String,
-    pub native_type_id: i64,
+    pub type_id: i64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,7 +24,7 @@ pub struct CheatMenuItemDescriptor {
     pub key: String,
     pub kind: String,
     pub name: String,
-    pub native_type_id: i64,
+    pub type_id: i64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -147,7 +147,7 @@ pub fn decode_cheat_menu_catalogs(values: &[LuaValue]) -> Result<CheatMenuCatalo
             Ok(CheatMenuEnemyDescriptor {
                 base: string_field(row, "base")?,
                 key: string_field(row, "key")?,
-                native_type_id: integer_field(row, "native_type_id")?,
+                type_id: integer_field(row, "native_type_id")?,
             })
         })?,
         items: decode_catalog(&values[1], "item", true, |value, index| {
@@ -156,7 +156,7 @@ pub fn decode_cheat_menu_catalogs(values: &[LuaValue]) -> Result<CheatMenuCatalo
                 key: string_field(row, "key")?,
                 kind: string_field(row, "kind")?,
                 name: string_field(row, "name")?,
-                native_type_id: integer_field(row, "native_type_id")?,
+                type_id: integer_field(row, "native_type_id")?,
             })
         })?,
         skills: decode_catalog(&values[2], "skill", true, |value, index| {
@@ -195,7 +195,7 @@ pub fn decode_cheat_menu_catalogs(values: &[LuaValue]) -> Result<CheatMenuCatalo
 }
 
 pub fn append_cheat_console_history(history: &mut Vec<String>, code: &str) {
-    let command = code.trim_matches(crate::native_ui_text::is_javascript_whitespace);
+    let command = code.trim_matches(crate::ui_text::is_javascript_whitespace);
     if command.is_empty() || history.last().is_some_and(|last| last == command) {
         return;
     }

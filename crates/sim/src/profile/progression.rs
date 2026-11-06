@@ -1,19 +1,18 @@
 //! Native experience thresholds, skill offers and acquisition from Website
 //! `core-kernels/player-progression.ts`. Combat resources stay in their canonical state.
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::combat::PlayerCombatState;
 use crate::float::fround;
 
 use super::{
-    NATIVE_HAGATHA_FACTORS, NATIVE_SKILL_CATALOG, NATIVE_WELD_BUILDS, NativeSkillBookState,
-    SPELL_WELDING_SKILL_ID, WizardElement, native_hagatha_revelation_rank, native_skill_category,
-    native_skill_rule, native_skill_stat, native_weld_build,
+    HAGATHA_FACTORS, SKILL_CATALOG, SPELL_WELDING_SKILL_ID, SkillBookState, WELD_BUILDS,
+    WizardElement, hagatha_revelation_rank, skill_category, skill_rule, skill_stat, weld_build,
 };
 
 pub const MAX_PLAYER_LEVEL: u32 = 75;
 pub const MAX_PLAYER_EXPERIENCE: f64 = 10_000_000.0;
-pub const NATIVE_LEVEL_THRESHOLDS: [u32; 76] = [
+pub const LEVEL_THRESHOLDS: [u32; 76] = [
     0, 90, 160, 275, 390, 520, 650, 800, 1060, 1300, 1600, 2000, 2400, 2850, 3400, 4200, 4800,
     5650, 6000, 6500, 7200, 7850, 8900, 9900, 11000, 12000, 13000, 14000, 15000, 16000, 20000,
     25000, 30000, 35000, 40000, 45000, 51000, 57000, 64000, 71000, 79000, 88000, 98000, 110000,
@@ -26,13 +25,13 @@ const WELDING_RELATED: [[usize; 2]; 5] = [[10, 9], [18, 17], [25, 26], [34, 33],
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeHagathaRuntimeState {
+pub struct HagathaRuntimeState {
     pub cheat_death_charges: u32,
     pub reverie_active: bool,
     pub serendipity_active: bool,
 }
 
-impl NativeHagathaRuntimeState {
+impl HagathaRuntimeState {
     pub fn purchase(&mut self, selectors: &[u32]) {
         if selectors.contains(&7) {
             self.cheat_death_charges = 1;
@@ -75,12 +74,12 @@ impl NativeHagathaRuntimeState {
         }
         assert_eq!(self.cheat_death_charges, 1, "Cheat Death has one native charge");
         self.cheat_death_charges = 0;
-        Some(fround(maximum_health * NATIVE_HAGATHA_FACTORS.cheat_death_recovery))
+        Some(fround(maximum_health * HAGATHA_FACTORS.cheat_death_recovery))
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativePotionKind {
+pub enum PotionKind {
     Health,
     Mana,
     WizardChug,
@@ -89,9 +88,9 @@ pub enum NativePotionKind {
     Rejuvenation,
 }
 
-impl NativePotionKind {
+impl PotionKind {
     #[must_use]
-    pub fn from_native_subtype(subtype: u32) -> Option<Self> {
+    pub fn from_subtype(subtype: u32) -> Option<Self> {
         Some(match subtype {
             0 => Self::Health,
             1 => Self::Mana,
@@ -168,7 +167,7 @@ pub struct PlayerProgressionState {
     pub exclude_active_weld_build_from_offers: bool,
     pub experience: f64,
     pub forced_offer_skill_ids: Vec<usize>,
-    pub hagatha_runtime: NativeHagathaRuntimeState,
+    pub hagatha_runtime: HagathaRuntimeState,
     pub level: u32,
     pub mind_chug_ticks_remaining: u64,
     // Native/portable disk imports may retain fractional thresholds until XP advances.
@@ -196,10 +195,10 @@ impl PlayerProgressionState {
             exclude_active_weld_build_from_offers: false,
             experience: 0.0,
             forced_offer_skill_ids: Vec::new(),
-            hagatha_runtime: NativeHagathaRuntimeState::default(),
+            hagatha_runtime: HagathaRuntimeState::default(),
             level: 1,
             mind_chug_ticks_remaining: 0,
-            next_threshold: f64::from(NATIVE_LEVEL_THRESHOLDS[1]),
+            next_threshold: f64::from(LEVEL_THRESHOLDS[1]),
             offer_cycle: 0,
             offer_seed,
             pending_levels: Vec::new(),
@@ -222,7 +221,7 @@ impl PlayerProgressionState {
         ((self.experience - self.previous_threshold) / span).clamp(0.0, 1.0)
     }
 
-    pub fn apply_acquisition_offer_seeds(&mut self, gameplay_rng: &mut NativeRng, count: usize) {
+    pub fn apply_acquisition_offer_seeds(&mut self, gameplay_rng: &mut Rng, count: usize) {
         for _ in 0..count {
             self.offer_seed = gameplay_rng.draw_integer(1_000_000) as u32;
         }
@@ -231,10 +230,10 @@ impl PlayerProgressionState {
     /// Native level thresholds are strict: exactly 90XP is still level one.
     pub fn grant_experience(
         &mut self,
-        book: &NativeSkillBookState,
+        book: &SkillBookState,
         combat: &mut PlayerCombatState,
         amount: f64,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
         sorcerors_charm_owned: bool,
     ) {
         assert!(
@@ -253,13 +252,13 @@ impl PlayerProgressionState {
         let old_level = self.level;
         let mut crossed_count = 0;
         while self.level < MAX_PLAYER_LEVEL
-            && self.experience > f64::from(NATIVE_LEVEL_THRESHOLDS[self.level as usize])
+            && self.experience > f64::from(LEVEL_THRESHOLDS[self.level as usize])
         {
             self.level += 1;
             crossed_count += 1;
         }
-        self.next_threshold = f64::from(NATIVE_LEVEL_THRESHOLDS[self.level as usize]);
-        self.previous_threshold = f64::from(NATIVE_LEVEL_THRESHOLDS[self.level as usize - 1]);
+        self.next_threshold = f64::from(LEVEL_THRESHOLDS[self.level as usize]);
+        self.previous_threshold = f64::from(LEVEL_THRESHOLDS[self.level as usize - 1]);
         if self.level != old_level {
             combat.current_health = combat.maximum_health;
             combat.current_mana = combat.maximum_mana;
@@ -280,9 +279,9 @@ impl PlayerProgressionState {
 
     pub fn open_next_offer(
         &mut self,
-        book: &NativeSkillBookState,
+        book: &SkillBookState,
         maximum_mana: f64,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
         sorcerors_charm_available: bool,
     ) {
         if self.pending_offer.is_some() || self.pending_levels.is_empty() {
@@ -301,10 +300,10 @@ impl PlayerProgressionState {
     /// a separate resource-recovery boundary after this shared progression step.
     pub fn synchronize_level_milestone(
         &mut self,
-        book: &NativeSkillBookState,
+        book: &SkillBookState,
         maximum_mana: f64,
         milestone: &SharedPlayerLevelMilestone,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         charm_owned: bool,
     ) -> Result<(), String> {
         milestone.validate()?;
@@ -321,8 +320,8 @@ impl PlayerProgressionState {
         }
         self.experience = milestone.experience.min(MAX_PLAYER_EXPERIENCE);
         self.level = milestone.level;
-        self.next_threshold = f64::from(NATIVE_LEVEL_THRESHOLDS[self.level as usize]);
-        self.previous_threshold = f64::from(NATIVE_LEVEL_THRESHOLDS[self.level as usize - 1]);
+        self.next_threshold = f64::from(LEVEL_THRESHOLDS[self.level as usize]);
+        self.previous_threshold = f64::from(LEVEL_THRESHOLDS[self.level as usize - 1]);
         self.revision += 1;
         self.open_next_offer(book, maximum_mana, rng, charm_owned);
         Ok(())
@@ -330,9 +329,9 @@ impl PlayerProgressionState {
 
     pub fn choose_skill(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         choice: PlayerSkillChoice,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
         owned_hagatha_selectors: &[u32],
     ) -> bool {
         let Some(offer) = &self.pending_offer else {
@@ -347,11 +346,11 @@ impl PlayerProgressionState {
         if chosen.skill_id != choice.skill_id {
             return false;
         }
-        let Some(entry) = NATIVE_SKILL_CATALOG.get(chosen.skill_id) else {
+        let Some(entry) = SKILL_CATALOG.get(chosen.skill_id) else {
             return false;
         };
         let rank = book.permanent_ranks[chosen.skill_id];
-        let weld = chosen.weld_build_id.and_then(native_weld_build);
+        let weld = chosen.weld_build_id.and_then(weld_build);
         if chosen.skill_id == SPELL_WELDING_SKILL_ID {
             if chosen.insight || weld.is_none() || rank > 0 || chosen.target_rank != 1 {
                 return false;
@@ -435,11 +434,11 @@ impl PlayerProgressionState {
 
     pub fn reroll_offer(
         &mut self,
-        book: &NativeSkillBookState,
+        book: &SkillBookState,
         maximum_mana: f64,
         offer_sequence: u64,
         next_offer_seed: u32,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
     ) -> bool {
         if !self.sorcerors_charm_available
             || self.pending_offer.as_ref().is_none_or(|offer| offer.sequence != offer_sequence)
@@ -456,10 +455,10 @@ impl PlayerProgressionState {
 
     pub fn defer_choice(
         &mut self,
-        book: &NativeSkillBookState,
+        book: &SkillBookState,
         maximum_mana: f64,
         offer_sequence: u64,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
         sorcerors_charm_owned: bool,
     ) -> bool {
         if !sorcerors_charm_owned
@@ -481,9 +480,9 @@ impl PlayerProgressionState {
 
     pub fn grant_bonus_skill_choice(
         &mut self,
-        book: &NativeSkillBookState,
+        book: &SkillBookState,
         maximum_mana: f64,
-        gameplay_rng: &mut NativeRng,
+        gameplay_rng: &mut Rng,
         sorcerors_charm_owned: bool,
     ) {
         self.pending_levels.push(self.level);
@@ -494,19 +493,19 @@ impl PlayerProgressionState {
         }
     }
 
-    pub fn apply_potion(&mut self, kind: NativePotionKind, combat: &mut PlayerCombatState) {
+    pub fn apply_potion(&mut self, kind: PotionKind, combat: &mut PlayerCombatState) {
         match kind {
-            NativePotionKind::Health => combat.current_health = combat.maximum_health,
-            NativePotionKind::Mana => combat.current_mana = combat.maximum_mana,
-            NativePotionKind::WizardChug => self.damage_x4_ticks_remaining = 6000,
-            NativePotionKind::Antidote => {
+            PotionKind::Health => combat.current_health = combat.maximum_health,
+            PotionKind::Mana => combat.current_mana = combat.maximum_mana,
+            PotionKind::WizardChug => self.damage_x4_ticks_remaining = 6000,
+            PotionKind::Antidote => {
                 combat.poison_before_cold = false;
                 combat.poison_damage_per_tick = 0.0;
                 combat.poison_ticks_remaining = 0;
                 self.poison_immunity_ticks_remaining = 1000;
             }
-            NativePotionKind::MindChug => self.mind_chug_ticks_remaining = 6000,
-            NativePotionKind::Rejuvenation => {
+            PotionKind::MindChug => self.mind_chug_ticks_remaining = 6000,
+            PotionKind::Rejuvenation => {
                 combat.current_health = combat.maximum_health;
                 combat.current_mana = combat.maximum_mana;
             }
@@ -538,7 +537,7 @@ impl PlayerProgressionState {
 }
 
 /// Native creation consumes 13 acquisition seeds, retaining only the last one.
-pub fn draw_native_player_creation_offer_seed(gameplay_rng: &mut NativeRng) -> u32 {
+pub fn draw_player_creation_offer_seed(gameplay_rng: &mut Rng) -> u32 {
     let mut seed = 0;
     for _ in 0..13 {
         seed = gameplay_rng.draw_integer(1_000_000) as u32;
@@ -580,15 +579,11 @@ pub fn boneyard_enemy_experience_award(
 }
 
 #[must_use]
-pub fn native_skill_passes_offer_eligibility(
-    skill_id: usize,
-    level: u32,
-    book: &NativeSkillBookState,
-) -> bool {
-    let Some(rule) = native_skill_rule(skill_id) else {
+pub fn skill_passes_offer_eligibility(skill_id: usize, level: u32, book: &SkillBookState) -> bool {
+    let Some(rule) = skill_rule(skill_id) else {
         return false;
     };
-    let Some(entry) = NATIVE_SKILL_CATALOG.get(skill_id) else {
+    let Some(entry) = SKILL_CATALOG.get(skill_id) else {
         return false;
     };
     if entry.cap_level < 1
@@ -606,12 +601,12 @@ pub fn native_skill_passes_offer_eligibility(
 #[must_use]
 pub fn build_player_skill_offer(
     progression: &PlayerProgressionState,
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     maximum_mana: f64,
     sequence: u64,
-    gameplay_rng: &mut NativeRng,
+    gameplay_rng: &mut Rng,
 ) -> PlayerSkillOffer {
-    let mut rng = NativeRng::new(i64::from(progression.offer_seed));
+    let mut rng = Rng::new(i64::from(progression.offer_seed));
     let desired = if learned(book, 63) { 4 } else { 3 };
     let category_one_owned = count_owned_category(book, 1);
     let category_two_owned = count_owned_category(book, 2);
@@ -645,11 +640,11 @@ pub fn build_player_skill_offer(
     let mut general = Vec::new();
     for skill_id in 8..=79 {
         if skill_id == SPELL_WELDING_SKILL_ID
-            || !native_skill_passes_offer_eligibility(skill_id, progression.level, book)
+            || !skill_passes_offer_eligibility(skill_id, progression.level, book)
         {
             continue;
         }
-        let rule = native_skill_rule(skill_id).expect("the eligible native skill rule");
+        let rule = skill_rule(skill_id).expect("the eligible native skill rule");
         let rank = book.effective_ranks[skill_id];
         let focused_out = (focus_one && rule.category == 1 && rank == 0)
             || (focus_two && rule.category == 2 && rank == 0);
@@ -727,21 +722,21 @@ pub fn build_player_skill_offer(
         if attempts == 100 {
             for skill_id in 8..=79 {
                 if skill_id != SPELL_WELDING_SKILL_ID
-                    && native_skill_passes_offer_eligibility(skill_id, progression.level, book)
+                    && skill_passes_offer_eligibility(skill_id, progression.level, book)
                 {
                     general.push(skill_id);
                 }
             }
         }
         let skill_id = general[rng.draw_integer(general.len() as i32) as usize];
-        let category = native_skill_category(skill_id);
+        let category = skill_category(skill_id);
         if category == Some(4)
-            && selected.iter().any(|option| native_skill_category(option.skill_id) == Some(4))
+            && selected.iter().any(|option| skill_category(option.skill_id) == Some(4))
         {
             continue;
         }
         if category == Some(1)
-            && selected.iter().any(|option| native_skill_category(option.skill_id) == Some(1))
+            && selected.iter().any(|option| skill_category(option.skill_id) == Some(1))
             && category_one_collisions < 50
         {
             category_one_collisions += 1;
@@ -758,14 +753,14 @@ pub fn build_player_skill_offer(
     }
 }
 
-fn learned(book: &NativeSkillBookState, skill_id: usize) -> bool {
+fn learned(book: &SkillBookState, skill_id: usize) -> bool {
     book.permanent_ranks.get(skill_id).is_some_and(|rank| *rank >= 1)
 }
-fn count_owned_category(book: &NativeSkillBookState, category: u32) -> usize {
-    (8..=79).filter(|id| native_skill_category(*id) == Some(category) && learned(book, *id)).count()
+fn count_owned_category(book: &SkillBookState, category: u32) -> usize {
+    (8..=79).filter(|id| skill_category(*id) == Some(category) && learned(book, *id)).count()
 }
-fn has_dependencies_and_unlock(skill_id: usize, book: &NativeSkillBookState) -> bool {
-    let Some(rule) = native_skill_rule(skill_id) else {
+fn has_dependencies_and_unlock(skill_id: usize, book: &SkillBookState) -> bool {
+    let Some(rule) = skill_rule(skill_id) else {
         return false;
     };
     if (72..=79).contains(&skill_id)
@@ -778,15 +773,15 @@ fn has_dependencies_and_unlock(skill_id: usize, book: &NativeSkillBookState) -> 
         && (rule.any.is_empty() || rule.any.iter().any(|id| learned(book, *id)))
         && !rule.forbidden.iter().any(|id| learned(book, *id))
 }
-fn welding_eligible(level: u32, book: &NativeSkillBookState) -> bool {
+fn welding_eligible(level: u32, book: &SkillBookState) -> bool {
     !learned(book, SPELL_WELDING_SKILL_ID)
-        && native_skill_passes_offer_eligibility(SPELL_WELDING_SKILL_ID, level, book)
+        && skill_passes_offer_eligibility(SPELL_WELDING_SKILL_ID, level, book)
         && ELEMENTAL_PRIMARIES.iter().filter(|id| learned(book, **id)).count() > 1
 }
 fn draw_welding_option(
     progression: &PlayerProgressionState,
-    book: &NativeSkillBookState,
-    rng: &mut NativeRng,
+    book: &SkillBookState,
+    rng: &mut Rng,
 ) -> Option<PlayerSkillOfferOption> {
     if progression.weld_offer_marker > 999 || !welding_eligible(progression.level, book) {
         return None;
@@ -797,7 +792,7 @@ fn draw_welding_option(
     {
         return None;
     }
-    let candidates: Vec<_> = NATIVE_WELD_BUILDS
+    let candidates: Vec<_> = WELD_BUILDS
         .iter()
         .filter(|build| {
             build.primary_skill_ids.iter().all(|id| learned(book, *id))
@@ -816,7 +811,7 @@ fn draw_welding_option(
         weld_build_id: Some(build.id),
     })
 }
-fn welding_related_pool(book: &NativeSkillBookState, level: u32) -> Vec<usize> {
+fn welding_related_pool(book: &SkillBookState, level: u32) -> Vec<usize> {
     let mut related = Vec::new();
     for should_be_learned in [true, false] {
         for (index, primary) in ELEMENTAL_PRIMARIES.iter().enumerate() {
@@ -825,7 +820,7 @@ fn welding_related_pool(book: &NativeSkillBookState, level: u32) -> Vec<usize> {
             }
             related.push(*primary);
             for skill_id in WELDING_RELATED[index] {
-                if native_skill_passes_offer_eligibility(skill_id, level, book) {
+                if skill_passes_offer_eligibility(skill_id, level, book) {
                     related.push(skill_id);
                 }
             }
@@ -836,16 +831,16 @@ fn welding_related_pool(book: &NativeSkillBookState, level: u32) -> Vec<usize> {
     }
     related
 }
-fn started_or_dependent(skill_id: usize, book: &NativeSkillBookState) -> bool {
+fn started_or_dependent(skill_id: usize, book: &SkillBookState) -> bool {
     book.effective_ranks[skill_id] > 0
-        || native_skill_rule(skill_id)
+        || skill_rule(skill_id)
             .and_then(|rule| rule.all.first())
             .is_some_and(|required| learned(book, *required))
 }
 fn mana_cost(skill_id: usize, rank: u32) -> f64 {
-    native_skill_stat(skill_id, "mManaCost", rank).unwrap_or(0.0)
+    skill_stat(skill_id, "mManaCost", rank).unwrap_or(0.0)
 }
-fn offer_option(skill_id: usize, book: &NativeSkillBookState) -> PlayerSkillOfferOption {
+fn offer_option(skill_id: usize, book: &SkillBookState) -> PlayerSkillOfferOption {
     PlayerSkillOfferOption {
         insight: false,
         skill_id,
@@ -858,19 +853,19 @@ fn insert_unique(selected: &mut Vec<PlayerSkillOfferOption>, option: PlayerSkill
         selected.push(option);
     }
 }
-fn full_range_shuffle<T>(values: &mut [T], rng: &mut NativeRng) {
+fn full_range_shuffle<T>(values: &mut [T], rng: &mut Rng) {
     for index in 0..values.len() {
         let draw = rng.draw_integer(values.len() as i32) as usize;
         values.swap(index, draw);
     }
 }
 
-impl NativeSkillBookState {
-    pub fn increase_random_learned_skill(&mut self, rng: &mut NativeRng) -> Option<usize> {
+impl SkillBookState {
+    pub fn increase_random_learned_skill(&mut self, rng: &mut Rng) -> Option<usize> {
         let eligible: Vec<_> = (8..82)
             .filter(|id| {
                 self.effective_ranks[*id] > 0
-                    && self.permanent_ranks[*id] < NATIVE_SKILL_CATALOG[*id].maximum_level
+                    && self.permanent_ranks[*id] < SKILL_CATALOG[*id].maximum_level
             })
             .collect();
         if eligible.is_empty() {
@@ -882,13 +877,8 @@ impl NativeSkillBookState {
         Some(skill_id)
     }
 
-    pub fn grant_weird_caster_skill(
-        &mut self,
-        rng: &mut NativeRng,
-        owned: &[u32],
-    ) -> Option<usize> {
-        let category_two: Vec<_> =
-            (8..=79).filter(|id| native_skill_category(*id) == Some(2)).collect();
+    pub fn grant_weird_caster_skill(&mut self, rng: &mut Rng, owned: &[u32]) -> Option<usize> {
+        let category_two: Vec<_> = (8..=79).filter(|id| skill_category(*id) == Some(2)).collect();
         if category_two.iter().filter(|id| self.permanent_ranks[**id] > 0).count() >= 2 {
             return None;
         }
@@ -898,9 +888,7 @@ impl NativeSkillBookState {
             return None;
         }
         let skill_id = candidates[rng.draw_integer(candidates.len() as i32) as usize];
-        let rank = NATIVE_SKILL_CATALOG[skill_id]
-            .maximum_level
-            .min(native_hagatha_revelation_rank(1, owned));
+        let rank = SKILL_CATALOG[skill_id].maximum_level.min(hagatha_revelation_rank(1, owned));
         assert!(rank > 0, "the native Weird Caster skill has an authored rank");
         self.permanent_ranks[skill_id] = rank;
         self.effective_ranks[skill_id] = rank;
@@ -919,9 +907,7 @@ impl NativeSkillBookState {
             WizardElement::Earth => [40, 45],
         };
         for skill_id in starters {
-            if self.permanent_ranks[skill_id] >= 2
-                || NATIVE_SKILL_CATALOG[skill_id].maximum_level < 2
-            {
+            if self.permanent_ranks[skill_id] >= 2 || SKILL_CATALOG[skill_id].maximum_level < 2 {
                 continue;
             }
             self.permanent_ranks[skill_id] = 2;
@@ -937,14 +923,14 @@ mod tests {
 
     #[test]
     fn crossing_the_first_experience_threshold_heals_and_opens_a_real_skill_offer() {
-        let book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+        let book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
         let mut progression = PlayerProgressionState::new(1);
         let mut combat = PlayerCombatState {
             current_health: 5.0,
             current_mana: 1.0,
             ..PlayerCombatState::new()
         };
-        let mut rng = NativeRng::new(1);
+        let mut rng = Rng::new(1);
         progression.grant_experience(&book, &mut combat, 90.0, &mut rng, false);
         assert_eq!(progression.level, 1);
         assert_eq!(combat.current_health, 5.0);

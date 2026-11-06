@@ -3,7 +3,7 @@ use super::world::EnemyWorld;
 use crate::enemies::model::EnemyActor;
 use crate::float::fround;
 use crate::spells::targeting::direction_from_heading;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -34,7 +34,7 @@ pub struct SpiderRemains {
 }
 
 #[must_use]
-pub fn create_native_dead_spider(position: Vec2, heading: f64) -> DeadSpiderState {
+pub fn create_dead_spider(position: Vec2, heading: f64) -> DeadSpiderState {
     DeadSpiderState {
         position,
         heading_deg: heading,
@@ -45,7 +45,7 @@ pub fn create_native_dead_spider(position: Vec2, heading: f64) -> DeadSpiderStat
         decal: None,
     }
 }
-pub fn step_native_dead_spider(source: &mut DeadSpiderState, rng: &mut NativeRng) -> bool {
+pub fn step_dead_spider(source: &mut DeadSpiderState, rng: &mut Rng) -> bool {
     let direction = direction_from_heading(source.heading_deg);
     source.position = Vec2::new(
         fround(source.position.x - direction.x * source.slide_speed.x),
@@ -93,7 +93,7 @@ pub fn step_native_dead_spider(source: &mut DeadSpiderState, rng: &mut NativeRng
 }
 
 #[must_use]
-pub fn native_dead_spider_entry(source: &DeadSpiderState) -> Option<usize> {
+pub fn dead_spider_entry(source: &DeadSpiderState) -> Option<usize> {
     let mut facing = source.heading_deg / 18.0;
     while facing < 0.0 {
         facing += 10.0;
@@ -109,12 +109,12 @@ impl EnemyWorld {
         self.spider_remains.push(SpiderRemains {
             id: self.next_death_effect_id,
             spawn_tick: tick,
-            state: create_native_dead_spider(actor.position, actor.heading_deg),
+            state: create_dead_spider(actor.position, actor.heading_deg),
         });
         self.next_death_effect_id += 1;
     }
     pub fn step_spider_remains(&mut self) {
         self.spider_remains
-            .retain_mut(|actor| step_native_dead_spider(&mut actor.state, &mut self.steering_rng));
+            .retain_mut(|actor| step_dead_spider(&mut actor.state, &mut self.steering_rng));
     }
 }

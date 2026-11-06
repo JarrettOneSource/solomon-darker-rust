@@ -4,7 +4,7 @@ mod command_player_snapshot;
 #[path = "support/player_combat.rs"]
 mod support;
 use serde_json::{Value, json};
-use solomon_sim::NativeRng;
+use solomon_sim::Rng;
 use solomon_sim::session::player_combat::*;
 use support::*;
 
@@ -43,7 +43,7 @@ fn entity_damage_mana_and_ordered_resource_death_ticks_replay_the_source() {
     for journey in fixture["journeys"].as_array().unwrap() {
         let spec = &journey["spec"];
         let (mut player, wizard, primary) = configured_player(spec);
-        let mut rng = NativeRng::new(917);
+        let mut rng = Rng::new(917);
         let mut expected = journey["samples"].as_array().unwrap().iter().peekable();
         for tick in 1..=spec["ticks"].as_u64().unwrap() {
             let flags = step_player_combat(PlayerCombatContext {

@@ -12,7 +12,7 @@ use crate::Vec2;
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "kebab-case"))]
-pub enum NativeEtherDrainTargetRef {
+pub enum EtherDrainTargetRef {
     Enemy { id: u64, registration_ordinal: usize },
     Golem { id: u64 },
     Loot { id: u64, registration_ordinal: usize },
@@ -22,7 +22,7 @@ pub enum NativeEtherDrainTargetRef {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "kebab-case"))]
-pub enum NativeEtherDrainWorldAnimationRef {
+pub enum EtherDrainWorldAnimationRef {
     EnemyDeathEffect { id: u64 },
     PrimaryTransient { id: u64 },
     SecondaryActor { id: u64 },
@@ -32,7 +32,7 @@ pub enum NativeEtherDrainWorldAnimationRef {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEtherDrainWorldAnimationIds {
+pub struct EtherDrainWorldAnimationIds {
     #[cfg_attr(feature = "persistence", serde(rename = "enemy-death-effect"))]
     pub enemy_death_effect: u64,
     #[cfg_attr(feature = "persistence", serde(rename = "primary-transient"))]
@@ -47,7 +47,7 @@ pub struct NativeEtherDrainWorldAnimationIds {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeEtherDrainAtlas {
+pub enum EtherDrainAtlas {
     BadGuys,
     Demon,
 }
@@ -55,8 +55,8 @@ pub enum NativeEtherDrainAtlas {
 /// A captured family image before the field supplies its own alpha and kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEtherDrainCapturedImage {
-    pub atlas: NativeEtherDrainAtlas,
+pub struct EtherDrainCapturedImage {
+    pub atlas: EtherDrainAtlas,
     pub entry: usize,
     pub tint: u32,
     pub body_y_offset: u32,
@@ -65,7 +65,7 @@ pub struct NativeEtherDrainCapturedImage {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(tag = "kind", rename_all = "kebab-case"))]
-pub enum NativeEtherDrainAnimation {
+pub enum EtherDrainAnimation {
     Debris {
         position: Vec2,
         direction: Vec2,
@@ -77,7 +77,7 @@ pub enum NativeEtherDrainAnimation {
     },
     Captured {
         alpha: f64,
-        atlas: NativeEtherDrainAtlas,
+        atlas: EtherDrainAtlas,
         entry: usize,
         tint: u32,
         body_y_offset: u32,
@@ -86,19 +86,19 @@ pub enum NativeEtherDrainAnimation {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEtherDrainState {
-    pub animations: Vec<NativeEtherDrainAnimation>,
+pub struct EtherDrainState {
+    pub animations: Vec<EtherDrainAnimation>,
     pub targets_initialized: bool,
     /// Source's -1 is the initial notification cursor; actual registrations are nonnegative.
     pub last_loot_registration_ordinal: i64,
-    pub loose: Vec<NativeEtherDrainTargetRef>,
-    pub queried: Vec<NativeEtherDrainTargetRef>,
+    pub loose: Vec<EtherDrainTargetRef>,
+    pub queried: Vec<EtherDrainTargetRef>,
     pub scenery: Vec<u64>,
-    pub world_animation_refs: Vec<NativeEtherDrainWorldAnimationRef>,
-    pub last_world_animation_ids: NativeEtherDrainWorldAnimationIds,
+    pub world_animation_refs: Vec<EtherDrainWorldAnimationRef>,
+    pub last_world_animation_ids: EtherDrainWorldAnimationIds,
 }
 
-impl Default for NativeEtherDrainState {
+impl Default for EtherDrainState {
     fn default() -> Self {
         Self {
             animations: Vec::new(),
@@ -108,7 +108,7 @@ impl Default for NativeEtherDrainState {
             queried: Vec::new(),
             scenery: Vec::new(),
             world_animation_refs: Vec::new(),
-            last_world_animation_ids: NativeEtherDrainWorldAnimationIds::default(),
+            last_world_animation_ids: EtherDrainWorldAnimationIds::default(),
         }
     }
 }

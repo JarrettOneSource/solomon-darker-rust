@@ -3,11 +3,11 @@
 
 use crate::float;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldMeteorDebrisSeed {
+pub struct WeldMeteorDebrisSeed {
     pub alpha: f64,
     pub color_green: f64,
     pub height: f64,
@@ -23,26 +23,26 @@ pub struct NativeWeldMeteorDebrisSeed {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeWeldBoulderDebrisParticleState {
-    pub common: NativeWeldMeteorDebrisSeed,
+pub struct WeldBoulderDebrisParticleState {
+    pub common: WeldMeteorDebrisSeed,
     pub bounce_velocity: f64,
     pub enhanced_shadow: bool,
 }
 
 /// EBoulder's terminal vslot, after its separately owned Ether fade.
-pub fn create_native_weld_ethereal_boulder_breakup_debris_program(
+pub fn create_weld_ethereal_boulder_breakup_debris_program(
     scale: f64,
-    rng: &mut NativeRng,
-) -> Vec<NativeWeldMeteorDebrisSeed> {
+    rng: &mut Rng,
+) -> Vec<WeldMeteorDebrisSeed> {
     create_ethereal_boulder_debris_program(scale, None, rng)
 }
 
 /// Weak held EBoulder at `0x0054572C..0x00545B0C` sheds its extra pieces.
-pub fn create_native_weld_ethereal_boulder_weak_debris_program(
+pub fn create_weld_ethereal_boulder_weak_debris_program(
     direction: Vec2,
     scale: f64,
-    rng: &mut NativeRng,
-) -> Vec<NativeWeldMeteorDebrisSeed> {
+    rng: &mut Rng,
+) -> Vec<WeldMeteorDebrisSeed> {
     create_ethereal_boulder_debris_program(scale, Some(direction), rng)
 }
 
@@ -51,8 +51,8 @@ pub fn create_native_weld_ethereal_boulder_weak_debris_program(
 fn create_ethereal_boulder_debris_program(
     input_scale: f64,
     weak_direction: Option<Vec2>,
-    rng: &mut NativeRng,
-) -> Vec<NativeWeldMeteorDebrisSeed> {
+    rng: &mut Rng,
+) -> Vec<WeldMeteorDebrisSeed> {
     let scale = input_scale.min(1.0);
     let count_scalar = fround(input_scale * 30.0).max(8.0);
     let count = if weak_direction.is_some() {
@@ -109,7 +109,7 @@ fn create_ethereal_boulder_debris_program(
                 Vec2::new(fround(direction.x * movement), fround(direction.y * movement)),
             )
         };
-        debris.push(NativeWeldMeteorDebrisSeed {
+        debris.push(WeldMeteorDebrisSeed {
             alpha: 2.0,
             color_green: color,
             height: fround(-height),
@@ -132,10 +132,10 @@ fn create_ethereal_boulder_debris_program(
 }
 
 #[must_use]
-pub fn create_native_weld_boulder_contact_debris_program(
+pub fn create_weld_boulder_contact_debris_program(
     scale: f64,
-    rng: &mut NativeRng,
-) -> NativeWeldMeteorDebrisSeed {
+    rng: &mut Rng,
+) -> WeldMeteorDebrisSeed {
     let angle = rng.draw_scaled_float(360.0, false);
     let bounce = rng.draw_scaled_float(3.0, false);
     let height = rng.draw_scaled_float(20.0, false);
@@ -158,7 +158,7 @@ pub fn create_native_weld_boulder_contact_debris_program(
     let radial = Vec2::new(fround(float::sin(radians)), fround(-float::cos(radians)));
     let velocity = Vec2::new(fround(radial.x * 1.5), radial.y);
     let spawn_distance = fround(distance + 10.0);
-    NativeWeldMeteorDebrisSeed {
+    WeldMeteorDebrisSeed {
         alpha: 2.0,
         color_green: color,
         height: fround(-height),
@@ -177,12 +177,12 @@ pub fn create_native_weld_boulder_contact_debris_program(
 }
 
 #[must_use]
-pub fn create_native_weld_boulder_debris_particle(
-    mut seed: NativeWeldMeteorDebrisSeed,
+pub fn create_weld_boulder_debris_particle(
+    mut seed: WeldMeteorDebrisSeed,
     enhanced_shadow: bool,
-) -> NativeWeldBoulderDebrisParticleState {
+) -> WeldBoulderDebrisParticleState {
     seed.alpha = if enhanced_shadow { 10.0 } else { 2.0 };
-    NativeWeldBoulderDebrisParticleState {
+    WeldBoulderDebrisParticleState {
         common: seed,
         bounce_velocity: seed.vertical_velocity,
         enhanced_shadow,
@@ -193,7 +193,7 @@ pub fn create_native_weld_boulder_debris_particle(
 /// Coffin's art and primary Boulder metadata remain with their owning actors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeBoulderDebrisMotion {
+pub struct BoulderDebrisMotion {
     pub alpha: f64,
     pub bounce_velocity: f64,
     pub height: f64,
@@ -205,12 +205,12 @@ pub struct NativeBoulderDebrisMotion {
 }
 
 #[must_use]
-pub fn step_native_weld_boulder_debris_particle(
-    mut particle: NativeWeldBoulderDebrisParticleState,
+pub fn step_weld_boulder_debris_particle(
+    mut particle: WeldBoulderDebrisParticleState,
     global_tick: u64,
-    rng: &mut NativeRng,
-) -> Option<NativeWeldBoulderDebrisParticleState> {
-    let motion = NativeBoulderDebrisMotion {
+    rng: &mut Rng,
+) -> Option<WeldBoulderDebrisParticleState> {
+    let motion = BoulderDebrisMotion {
         alpha: particle.common.alpha,
         bounce_velocity: particle.bounce_velocity,
         height: particle.common.height,
@@ -220,7 +220,7 @@ pub fn step_native_weld_boulder_debris_particle(
         velocity: particle.common.velocity,
         vertical_velocity: particle.common.vertical_velocity,
     };
-    let motion = step_native_boulder_debris_motion(motion, global_tick, rng)?;
+    let motion = step_boulder_debris_motion(motion, global_tick, rng)?;
     particle.common.alpha = motion.alpha;
     particle.bounce_velocity = motion.bounce_velocity;
     particle.common.height = motion.height;
@@ -233,11 +233,11 @@ pub fn step_native_weld_boulder_debris_particle(
 }
 
 #[must_use]
-pub fn step_native_boulder_debris_motion(
-    mut particle: NativeBoulderDebrisMotion,
+pub fn step_boulder_debris_motion(
+    mut particle: BoulderDebrisMotion,
     global_tick: u64,
-    rng: &mut NativeRng,
-) -> Option<NativeBoulderDebrisMotion> {
+    rng: &mut Rng,
+) -> Option<BoulderDebrisMotion> {
     // On every third global tick an airborne bit only fades; its gravity waits.
     if particle.height != 0.0 && global_tick.is_multiple_of(3) {
         particle.alpha = fround(particle.alpha - 0.025_f32 as f64);

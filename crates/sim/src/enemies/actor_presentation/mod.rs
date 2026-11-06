@@ -12,28 +12,28 @@ mod sprites;
 mod zombie;
 pub use model::*;
 pub use sample::*;
-pub use skeleton::native_skeleton_base_tint;
+pub use skeleton::skeleton_base_tint;
 
 use crate::Vec2;
 use crate::enemies::EnemyToken;
 use crate::enemies::model::*;
 
 #[must_use]
-pub fn native_enemy_actor_plan(
+pub fn enemy_actor_plan(
     actor: &EnemyActor,
     context: EnemyActorAppearanceContext,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyActorPresentationPlan {
-    let sample = native_enemy_presentation_input(actor, context);
-    native_enemy_actor_plan_with_input(actor, context, &sample, art)
+    let sample = enemy_presentation_input(actor, context);
+    enemy_actor_plan_with_input(actor, context, &sample, art)
 }
 
 /// Draw an already sampled/interpolated animation without resampling brain state.
 #[must_use]
-pub fn native_enemy_actor_plan_with_input(
+pub fn enemy_actor_plan_with_input(
     actor: &EnemyActor,
     context: EnemyActorAppearanceContext,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyActorPresentationPlan {
     let token = actor.config.enemy_token;
@@ -155,22 +155,22 @@ fn attack_effect_origin(
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> Option<Vec2> {
     use crate::enemies::attack_presentation::{
-        native_demon_bomb_bearing, native_demon_bomb_muzzle_origin, native_imp_contact_burst_origin,
+        demon_bomb_bearing, demon_bomb_muzzle_origin, imp_contact_burst_origin,
     };
     if actor.config.enemy_token == EnemyToken::Imp {
-        return Some(native_imp_contact_burst_origin(actor.position, actor.heading_deg));
+        return Some(imp_contact_burst_origin(actor.position, actor.heading_deg));
     }
     if actor.config.enemy_token != EnemyToken::Demon {
         return None;
     }
     let controller = layers.iter().find(|layer| layer.role == "demon-controller-body")?;
     let pose = (controller.entry - 19) / 18;
-    let entry = 19 + pose * 18 + (native_demon_bomb_bearing(actor.heading_deg) / 20.0) as usize;
+    let entry = 19 + pose * 18 + (demon_bomb_bearing(actor.heading_deg) / 20.0) as usize;
     let point = art
         .points(EnemyArtAtlas::Demon, entry)
         .get(5)
         .expect("Demon controller requires authored muzzle point 5");
-    Some(native_demon_bomb_muzzle_origin(
+    Some(demon_bomb_muzzle_origin(
         actor.position,
         actor.heading_deg,
         Vec2::new(point.x + controller.offset.x * actor.config.scale, point.y),
@@ -185,29 +185,29 @@ pub(super) fn puppet_hit_tint(complex_lighting: bool, tint: u32) -> u32 {
 
 /// Coffin children register and paint independently from the parent body.
 #[must_use]
-pub fn native_maggot_plan(
+pub fn maggot_plan(
     maggot: &EnemyMaggotActor,
     tick: u64,
     complex_lighting: bool,
 ) -> Vec<EnemySpriteLayer> {
-    let sample = native_maggot_presentation_input(maggot, tick);
-    native_maggot_plan_with_input(maggot, &sample, complex_lighting)
+    let sample = maggot_presentation_input(maggot, tick);
+    maggot_plan_with_input(maggot, &sample, complex_lighting)
 }
 
 #[must_use]
-pub fn native_maggot_plan_with_input(
+pub fn maggot_plan_with_input(
     maggot: &EnemyMaggotActor,
-    sample: &NativeMaggotPresentationInput,
+    sample: &MaggotPresentationInput,
     complex_lighting: bool,
 ) -> Vec<EnemySpriteLayer> {
-    let biting = sample.state == NativeMaggotState::Bite;
-    let emerging = sample.state == NativeMaggotState::Emerging;
+    let biting = sample.state == MaggotState::Bite;
+    let emerging = sample.state == MaggotState::Emerging;
     let (atlas, entry) = if biting {
         (
             EnemyArtAtlas::BadGuys,
             202 + 18 + layers::facing(EnemyToken::Skeleton, sample.heading_deg),
         )
-    } else if sample.state == NativeMaggotState::Death {
+    } else if sample.state == MaggotState::Death {
         (EnemyArtAtlas::DeadHawg, 28)
     } else if emerging {
         let heading = crate::heading::heading_degrees_from_vector(
@@ -260,12 +260,12 @@ pub fn native_maggot_plan_with_input(
 /// `nativeEtherDrainCapturedImage`: the pre-hit family art survives terminal
 /// dispatch. Families without a capturable image still flush the field manager.
 #[must_use]
-pub fn native_ether_drain_captured_image(
+pub fn ether_drain_captured_image(
     actor: &EnemyActor,
     tick: u64,
-) -> Option<crate::secondary::ether_drain::NativeEtherDrainCapturedImage> {
+) -> Option<crate::secondary::ether_drain::EtherDrainCapturedImage> {
     use crate::enemies::config::EnemyFamilyConfig;
-    use crate::secondary::ether_drain::{NativeEtherDrainAtlas, NativeEtherDrainCapturedImage};
+    use crate::secondary::ether_drain::{EtherDrainAtlas, EtherDrainCapturedImage};
     let facing = layers::facing(EnemyToken::Skeleton, actor.heading_deg);
     let (atlas, entry, tint, body_y_offset) = match actor.config.enemy_token {
         EnemyToken::Skeleton | EnemyToken::SkeletonArcher | EnemyToken::SkeletonMage => {
@@ -278,9 +278,9 @@ pub fn native_ether_drain_captured_image(
             let head_facing =
                 (facing as i64 + i64::from(actor.head_facing_offset) + 18) as usize % 18;
             (
-                NativeEtherDrainAtlas::BadGuys,
+                EtherDrainAtlas::BadGuys,
                 skeleton::HEADGEAR_BASES[headgear as usize] + head_facing,
-                native_skeleton_base_tint(actor, tick.saturating_sub(actor.spawn_tick), false),
+                skeleton_base_tint(actor, tick.saturating_sub(actor.spawn_tick), false),
                 23,
             )
         }
@@ -290,14 +290,14 @@ pub fn native_ether_drain_captured_image(
                 return None;
             }
             (
-                NativeEtherDrainAtlas::BadGuys,
+                EtherDrainAtlas::BadGuys,
                 2293 + usize::from(brain.head_type) * 18 + facing,
                 0xffffff,
                 0,
             )
         }
-        EnemyToken::Demon => (NativeEtherDrainAtlas::Demon, 80 + facing, 0xffffff, 0),
+        EnemyToken::Demon => (EtherDrainAtlas::Demon, 80 + facing, 0xffffff, 0),
         _ => return None,
     };
-    Some(NativeEtherDrainCapturedImage { atlas, entry, tint, body_y_offset })
+    Some(EtherDrainCapturedImage { atlas, entry, tint, body_y_offset })
 }

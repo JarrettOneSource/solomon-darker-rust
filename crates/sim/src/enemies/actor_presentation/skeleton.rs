@@ -18,7 +18,7 @@ pub(super) fn skeleton_presentation(
     actor: &EnemyActor,
     facing: usize,
     context: EnemyActorAppearanceContext,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let EnemyFamilyConfig::Skeleton { weapon, armor, headgear } = actor.config.family else {
@@ -194,7 +194,7 @@ pub(super) fn archer_presentation(
     actor: &EnemyActor,
     facing: usize,
     tick: u64,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let EnemyFamilyConfig::Archer { headgear, arrow_type, .. } = actor.config.family else {
@@ -243,7 +243,7 @@ pub(super) fn mage_presentation(
     actor: &EnemyActor,
     facing: usize,
     context: EnemyActorAppearanceContext,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
     art: &(impl EnemyArtPoints + ?Sized),
 ) -> EnemyFamilyPresentation {
     let EnemyFamilyConfig::Mage { headgear, cloak, element, .. } = actor.config.family else {
@@ -296,13 +296,13 @@ fn compose_family(
     family: &str,
     held: Option<EnemySpriteLayer>,
     include_fire: bool,
-    sample: &NativeEnemyPresentationInput,
+    sample: &EnemyPresentationInput,
 ) -> (Vec<EnemySpriteLayer>, Vec<EnemySpriteLayer>) {
     let bob = float::sin(radians(sample.stride_phase_deg * 0.5)).abs();
     let body_height = stable_inclusive_unit(actor, 70, 0) * 3.0;
     let body_glow_tint = burning_tint(0.25 + stable_inclusive_unit(actor, 73, age as u32) * 0.75);
     let burning = actor.config.burning;
-    let base_tint = native_skeleton_base_tint(actor, age, include_fire);
+    let base_tint = skeleton_base_tint(actor, age, include_fire);
     let mut articulated = Vec::with_capacity(source.len());
     for mut layer in source {
         let y = if layer.role.ends_with("-limbs") {
@@ -396,7 +396,7 @@ fn compose_family(
 
 /// `nativeSkeletonBaseTint` is shared with EtherDrain's accepted head capture.
 #[must_use]
-pub fn native_skeleton_base_tint(actor: &EnemyActor, age: u64, include_fire: bool) -> u32 {
+pub fn skeleton_base_tint(actor: &EnemyActor, age: u64, include_fire: bool) -> u32 {
     if !include_fire && actor.lighting.charge > 0.0 {
         return 0xffffff;
     }

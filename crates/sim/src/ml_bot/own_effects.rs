@@ -2,13 +2,11 @@
 
 use crate::Vec2;
 use crate::float::hypot;
-use crate::secondary::{NativeSecondaryActorKind as SecondaryKind, NativeSecondarySimulationState};
+use crate::secondary::{SecondaryActorKind as SecondaryKind, SecondarySimulationState};
 use crate::spells::model::{
     PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
 };
-use crate::spells::weld::{
-    NativeWeldHailChildActorState, NativeWeldPersistentActorState, NativeWeldWorldActor,
-};
+use crate::spells::weld::{WeldHailChildActorState, WeldPersistentActorState, WeldWorldActor};
 
 use super::numbers::{normalized, signed, unsigned, write};
 use super::spec::scales;
@@ -22,7 +20,7 @@ pub struct MlBotPolicyOwnEffectObservation {
 
 pub fn observe_ml_bot_policy_own_effects(
     primary: &SpellState,
-    secondary: &NativeSecondarySimulationState,
+    secondary: &SecondarySimulationState,
     player_id: &str,
     position: Vec2,
     quickbar: &[Option<usize>; 8],
@@ -231,33 +229,33 @@ fn primary_transient_row(transient: &PrimarySpellTransient) -> Option<EffectRow>
         PrimarySpellTransient::Weld(state) => {
             row.position = state.common().origin;
             match state {
-                NativeWeldWorldActor::Channel(state) => {
+                WeldWorldActor::Channel(state) => {
                     row.family = Family::Channel;
                     row.position = state.midpoint.unwrap_or(state.common.origin);
                     row.target = state.target_id.is_some();
                 }
-                NativeWeldWorldActor::Persistent(state) => match state {
-                    NativeWeldPersistentActorState::EtherealBoulder(state) => {
+                WeldWorldActor::Persistent(state) => match state {
+                    WeldPersistentActorState::EtherealBoulder(state) => {
                         row.damage = state.damage;
                         row.held = state.phase == PrimarySpellProjectilePhase::Held;
                         row.velocity = state.velocity;
                     }
-                    NativeWeldPersistentActorState::Hailstones(state) => {
+                    WeldPersistentActorState::Hailstones(state) => {
                         row.damage = state.damage;
                         row.radius = state.collision_radius;
                         row.held = state.phase == PrimarySpellProjectilePhase::Held;
                     }
-                    NativeWeldPersistentActorState::MeteorField(_) => row.held = true,
+                    WeldPersistentActorState::MeteorField(_) => row.held = true,
                 },
-                NativeWeldWorldActor::Meteor(state) => {
+                WeldWorldActor::Meteor(state) => {
                     row.damage = state.damage;
                     row.position = state.position;
                 }
-                NativeWeldWorldActor::Steam(state) => {
+                WeldWorldActor::Steam(state) => {
                     row.position = state.position;
                     row.velocity = state.velocity;
                 }
-                NativeWeldWorldActor::HailChild(NativeWeldHailChildActorState::Knockback(_)) => {
+                WeldWorldActor::HailChild(WeldHailChildActorState::Knockback(_)) => {
                     row.target = true
                 }
                 _ => return None,

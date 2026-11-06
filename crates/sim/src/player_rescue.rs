@@ -3,13 +3,13 @@
 
 use crate::float::{fround, sin};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_SPARKLE_TIMER: f64 = 180.0;
+pub const SPARKLE_TIMER: f64 = 180.0;
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSparkleState {
+pub struct SparkleState {
     pub alpha: f64,
     pub decay: f64,
     pub id: u64,
@@ -20,7 +20,7 @@ pub struct NativeSparkleState {
     pub world_key: String,
 }
 
-impl NativeSparkleState {
+impl SparkleState {
     /// Returns false at the same float store that removes the native animation.
     pub fn step(&mut self) -> bool {
         let timer = fround(self.timer - self.decay);
@@ -34,36 +34,36 @@ impl NativeSparkleState {
 }
 
 #[must_use]
-pub fn native_sparkle_scale(timer: f64) -> f64 {
+pub fn sparkle_scale(timer: f64) -> f64 {
     sin(timer * std::f64::consts::PI / 180.0)
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativePlayerRescueProtection {
+pub struct PlayerRescueProtection {
     pub fraction: f64,
     pub next_particle_id: u64,
-    pub particles: Vec<NativeSparkleState>,
+    pub particles: Vec<SparkleState>,
 }
 
-impl Default for NativePlayerRescueProtection {
+impl Default for PlayerRescueProtection {
     fn default() -> Self {
         Self { fraction: 0.0, next_particle_id: 1, particles: Vec::new() }
     }
 }
 
-impl NativePlayerRescueProtection {
+impl PlayerRescueProtection {
     pub fn step(
         &mut self,
         position: Vec2,
         world_key: &str,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
         order: &mut WorldPainterOrder,
     ) {
         if self.fraction <= 0.0 && self.particles.is_empty() {
             return;
         }
-        self.particles.retain_mut(NativeSparkleState::step);
+        self.particles.retain_mut(SparkleState::step);
         if self.fraction <= 0.0 {
             return;
         }
@@ -74,7 +74,7 @@ impl NativePlayerRescueProtection {
         let vector = rng.draw_unit_vector();
         let angle = rng.draw_scaled_float(360.0, false);
         let decay = rng.draw_scaled_float(2.0, false);
-        self.particles.push(NativeSparkleState {
+        self.particles.push(SparkleState {
             alpha: self.fraction,
             decay: fround(3.0 + decay),
             id: self.next_particle_id,
@@ -84,7 +84,7 @@ impl NativePlayerRescueProtection {
             ),
             painter_registration: Some(order.register(WorldManagerLane::Transient)),
             rotation_degrees: angle,
-            timer: NATIVE_SPARKLE_TIMER,
+            timer: SPARKLE_TIMER,
             world_key: world_key.into(),
         });
         self.next_particle_id += 1;
@@ -92,6 +92,6 @@ impl NativePlayerRescueProtection {
 }
 
 #[must_use]
-pub fn native_rescue_damage(amount: f64, protection: &NativePlayerRescueProtection) -> f64 {
+pub fn rescue_damage(amount: f64, protection: &PlayerRescueProtection) -> f64 {
     if protection.fraction > 0.0 { fround(amount * (1.0 - protection.fraction)) } else { amount }
 }

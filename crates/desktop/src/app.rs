@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use solomon_web::{
+use solomon_client::{
     Game,
     desktop::{
         DesktopControls,
@@ -58,7 +58,7 @@ impl Screen {
 impl Drop for Screen {
     fn drop(&mut self) {
         if let Err(error) = self.window().make_current() {
-            solomon_web::platform::error(&error);
+            solomon_client::platform::error(&error);
         }
     }
 }
@@ -85,7 +85,7 @@ impl Drop for Loading {
         if let Some(window) = &self.window
             && let Err(error) = window.make_current()
         {
-            solomon_web::platform::error(&error);
+            solomon_client::platform::error(&error);
         }
     }
 }
@@ -126,13 +126,15 @@ pub fn run(config: Config) -> Result<(), String> {
     solomon_graphics::assets::configure(solomon_graphics::assets::NativeAssets::new(
         &config.assets,
     )?);
-    solomon_web::configure_native_storage(profile.documents.clone())?;
+    solomon_client::configure_native_storage(profile.documents.clone())?;
     let event_loop = EventLoop::<AccessibilityEvent>::with_user_event()
         .build()
         .map_err(|error| error.to_string())?;
     let mut addresses: Vec<String> = if_addrs::get_if_addrs()
         .unwrap_or_else(|error| {
-            solomon_web::platform::error(&format!("Cannot list local network addresses: {error}"));
+            solomon_client::platform::error(&format!(
+                "Cannot list local network addresses: {error}"
+            ));
             Vec::new()
         })
         .into_iter()
@@ -215,7 +217,7 @@ impl App {
                 blocking::unblock(move || Session::start(options, assets, &revision)).await?;
             let endpoint = session.endpoint();
             let location = endpoint.url.replacen("ws:", "http:", 1);
-            solomon_web::platform::configure_native_location(&location, None)?;
+            solomon_client::platform::configure_native_location(&location, None)?;
             let game = Game::load_native(surface, renderer, endpoint, controls).await?;
             Ok(PreparedGame { game, session })
         });
@@ -245,7 +247,7 @@ impl App {
             }
             Err(error) => {
                 drop(loading);
-                solomon_web::platform::error(&error);
+                solomon_client::platform::error(&error);
                 self.message(error);
             }
         }
@@ -270,7 +272,7 @@ impl App {
         if let Some(window) = window
             && let Err(error) = window.make_current()
         {
-            solomon_web::platform::error(&error);
+            solomon_client::platform::error(&error);
         }
         self.tasks.take();
         self.loading.take();
@@ -357,7 +359,7 @@ impl App {
             Err("The game did not finish saving.".into())
         } else if let Some(Screen::Game { game, .. }) = &self.screen {
             let result =
-                game.borrow_mut().poll_desktop_close(solomon_web::platform::monotonic_ms());
+                game.borrow_mut().poll_desktop_close(solomon_client::platform::monotonic_ms());
             Game::run_pending_work(game);
             result
         } else {
@@ -444,9 +446,9 @@ impl App {
             Action::CopyInvite => {
                 let invite =
                     self.controls.invite().ok_or("Start hosting a game to create an invite.")?;
-                let copied = solomon_web::platform::copy_text(&invite)?;
+                let copied = solomon_client::platform::copy_text(&invite)?;
                 let controls = self.controls.clone();
-                solomon_web::platform::spawn_local(async move {
+                solomon_client::platform::spawn_local(async move {
                     controls.set_message(Some(match copied.await {
                         Ok(()) => "Multiplayer invite copied.".into(),
                         Err(error) => error,
@@ -547,7 +549,7 @@ impl ApplicationHandler<AccessibilityEvent> for App {
         if screen.window().window.id() != event.window_id {
             return;
         }
-        let now = solomon_web::platform::monotonic_ms();
+        let now = solomon_client::platform::monotonic_ms();
         let result = match event.window_event {
             egui_winit::accesskit_winit::WindowEvent::InitialTreeRequested => {
                 match screen {
@@ -593,7 +595,7 @@ impl ApplicationHandler<AccessibilityEvent> for App {
             return;
         }
         let result = (|| {
-            let now = solomon_web::platform::monotonic_ms();
+            let now = solomon_client::platform::monotonic_ms();
             let screen = self.screen.as_mut().expect("the event belongs to the current screen");
             screen.window().make_current()?;
             if let WindowEvent::Resized(size) = &event {
@@ -621,9 +623,9 @@ impl ApplicationHandler<AccessibilityEvent> for App {
                         if self.failure.is_none() {
                             let result = game.borrow_mut().frame(now);
                             if let Err(error) = result {
-                                solomon_web::platform::error(&error);
+                                solomon_client::platform::error(&error);
                                 if let Err(stop_error) = game.borrow_mut().report_failure(&error) {
-                                    solomon_web::platform::error(&stop_error);
+                                    solomon_client::platform::error(&stop_error);
                                 }
                                 self.failure = Some(error);
                             }

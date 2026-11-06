@@ -7,11 +7,11 @@ use crate::economy::CompletedRunEconomyArchive;
 use crate::economy::HubEconomyState;
 use crate::enemies::model::EnemyDamageRequest;
 use crate::game_run::{GameRunPhase, presentation::game_over_audio_events};
-use crate::loot::NativeLootDropKind;
+use crate::loot::LootDropKind;
 use crate::painter::WorldManagerLane;
-use crate::profile::native_hagatha_boss_damage_factor;
-use crate::secondary::NativePlayerMindblastInput;
-use crate::spells::boneyard::boneyard_native_secondary_targets;
+use crate::profile::hagatha_boss_damage_factor;
+use crate::secondary::PlayerMindblastInput;
+use crate::spells::boneyard::boneyard_secondary_targets;
 
 impl GameSession {
     #[must_use]
@@ -40,10 +40,10 @@ impl GameSession {
         let mut ground_items = Vec::new();
         if last_word && let Some(world) = &self.boneyard {
             for actor in world.loot.actors.iter() {
-                if actor.kind == NativeLootDropKind::Gold {
+                if actor.kind == LootDropKind::Gold {
                     ground_gold += actor.amount;
                 }
-                if actor.kind == NativeLootDropKind::Sack
+                if actor.kind == LootDropKind::Sack
                     && let Some(item) = &actor.item
                 {
                     ground_items.push(item.clone());
@@ -175,7 +175,7 @@ impl GameSession {
         let key = format!("boneyard:{}", world.loaded.run_id);
         let registration = self.painter_order.register(WorldManagerLane::Actor);
         let burst = self.secondary.trigger_player_mindblast(
-            NativePlayerMindblastInput {
+            PlayerMindblastInput {
                 direct_damage: Some(5000.0),
                 element: participant.player.selection.element,
                 level: 10_000,
@@ -187,8 +187,7 @@ impl GameSession {
             },
             Some(&mut self.painter_order),
         );
-        let targets =
-            boneyard_native_secondary_targets(&world.enemies, position, burst.direct_radius);
+        let targets = boneyard_secondary_targets(&world.enemies, position, burst.direct_radius);
         for target in targets {
             let x = target.position.x - position.x;
             let y = target.position.y - position.y;
@@ -202,7 +201,7 @@ impl GameSession {
                 world.enemies.actors.iter().find(|actor| actor.id == target.id).map_or(
                     1.0,
                     |actor| {
-                        native_hagatha_boss_damage_factor(
+                        hagatha_boss_damage_factor(
                             &self
                                 .participants
                                 .get(id)
@@ -210,7 +209,7 @@ impl GameSession {
                                 .player
                                 .economy
                                 .owned_perk_selectors,
-                            u32::from(actor.config.native_type_id),
+                            u32::from(actor.config.type_id),
                         )
                     },
                 );
@@ -243,13 +242,13 @@ impl GameSession {
     pub(super) fn archive_last_word_ground_loot(&mut self, id: &str) {
         let participant = self.participants.get_mut(id).expect("Last Word owner exists");
         let world = self.boneyard.as_ref().expect("Last Word has a ground loot owner");
-        let retained = world.loot.native_hagatha_last_word_loot();
+        let retained = world.loot.hagatha_last_word_loot();
         if retained.actor_ids.is_empty() {
             return;
         }
         let mut remove = Vec::new();
         for actor in world.loot.actors.iter() {
-            if actor.native_type_id == 2012 {
+            if actor.type_id == 2012 {
                 remove.push(actor.id);
             }
         }
@@ -261,11 +260,11 @@ impl GameSession {
             let name = format!(
                 "{}'s {}",
                 participant.player.selection.name,
-                crate::economy::NATIVE_RETAINED_SACK_SUFFIXES[suffix]
+                crate::economy::RETAINED_SACK_SUFFIXES[suffix]
             );
             if participant.player.economy.archive_hagatha_last_word_items(&retained.items, &name) {
                 for actor in world.loot.actors.iter() {
-                    if actor.native_type_id == 2013 {
+                    if actor.type_id == 2013 {
                         remove.push(actor.id);
                     }
                 }

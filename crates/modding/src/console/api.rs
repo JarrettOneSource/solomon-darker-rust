@@ -252,8 +252,8 @@ fn resolve_player(
 }
 fn stock_enemy(value: &Value) -> Option<WebLuaStockEnemy> {
     WEB_LUA_STOCK_ENEMIES.into_iter().find(|enemy| match value {
-        Value::Integer(value) => *value == i64::from(enemy.token.native_type_id()),
-        Value::Number(value) => *value == f64::from(enemy.token.native_type_id()),
+        Value::Integer(value) => *value == i64::from(enemy.token.type_id()),
+        Value::Number(value) => *value == f64::from(enemy.token.type_id()),
         Value::String(value) => {
             let value = value.to_string_lossy().to_lowercase();
             value == enemy.key || value == enemy.token.id().to_lowercase()
@@ -265,7 +265,7 @@ fn enemy_descriptor(enemy: WebLuaStockEnemy) -> LuaValue {
     object([
         ("base", LuaValue::String(enemy.key.into())),
         ("key", LuaValue::String(enemy.key.into())),
-        ("native_type_id", LuaValue::Number(f64::from(enemy.token.native_type_id()))),
+        ("native_type_id", LuaValue::Number(f64::from(enemy.token.type_id()))),
     ])
 }
 fn object_options(value: &Value, message: &str) -> Result<Vec<(String, Value)>, String> {

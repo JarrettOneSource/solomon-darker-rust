@@ -103,7 +103,7 @@ fn console_catalogs_and_queued_commands_preserve_source_game_components_and_rng(
         let output = match case.input {
             Input::Commands { commands } => {
                 let applied = apply_web_lua_commands(&mut game, &commands, None);
-                let spawns:Vec<_>=applied.enemy_spawn_intents.iter().map(|spawn|json!({"enemyToken":spawn.enemy_token.id(),"flags":[],"id":spawn.id,"locationPolicy":"anywhere","nativeTypeId":spawn.native_type_id,"position":spawn.position,"spawnTick":spawn.spawn_tick,"waveOrdinal":spawn.wave_ordinal})).collect();
+                let spawns:Vec<_>=applied.enemy_spawn_intents.iter().map(|spawn|json!({"enemyToken":spawn.enemy_token.id(),"flags":[],"id":spawn.id,"locationPolicy":"anywhere","nativeTypeId":spawn.type_id,"position":spawn.position,"spawnTick":spawn.spawn_tick,"waveOrdinal":spawn.wave_ordinal})).collect();
                 json!({"enemySpawnIntents":spawns,"nextRunSeed":applied.next_run_seed})
             }
             Input::Items { key, quantity } => json!(

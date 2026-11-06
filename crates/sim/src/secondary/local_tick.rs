@@ -1,19 +1,17 @@
 //! Presentation actors whose native tick is local to their own state.
 
-use super::dampened::{NativeDampenedSpellState, step_native_dampened_spell};
+use super::dampened::{DampenedSpellState, step_dampened_spell};
 use super::program::*;
 use super::step::StepEngine;
-use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryDamageKind as Damage, NativeSecondaryWorld,
-};
+use super::{SecondaryActorKind as Kind, SecondaryDamageKind as Damage, SecondaryWorld};
 use crate::Vec2;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorState;
 
-pub(super) fn step<W: NativeSecondaryWorld>(
+pub(super) fn step<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     match actor.kind {
@@ -56,14 +54,13 @@ pub(super) fn step<W: NativeSecondaryWorld>(
             actor.scale *= 1.1;
         }
         Kind::DampenedProjectile => {
-            let mut projectile = NativeDampenedSpellState {
+            let mut projectile = DampenedSpellState {
                 heading_degrees: source.rotation_radians * 180.0 / std::f64::consts::PI,
                 phase_degrees: source.phase,
                 position: source.position,
                 velocity: source.velocity,
             };
-            let smoke =
-                step_native_dampened_spell(&mut projectile, actor.variant, &mut engine.state.rng);
+            let smoke = step_dampened_spell(&mut projectile, actor.variant, &mut engine.state.rng);
             actor.frame = 0.0;
             actor.phase = projectile.phase_degrees;
             actor.position = projectile.position;

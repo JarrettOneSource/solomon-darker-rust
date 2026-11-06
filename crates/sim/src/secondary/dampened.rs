@@ -2,10 +2,10 @@
 
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeDampenedSpellState {
+pub struct DampenedSpellState {
     pub heading_degrees: f64,
     pub phase_degrees: f64,
     pub position: Vec2,
@@ -22,11 +22,7 @@ pub struct NativeDampenedSmoke {
     pub position: Vec2,
 }
 
-pub fn create_native_dampened_spell(
-    origin: Vec2,
-    position: Vec2,
-    rng: &mut NativeRng,
-) -> NativeDampenedSpellState {
+pub fn create_dampened_spell(origin: Vec2, position: Vec2, rng: &mut Rng) -> DampenedSpellState {
     let phase = rng.draw_scaled_float(360.0, false);
     let dx = fround(position.x - origin.x);
     let dy = fround(position.y - origin.y);
@@ -36,12 +32,12 @@ pub fn create_native_dampened_spell(
     } else {
         Vec2::new(fround(dx / distance * 7.0), fround(dy / distance * 7.0))
     };
-    NativeDampenedSpellState { heading_degrees: -1.0, phase_degrees: phase, position, velocity }
+    DampenedSpellState { heading_degrees: -1.0, phase_degrees: phase, position, velocity }
 }
-pub fn step_native_dampened_spell(
-    state: &mut NativeDampenedSpellState,
+pub fn step_dampened_spell(
+    state: &mut DampenedSpellState,
     variant: i32,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> NativeDampenedSmoke {
     state.position = Vec2::new(
         fround(state.position.x + state.velocity.x),

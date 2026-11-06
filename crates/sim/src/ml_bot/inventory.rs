@@ -4,11 +4,10 @@ use crate::economy::{
     HubEquipmentState, HubInventoryItem, HubItemKind, ItemRarity, project_inventory_items,
 };
 use crate::equipment::{
-    NATIVE_EQUIPMENT_SETS, NativeEquipmentEffectSource, NativeEquipmentModifiers,
-    NativeEquipmentScalarTransform, native_equipment_recipe_effects,
-    resolve_native_equipment_effects,
+    EQUIPMENT_SETS, EquipmentEffectSource, EquipmentModifiers, EquipmentScalarTransform,
+    equipment_recipe_effects, resolve_equipment_effects,
 };
-use crate::profile::NATIVE_SKILL_ROW_COUNT;
+use crate::profile::SKILL_ROW_COUNT;
 use crate::session::GameSession;
 
 use super::numbers::{count_scaled, signed, unsigned, write};
@@ -43,7 +42,7 @@ pub fn observe_ml_bot_policy_inventory(
         .iter()
         .map(|row| row.item)
         .filter(|item| {
-            item.native_type_id == 7001
+            item.type_id == 7001
                 && matches!(
                     item.kind,
                     HubItemKind::Antidote
@@ -72,7 +71,7 @@ pub fn observe_ml_bot_policy_inventory(
         potion_total += f64::from(item.quantity);
     }
     for (slot, item) in potions.iter().take(12).enumerate() {
-        let stock = if item.kind == HubItemKind::ModPotion { None } else { item.native_subtype };
+        let stock = if item.kind == HubItemKind::ModPotion { None } else { item.subtype };
         let identity = if item.kind == HubItemKind::ModPotion {
             item.mod_content.as_ref().map_or_else(
                 || item.kind.as_str().to_owned(),
@@ -117,7 +116,7 @@ pub fn observe_ml_bot_policy_inventory(
             ],
         );
         let legal = if item.quantity == 0
-            || item.native_subtype.is_none()
+            || item.subtype.is_none()
             || !player.combat.can_accept_input()
             || session.level_up_barrier.is_some()
         {
@@ -127,7 +126,7 @@ pub fn observe_ml_bot_policy_inventory(
                 .as_ref()
                 .is_some_and(|content| has_consumable.is_some_and(|has| has(&content.content_id)))
         } else {
-            match item.native_subtype {
+            match item.subtype {
                 Some(0) => player.combat.current_health < player.combat.maximum_health,
                 Some(1) => player.combat.current_mana < player.combat.maximum_mana,
                 Some(2) => player.progression.damage_x4_ticks_remaining < 6000,
@@ -160,7 +159,7 @@ pub fn observe_ml_bot_policy_inventory(
     };
     let block_q = [
         count(&|_| true),
-        count(&|item| item.native_type_id == 7001),
+        count(&|item| item.type_id == 7001),
         count(&|item| item.kind == HubItemKind::Equipment),
         count(&|item| item.kind == HubItemKind::Sack),
         count(&|item| item.kind == HubItemKind::Dye),
@@ -174,10 +173,7 @@ pub fn observe_ml_bot_policy_inventory(
     Ok(MlBotPolicyInventoryObservation { block_o, block_p, block_q, potions: potion_rows })
 }
 
-fn observe_equipment(
-    equipment: &HubEquipmentState,
-    ranks: &[u32; NATIVE_SKILL_ROW_COUNT],
-) -> Vec<f32> {
+fn observe_equipment(equipment: &HubEquipmentState, ranks: &[u32; SKILL_ROW_COUNT]) -> Vec<f32> {
     let mut block = vec![0.0; 7 * 15];
     let slots = [
         &equipment.hat,
@@ -195,21 +191,21 @@ fn observe_equipment(
             continue;
         };
         let identity = item.recipe_index.map_or_else(
-            || format!("{}:{}", item.native_type_id, item.name),
-            |recipe| format!("{}:{recipe}", item.native_type_id),
+            || format!("{}:{}", item.type_id, item.name),
+            |recipe| format!("{}:{recipe}", item.type_id),
         );
         let (hash_a, hash_b) = identity_hashes(&identity);
         let effects = item
             .native_effects
             .as_deref()
-            .unwrap_or_else(|| item.recipe_index.map_or(&[][..], native_equipment_recipe_effects));
-        let resolution = resolve_native_equipment_effects(
+            .unwrap_or_else(|| item.recipe_index.map_or(&[][..], equipment_recipe_effects));
+        let resolution = resolve_equipment_effects(
             ranks,
-            &[NativeEquipmentEffectSource { effects: effects.to_vec(), recipe_index: None }],
+            &[EquipmentEffectSource { effects: effects.to_vec(), recipe_index: None }],
             &[],
         );
         let tooltip_set = item.recipe_index.and_then(|recipe| {
-            NATIVE_EQUIPMENT_SETS.iter().find(|set| set.member_recipe_indices.contains(&recipe))
+            EQUIPMENT_SETS.iter().find(|set| set.member_recipe_indices.contains(&recipe))
         });
         let set_complete = tooltip_set.is_some_and(|set| {
             set.member_recipe_indices.iter().all(|id| equipped_recipes.contains(id))
@@ -261,7 +257,7 @@ enum ModifierFamily {
     Resource,
 }
 
-fn family_totals(modifiers: &NativeEquipmentModifiers) -> FamilyTotals {
+fn family_totals(modifiers: &EquipmentModifiers) -> FamilyTotals {
     use ModifierFamily::*;
     let mut totals = FamilyTotals::default();
     // Retain closed-unions.ts Object.entries order and each array's own subtotal.
@@ -316,11 +312,11 @@ fn sum(values: &[f64], multiplier: bool) -> f64 {
     total
 }
 
-fn transform(value: NativeEquipmentScalarTransform) -> f64 {
+fn transform(value: EquipmentScalarTransform) -> f64 {
     value.offset + (value.scale - 1.0)
 }
 
-fn sum_transforms(values: &[NativeEquipmentScalarTransform]) -> f64 {
+fn sum_transforms(values: &[EquipmentScalarTransform]) -> f64 {
     let mut total = 0.0;
     for value in values {
         total += transform(*value);

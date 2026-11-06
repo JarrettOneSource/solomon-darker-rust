@@ -95,17 +95,13 @@ fn elements_and_every_selected_weld_plan_replay_the_website() {
             .find(|element| element.as_str() == case.element)
             .expect("fixture element");
         compare_plan(
-            &element_vfx::native_element_vfx_plan_at_phase(element, case.phase, case.scale),
+            &element_vfx::element_vfx_plan_at_phase(element, case.phase, case.scale),
             &case.plan,
         );
     }
     for case in golden.selected {
         compare_plan(
-            &element_vfx::native_selected_primary_element_vfx_plan(
-                case.skill_id,
-                case.tick,
-                case.scale,
-            ),
+            &element_vfx::selected_primary_element_vfx_plan(case.skill_id, case.tick, case.scale),
             &case.plan,
         );
     }

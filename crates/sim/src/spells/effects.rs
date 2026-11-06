@@ -1,19 +1,18 @@
 //! Effect births and painter membership from `core-kernels/primary-spells.ts`.
 
-use super::earth_debris::{NativeWeldMeteorDebrisSeed, create_native_weld_boulder_debris_particle};
+use super::earth_debris::{WeldMeteorDebrisSeed, create_weld_boulder_debris_particle};
 use super::earth_fragments::{
     EarthImpactSeed, earth_impact_fragment_count, earth_impact_lifetime_ticks,
 };
-use super::ether::NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS;
+use super::ether::ETHER_BLAST_PARTICLE_LIFETIME_TICKS;
 use super::fire::{
-    NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS, NATIVE_FIRE_IMPACT_LIFETIME_TICKS,
-    NativeFireExplosionState, create_native_fire_detonation, native_fire_particle_lifetime_ticks,
-    native_fire_particle_variant,
+    FIRE_EXPLOSION_LIFETIME_TICKS, FIRE_IMPACT_LIFETIME_TICKS, FireExplosionState,
+    create_fire_detonation, fire_particle_lifetime_ticks, fire_particle_variant,
 };
 use super::model::*;
 use super::water::water_frost_jet_lifetime_ticks;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 pub(super) fn transient_base(
     id: u64,
@@ -32,7 +31,7 @@ pub(super) fn transient_base(
 }
 
 pub struct CreatePrimarySpellEarthBoulderBitInput<'a> {
-    pub debris: NativeWeldMeteorDebrisSeed,
+    pub debris: WeldMeteorDebrisSeed,
     pub enhanced_effects: bool,
     pub id: u64,
     pub origin: Vec2,
@@ -51,7 +50,7 @@ pub fn create_primary_spell_earth_boulder_bit(
     PrimarySpellEarthBoulderBit {
         common,
         birth_tick: input.tick,
-        debris: create_native_weld_boulder_debris_particle(input.debris, input.enhanced_effects),
+        debris: create_weld_boulder_debris_particle(input.debris, input.enhanced_effects),
         origin: input.origin,
         position: input.origin,
     }
@@ -120,7 +119,7 @@ pub(super) fn fire_impact_at(
 
 pub(super) fn fire_explosion(
     id: u64,
-    seed: NativeFireExplosionState,
+    seed: FireExplosionState,
     sound_pitch: f64,
     order: &mut WorldPainterOrder,
 ) -> PrimarySpellFireExplosion {
@@ -152,13 +151,13 @@ pub fn create_primary_spell_fire_detonation(
     next_id: u64,
     spell: &PrimarySpellFireProjectile,
     origin: Vec2,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     order: &mut WorldPainterOrder,
 ) -> PrimarySpellFireDetonation {
     let impact =
         fire_impact_at(next_id, origin, &spell.common.owner_id, &spell.common.world_key, order);
     let has_explosion = spell.explode_radius > 0.0 && spell.explode_damage > 0.0;
-    let detonation = create_native_fire_detonation(
+    let detonation = create_fire_detonation(
         next_id + 1 + u64::from(has_explosion),
         spell.into(),
         origin,
@@ -201,14 +200,14 @@ pub(super) fn create_fire_particle(
         enhanced_effects,
         direction: fireball.direction,
         origin: fireball.position,
-        variant: native_fire_particle_variant(id),
+        variant: fire_particle_variant(id),
     }
 }
 
 pub(super) fn transient_lifetime(effect: &PrimarySpellTransient) -> u64 {
     match effect {
         PrimarySpellTransient::WaterAura(spell) => spell.duration_ticks,
-        PrimarySpellTransient::Air(spell) => super::air::native_air_contact_lifetime_ticks(
+        PrimarySpellTransient::Air(spell) => super::air::air_contact_lifetime_ticks(
             spell.underpowered,
             spell.chained,
             spell.enhanced_effects,
@@ -217,12 +216,12 @@ pub(super) fn transient_lifetime(effect: &PrimarySpellTransient) -> u64 {
         PrimarySpellTransient::EarthImpact(spell) => spell.lifetime_ticks,
         PrimarySpellTransient::EtherImpact(_) => 19,
         PrimarySpellTransient::EtherPierceStreak(_) => 10,
-        PrimarySpellTransient::EtherBlast(_) => NATIVE_ETHER_BLAST_PARTICLE_LIFETIME_TICKS,
+        PrimarySpellTransient::EtherBlast(_) => ETHER_BLAST_PARTICLE_LIFETIME_TICKS,
         PrimarySpellTransient::FireParticle(spell) => {
-            native_fire_particle_lifetime_ticks(spell.common.id, spell.enhanced_effects)
+            fire_particle_lifetime_ticks(spell.common.id, spell.enhanced_effects)
         }
-        PrimarySpellTransient::FireExplosion(_) => NATIVE_FIRE_EXPLOSION_LIFETIME_TICKS,
-        PrimarySpellTransient::FireImpact(_) => NATIVE_FIRE_IMPACT_LIFETIME_TICKS,
+        PrimarySpellTransient::FireExplosion(_) => FIRE_EXPLOSION_LIFETIME_TICKS,
+        PrimarySpellTransient::FireImpact(_) => FIRE_IMPACT_LIFETIME_TICKS,
         // These actors have their own native lifecycle rather than a fixed duration.
         PrimarySpellTransient::Harden(_)
         | PrimarySpellTransient::EarthCalledRock(_)

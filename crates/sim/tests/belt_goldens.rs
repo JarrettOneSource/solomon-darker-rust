@@ -3,15 +3,15 @@
 use serde_json::{Value, json};
 use solomon_sim::belt::*;
 use solomon_sim::economy::*;
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
 
 fn belt_snapshot(belt: &PlayerBeltComponent) -> Value {
     json!(belt.entries.map(|entry| entry.map(|entry| match entry {
         NativeBeltEntry::Skill { skill_id } => json!({"kind":"skill","skillId":skill_id}),
         NativeBeltEntry::HealthPotion => json!({"kind":"health-potion"}),
         NativeBeltEntry::ManaPotion => json!({"kind":"mana-potion"}),
-        NativeBeltEntry::Item { item_id, native_type_id } =>
-            json!({"kind":"item","itemId":item_id,"nativeTypeId":native_type_id}),
+        NativeBeltEntry::Item { item_id, type_id } =>
+            json!({"kind":"item","itemId":item_id,"nativeTypeId":type_id}),
     })))
 }
 fn equipment_type(value: &Value) -> Option<EquipmentType> {
@@ -40,13 +40,11 @@ fn native_belt_bindings_follow_owned_items_learned_skills_and_live_potion_stacks
             .find(|discipline| Some(discipline.as_str()) == case["discipline"].as_str())
             .unwrap();
         assert_eq!(
-            belt_snapshot(&PlayerBeltComponent::new(&NativeSkillBookState::new(
-                element, discipline
-            ))),
+            belt_snapshot(&PlayerBeltComponent::new(&SkillBookState::new(element, discipline))),
             case["belt"]
         );
     }
-    let mut book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+    let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
     let mut economy = HubEconomyState::new(1, WizardElement::Ether);
     let mut sack = create_fomentius_inventory_item(&FOMENTIUS_STOCK_DEFINITIONS[5], 100, 1);
     sack.contents = Some(vec![
@@ -62,7 +60,7 @@ fn native_belt_bindings_follow_owned_items_learned_skills_and_live_potion_stacks
         let operation = &record["operation"];
         let accepted = match operation["type"].as_str().unwrap() {
             "bind-item" => belt.apply(
-                NativeBeltCommand::BindItem {
+                BeltCommand::BindItem {
                     item_id: operation["itemId"].as_u64().unwrap(),
                     slot: operation["slot"].as_u64().unwrap() as usize,
                 },
@@ -70,7 +68,7 @@ fn native_belt_bindings_follow_owned_items_learned_skills_and_live_potion_stacks
                 &economy,
             ),
             "bind-skill" => belt.apply(
-                NativeBeltCommand::BindSkill {
+                BeltCommand::BindSkill {
                     skill_id: operation["skillId"].as_u64().map(|value| value as usize),
                     slot: operation["slot"].as_u64().unwrap() as usize,
                 },
@@ -133,17 +131,15 @@ fn native_belt_bindings_follow_owned_items_learned_skills_and_live_potion_stacks
         assert_eq!(accepted, record["accepted"].as_bool().unwrap());
         assert_eq!(belt_snapshot(&belt), record["belt"]);
         assert_eq!(json!(belt.skill_projection()), record["skills"]);
-        for (key, kind) in
-            [("health", NativeBeltPotionKind::Health), ("mana", NativeBeltPotionKind::Mana)]
-        {
-            let projection = native_belt_potion_projection(&economy.backpack, kind);
+        for (key, kind) in [("health", BeltPotionKind::Health), ("mana", BeltPotionKind::Mana)] {
+            let projection = belt_potion_projection(&economy.backpack, kind);
             assert_eq!(
                 json!({"count":projection.count,"itemId":projection.item.map(|item|item.id)}),
                 record[key]
             );
         }
         let items = belt.entries.map(|entry| {
-            entry.and_then(|entry| native_belt_entry_item(entry, &economy)).map(|item| item.id)
+            entry.and_then(|entry| belt_entry_item(entry, &economy)).map(|item| item.id)
         });
         assert_eq!(json!(items), record["entryItems"]);
     }
@@ -169,17 +165,14 @@ fn native_belt_bindings_follow_owned_items_learned_skills_and_live_potion_stacks
             "mod-potion" => HubItemKind::ModPotion,
             other => panic!("belt admission item kind {other}"),
         };
-        item.native_type_id = case["item"]["nativeTypeId"].as_u64().unwrap() as u32;
-        item.native_subtype = case["item"]["nativeSubtype"].as_u64().map(|value| value as u32);
-        assert_eq!(
-            native_inventory_item_can_bind_to_belt(&item),
-            case["accepted"].as_bool().unwrap()
-        );
+        item.type_id = case["item"]["nativeTypeId"].as_u64().unwrap() as u32;
+        item.subtype = case["item"]["nativeSubtype"].as_u64().map(|value| value as u32);
+        assert_eq!(inventory_item_can_bind_to_belt(&item), case["accepted"].as_bool().unwrap());
     }
     for case in fixture["equipmentSlots"].as_array().unwrap() {
         let mut item = economy.equipment.hat.clone().unwrap();
         item.equipment_type = equipment_type(&case["equipmentType"]);
-        let slots: Vec<_> = native_belt_equipment_slots(&item, case["unlocked"].as_bool().unwrap())
+        let slots: Vec<_> = belt_equipment_slots(&item, case["unlocked"].as_bool().unwrap())
             .into_iter()
             .map(EquipmentSlot::as_str)
             .collect();

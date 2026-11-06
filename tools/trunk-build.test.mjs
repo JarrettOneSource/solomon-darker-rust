@@ -17,7 +17,7 @@ function trunkDocument(mount = '') {
 }
 const generatedResources = [
   'solomon-loader-1111111111111111.js', 'solomon-loader-2222222222222222_bg.wasm',
-  'solomon-web-d693347574b3e849.js', 'solomon-web-852180e6d53c052b_bg.wasm',
+  'solomon-client-d693347574b3e849.js', 'solomon-client-852180e6d53c052b_bg.wasm',
 ];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex').slice(0, 16);
 
@@ -56,7 +56,7 @@ subprocess.run([command['command'], *command['command_arguments']], check=True)
   assert.ok(initializer, 'the configured hook emits the external GPU loader');
   const bootstrap = await readFile(join(root, initializer[1]), 'utf8');
   assert.match(bootstrap, /"loaderModule": "solomon-loader-[a-f0-9]+\.js"/);
-  assert.match(bootstrap, /"mainWasm": "solomon-web-[a-f0-9]+_bg\.wasm"/);
+  assert.match(bootstrap, /"mainWasm": "solomon-client-[a-f0-9]+_bg\.wasm"/);
 });
 
 test('worker outputs hash WASM before rewriting and hashing the JavaScript binding', async context => {
@@ -64,10 +64,10 @@ test('worker outputs hash WASM before rewriting and hashing the JavaScript bindi
   context.after(() => rm(root, {recursive: true, force: true}));
   await writeFile(join(root, 'index.html'), trunkDocument());
   const expected = [];
-  for (const name of ['solomon-loader', 'solomon-web']) {
+  for (const name of ['solomon-loader', 'solomon-client']) {
     const wasm = Buffer.from(`${name} WASM fixture`);
     const wasmName = `${name}-${digest(wasm)}_bg.wasm`;
-    const binding = `export default () => new URL('${name}_bg.wasm', import.meta.url);${name === 'solomon-web' ? '\r\n' : '\n'}`;
+    const binding = `export default () => new URL('${name}_bg.wasm', import.meta.url);${name === 'solomon-client' ? '\r\n' : '\n'}`;
     const rewritten = binding.replace(`${name}_bg.wasm`, wasmName);
     const moduleName = `${name}-${digest(rewritten)}.js`;
     await writeFile(join(root, `${name}_bg.wasm`), wasm);
@@ -80,11 +80,11 @@ test('worker outputs hash WASM before rewriting and hashing the JavaScript bindi
   prepare();
   const files = await readdir(root);
   for (const name of expected) assert.ok(files.includes(name), `missing content-hashed ${name}`);
-  assert.equal(files.some(name => /solomon-(?:loader|web)(?:_bg\.wasm|\.js)$/.test(name)), false);
+  assert.equal(files.some(name => /solomon-(?:loader|client)(?:_bg\.wasm|\.js)$/.test(name)), false);
   for (const name of expected.filter(name => name.endsWith('.js'))) {
     const binding = await readFile(join(root, name), 'utf8');
     assert.equal(name.match(/-([a-f0-9]{16})\.js$/)[1], digest(binding));
-    assert.match(binding, /new URL\('solomon-(?:loader|web)-[a-f0-9]{16}_bg\.wasm', import.meta.url\)/);
+    assert.match(binding, /new URL\('solomon-(?:loader|client)-[a-f0-9]{16}_bg\.wasm', import.meta.url\)/);
   }
   prepare();
   assert.deepEqual((await readdir(root)).sort(), files.sort(), 'preparation is idempotent');

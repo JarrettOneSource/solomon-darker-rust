@@ -1,12 +1,12 @@
 use serde_json::{Value, json};
-use solomon_sim::enemies::path::NativeEnemyPathState;
-use solomon_sim::profile::primary::NativeSpentEmber;
+use solomon_sim::enemies::path::EnemyPathState;
+use solomon_sim::profile::primary::SpentEmber;
 use solomon_sim::spells::fire::*;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
 };
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -16,15 +16,15 @@ fn point(position: Vec2) -> Value {
     json!({ "x": position.x, "y": position.y })
 }
 
-fn random_state(rng: &NativeRng) -> Value {
+fn random_state(rng: &Rng) -> Value {
     json!({ "indexA": rng.index_a, "indexB": rng.index_b, "words": rng.words.as_slice() })
 }
 
-fn spent_ember(value: NativeSpentEmber) -> Value {
+fn spent_ember(value: SpentEmber) -> Value {
     match value {
-        NativeSpentEmber::None => json!({ "kind": "none" }),
-        NativeSpentEmber::Immolate { damage } => json!({ "kind": "immolate", "damage": damage }),
-        NativeSpentEmber::Imp { damage, lifetime_ticks } => {
+        SpentEmber::None => json!({ "kind": "none" }),
+        SpentEmber::Immolate { damage } => json!({ "kind": "immolate", "damage": damage }),
+        SpentEmber::Imp { damage, lifetime_ticks } => {
             json!({ "kind": "imp", "damage": damage, "lifetimeTicks": lifetime_ticks })
         }
     }
@@ -79,7 +79,7 @@ fn ember_row(ember: &PrimarySpellFireEmber) -> Value {
     })
 }
 
-fn explosion_row(explosion: &NativeFireExplosionState) -> Value {
+fn explosion_row(explosion: &FireExplosionState) -> Value {
     json!({
         "burnDamage": explosion.burn_damage, "damage": explosion.damage,
         "footprintDimension": explosion.footprint_dimension, "origin": point(explosion.origin),
@@ -88,13 +88,13 @@ fn explosion_row(explosion: &NativeFireExplosionState) -> Value {
     })
 }
 
-fn retirement_row(retirement: &NativeFireEmberRetirement) -> Value {
+fn retirement_row(retirement: &FireEmberRetirement) -> Value {
     match retirement {
-        NativeFireEmberRetirement::None => json!({ "kind": "none" }),
-        NativeFireEmberRetirement::Immolate(explosion) => {
+        FireEmberRetirement::None => json!({ "kind": "none" }),
+        FireEmberRetirement::Immolate(explosion) => {
             json!({ "kind": "immolate", "explosion": explosion_row(explosion) })
         }
-        NativeFireEmberRetirement::Imp {
+        FireEmberRetirement::Imp {
             burn_damage,
             damage,
             lifetime_ticks,
@@ -109,7 +109,7 @@ fn retirement_row(retirement: &NativeFireEmberRetirement) -> Value {
     }
 }
 
-fn path_row(path: &NativeEnemyPathState) -> Value {
+fn path_row(path: &EnemyPathState) -> Value {
     let waypoints = path.route_waypoints.map(|points| [point(points[0]), point(points[1])]);
     json!({
         "baseTurnRate": path.base_turn_rate, "flankAngleDeg": path.flank_angle_deg,
@@ -158,7 +158,7 @@ fn targets() -> Vec<PrimarySpellTarget> {
             grid_position: None,
             id: if index == 0 { "enemy:a".into() } else { "enemy:b".into() },
             kind: PrimarySpellTargetKind::Enemy,
-            native_priority: 0,
+            priority: 0,
             pending_remove: false,
             position,
             query_lane: PrimarySpellQueryLane::Grid,
@@ -179,9 +179,9 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
             "goodguy" => FirePatchType::GoodGuy,
             _ => FirePatchType::Moving,
         };
-        let mut rng = NativeRng::new(7);
+        let mut rng = Rng::new(7);
         let mut patch = Some(spawn_native_fire_patch(
-            CreateNativeFirePatchOptions {
+            CreateFirePatchOptions {
                 atlas_phase_step: None,
                 burn_damage: 10.0,
                 damage: 8.0,
@@ -207,8 +207,7 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
             let expected_tick = frame["tick"].as_u64().unwrap();
             while tick < expected_tick {
                 tick += 1;
-                let (retained, next_contact) =
-                    step_native_fire_patch(patch.as_mut().unwrap(), tick);
+                let (retained, next_contact) = step_fire_patch(patch.as_mut().unwrap(), tick);
                 contact = next_contact;
                 if !retained {
                     patch = None;
@@ -233,14 +232,14 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
 
     for case in fixture["detonations"].as_array().unwrap() {
         let spent = match case["kind"].as_str().unwrap() {
-            "immolate" => NativeSpentEmber::Immolate { damage: 20.0 },
-            "imp" => NativeSpentEmber::Imp { damage: 20.0, lifetime_ticks: 300 },
-            _ => NativeSpentEmber::None,
+            "immolate" => SpentEmber::Immolate { damage: 20.0 },
+            "imp" => SpentEmber::Imp { damage: 20.0, lifetime_ticks: 300 },
+            _ => SpentEmber::None,
         };
-        let mut rng = NativeRng::new(900);
-        let born = create_native_fire_detonation(
+        let mut rng = Rng::new(900);
+        let born = create_fire_detonation(
             10,
-            NativeFireProjectilePayload {
+            FireProjectilePayload {
                 burn_damage: 10.0,
                 ember_damage: 8.0,
                 ember_fragments: 4,
@@ -267,12 +266,12 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
             "detonation",
         );
         let mut ember = Some(born.embers[0].clone());
-        let mut retirement = NativeFireEmberRetirement::None;
+        let mut retirement = FireEmberRetirement::None;
         let mut tick = 0;
         for frame in case["frames"].as_array().unwrap() {
             while tick < frame["tick"].as_u64().unwrap() {
                 tick += 1;
-                let step = step_native_fire_ember(ember.as_mut().unwrap());
+                let step = step_fire_ember(ember.as_mut().unwrap());
                 if !step.retained {
                     ember = None;
                 }
@@ -289,9 +288,9 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
 
     for case in fixture["imps"].as_array().unwrap() {
         let mode = case["mode"].as_str().unwrap();
-        let mut rng = NativeRng::new(7);
-        let mut imp = Some(spawn_native_fire_good_imp(
-            SpawnNativeFireGoodImpOptions {
+        let mut rng = Rng::new(7);
+        let mut imp = Some(spawn_fire_good_imp(
+            SpawnFireGoodImpOptions {
                 burn_damage: 10.0,
                 damage: 12.0,
                 id: 51,
@@ -315,9 +314,9 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
                 if tick >= 60 && !actors.is_empty() {
                     actors[0].active = false;
                 }
-                let step = step_native_fire_good_imp(
+                let step = step_fire_good_imp(
                     imp.as_mut().unwrap(),
-                    NativeFireGoodImpStepContext {
+                    FireGoodImpStepContext {
                         can_occupy: &can_occupy,
                         navigation: None,
                         targets: &actors,
@@ -353,9 +352,9 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
         let id = case["id"].as_u64().unwrap();
         compare(
             &json!({
-                "id": id, "fade": native_fire_particle_fade_step(id, true),
-                "lifetime": native_fire_particle_lifetime_ticks(id, true), "variant": native_fire_particle_variant(id),
-                "pitch": native_fire_impact_pitch(id), "signed": native_fire_presentation_signed_random(id, 7, 3, 0.5),
+                "id": id, "fade": fire_particle_fade_step(id, true),
+                "lifetime": fire_particle_lifetime_ticks(id, true), "variant": fire_particle_variant(id),
+                "pitch": fire_impact_pitch(id), "signed": fire_presentation_signed_random(id, 7, 3, 0.5),
             }),
             case,
             "presentation",

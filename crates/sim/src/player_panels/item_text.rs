@@ -5,26 +5,20 @@
 mod hagatha;
 
 use crate::Vec2;
-use crate::boneyard::tutorial::{
-    NATIVE_TUTORIAL_AMULET_DESCRIPTION, native_tutorial_amulet_identity_matches,
-};
+use crate::boneyard::tutorial::{TUTORIAL_AMULET_DESCRIPTION, tutorial_amulet_identity_matches};
 use crate::economy::{
     DOWSING_EQUIPMENT_RECIPES, HAGATHA_PERKS, HubEconomyContext, HubEconomyState, HubInventoryItem,
-    HubItemKind, ItemRarity, native_equipment_meets_level_requirement,
-    native_equipment_required_level,
+    HubItemKind, ItemRarity, equipment_meets_level_requirement, equipment_required_level,
 };
 use crate::equipment::{
-    NATIVE_EQUIPMENT_SETS, NativeEquipmentEffect, native_equipment_recipe_description,
-    native_equipment_recipe_effects,
+    EQUIPMENT_SETS, EquipmentEffect, equipment_recipe_description, equipment_recipe_effects,
 };
 use crate::hud::HudRect;
-use crate::native_ui_text::{
-    NativeUiFontName, measure_native_ui_text, native_ui_font, wrap_native_ui_text,
-};
-use crate::profile::NATIVE_SKILL_CATALOG;
+use crate::profile::SKILL_CATALOG;
+use crate::ui_text::{UiFontName, measure_ui_text, ui_font, wrap_ui_text};
 
-use super::native_tooltip_fixed;
 use super::sack_rename::inventory_sack_name_needs_browser_font;
+use super::tooltip_fixed;
 
 pub const HUB_TOOLTIP_CONTENT_MARGIN: f64 = 25.0;
 pub const HUB_TOOLTIP_CONTENT_MAX_WIDTH: f64 = 300.0;
@@ -37,7 +31,7 @@ const SET_NAME: u32 = 0xffbf80;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HubTooltipLine {
-    pub font: NativeUiFontName,
+    pub font: UiFontName,
     pub text: String,
     pub tint: u32,
     pub sack_name_browser_font: bool,
@@ -46,7 +40,7 @@ pub struct HubTooltipLine {
 impl HubTooltipLine {
     fn body(text: impl Into<String>) -> Self {
         Self {
-            font: NativeUiFontName::Body,
+            font: UiFontName::Body,
             text: text.into(),
             tint: BODY,
             sack_name_browser_font: false,
@@ -58,7 +52,7 @@ impl HubTooltipLine {
     }
 
     fn title(text: impl Into<String>) -> Self {
-        Self { font: NativeUiFontName::Menu, tint: 0xffffff, ..Self::body(text) }
+        Self { font: UiFontName::Menu, tint: 0xffffff, ..Self::body(text) }
     }
 }
 
@@ -172,7 +166,7 @@ pub fn hub_inventory_item_info_text(item: &HubInventoryItem) -> HubInventoryItem
         }
         HubItemKind::SkillBook => {
             return HubInventoryItemInfoText {
-                description: Some(if item.native_subtype == Some(2) {
+                description: Some(if item.subtype == Some(2) {
                     "Double click to learn a new skill".into()
                 } else {
                     "Double click to improve a learned skill".into()
@@ -212,7 +206,7 @@ pub fn hub_hagatha_tooltip_lines(options: &HagathaTooltipOptions<'_>) -> Vec<Hub
     } else {
         let selector = options.selector as usize;
         lines.push(HubTooltipLine::title(HAGATHA_PERKS[selector].name));
-        for text in hagatha::HAGATHA_NATIVE_TOOLTIP_LINES[selector] {
+        for text in hagatha::HAGATHA_TOOLTIP_LINES[selector] {
             lines.push(HubTooltipLine::body(*text));
         }
         if selector == 7
@@ -243,7 +237,7 @@ pub fn hub_item_tooltip_lines(
 ) -> Vec<HubTooltipLine> {
     let info = hub_inventory_item_info_text(item);
     let set = item.recipe_index.and_then(|recipe| {
-        NATIVE_EQUIPMENT_SETS.iter().find(|set| set.member_recipe_indices.contains(&recipe))
+        EQUIPMENT_SETS.iter().find(|set| set.member_recipe_indices.contains(&recipe))
     });
     let complete = set.is_some_and(|set| {
         set.member_recipe_indices.iter().all(|index| options.owned_recipe_indices.contains(index))
@@ -258,7 +252,7 @@ pub fn hub_item_tooltip_lines(
         }
     };
     let sack_name_browser_font = item.kind == HubItemKind::Sack
-        && item.native_type_id == 7008
+        && item.type_id == 7008
         && inventory_sack_name_needs_browser_font(&info.title);
     let mut lines =
         vec![HubTooltipLine { tint, sack_name_browser_font, ..HubTooltipLine::title(info.title) }];
@@ -274,9 +268,9 @@ pub fn hub_item_tooltip_lines(
     let description = if let Some(content) = &item.mod_item_content {
         &content.description
     } else if let Some(recipe) = item.recipe_index {
-        native_equipment_recipe_description(recipe)
-    } else if native_tutorial_amulet_identity_matches(item) {
-        NATIVE_TUTORIAL_AMULET_DESCRIPTION
+        equipment_recipe_description(recipe)
+    } else if tutorial_amulet_identity_matches(item) {
+        TUTORIAL_AMULET_DESCRIPTION
     } else {
         ""
     };
@@ -294,12 +288,12 @@ pub fn hub_item_tooltip_lines(
             creativity_rank: options.creativity_rank,
             ..HubEconomyContext::default()
         };
-        if !native_equipment_meets_level_requirement(item, &context) {
+        if !equipment_meets_level_requirement(item, &context) {
             lines.push(HubTooltipLine {
                 tint: 0xff8080,
                 ..HubTooltipLine::body(format!(
                     "Requires Player Level {}",
-                    native_equipment_required_level(item)
+                    equipment_required_level(item)
                 ))
             });
         }
@@ -307,9 +301,9 @@ pub fn hub_item_tooltip_lines(
     let effects = item
         .native_effects
         .as_deref()
-        .unwrap_or_else(|| item.recipe_index.map_or(&[], native_equipment_recipe_effects));
+        .unwrap_or_else(|| item.recipe_index.map_or(&[], equipment_recipe_effects));
     for effect in effects {
-        lines.push(HubTooltipLine::body(hub_native_equipment_effect_text(*effect)));
+        lines.push(HubTooltipLine::body(hub_equipment_effect_text(*effect)));
     }
     if let Some(set) = set {
         lines.push(HubTooltipLine::body(""));
@@ -328,7 +322,7 @@ pub fn hub_item_tooltip_lines(
         lines.push(HubTooltipLine::body(""));
         lines.push(HubTooltipLine::gold("Complete Set Bonus:"));
         for effect in set.effects {
-            lines.push(HubTooltipLine::body(hub_native_equipment_effect_text(*effect)));
+            lines.push(HubTooltipLine::body(hub_equipment_effect_text(*effect)));
         }
     }
     append_price(&mut lines, options.price);
@@ -344,7 +338,7 @@ fn append_price(lines: &mut Vec<HubTooltipLine>, price: Option<u64>) {
 }
 
 #[must_use]
-pub fn hub_native_equipment_effect_text(effect: NativeEquipmentEffect) -> String {
+pub fn hub_equipment_effect_text(effect: EquipmentEffect) -> String {
     assert!(
         (1..=39).contains(&effect.kind) && effect.magnitude.is_finite() && effect.operator <= 2,
         "native equipment tooltip effect"
@@ -354,8 +348,7 @@ pub fn hub_native_equipment_effect_text(effect: NativeEquipmentEffect) -> String
     let floor = effect.magnitude.floor();
     let rounded_value = if effect.magnitude - floor >= 0.5 { floor + 1.0 } else { floor };
     let rounded = ryu_js::Buffer::new().format(rounded_value).to_owned();
-    let skill =
-        || NATIVE_SKILL_CATALOG.get(effect.target as usize).expect("native tooltip skill").name;
+    let skill = || SKILL_CATALOG.get(effect.target as usize).expect("native tooltip skill").name;
     let class = || {
         ["Ether", "Fire", "Air", "Water", "Earth", "Body", "Mind", "Arcane"]
             .get(effect.target as usize)
@@ -364,12 +357,12 @@ pub fn hub_native_equipment_effect_text(effect: NativeEquipmentEffect) -> String
     };
     let value = || {
         if effect.operator == 1 {
-            format!("x{}", native_tooltip_fixed(effect.magnitude, 1))
+            format!("x{}", tooltip_fixed(effect.magnitude, 1))
         } else {
             let suffix = if effect.operator == 2 { "%" } else { "" };
             let sign = if effect.magnitude <= 0.0 { "-" } else { "+" };
             let digits = if effect.operator == 2 && effect.magnitude <= 0.0 { 0 } else { 1 };
-            format!("{sign}{}{suffix}", native_tooltip_fixed(effect.magnitude.abs(), digits))
+            format!("{sign}{}{suffix}", tooltip_fixed(effect.magnitude.abs(), digits))
         }
     };
     match effect.kind {
@@ -387,7 +380,7 @@ pub fn hub_native_equipment_effect_text(effect: NativeEquipmentEffect) -> String
         }
         14 => format!("Find {rounded}% more gold"),
         15 if effect.operator == 1 => {
-            format!("Pull orbs from {}x further away", native_tooltip_fixed(effect.magnitude, 1))
+            format!("Pull orbs from {}x further away", tooltip_fixed(effect.magnitude, 1))
         }
         15 => format!("Pull orbs from {rounded}% further away"),
         18 => format!("Resist Pain +{rounded}%"),
@@ -465,17 +458,13 @@ pub fn hub_contextual_hover_layout(
                 height: measured.y,
             }
         } else {
-            let sources = wrap_native_ui_text(
-                &line.text,
-                line.font,
-                Some(HUB_TOOLTIP_CONTENT_MAX_WIDTH),
-                1.0,
-            );
+            let sources =
+                wrap_ui_text(&line.text, line.font, Some(HUB_TOOLTIP_CONTENT_MAX_WIDTH), 1.0);
             let mut width: f64 = 0.0;
             for text in &sources {
-                width = width.max(measure_native_ui_text(text, line.font, 1.0));
+                width = width.max(measure_ui_text(text, line.font, 1.0));
             }
-            let height = sources.len() as f64 * native_ui_font(line.font).metrics[0];
+            let height = sources.len() as f64 * ui_font(line.font).metrics[0];
             HubTooltipRenderedLine { sources, width, height }
         };
         content_width = content_width.max(row.width);

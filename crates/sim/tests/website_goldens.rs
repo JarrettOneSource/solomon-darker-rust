@@ -6,7 +6,7 @@
 //! only trigonometry is allowed a last-bit tolerance.
 
 use serde::Deserialize;
-use solomon_sim::appearance::{StarterColorOwner, roll_native_starter_equipment_appearance};
+use solomon_sim::appearance::{StarterColorOwner, roll_starter_equipment_appearance};
 use solomon_sim::hub::ambient::{
     HubAmbientState, HubColor, hub_fountain_particle_alpha, hub_seal_colors, hub_statue_offsets,
 };
@@ -24,9 +24,9 @@ use solomon_sim::hub::teacher::{
     HubTeacherBurstMember, HubTeacherPhase, hub_teacher_burst_at, hub_teacher_frame_at,
     hub_teacher_phase_at,
 };
-use solomon_sim::hub::{HUB_COURTYARD_SEGMENTS, HubWizard, NATIVE_HUB_COLLISION_RNG_SEED};
-use solomon_sim::random_domain::{native_random_float_from_word, native_random_int_from_word};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::hub::{HUB_COLLISION_RNG_SEED, HUB_COURTYARD_SEGMENTS, HubWizard};
+use solomon_sim::random_domain::{random_float_from_word, random_int_from_word};
+use solomon_sim::{Rng, Vec2};
 
 #[derive(Deserialize)]
 struct WalkGoldens {
@@ -75,7 +75,7 @@ fn hub_walks_replay_the_website_kernels_exactly() {
     assert!(!goldens.scenarios.is_empty());
     for scenario in &goldens.scenarios {
         let mut wizard = HubWizard::at(Vec2::new(scenario.start[0], scenario.start[1]));
-        let mut rng = NATIVE_HUB_COLLISION_RNG_SEED;
+        let mut rng = HUB_COLLISION_RNG_SEED;
         let mut fallback_samples = 0;
         let mut expected = scenario.ticks.iter().enumerate();
         for stage in &scenario.stages {
@@ -123,8 +123,8 @@ fn starter_appearances_match_the_website_roll() {
             "college" => StarterColorOwner::College,
             other => panic!("unknown owner {other}"),
         };
-        let mut rng = NativeRng::new(case.seed);
-        let appearance = roll_native_starter_equipment_appearance(&mut rng, owner);
+        let mut rng = Rng::new(case.seed);
+        let appearance = roll_starter_equipment_appearance(&mut rng, owner);
         assert_eq!(
             (appearance.primary_tint, appearance.secondary_tint),
             (case.primary_tint, case.secondary_tint),
@@ -460,14 +460,14 @@ fn teacher_cycle_burst_and_random_domain_replay_the_website_kernels() {
     }
     for (word, bound, result) in &goldens.random_domain.ints {
         assert_eq!(
-            native_random_int_from_word(*word, *bound),
+            random_int_from_word(*word, *bound),
             *result,
             "integer from word {word:#x} below {bound}"
         );
     }
     for (word, maximum, result) in &goldens.random_domain.floats {
         assert_eq!(
-            native_random_float_from_word(*word, *maximum),
+            random_float_from_word(*word, *maximum),
             *result,
             "float from word {word:#x} up to {maximum}"
         );
@@ -940,7 +940,7 @@ fn private_rooms_collision_presentation_and_doorway_lifecycles_match_the_website
                     position,
                     Vec2::new(*dx, *dy),
                     25.0,
-                    NATIVE_HUB_COLLISION_RNG_SEED,
+                    HUB_COLLISION_RNG_SEED,
                     region.segments(),
                 );
                 assert_eq!(
@@ -989,7 +989,7 @@ fn private_rooms_collision_presentation_and_doorway_lifecycles_match_the_website
             scripted_target: Vec2::new(tr.scripted_target.x, tr.scripted_target.y),
             source_region: region(&tr.source_region),
         });
-        let mut rng = NATIVE_HUB_COLLISION_RNG_SEED;
+        let mut rng = HUB_COLLISION_RNG_SEED;
         for (tick, expected) in walk.samples.iter().enumerate() {
             wizard.tick(vec2(walk.direction), &mut rng);
             let (phase, alpha, speed, target) =
@@ -1292,7 +1292,7 @@ fn students_actor_contacts_and_trader_clocks_replay_the_website() {
     }
     let mut population = HubStudentPopulation::new(None);
     let mut wizard = HubWizard::spawn();
-    let mut collision_rng = NATIVE_HUB_COLLISION_RNG_SEED;
+    let mut collision_rng = HUB_COLLISION_RNG_SEED;
     let mut tick = 0;
     for expected in &goldens.world_ticks {
         while tick < expected.tick {
@@ -1384,11 +1384,10 @@ fn students_actor_contacts_and_trader_clocks_replay_the_website() {
 fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
     use serde_json::{Value, json};
     use solomon_sim::profile::{
-        NATIVE_SKILL_CATALOG, NativeSkillBookState, NativeSkillValue, WizardDiscipline,
-        WizardElement,
+        SKILL_CATALOG, SkillBookState, SkillValue, WizardDiscipline, WizardElement,
     };
 
-    fn snapshot(book: &NativeSkillBookState) -> Value {
+    fn snapshot(book: &SkillBookState) -> Value {
         json!({
             "advancedUnlocks": book.advanced_unlocks,
             "disciplineRoot": book.discipline_root,
@@ -1403,9 +1402,7 @@ fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
     }
 
     let fixture: Value = serde_json::from_str(&fixture("profile-goldens.json")).unwrap();
-    for (actual, expected) in
-        NATIVE_SKILL_CATALOG.iter().zip(fixture["statBook"].as_array().unwrap())
-    {
+    for (actual, expected) in SKILL_CATALOG.iter().zip(fixture["statBook"].as_array().unwrap()) {
         assert_eq!(actual.id as u64, expected["id"].as_u64().unwrap());
         assert_eq!(u64::from(actual.cap_level), expected["capLevel"].as_u64().unwrap());
         assert_eq!(u64::from(actual.maximum_level), expected["maximumLevel"].as_u64().unwrap());
@@ -1426,8 +1423,8 @@ fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
         for property in actual.numeric_properties {
             let expected = &properties[property.name];
             match property.value {
-                NativeSkillValue::Scalar(value) => assert_eq!(value, expected.as_f64().unwrap()),
-                NativeSkillValue::Ranks(values) => {
+                SkillValue::Scalar(value) => assert_eq!(value, expected.as_f64().unwrap()),
+                SkillValue::Ranks(values) => {
                     let expected: Vec<_> = expected
                         .as_array()
                         .unwrap()
@@ -1448,7 +1445,7 @@ fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
             .into_iter()
             .find(|discipline| Some(discipline.as_str()) == case["discipline"].as_str())
             .unwrap();
-        let mut book = NativeSkillBookState::new(element, discipline);
+        let mut book = SkillBookState::new(element, discipline);
         assert_eq!(snapshot(&book), case["fresh"]);
         book.grant_ranks(72, 2);
         assert_eq!(snapshot(&book), case["granted"]);
@@ -1456,7 +1453,7 @@ fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
         assert_eq!(snapshot(&book), case["capped"]);
     }
     for case in fixture["welds"].as_array().unwrap() {
-        let mut book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+        let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
         book.grant_weld_build(case["build"]["id"].as_u64().unwrap() as u32);
         assert_eq!(snapshot(&book), case["learned"]);
     }
@@ -1466,7 +1463,7 @@ fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
 fn stock_inventory_and_every_college_service_replay_the_website() {
     use serde_json::{Value, json};
     use solomon_sim::economy::*;
-    use solomon_sim::equipment::NativeEquipmentEffect;
+    use solomon_sim::equipment::EquipmentEffect;
     use solomon_sim::profile::WizardElement;
 
     fn equipment_type(value: &Value) -> Option<EquipmentType> {
@@ -1525,12 +1522,12 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             inventory_slot: value["inventorySlot"].as_u64().map(|value| value as usize),
             kind: kind(&value["kind"]),
             name: value["name"].as_str().unwrap().to_owned(),
-            native_subtype: value["nativeSubtype"].as_u64().map(|value| value as u32),
-            native_selector: value["nativeSelector"].as_u64().map(|value| value as u32),
+            subtype: value["nativeSubtype"].as_u64().map(|value| value as u32),
+            selector: value["nativeSelector"].as_u64().map(|value| value as u32),
             native_effects: value["nativeEffects"].as_array().map(|values| {
                 values
                     .iter()
-                    .map(|effect| NativeEquipmentEffect {
+                    .map(|effect| EquipmentEffect {
                         kind: effect["kind"].as_u64().unwrap() as u32,
                         magnitude: effect["magnitude"].as_f64().unwrap(),
                         operator: effect["operator"].as_u64().unwrap() as u32,
@@ -1538,7 +1535,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
                     })
                     .collect()
             }),
-            native_type_id: value["nativeTypeId"].as_u64().unwrap() as u32,
+            type_id: value["nativeTypeId"].as_u64().unwrap() as u32,
             quantity: value["quantity"].as_u64().unwrap() as u32,
             rarity: value["rarity"].as_str().map(|rarity| match rarity {
                 "Epic" => ItemRarity::Epic,
@@ -1550,12 +1547,12 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
     }
     fn item_snapshot(item: &HubInventoryItem) -> Value {
         json!({ "id":item.id, "kind":item.kind.as_str(), "name":item.name,
-            "nativeTypeId":item.native_type_id, "nativeSubtype":item.native_subtype,
+            "nativeTypeId":item.type_id, "nativeSubtype":item.subtype,
             "quantity":item.quantity, "inventorySlot":item.inventory_slot,
             "equipmentType":item.equipment_type.map(EquipmentType::as_str),
             "recipeIndex":item.recipe_index, "generatedLevel":item.generated_level,
             "iconRecords":item.icon_records, "iconTints":item.icon_tints,
-            "nativeSelector":item.native_selector,
+            "nativeSelector":item.selector,
             "nativeEffects":item.native_effects.as_ref().map(|effects| effects.iter().map(|effect| json!({
                 "kind":effect.kind,"magnitude":effect.magnitude,"operator":effect.operator,"target":effect.target,
             })).collect::<Vec<_>>()),
@@ -1632,7 +1629,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             .try_into()
             .unwrap();
         let bonuses = &value["unforgeBonuses"];
-        state.unforge_bonuses = NativeUnforgeBonuses {
+        state.unforge_bonuses = UnforgeBonuses {
             experience: bonuses["experience"].as_f64().unwrap(),
             mana_cost_reduction: bonuses["manaCostReduction"].as_f64().unwrap(),
             maximum_health: bonuses["maximumHealth"].as_f64().unwrap(),
@@ -1759,11 +1756,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             "dye" => HubInventoryAction::Dye {
                 session_id: operation["sessionId"].as_str().unwrap().into(),
                 target_item_id: id("targetItemId"),
-                layer: if operation["layer"] == "cloth" {
-                    NativeDyeLayer::Cloth
-                } else {
-                    NativeDyeLayer::Trim
-                },
+                layer: if operation["layer"] == "cloth" { DyeLayer::Cloth } else { DyeLayer::Trim },
                 swatch_rows: operation["swatchRows"]
                     .as_array()
                     .unwrap()
@@ -1832,7 +1825,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             actual.backpack = vec![item];
             let vitals = &record["vitals"];
             let context = HubEconomyContext {
-                vitals: NativeUnforgeVitals {
+                vitals: UnforgeVitals {
                     current_health: vitals["currentHealth"].as_f64().unwrap(),
                     current_mana: vitals["currentMana"].as_f64().unwrap(),
                     maximum_health: vitals["maximumHealth"].as_f64().unwrap(),
@@ -1855,8 +1848,8 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             .iter()
             .map(|value| value.as_u64().unwrap() as usize)
             .collect();
-        assert_eq!(native_dye_mixed_tint(&rows).map(u64::from), case["mixed"].as_u64());
-        assert_eq!(native_dye_committed_tint(&rows).map(u64::from), case["committed"].as_u64());
+        assert_eq!(dye_mixed_tint(&rows).map(u64::from), case["mixed"].as_u64());
+        assert_eq!(dye_committed_tint(&rows).map(u64::from), case["committed"].as_u64());
     }
     for case in fixture["archiveCases"].as_array().unwrap() {
         let mut actual = read_state(&case["initial"]);
@@ -1893,10 +1886,10 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
 #[test]
 fn every_native_ui_font_and_text_layout_replays_the_website() {
     use serde_json::{Value, json};
-    use solomon_sim::native_ui_text::*;
+    use solomon_sim::ui_text::*;
 
-    fn font(value: &Value) -> NativeUiFontName {
-        NativeUiFontName::ALL
+    fn font(value: &Value) -> UiFontName {
+        UiFontName::ALL
             .into_iter()
             .find(|font| Some(font.as_str()) == value.as_str())
             .expect("oracle font exists")
@@ -1923,10 +1916,10 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
         }
     }
 
-    fn layout_record(layout: NativeUiTextLayout) -> Value {
+    fn layout_record(layout: UiTextLayout) -> Value {
         let mut glyphs = Vec::new();
         for glyph in &layout.glyphs {
-            let ink = native_ui_glyph_ink_bounds(glyph);
+            let ink = ui_glyph_ink_bounds(glyph);
             glyphs.push(json!({
                 "record": glyph.glyph.record, "codePoint": glyph.glyph.code_point,
                 "centerX": glyph.center_x, "centerY": glyph.center_y,
@@ -1944,12 +1937,12 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
         })
     }
 
-    fn read_runs(value: &Value) -> Vec<NativeUiTextRun<'_>> {
+    fn read_runs(value: &Value) -> Vec<UiTextRun<'_>> {
         value
             .as_array()
             .unwrap()
             .iter()
-            .map(|run| NativeUiTextRun {
+            .map(|run| UiTextRun {
                 text: run["text"].as_str().unwrap(),
                 scale: run["scale"].as_f64(),
                 advance_scale: run["advanceScale"].as_f64(),
@@ -1960,7 +1953,7 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
             .collect()
     }
 
-    fn run_record(run: &NativeUiTextRun<'_>) -> Value {
+    fn run_record(run: &UiTextRun<'_>) -> Value {
         let mut value = json!({ "text": run.text });
         if let Some(scale) = run.scale {
             value["scale"] = json!(scale);
@@ -1981,10 +1974,10 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
     }
 
     let fixture: Value = serde_json::from_str(&fixture("native-ui-text-goldens.json")).unwrap();
-    assert_eq!(fixture["fonts"].as_array().unwrap().len(), NativeUiFontName::ALL.len());
+    assert_eq!(fixture["fonts"].as_array().unwrap().len(), UiFontName::ALL.len());
     for record in fixture["fonts"].as_array().unwrap() {
         let name = font(&record["name"]);
-        let actual = native_ui_font(name);
+        let actual = ui_font(name);
         assert_eq!(actual.atlas.as_str(), record["atlas"].as_str().unwrap());
         compare(&json!(actual.atlas.dimensions()), &record["atlasDimensions"], name.as_str());
         compare(&json!(actual.metrics), &record["metrics"], name.as_str());
@@ -2004,7 +1997,7 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
             let left = char::from_u32(pair["left"].as_u64().unwrap() as u32).unwrap();
             let right = char::from_u32(pair["right"].as_u64().unwrap() as u32).unwrap();
             assert_eq!(
-                measure_native_ui_text(&format!("{left}{right}"), name, 1.0),
+                measure_ui_text(&format!("{left}{right}"), name, 1.0),
                 pair["width"].as_f64().unwrap(),
                 "{} {left}{right}",
                 name.as_str(),
@@ -2013,23 +2006,23 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
     }
     for (index, record) in fixture["layouts"].as_array().unwrap().iter().enumerate() {
         let input = &record["spec"];
-        let spec = NativeUiTextSpec {
+        let spec = UiTextSpec {
             align: match input["align"].as_str() {
-                Some("left") => NativeUiTextAlign::Left,
-                Some("right") => NativeUiTextAlign::Right,
-                _ => NativeUiTextAlign::Center,
+                Some("left") => UiTextAlign::Left,
+                Some("right") => UiTextAlign::Right,
+                _ => UiTextAlign::Center,
             },
             placement: if input["placement"] == "box" {
-                NativeUiTextPlacement::Box
+                UiTextPlacement::Box
             } else {
-                NativeUiTextPlacement::Baseline
+                UiTextPlacement::Baseline
             },
             scale: input["scale"].as_f64().unwrap_or(1.0),
             alpha: input["alpha"].as_f64().unwrap_or(1.0),
             tint: input["tint"].as_u64().unwrap_or(0xffffff) as u32,
             max_width: input["maxWidth"].as_f64(),
             line_height: input["lineHeight"].as_f64(),
-            ..NativeUiTextSpec::new(
+            ..UiTextSpec::new(
                 font(&input["font"]),
                 input["text"].as_str().unwrap(),
                 input["x"].as_f64().unwrap(),
@@ -2037,14 +2030,14 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
             )
         };
         compare(
-            &layout_record(layout_native_ui_text(&spec)),
+            &layout_record(layout_ui_text(&spec)),
             &record["expected"],
             &format!("layout {index}"),
         );
     }
     for (index, record) in fixture["runs"].as_array().unwrap().iter().enumerate() {
         let spec = &record["spec"];
-        let layout = layout_native_ui_text_runs(
+        let layout = layout_ui_text_runs(
             font(&spec["font"]),
             &read_runs(&spec["runs"]),
             spec["x"].as_f64().unwrap(),
@@ -2055,11 +2048,8 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
     }
     for (index, record) in fixture["wrappedRuns"].as_array().unwrap().iter().enumerate() {
         let runs = read_runs(&record["runs"]);
-        let lines = wrap_native_ui_text_runs(
-            &runs,
-            font(&record["font"]),
-            record["maxWidth"].as_f64().unwrap(),
-        );
+        let lines =
+            wrap_ui_text_runs(&runs, font(&record["font"]), record["maxWidth"].as_f64().unwrap());
         let actual: Vec<Vec<_>> =
             lines.iter().map(|line| line.iter().map(run_record).collect()).collect();
         compare(&json!(actual), &record["expected"], &format!("wrapped runs {index}"));
@@ -2067,7 +2057,7 @@ fn every_native_ui_font_and_text_layout_replays_the_website() {
     for record in fixture["msgBoxes"].as_array().unwrap() {
         let text = record["text"].as_str().unwrap();
         assert_eq!(
-            json!(wrap_native_ui_msg_box_text(
+            json!(wrap_ui_msg_box_text(
                 text,
                 font(&record["font"]),
                 record["maxWidth"].as_f64().unwrap()
@@ -2216,7 +2206,7 @@ fn save_mod_mismatch_keeps_source_identity_matching_and_array_order() {
 #[test]
 fn hosted_social_goldens() {
     use solomon_sim::social::{
-        GameChatWorldKind, GameSessionKind, native_player_card_college_invite_available,
+        GameChatWorldKind, GameSessionKind, player_card_college_invite_available,
     };
     let recorded: serde_json::Value =
         serde_json::from_str(&fixture("hosted-social-goldens.json")).unwrap();
@@ -2238,7 +2228,7 @@ fn hosted_social_goldens() {
             GameChatWorldKind::Boneyard
         };
         assert_eq!(
-            native_player_card_college_invite_available(
+            player_card_college_invite_available(
                 session,
                 world,
                 case["leader"].as_bool().unwrap(),
@@ -2353,14 +2343,14 @@ fn cheat_menu_goldens() {
         for (row, expected) in actual.enemies.iter().zip(expected["enemies"].as_array().unwrap()) {
             assert_eq!(row.base, expected["base"].as_str().unwrap());
             assert_eq!(row.key, expected["key"].as_str().unwrap());
-            assert_eq!(row.native_type_id, expected["nativeTypeId"].as_i64().unwrap());
+            assert_eq!(row.type_id, expected["nativeTypeId"].as_i64().unwrap());
         }
         assert_eq!(actual.items.len(), expected["items"].as_array().unwrap().len());
         for (row, expected) in actual.items.iter().zip(expected["items"].as_array().unwrap()) {
             assert_eq!(row.key, expected["key"].as_str().unwrap());
             assert_eq!(row.kind, expected["kind"].as_str().unwrap());
             assert_eq!(row.name, expected["name"].as_str().unwrap());
-            assert_eq!(row.native_type_id, expected["nativeTypeId"].as_i64().unwrap());
+            assert_eq!(row.type_id, expected["nativeTypeId"].as_i64().unwrap());
         }
         assert_eq!(actual.skills.len(), expected["skills"].as_array().unwrap().len());
         for (row, expected) in actual.skills.iter().zip(expected["skills"].as_array().unwrap()) {
@@ -2404,14 +2394,14 @@ fn cheat_menu_goldens() {
 fn party_ui_goldens() {
     use serde_json::{Value, json};
     use solomon_sim::hud::HudRect;
-    use solomon_sim::native_ui_text::{NativeUiFontName, NativeUiTextAlign};
     use solomon_sim::social::PartyVisibility;
     use solomon_sim::social::party_ui::{
-        NATIVE_PARTY_INVITATION_FRAME, NATIVE_PARTY_INVITATION_TITLE, NativePartyMenuMember,
-        NativePartyMenuRequest, NativePartyMenuSpec, NativePartyMenuTab, NativePartyMenuTag,
-        fit_native_party_menu_text, native_party_invitation_action_bounds,
-        native_party_invitation_body, native_party_menu_name_font, plan_native_party_menu,
+        PARTY_INVITATION_FRAME, PARTY_INVITATION_TITLE, PartyMenuMember, PartyMenuRequest,
+        PartyMenuSpec, PartyMenuTab, PartyMenuTag, fit_party_menu_text,
+        party_invitation_action_bounds, party_invitation_body, party_menu_name_font,
+        plan_party_menu,
     };
+    use solomon_sim::ui_text::{UiFontName, UiTextAlign};
 
     fn rect(bounds: HudRect) -> Value {
         json!([bounds.x, bounds.y, bounds.width, bounds.height])
@@ -2438,9 +2428,9 @@ fn party_ui_goldens() {
         serde_json::from_str(include_str!("fixtures/website/party-ui-goldens.json")).unwrap();
     let invitation = &recorded["invitation"];
     let mut actual = json!({
-        "frame": rect(NATIVE_PARTY_INVITATION_FRAME),
-        "title": NATIVE_PARTY_INVITATION_TITLE,
-        "actions": native_party_invitation_action_bounds().map(rect),
+        "frame": rect(PARTY_INVITATION_FRAME),
+        "title": PARTY_INVITATION_TITLE,
+        "actions": party_invitation_action_bounds().map(rect),
     });
     let mut expected = json!({
         "frame": invitation["frame"],
@@ -2452,7 +2442,7 @@ fn party_ui_goldens() {
     assert_eq!(actual, expected, "Party invitation geometry and title");
     for body in invitation["bodies"].as_array().unwrap() {
         assert_eq!(
-            native_party_invitation_body(body["inviter"].as_str().unwrap()),
+            party_invitation_body(body["inviter"].as_str().unwrap()),
             body["expected"].as_str().unwrap()
         );
     }
@@ -2468,13 +2458,13 @@ fn party_ui_goldens() {
                     .unwrap()
                     .iter()
                     .map(|tag| match tag.as_str().unwrap() {
-                        "you" => NativePartyMenuTag::You,
-                        "leader" => NativePartyMenuTag::Leader,
-                        "offline" => NativePartyMenuTag::Offline,
+                        "you" => PartyMenuTag::You,
+                        "leader" => PartyMenuTag::Leader,
+                        "offline" => PartyMenuTag::Offline,
                         _ => panic!("unknown source Party tag"),
                     })
                     .collect();
-                NativePartyMenuMember {
+                PartyMenuMember {
                     id: row["id"].as_str().unwrap().to_owned(),
                     name: row["name"].as_str().unwrap().to_owned(),
                     removable: row["removable"].as_bool().unwrap(),
@@ -2486,7 +2476,7 @@ fn party_ui_goldens() {
             .as_array()
             .unwrap()
             .iter()
-            .map(|row| NativePartyMenuRequest {
+            .map(|row| PartyMenuRequest {
                 id: row["id"].as_str().unwrap().to_owned(),
                 name: row["name"].as_str().unwrap().to_owned(),
             })
@@ -2497,11 +2487,11 @@ fn party_ui_goldens() {
             .iter()
             .map(|option| visibility(option["id"].as_str().unwrap()))
             .collect::<Vec<_>>();
-        let tab = NativePartyMenuTab::ALL
+        let tab = PartyMenuTab::ALL
             .into_iter()
             .find(|tab| tab.id() == input["selectedTab"].as_str().unwrap())
             .unwrap();
-        let plan = plan_native_party_menu(&NativePartyMenuSpec {
+        let plan = plan_party_menu(&PartyMenuSpec {
             code: input["code"].as_str(),
             copied: input["copyLabel"] == "COPIED",
             error: input["error"].as_str(),
@@ -2519,7 +2509,7 @@ fn party_ui_goldens() {
         let actions = plan.actions.iter().map(|action| json!({"bounds":rect(action.bounds),"disabled":action.disabled,"id":action.id})).collect::<Vec<_>>();
         let texts = plan.texts.iter().map(|text| json!({
             "label":text.label,"text":text.text,"font":text.font.as_str(),
-            "align":match text.align {NativeUiTextAlign::Left=>"left", NativeUiTextAlign::Center=>"center", NativeUiTextAlign::Right=>"right"},
+            "align":match text.align {UiTextAlign::Left=>"left", UiTextAlign::Center=>"center", UiTextAlign::Right=>"right"},
             "scale":text.scale,"tint":text.tint,"x":text.x,"y":text.y,"clipped":text.clipped,
         })).collect::<Vec<_>>();
         let mut actual = json!({"contentHeight":plan.content_height,"maximumScrollY":plan.maximum_scroll_y,"scrollY":plan.scroll_y,"rows":rows,"rowActions":row_actions,"actions":actions,"texts":texts});
@@ -2530,14 +2520,14 @@ fn party_ui_goldens() {
     }
     for case in recorded["fits"].as_array().unwrap() {
         let text = case["text"].as_str().unwrap();
-        let font = NativeUiFontName::ALL
+        let font = UiFontName::ALL
             .into_iter()
             .find(|font| font.as_str() == case["font"].as_str().unwrap())
             .unwrap();
         assert_eq!(
-            fit_native_party_menu_text(text, font, case["maximum"].as_f64().unwrap(), 1.0),
+            fit_party_menu_text(text, font, case["maximum"].as_f64().unwrap(), 1.0),
             case["expected"].as_str().unwrap()
         );
-        assert_eq!(native_party_menu_name_font(text).as_str(), case["nameFont"].as_str().unwrap());
+        assert_eq!(party_menu_name_font(text).as_str(), case["nameFont"].as_str().unwrap());
     }
 }

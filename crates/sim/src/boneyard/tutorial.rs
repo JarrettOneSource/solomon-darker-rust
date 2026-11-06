@@ -17,14 +17,14 @@ use crate::enemies::{EnemySpawnIntent, SpawnLocationPolicy, SpawnPositionPolicy}
 use crate::float;
 use crate::float::fround;
 use crate::rng::seed_from_text;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 use super::encounter::SolomonPhase;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeTutorialStage {
+pub enum TutorialStage {
     Movement = 0,
     ConfrontSolomon = 1,
     ThrowMissiles = 2,
@@ -47,7 +47,7 @@ pub enum NativeTutorialStage {
     Survive = 19,
 }
 
-impl NativeTutorialStage {
+impl TutorialStage {
     pub const ALL: [Self; 20] = [
         Self::Movement,
         Self::ConfrontSolomon,
@@ -82,36 +82,36 @@ impl NativeTutorialStage {
     }
 }
 
-pub use crate::tutorial_surface::NativeTutorialSurfaceAction;
+pub use crate::tutorial_surface::TutorialSurfaceAction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeTutorialNarrationEvent {
-    pub cue: NativeTutorialCue,
+pub struct TutorialNarrationEvent {
+    pub cue: TutorialCue,
     pub event_id: u64,
-    pub speaker: NativeTutorialSpeaker,
+    pub speaker: TutorialSpeaker,
     pub text: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeTutorialNarrationState {
-    pub current: Option<NativeTutorialNarrationEvent>,
+pub struct TutorialNarrationState {
+    pub current: Option<TutorialNarrationEvent>,
     pub next_event_id: u64,
-    pub pending: Vec<NativeTutorialCue>,
+    pub pending: Vec<TutorialCue>,
     pub ticks_remaining: u64,
 }
 
-impl Default for NativeTutorialNarrationState {
+impl Default for TutorialNarrationState {
     fn default() -> Self {
         Self { current: None, next_event_id: 1, pending: Vec::new(), ticks_remaining: 0 }
     }
 }
 
-impl NativeTutorialNarrationState {
-    fn start(&mut self, cue: NativeTutorialCue) {
+impl TutorialNarrationState {
+    fn start(&mut self, cue: TutorialCue) {
         let definition = cue.definition();
-        self.current = Some(NativeTutorialNarrationEvent {
+        self.current = Some(TutorialNarrationEvent {
             cue,
             event_id: self.next_event_id,
             speaker: definition.speaker,
@@ -121,7 +121,7 @@ impl NativeTutorialNarrationState {
         self.ticks_remaining = definition.duration_ticks;
     }
 
-    fn enqueue(&mut self, cues: &[NativeTutorialCue]) {
+    fn enqueue(&mut self, cues: &[TutorialCue]) {
         let Some((first, remaining)) = cues.split_first() else {
             return;
         };
@@ -158,7 +158,7 @@ impl NativeTutorialNarrationState {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeTutorialState {
+pub struct TutorialState {
     pub active: bool,
     pub camera_lock_age_ticks: f64,
     pub camera_lock_triggered: bool,
@@ -175,16 +175,16 @@ pub struct NativeTutorialState {
     pub item_drop_armed: bool,
     pub movement_anchor: Vec2,
     pub movement_instruction_acknowledged: bool,
-    pub narration: NativeTutorialNarrationState,
+    pub narration: TutorialNarrationState,
     pub next_spawn_intent_id: usize,
     pub primary_cast_sequence_at_start: u64,
-    pub rng: NativeRng,
+    pub rng: Rng,
     pub selected_skill_hud_acknowledged: bool,
     pub skills_opened: bool,
     pub skills_seen: bool,
     pub solomon_dialogue_queued: bool,
     pub solomon_retreat_queued: bool,
-    pub stage: NativeTutorialStage,
+    pub stage: TutorialStage,
     pub stage_ticks: u64,
     pub survival_enabled: bool,
     pub survival_interval_cursor: usize,
@@ -195,7 +195,7 @@ pub struct NativeTutorialState {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeTutorialTickInput {
+pub struct TutorialTickInput {
     pub acid_rain_cast_sequence: u64,
     pub acid_rain_last_skill_id: Option<usize>,
     pub camera_lock_safety_clear: bool,
@@ -216,13 +216,13 @@ pub struct NativeTutorialTickInput {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct NativeTutorialTickResult {
+pub struct TutorialTickResult {
     pub force_offer_skill_ids: Option<[usize; 3]>,
     pub grant_experience: f64,
     pub spawn_intents: Vec<EnemySpawnIntent>,
 }
 
-impl NativeTutorialState {
+impl TutorialState {
     #[must_use]
     pub fn new(player_position: Vec2, primary_cast_sequence: u64, seed: &str) -> Self {
         Self {
@@ -245,16 +245,16 @@ impl NativeTutorialState {
                 fround(player_position.y - 100.0),
             ),
             movement_instruction_acknowledged: false,
-            narration: NativeTutorialNarrationState::default(),
+            narration: TutorialNarrationState::default(),
             next_spawn_intent_id: 1,
             primary_cast_sequence_at_start: primary_cast_sequence,
-            rng: NativeRng::new(i64::from(seed_from_text(&format!("{seed}:tutorial")))),
+            rng: Rng::new(i64::from(seed_from_text(&format!("{seed}:tutorial")))),
             selected_skill_hud_acknowledged: false,
             skills_opened: false,
             skills_seen: false,
             solomon_dialogue_queued: false,
             solomon_retreat_queued: false,
-            stage: NativeTutorialStage::Movement,
+            stage: TutorialStage::Movement,
             stage_ticks: 0,
             survival_enabled: false,
             survival_interval_cursor: 0,
@@ -265,16 +265,16 @@ impl NativeTutorialState {
         }
     }
 
-    pub fn apply_surface_action(&mut self, action: NativeTutorialSurfaceAction) {
-        use NativeTutorialStage as Stage;
+    pub fn apply_surface_action(&mut self, action: TutorialSurfaceAction) {
+        use TutorialStage as Stage;
         match action {
-            NativeTutorialSurfaceAction::PrimarySelectorOpened
-            | NativeTutorialSurfaceAction::ConcentrationASelectorOpened => {
-                if native_tutorial_hud_access(self).spell {
+            TutorialSurfaceAction::PrimarySelectorOpened
+            | TutorialSurfaceAction::ConcentrationASelectorOpened => {
+                if tutorial_hud_access(self).spell {
                     self.selected_skill_hud_acknowledged = true;
                 }
             }
-            NativeTutorialSurfaceAction::InventoryOpened => {
+            TutorialSurfaceAction::InventoryOpened => {
                 if !matches!(self.stage, Stage::OpenInventory | Stage::CloseInventory) {
                     return;
                 }
@@ -284,7 +284,7 @@ impl NativeTutorialState {
                     self.enter_stage(Stage::CloseInventory);
                 }
             }
-            NativeTutorialSurfaceAction::InventoryClosed => {
+            TutorialSurfaceAction::InventoryClosed => {
                 if !matches!(self.stage, Stage::OpenInventory | Stage::CloseInventory)
                     || !self.inventory_seen
                 {
@@ -295,7 +295,7 @@ impl NativeTutorialState {
                     self.enter_stage(Stage::CloseInventory);
                 }
             }
-            NativeTutorialSurfaceAction::SkillsOpened => {
+            TutorialSurfaceAction::SkillsOpened => {
                 if !matches!(self.stage, Stage::OpenSkills | Stage::CloseSkills) {
                     return;
                 }
@@ -305,7 +305,7 @@ impl NativeTutorialState {
                     self.enter_stage(Stage::CloseSkills);
                 }
             }
-            NativeTutorialSurfaceAction::SkillsClosed => {
+            TutorialSurfaceAction::SkillsClosed => {
                 if !matches!(self.stage, Stage::OpenSkills | Stage::CloseSkills)
                     || !self.skills_seen
                 {
@@ -326,7 +326,7 @@ impl NativeTutorialState {
     ) {
         if self.active
             && !self.intro_active
-            && self.stage == NativeTutorialStage::Movement
+            && self.stage == TutorialStage::Movement
             && movement_epoch_active
             && user_movement_requested
         {
@@ -334,9 +334,9 @@ impl NativeTutorialState {
         }
     }
 
-    pub fn step(&mut self, input: NativeTutorialTickInput) -> NativeTutorialTickResult {
-        use NativeTutorialCue as Cue;
-        use NativeTutorialStage as Stage;
+    pub fn step(&mut self, input: TutorialTickInput) -> TutorialTickResult {
+        use TutorialCue as Cue;
+        use TutorialStage as Stage;
         if self.camera_lock_triggered && !input.camera_lock_safety_clear {
             self.camera_lock_age_ticks = 0.0;
             self.camera_lock_triggered = false;
@@ -344,10 +344,10 @@ impl NativeTutorialState {
         }
         if self.intro_active {
             self.step_intro();
-            return NativeTutorialTickResult::default();
+            return TutorialTickResult::default();
         }
         self.tick_base(&input);
-        let mut result = NativeTutorialTickResult::default();
+        let mut result = TutorialTickResult::default();
         if input.solomon_phase == Some(SolomonPhase::Speaking) && !self.solomon_dialogue_queued {
             self.narration.enqueue(&[
                 Cue::OhBoyAnotherWizard,
@@ -414,7 +414,7 @@ impl NativeTutorialState {
                 }
                 Stage::CastAcidRain => {
                     if input.acid_rain_cast_sequence > 0
-                        && input.acid_rain_last_skill_id == Some(NATIVE_TUTORIAL_ACID_RAIN_SKILL_ID)
+                        && input.acid_rain_last_skill_id == Some(TUTORIAL_ACID_RAIN_SKILL_ID)
                     {
                         self.narration.enqueue(&[
                             Cue::CamePrepared,
@@ -529,7 +529,7 @@ impl NativeTutorialState {
         result
     }
 
-    fn enter_stage(&mut self, stage: NativeTutorialStage) {
+    fn enter_stage(&mut self, stage: TutorialStage) {
         self.stage = stage;
         self.stage_ticks = 0;
     }
@@ -545,17 +545,17 @@ impl NativeTutorialState {
         self.wave_ticks = 0;
     }
 
-    fn tick_base(&mut self, input: &NativeTutorialTickInput) {
+    fn tick_base(&mut self, input: &TutorialTickInput) {
         if self.camera_lock_triggered {
-            self.camera_lock_age_ticks = (self.camera_lock_age_ticks + 1.0)
-                .min(NATIVE_TUTORIAL_CAMERA_LOCK_SETTLE_TICKS as f64);
+            self.camera_lock_age_ticks =
+                (self.camera_lock_age_ticks + 1.0).min(TUTORIAL_CAMERA_LOCK_SETTLE_TICKS as f64);
             self.camera_lock_ticks_remaining = self.camera_lock_ticks_remaining.saturating_sub(1);
         } else if input.camera_lock_safety_clear
-            && point_inside(input.player_position, NATIVE_TUTORIAL_CAMERA_TRIGGER)
+            && point_inside(input.player_position, TUTORIAL_CAMERA_TRIGGER)
         {
             self.camera_lock_triggered = true;
             self.camera_lock_age_ticks = 0.0;
-            self.camera_lock_ticks_remaining = NATIVE_TUTORIAL_CAMERA_CLEANUP_TICKS;
+            self.camera_lock_ticks_remaining = TUTORIAL_CAMERA_CLEANUP_TICKS;
         }
         self.intro_movement_ticks_remaining = self.intro_movement_ticks_remaining.saturating_sub(1);
         self.narration.step();
@@ -571,7 +571,7 @@ impl NativeTutorialState {
         if self.intro_delay_ticks_remaining > 0 {
             return;
         }
-        self.intro_blend = advance_native_tutorial_intro_blend(self.intro_blend);
+        self.intro_blend = advance_tutorial_intro_blend(self.intro_blend);
         if self.intro_blend < 1.0 {
             return;
         }
@@ -579,12 +579,9 @@ impl NativeTutorialState {
         self.intro_active = self.intro_fade > 0.0;
     }
 
-    fn materialize_scheduled_spawns(
-        &mut self,
-        input: &NativeTutorialTickInput,
-    ) -> Vec<EnemySpawnIntent> {
+    fn materialize_scheduled_spawns(&mut self, input: &TutorialTickInput) -> Vec<EnemySpawnIntent> {
         let mut intents = Vec::new();
-        let batches = native_tutorial_wave_batches(self.wave_ordinal);
+        let batches = tutorial_wave_batches(self.wave_ordinal);
         while let Some(batch) = batches.get(self.wave_spawn_cursor) {
             if batch.tick > self.wave_ticks {
                 break;
@@ -605,7 +602,7 @@ impl NativeTutorialState {
                     _ => unreachable!("Tutorial owns three survival interval cursors"),
                 };
                 if eligible {
-                    let batch = NativeTutorialSpawnBatch {
+                    let batch = TutorialSpawnBatch {
                         count: Some(1),
                         group_uid: Some(if cursor == 2 { 10086 } else { 10078 }),
                         position_policy: SpawnPositionPolicy::Light,
@@ -625,13 +622,13 @@ impl NativeTutorialState {
 
     fn materialize_batch(
         &mut self,
-        batch: NativeTutorialSpawnBatch,
+        batch: TutorialSpawnBatch,
         player_position: Vec2,
         spawn_tick: u64,
     ) -> Vec<EnemySpawnIntent> {
         let group = batch
             .group_uid
-            .map(|uid| native_tutorial_uid_group(uid).expect("authored Tutorial group exists"));
+            .map(|uid| tutorial_uid_group(uid).expect("authored Tutorial group exists"));
         let spawn_count = if batch.recipe_uid.is_some() {
             1
         } else {
@@ -660,8 +657,8 @@ impl NativeTutorialState {
                 fround(player_position.x + float::cos(radians) * 100.0),
                 fround(player_position.y + float::sin(radians) * 100.0),
             );
-            let definition = native_tutorial_monster_recipe(recipe_uid)
-                .expect("authored Tutorial recipe exists");
+            let definition =
+                tutorial_monster_recipe(recipe_uid).expect("authored Tutorial recipe exists");
             let mut intent = EnemySpawnIntent::new(
                 definition.enemy_token,
                 position,
@@ -682,16 +679,16 @@ impl NativeTutorialState {
     }
 }
 
-fn advance_native_tutorial_intro_blend(source: f64) -> f64 {
+fn advance_tutorial_intro_blend(source: f64) -> f64 {
     fround(source + 0.0025).min(1.0)
 }
 
 #[must_use]
-pub const fn native_tutorial_dialogue_ticks() -> u64 {
+pub const fn tutorial_dialogue_ticks() -> u64 {
     844 + 547 + 267 + 782 + 614
 }
 
 #[must_use]
-pub fn native_tutorial_hostile_scene_paused(state: &NativeTutorialState) -> bool {
-    state.active && !state.intro_active && state.stage == NativeTutorialStage::ThrowMissiles
+pub fn tutorial_hostile_scene_paused(state: &TutorialState) -> bool {
+    state.active && !state.intro_active && state.stage == TutorialStage::ThrowMissiles
 }

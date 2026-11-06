@@ -9,19 +9,19 @@ use crate::Vec2;
 use crate::float::{fround, hypot};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeStaffAttachmentFrame {
+pub struct StaffAttachmentFrame {
     pub start: Vec2,
     pub end: Vec2,
     pub front: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnchantStaffDrawInput {
-    pub attachment: NativeStaffAttachmentFrame,
+pub struct EnchantStaffDrawInput {
+    pub attachment: StaffAttachmentFrame,
     pub effective_rank: u32,
     pub heading_index: usize,
     pub living: bool,
-    pub native_staff: bool,
+    pub staff: bool,
     pub pose: usize,
     pub selected_primary_skill_id: Option<u32>,
     pub selector: usize,
@@ -31,7 +31,7 @@ pub struct NativeEnchantStaffDrawInput {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnchantStaffDrawPlan {
+pub struct EnchantStaffDrawPlan {
     pub aura_record: Option<usize>,
     pub body_record: usize,
     pub end: Vec2,
@@ -45,12 +45,12 @@ pub struct NativeEnchantStaffDrawPlan {
 }
 
 #[must_use]
-pub fn native_enchant_staff_glow_alpha(tick: f64) -> f64 {
+pub fn enchant_staff_glow_alpha(tick: f64) -> f64 {
     fround(float::sin(tick * 5.0 * PI / 180.0) * 0.2 + 0.5)
 }
 
 #[must_use]
-pub fn native_enchant_staff_glow_tint(
+pub fn enchant_staff_glow_tint(
     selected_primary_skill_id: Option<u32>,
     weld_build_id: Option<u32>,
 ) -> Option<u32> {
@@ -75,21 +75,18 @@ pub fn native_enchant_staff_glow_tint(
 }
 
 #[must_use]
-pub fn native_enchant_staff_draw_plan(
-    input: NativeEnchantStaffDrawInput,
-) -> Option<NativeEnchantStaffDrawPlan> {
+pub fn enchant_staff_draw_plan(input: EnchantStaffDrawInput) -> Option<EnchantStaffDrawPlan> {
     assert!(input.selector < 6, "Enchant Staff selector is within 0..6");
     assert!(input.pose < 10, "Enchant Staff attachment pose is within 0..10");
     if !input.living
-        || !input.native_staff
+        || !input.staff
         || input.selected_primary_skill_id.is_none()
         || input.effective_rank == 0
     {
         return None;
     }
     let frame = input.attachment;
-    let tint =
-        native_enchant_staff_glow_tint(input.selected_primary_skill_id, input.weld_build_id)?;
+    let tint = enchant_staff_glow_tint(input.selected_primary_skill_id, input.weld_build_id)?;
     let width_sample = input.width_sample.unwrap_or_else(|| {
         visual_width_sample(input.tick, input.heading_index % 24, input.pose, input.selector)
     });
@@ -105,8 +102,8 @@ pub fn native_enchant_staff_draw_plan(
     let width_factor = fround(2.0 + width_sample);
     let half_width = [6.0, 6.0, 6.0, 6.0, 8.0, 9.0][input.selector] * 0.5 * width_factor;
     let extended_end = Vec2::new(frame.end.x + along.x * 5.0, frame.end.y + along.y * 5.0);
-    let near_alpha = native_enchant_staff_glow_alpha(input.tick);
-    Some(NativeEnchantStaffDrawPlan {
+    let near_alpha = enchant_staff_glow_alpha(input.tick);
+    Some(EnchantStaffDrawPlan {
         aura_record: if input.selector < 2 { Some(11 + input.selector) } else { None },
         body_record: 5 + input.selector,
         end: frame.end,

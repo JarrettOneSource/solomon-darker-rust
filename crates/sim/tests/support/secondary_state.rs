@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::secondary::golem::*;
 use solomon_sim::secondary::*;
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::spells::casting::PlayerWeaponKind;
+use solomon_sim::{Rng, Vec2};
 
 pub fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -13,7 +13,7 @@ pub fn point(value: &Value) -> Vec2 {
 pub fn point_snapshot(value: Vec2) -> Value {
     json!({"x":value.x,"y":value.y})
 }
-pub fn rng_snapshot(value: &NativeRng) -> Value {
+pub fn rng_snapshot(value: &Rng) -> Value {
     json!({"indexA":value.index_a,"indexB":value.index_b,"words":&value.words[..]})
 }
 pub fn registration_snapshot(value: PainterRegistration) -> Value {
@@ -30,17 +30,17 @@ pub fn registration(value: &Value) -> PainterRegistration {
     }
 }
 
-pub fn weapon(value: &Value) -> Option<NativePlayerWeaponKind> {
+pub fn weapon(value: &Value) -> Option<PlayerWeaponKind> {
     match value.as_str() {
-        Some("staff") => Some(NativePlayerWeaponKind::Staff),
-        Some("wand") => Some(NativePlayerWeaponKind::Wand),
+        Some("staff") => Some(PlayerWeaponKind::Staff),
+        Some("wand") => Some(PlayerWeaponKind::Wand),
         None => None,
         other => panic!("unknown weapon {other:?}"),
     }
 }
-pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
-    let mut player = NativeSecondaryPlayerState {
-        cast_action: value["castAction"].as_object().map(|_| NativeSecondaryCastAction {
+pub fn read_player(value: &Value) -> SecondaryPlayerState {
+    let mut player = SecondaryPlayerState {
+        cast_action: value["castAction"].as_object().map(|_| SecondaryCastAction {
             weapon_kind: weapon(&value["castAction"]["weaponKind"]),
             progress: value["castAction"]["progress"].as_f64().unwrap(),
             hand: None,
@@ -53,7 +53,7 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
         held_slot: value["heldSlot"].as_u64().map(|id| id as usize),
         last_skill_id: value["lastSkillId"]
             .as_u64()
-            .map(|id| NativeSecondaryAbilityId::from_skill_id(id as usize).unwrap()),
+            .map(|id| SecondaryAbilityId::from_skill_id(id as usize).unwrap()),
         magic_shield_absorb: value["magicShieldAbsorb"].as_f64().unwrap(),
         magic_shield_explosion_damage: value["magicShieldExplosionDamage"].as_f64().unwrap(),
         magic_shield_maximum: value["magicShieldMaximum"].as_f64().unwrap(),
@@ -64,7 +64,7 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
         regenerate: value["regenerate"].as_bool().unwrap(),
         reserved_mana: value["reservedMana"].as_f64().unwrap(),
         stoneskin_ticks_remaining: value["stoneskinTicksRemaining"].as_u64().unwrap(),
-        ..NativeSecondaryPlayerState::default()
+        ..SecondaryPlayerState::default()
     };
     for id in 0..83 {
         player.cooldown_maximum_ticks_by_skill[id] =
@@ -73,16 +73,16 @@ pub fn read_player(value: &Value) -> NativeSecondaryPlayerState {
     }
     player
 }
-pub fn action_snapshot(action: Option<NativeSecondaryCastAction>) -> Value {
+pub fn action_snapshot(action: Option<SecondaryCastAction>) -> Value {
     match action {
         Some(action) => json!({"progress":action.progress,"weaponKind":match action.weapon_kind {
-            Some(NativePlayerWeaponKind::Staff)=>Some("staff"),
-            Some(NativePlayerWeaponKind::Wand)=>Some("wand"), None=>None,
+            Some(PlayerWeaponKind::Staff)=>Some("staff"),
+            Some(PlayerWeaponKind::Wand)=>Some("wand"), None=>None,
         }}),
         None => Value::Null,
     }
 }
-pub fn player_snapshot(player: &NativeSecondaryPlayerState) -> Value {
+pub fn player_snapshot(player: &SecondaryPlayerState) -> Value {
     json!({
         "castAction":action_snapshot(player.cast_action),
         "castSequence":player.cast_sequence,"castSpinTicksRemaining":player.cast_spin_ticks_remaining,
@@ -90,7 +90,7 @@ pub fn player_snapshot(player: &NativeSecondaryPlayerState) -> Value {
         "cooldownTicksBySkill":&player.cooldown_ticks_by_skill[..],
         "firewalker":player.firewalker,"fizzleSequence":player.fizzle_sequence,
         "globalCooldownTicks":player.global_cooldown_ticks,"heldSlot":player.held_slot,
-        "lastSkillId":player.last_skill_id.map(NativeSecondaryAbilityId::skill_id),
+        "lastSkillId":player.last_skill_id.map(SecondaryAbilityId::skill_id),
         "magicShieldAbsorb":player.magic_shield_absorb,"magicShieldExplosionDamage":player.magic_shield_explosion_damage,
         "magicShieldMaximum":player.magic_shield_maximum,"magicShieldPulseTicks":player.magic_shield_pulse_ticks,
         "mindstar":player.mindstar,"planeOrbHeld":player.plane_orb_held,
@@ -99,8 +99,8 @@ pub fn player_snapshot(player: &NativeSecondaryPlayerState) -> Value {
     })
 }
 
-pub fn electric(value: &Value) -> NativeSecondaryElectricBurnEffectState {
-    NativeSecondaryElectricBurnEffectState {
+pub fn electric(value: &Value) -> SecondaryElectricBurnEffectState {
+    SecondaryElectricBurnEffectState {
         arc_count: value["arcCount"].as_u64().unwrap() as usize,
         damage_per_tick: value["damagePerTick"].as_f64().unwrap(),
         owner_id: value["ownerId"].as_str().unwrap().to_owned(),
@@ -109,8 +109,8 @@ pub fn electric(value: &Value) -> NativeSecondaryElectricBurnEffectState {
         ticks: value["ticks"].as_u64().unwrap(),
     }
 }
-pub fn steamed(value: &Value) -> NativeSecondarySteamedEffectState {
-    NativeSecondarySteamedEffectState {
+pub fn steamed(value: &Value) -> SecondarySteamedEffectState {
+    SecondarySteamedEffectState {
         damage_per_tick: value["damagePerTick"].as_f64().unwrap(),
         ember_damage: value["emberDamage"].as_f64().unwrap(),
         ember_fragments: value["emberFragments"].as_u64().unwrap() as usize,
@@ -121,8 +121,8 @@ pub fn steamed(value: &Value) -> NativeSecondarySteamedEffectState {
         ticks: value["ticks"].as_u64().unwrap(),
     }
 }
-pub fn patch(value: &Value) -> NativeSecondaryTargetEffectPatch {
-    NativeSecondaryTargetEffectPatch {
+pub fn patch(value: &Value) -> SecondaryTargetEffectPatch {
+    SecondaryTargetEffectPatch {
         circle_slow_factor: value["circleSlowFactor"].as_f64(),
         circle_slow_ticks: value["circleSlowTicks"].as_u64(),
         cold_slow_factor: value["coldSlowFactor"].as_f64(),
@@ -151,7 +151,7 @@ pub fn patch(value: &Value) -> NativeSecondaryTargetEffectPatch {
     }
 }
 
-pub fn effect_snapshot(effect: &NativeSecondaryTargetEffectState) -> Value {
+pub fn effect_snapshot(effect: &SecondaryTargetEffectState) -> Value {
     let electric=effect.electric_burn.as_ref().map(|burn|json!({"arcCount":burn.arc_count,"damagePerTick":burn.damage_per_tick,
         "ownerId":burn.owner_id,"sourceActorId":burn.source_actor_id,"stunFactor":burn.stun_factor,"ticks":burn.ticks}));
     let steamed=effect.steamed.as_ref().map(|burn|json!({"damagePerTick":burn.damage_per_tick,"emberDamage":burn.ember_damage,
@@ -160,11 +160,11 @@ pub fn effect_snapshot(effect: &NativeSecondaryTargetEffectState) -> Value {
     let mut order = Vec::new();
     for kind in &effect.movement_modifier_order {
         order.push(match kind {
-            NativeSecondaryMovementModifierKind::ColdSlow => "cold-slow",
-            NativeSecondaryMovementModifierKind::CircleSlow => "circle-slow",
-            NativeSecondaryMovementModifierKind::Frozen => "frozen",
-            NativeSecondaryMovementModifierKind::Stun => "stun",
-            NativeSecondaryMovementModifierKind::Dazzle => "dazzle",
+            SecondaryMovementModifierKind::ColdSlow => "cold-slow",
+            SecondaryMovementModifierKind::CircleSlow => "circle-slow",
+            SecondaryMovementModifierKind::Frozen => "frozen",
+            SecondaryMovementModifierKind::Stun => "stun",
+            SecondaryMovementModifierKind::Dazzle => "dazzle",
         });
     }
     json!({"circleSlowFactor":effect.circle_slow_factor,"circleSlowTicks":effect.circle_slow_ticks,
@@ -200,7 +200,7 @@ pub fn assert_snapshot(actual: &Value, expected: &Value, path: &str) {
     }
 }
 
-pub fn golem_snapshot(value: NativeSecondaryGolemState) -> Value {
+pub fn golem_snapshot(value: SecondaryGolemState) -> Value {
     json!({
     "actionHeadingOffsetDegrees":value.action_heading_offset_degrees,
     "actionDurationTicks":value.action_duration_ticks,
@@ -221,7 +221,7 @@ pub fn golem_snapshot(value: NativeSecondaryGolemState) -> Value {
     "maximumHealth":value.maximum_health,
     "orbitDirection":value.orbit_direction,
     "orbitHeadingRadians":value.orbit_heading_radians,
-    "phase":match value.phase {NativeGolemPhase::Active=>"active",NativeGolemPhase::Assembly=>"assembly",NativeGolemPhase::Attack=>"attack",NativeGolemPhase::Provoke=>"provoke"},
+    "phase":match value.phase {GolemPhase::Active=>"active",GolemPhase::Assembly=>"assembly",GolemPhase::Attack=>"attack",GolemPhase::Provoke=>"provoke"},
     "poseVariant":value.pose_variant,
     "provokeRollBound":value.provoke_roll_bound,
     "reflectFactor":value.reflect_factor,
@@ -237,7 +237,7 @@ pub fn golem_snapshot(value: NativeSecondaryGolemState) -> Value {
     })
 }
 
-pub fn actor_snapshot(value: &NativeSecondaryActorState) -> Value {
+pub fn actor_snapshot(value: &SecondaryActorState) -> Value {
     json!({
     "ageTicks":value.age_ticks,
     "alpha":value.alpha,
@@ -273,7 +273,7 @@ pub fn actor_snapshot(value: &NativeSecondaryActorState) -> Value {
     })
 }
 
-pub fn flash_snapshot(value: NativeSecondaryScreenFlashState) -> Value {
+pub fn flash_snapshot(value: SecondaryScreenFlashState) -> Value {
     json!({
     "alpha":value.alpha,
     "blue":value.blue,
@@ -284,12 +284,12 @@ pub fn flash_snapshot(value: NativeSecondaryScreenFlashState) -> Value {
     })
 }
 
-pub fn event_snapshot(value: &NativeSecondaryEventState) -> Value {
+pub fn event_snapshot(value: &SecondaryEventState) -> Value {
     json!({
     "actorId":value.actor_id,
     "cameraDisplacement":value.camera_displacement.map(point_snapshot),
     "cameraMagnitude":value.camera_magnitude,
-    "cue":value.cue.map(NativeSecondaryAudioCue::as_str),
+    "cue":value.cue.map(SecondaryAudioCue::as_str),
     "eventId":value.event_id,
     "gain":value.gain,
     "kind":value.kind.as_str(),
@@ -303,7 +303,7 @@ pub fn event_snapshot(value: &NativeSecondaryEventState) -> Value {
     })
 }
 
-pub fn state_snapshot(state: &NativeSecondarySimulationState) -> Value {
+pub fn state_snapshot(state: &SecondarySimulationState) -> Value {
     let actors: Vec<_> = state.actors.iter().map(actor_snapshot).collect();
     let events: Vec<_> = state.events.iter().map(event_snapshot).collect();
     let mut players = json!({});
@@ -320,8 +320,8 @@ impl NativeGolemWorld for OpenWorld {
         requested
     }
 }
-pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
-    let mut state = NativeSecondarySimulationState::new(0);
+pub fn read_state(value: &Value) -> SecondarySimulationState {
+    let mut state = SecondarySimulationState::new(0);
     state.next_actor_id = value["nextActorId"].as_u64().unwrap();
     state.next_event_id = value["nextEventId"].as_u64().unwrap();
     state.firewalker_geometry_sequence =
@@ -338,9 +338,9 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
     }
     for value in value["actors"].as_array().unwrap() {
         assert_eq!(value["kind"].as_str(), Some("golem"));
-        let mut actor = NativeSecondaryActorState::new(
+        let mut actor = SecondaryActorState::new(
             value["id"].as_u64().unwrap(),
-            NativeSecondaryActorKind::Golem,
+            SecondaryActorKind::Golem,
             value["ownerId"].as_str().unwrap().to_owned(),
             value["worldKey"].as_str().unwrap().to_owned(),
             Some(45),
@@ -354,10 +354,10 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
         actor.rotation_radians = value["rotationRadians"].as_f64().unwrap();
         actor.variant = value["variant"].as_i64().unwrap() as i32;
         let source = &value["golem"];
-        let mut golem = NativeSecondaryGolemState::new(
+        let mut golem = SecondaryGolemState::new(
             actor.position,
             actor.rotation_radians,
-            NativeGolemBirthStats {
+            GolemBirthStats {
                 health: source["maximumHealth"].as_f64().unwrap(),
                 damage_maximum: source["damageMaximum"].as_f64().unwrap(),
                 iron: source["iron"].as_bool().unwrap(),
@@ -366,7 +366,7 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
             },
             &mut OpenWorld,
         );
-        golem.phase = NativeGolemPhase::Active;
+        golem.phase = GolemPhase::Active;
         actor.golem = Some(golem);
         state.actors.push(actor);
     }
@@ -374,8 +374,8 @@ pub fn read_state(value: &Value) -> NativeSecondarySimulationState {
     assert!(value["targetEffects"].as_array().unwrap().is_empty());
     state
 }
-pub fn target(value: &Value) -> NativeSecondaryTarget {
-    NativeSecondaryTarget {
+pub fn target(value: &Value) -> SecondaryTarget {
+    SecondaryTarget {
         family: value["family"].as_str().unwrap().to_owned(),
         id: value["id"].as_u64().unwrap() as usize,
         light_registration: registration(&value["lightRegistration"]),

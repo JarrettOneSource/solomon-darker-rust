@@ -11,13 +11,13 @@ mod secondary;
 use serde_json::{Value, json};
 use solomon_sim::harden_effects::*;
 use solomon_sim::painter::WorldPainterOrder;
-use solomon_sim::secondary::NativeSecondarySimulationState;
+use solomon_sim::secondary::SecondarySimulationState;
 use solomon_sim::session::harden::*;
 use solomon_sim::spells::model::SpellState;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
-fn read_rng(value: &Value) -> NativeRng {
-    let mut rng = NativeRng::new(0);
+fn read_rng(value: &Value) -> Rng {
+    let mut rng = Rng::new(0);
     rng.index_a = value["indexA"].as_u64().unwrap() as usize;
     rng.index_b = value["indexB"].as_u64().unwrap() as usize;
     for (word, value) in rng.words.iter_mut().zip(value["words"].as_array().unwrap()) {
@@ -25,8 +25,8 @@ fn read_rng(value: &Value) -> NativeRng {
     }
     rng
 }
-fn read_shard(value: &Value) -> NativeHardenShardBody {
-    NativeHardenShardBody {
+fn read_shard(value: &Value) -> HardenShardBody {
+    HardenShardBody {
         bounce_velocity: value["bounceVelocity"].as_f64().unwrap(),
         enhanced_shadow: true,
         height: value["height"].as_f64().unwrap(),
@@ -39,9 +39,9 @@ fn read_shard(value: &Value) -> NativeHardenShardBody {
         vertical_velocity: value["verticalVelocity"].as_f64().unwrap(),
     }
 }
-fn effect_snapshot(effect: &NativeHardenEffect) -> Value {
+fn effect_snapshot(effect: &HardenEffect) -> Value {
     let (owner, mut value) = match effect {
-        NativeHardenEffect::Shard { owner, body } => (
+        HardenEffect::Shard { owner, body } => (
             owner,
             json!({
                 "kind": "harden-shard", "bounceVelocity": body.bounce_velocity, "height": body.height,
@@ -50,7 +50,7 @@ fn effect_snapshot(effect: &NativeHardenEffect) -> Value {
                 "velocity": secondary::point_snapshot(body.velocity), "verticalVelocity": body.vertical_velocity,
             }),
         ),
-        NativeHardenEffect::Burst { owner, alpha, position } => (
+        HardenEffect::Burst { owner, alpha, position } => (
             owner,
             json!({
                 "kind": "harden-burst", "alpha": alpha, "position": secondary::point_snapshot(*position),
@@ -95,7 +95,7 @@ fn harden_chips_and_coating_transitions_enroll_in_source_order_with_exact_rng() 
             .unwrap()
             .iter()
             .map(|pending| PendingPlayerHardenChip {
-                chip: NativeHardenChip {
+                chip: HardenChip {
                     pitch: pending["chip"]["pitch"].as_f64().unwrap(),
                     shard: read_shard(&pending["chip"]["shard"]),
                 },
@@ -105,7 +105,7 @@ fn harden_chips_and_coating_transitions_enroll_in_source_order_with_exact_rng() 
             })
             .collect::<Vec<_>>();
         let mut spells = SpellState { next_id: 81, ..SpellState::default() };
-        let mut secondary = NativeSecondarySimulationState::new(55);
+        let mut secondary = SecondarySimulationState::new(55);
         let mut rng = read_rng(&case["beforeRng"]);
         let mut order = WorldPainterOrder { next_actor_ordinal: 300, next_transient_ordinal: 500 };
         synchronize_player_harden_effects(

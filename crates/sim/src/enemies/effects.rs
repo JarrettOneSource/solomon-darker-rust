@@ -10,9 +10,9 @@ use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 
 // Source `boneyard-transient-effects.ts` keeps these native Fade stores as singles.
-pub const NATIVE_FADE_ALPHA_LOSS: f64 = 0.1_f32 as f64;
-pub const NATIVE_BANISH_RING_ALPHA_LOSS: f64 = (0.1_f32 * 0.25_f32) as f64;
-pub const NATIVE_TRAGIC_CONTACT_ALPHA_LOSS: f64 = (0.1_f32 * 0.5_f32) as f64;
+pub const FADE_ALPHA_LOSS: f64 = 0.1_f32 as f64;
+pub const BANISH_RING_ALPHA_LOSS: f64 = (0.1_f32 * 0.25_f32) as f64;
+pub const TRAGIC_CONTACT_ALPHA_LOSS: f64 = (0.1_f32 * 0.5_f32) as f64;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeathEffectOwner {
@@ -340,7 +340,7 @@ impl EnemyWorld {
                 | EnemyDeathEffectKind::SmokyBouncer
                 | EnemyDeathEffectKind::BlackSmokyBouncer
         ) {
-            let mut motion = crate::death_animations::NativeBouncerMotion {
+            let mut motion = crate::death_animations::BouncerMotion {
                 bounce_velocity: effect.bounce_velocity,
                 height: effect.height,
                 position: effect.position,
@@ -349,8 +349,7 @@ impl EnemyWorld {
                 velocity: effect.velocity,
                 vertical_velocity: effect.vertical_velocity,
             };
-            let skipped =
-                crate::death_animations::step_native_bouncer_motion(&mut motion, tick, self);
+            let skipped = crate::death_animations::step_bouncer_motion(&mut motion, tick, self);
             if !skipped {
                 effect.opacity_timer = fround(effect.opacity_timer - effect.alpha_loss_per_tick);
             }
@@ -574,7 +573,7 @@ fn death_effect_alpha(kind: EnemyDeathEffectKind, opacity: f64, multiplier: f64)
     alpha * multiplier
 }
 
-impl crate::death_animations::NativeBouncerRandom for EnemyWorld {
+impl crate::death_animations::BouncerRandom for EnemyWorld {
     fn float(&mut self, maximum: f64) -> f64 {
         self.draw_unit() * maximum
     }

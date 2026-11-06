@@ -1,7 +1,7 @@
 //! Versioned primary and secondary actor migrations; both retain their canonical RNG.
 
 use serde_json::{Value, json};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 use super::super::contract::{MAX_SAFE_INTEGER, record};
 use super::super::value::{decode, encode};
@@ -61,7 +61,7 @@ pub(super) fn primary(value: &Value, version: u64) -> Result<Value, String> {
             let root = if value["ageTicks"].as_f64() == Some(0.0) {
                 Vec2::ZERO
             } else {
-                solomon_sim::spells::weld::meteor::native_weld_meteor_root_position(
+                solomon_sim::spells::weld::meteor::weld_meteor_root_position(
                     position, heading, height,
                 )
             };
@@ -90,7 +90,7 @@ pub(super) fn secondary(value: &Value, version: u64, saved_tick: u64) -> Result<
     let camera = value.get("cameraDisplacements").cloned().unwrap_or_else(|| json!([]));
     camera_displacements(&camera, "game save secondary camera displacements")?;
     source.insert("cameraDisplacements".into(), camera);
-    let mut rng: NativeRng = decode(value["rng"].clone())?;
+    let mut rng: Rng = decode(value["rng"].clone())?;
     let mut actors = Vec::new();
     let legacy_debris: Vec<_> = array(&value["actors"], "game save secondary actors")?
         .iter()
@@ -139,19 +139,16 @@ pub(super) fn secondary(value: &Value, version: u64, saved_tick: u64) -> Result<
         }
         if value["kind"] == "golem-death" {
             use solomon_sim::death_animations::{
-                NATIVE_GOLEM_DEATH_MAX_AGE_BASIC, NATIVE_GOLEM_DEATH_MAX_AGE_ENHANCED,
-                create_native_golem_death_animation, step_native_golem_death_animation,
+                GOLEM_DEATH_MAX_AGE_BASIC, GOLEM_DEATH_MAX_AGE_ENHANCED,
+                create_golem_death_animation, step_golem_death_animation,
             };
             let enhanced = if version < 46 {
                 true
             } else {
                 value["enhanced"].as_bool().ok_or("saved Golem death quality is invalid")?
             };
-            let lifetime = if enhanced {
-                NATIVE_GOLEM_DEATH_MAX_AGE_ENHANCED
-            } else {
-                NATIVE_GOLEM_DEATH_MAX_AGE_BASIC
-            };
+            let lifetime =
+                if enhanced { GOLEM_DEATH_MAX_AGE_ENHANCED } else { GOLEM_DEATH_MAX_AGE_BASIC };
             if version >= 48
                 && (!value["presentationRng"].is_null() || value["lifetimeTicks"] != lifetime)
             {
@@ -161,13 +158,13 @@ pub(super) fn secondary(value: &Value, version: u64, saved_tick: u64) -> Result<
                 );
             }
             let animation = if version < 48 {
-                let mut legacy_rng: NativeRng = decode(value["presentationRng"].clone())?;
+                let mut legacy_rng: Rng = decode(value["presentationRng"].clone())?;
                 let age = integer_within(&value["ageTicks"], "saved Golem death age", 0, 133)?;
                 let position: Vec2 = decode(value["position"].clone())?;
                 let mut animation =
-                    create_native_golem_death_animation(&mut legacy_rng, position, enhanced);
+                    create_golem_death_animation(&mut legacy_rng, position, enhanced);
                 for step in 1..=age {
-                    step_native_golem_death_animation(
+                    step_golem_death_animation(
                         &mut animation,
                         (saved_tick + step).saturating_sub(age),
                         &mut legacy_rng,
@@ -209,15 +206,15 @@ pub(super) fn secondary(value: &Value, version: u64, saved_tick: u64) -> Result<
         }
         if matches!(value["kind"].as_str(), Some("leviathan" | "leviathan-appendage")) {
             let rank = finite(&value["rank"], "saved Leviathan rank")?;
-            let definition = &solomon_sim::profile::NATIVE_SKILL_CATALOG[11];
+            let definition = &solomon_sim::profile::SKILL_CATALOG[11];
             if rank.fract() != 0.0
                 || rank < 1.0
                 || rank > f64::from(definition.maximum_level.max(2))
             {
                 return Err(format!("secondary skill 11 has invalid effective rank {rank}"));
             }
-            let damage = solomon_sim::secondary::native_secondary_ability_rank_stats(
-                solomon_sim::secondary::NativeSecondaryAbilityId::CallLeviathan,
+            let damage = solomon_sim::secondary::secondary_ability_rank_stats(
+                solomon_sim::secondary::SecondaryAbilityId::CallLeviathan,
                 rank as u32,
             )
             .value("mDamage")
@@ -242,9 +239,8 @@ pub(super) fn secondary(value: &Value, version: u64, saved_tick: u64) -> Result<
             let position: Vec2 = decode(value["position"].clone())?;
             let velocity: Vec2 = decode(value["velocity"].clone())?;
             let origin = Vec2::new(position.x - velocity.x, position.y - velocity.y);
-            let flyout = solomon_sim::secondary::dampened::create_native_dampened_spell(
-                origin, position, &mut rng,
-            );
+            let flyout =
+                solomon_sim::secondary::dampened::create_dampened_spell(origin, position, &mut rng);
             actor.extend([
                 ("ageTicks".into(), json!(0)),
                 ("frame".into(), json!(0)),
@@ -267,9 +263,7 @@ pub(super) fn secondary(value: &Value, version: u64, saved_tick: u64) -> Result<
         source.insert(
             "stoneskinWarp".into(),
             if has_stoneskin {
-                encode(&solomon_sim::secondary::motion::create_native_stoneskin_warp(
-                    &mut rng.clone(),
-                ))?
+                encode(&solomon_sim::secondary::motion::create_stoneskin_warp(&mut rng.clone()))?
             } else {
                 Value::Null
             },

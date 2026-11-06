@@ -104,8 +104,8 @@ impl EnemySpriteLayer {
     }
 }
 
-impl From<crate::enemies::presentation::NativeEnemyProjectileLayer> for EnemySpriteLayer {
-    fn from(layer: crate::enemies::presentation::NativeEnemyProjectileLayer) -> Self {
+impl From<crate::enemies::presentation::EnemyProjectileLayer> for EnemySpriteLayer {
+    fn from(layer: crate::enemies::presentation::EnemyProjectileLayer) -> Self {
         use crate::spells::presentation::{SpellAtlas, SpellBlend};
         Self {
             alpha: layer.alpha,

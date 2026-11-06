@@ -9,7 +9,7 @@ use crate::Vec2;
 use crate::float;
 use crate::float::{atan2, fround};
 
-const NATIVE_PI: f64 = std::f32::consts::PI as f64;
+const PI_F32: f64 = std::f32::consts::PI as f64;
 const LIFETIME_STEP: f64 = 0.04_f32 as f64;
 const CORE_GROWTH: f64 = 0.01_f32 as f64;
 const GLINT_SHRINK: f64 = 0.95_f32 as f64;
@@ -124,7 +124,7 @@ pub fn water_frost_jet_emission(input: WaterFrostJetEmissionInput) -> WaterFrost
         phase = fround(phase + phase_step);
     }
     let phase_degrees = fround(phase * 65.0);
-    let phase_radians = fround(phase_degrees * NATIVE_PI / 180.0);
+    let phase_radians = fround(phase_degrees * PI_F32 / 180.0);
     let wave = fround(float::sin(phase_radians));
     let amplitude = fround(widen_half_degrees + 15.0);
     let heading = fround(base_heading + wave * amplitude);
@@ -173,9 +173,9 @@ pub fn water_frost_jet_obstruction(
     );
     let hit = clip(caster_position, prediction_end)?;
     let point = float32_vector(hit);
-    let distance = native_float32_distance(emission.origin, point);
-    let beyond_hit = native_float32_distance_squared(caster_position, emission.origin)
-        > native_float32_distance_squared(caster_position, point);
+    let distance = float32_distance(emission.origin, point);
+    let beyond_hit = float32_distance_squared(caster_position, emission.origin)
+        > float32_distance_squared(caster_position, point);
     Some(WaterFrostJetObstruction { distance: if beyond_hit { 0.0 } else { distance }, point })
 }
 
@@ -391,7 +391,7 @@ fn motion(state: &PrimarySpellWaterTransient) -> (Vec2, Vec2) {
     let mut position = float32_vector(state.origin);
     for _ in 0..state.common.age_ticks {
         if let (Some(distance), Some(point)) = (pending_distance, state.obstruction_point) {
-            let remaining = fround(distance - native_float32_distance(Vec2::ZERO, velocity));
+            let remaining = fround(distance - float32_distance(Vec2::ZERO, velocity));
             if remaining <= 0.0 {
                 position = float32_vector(point);
                 let sign = if visual_hash(state.common.id, 7) & 1 == 0 { -1.0 } else { 1.0 };
@@ -417,7 +417,7 @@ fn frost_velocity(direction: Vec2, speed: f64) -> Vec2 {
 }
 
 fn unit_for_heading_degrees(heading: f64, magnitude: f64) -> Vec2 {
-    let radians = fround(NATIVE_PI * fround(heading) / 180.0);
+    let radians = fround(PI_F32 * fround(heading) / 180.0);
     Vec2::new(
         fround(fround(float::sin(radians)) * magnitude),
         fround(fround(-float::cos(radians)) * magnitude),
@@ -433,10 +433,10 @@ fn bounded_random(id: u64, salt: u32, bound: f64) -> f64 {
 fn float32_vector(value: Vec2) -> Vec2 {
     Vec2::new(fround(value.x), fround(value.y))
 }
-fn native_float32_distance(first: Vec2, second: Vec2) -> f64 {
-    fround(native_float32_distance_squared(first, second).sqrt())
+fn float32_distance(first: Vec2, second: Vec2) -> f64 {
+    fround(float32_distance_squared(first, second).sqrt())
 }
-fn native_float32_distance_squared(first: Vec2, second: Vec2) -> f64 {
+fn float32_distance_squared(first: Vec2, second: Vec2) -> f64 {
     let dx = fround(fround(first.x) - fround(second.x));
     let dy = fround(fround(first.y) - fround(second.y));
     fround(dx * dx + dy * dy)

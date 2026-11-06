@@ -30,10 +30,10 @@ use crate::actor_physics::{ActorPhysicsBody, resolve_actor_motion};
 use crate::enemies::EnemySpawnIntent;
 use crate::enemies::model::{EnemyBrain, EnemyEvent, EnemyLifeState};
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
-use crate::enemies::webbed::native_webbed_movement_scale;
+use crate::enemies::webbed::webbed_movement_scale;
 use crate::enemies::world::EnemyWorld;
 use crate::hub::{HubWizardPlan, PLAYER_CHARACTER_RADIUS, plan_hub_wizard_tick};
-use crate::loot::{NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS, NativeLootDropKind};
+use crate::loot::{LOOT_CARRIER_PLACEMENT_RADIUS, LootDropKind};
 use crate::painter::{PainterRegistration, WorldPainterOrder};
 use crate::{HubWizard, Vec2};
 
@@ -41,7 +41,7 @@ use super::arena::{ArenaPhase, ArenaTransition};
 use super::collision::{BoneyardCollisionWorld, boneyard_body_collides, can_place_boneyard_body};
 use super::encounter::{SolomonEncounter, SolomonPhase, SolomonPlayer};
 use super::escape::{prepare_solomon_escape_navigation, resolve_solomon_escape_movement};
-use super::feedback::NativeEnemyWorldFeedback;
+use super::feedback::EnemyWorldFeedback;
 use super::gate::{GateLeaf, create_gate_leaves};
 use super::loot::{
     BoneyardGoodieInput, BoneyardLootEvent, BoneyardLootParticipant, BoneyardLootStep,
@@ -49,8 +49,7 @@ use super::loot::{
 };
 use super::navigation::NavigationSet;
 use super::tutorial::{
-    NATIVE_TUTORIAL_CAMERA_TARGET, NativeTutorialState, native_tutorial_camera_bounds,
-    native_tutorial_dialogue_ticks,
+    TUTORIAL_CAMERA_TARGET, TutorialState, tutorial_camera_bounds, tutorial_dialogue_ticks,
 };
 use super::waves::director::{WaveCheckpoint, WaveDirector, WavePhase, WaveTickContext};
 use super::world_geometry::{BoneyardPhysicsWorld, boneyard_lantern_body, enemy_collision_body};
@@ -121,7 +120,7 @@ pub struct BoneyardWorld {
     pub arena_transition: Option<ArenaTransition>,
     pub encounter: Option<SolomonEncounter>,
     pub waves: Option<WaveDirector>,
-    pub tutorial: Option<NativeTutorialState>,
+    pub tutorial: Option<TutorialState>,
     /// Immutable scenery targets reconstruct from the scene; native cleanup permanently
     /// filters their bounds even if a later Tutorial safety check releases its camera lock.
     pub scenery_retained_bounds: Option<BoneyardBounds>,
@@ -129,10 +128,10 @@ pub struct BoneyardWorld {
     /// that cannot be reconstructed from one cleanup rectangle. `None` keeps all targets.
     pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
-    pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
+    pub death_weapons: Vec<crate::death_animations::DeathWeaponActor>,
     pub next_death_weapon_id: u64,
     pub loot: BoneyardLootStore,
-    pub enemy_world_feedback: NativeEnemyWorldFeedback,
+    pub enemy_world_feedback: EnemyWorldFeedback,
     pub enemy_events: Vec<EnemyEvent>,
     pub loot_events: Vec<BoneyardLootEvent>,
     pub player_ouch_deadline_tick: u64,
@@ -161,15 +160,15 @@ pub struct BoneyardCheckpoint {
     pub arena_transition: Option<ArenaTransition>,
     pub encounter: Option<SolomonEncounter>,
     pub waves: Option<WaveCheckpoint>,
-    pub tutorial: Option<NativeTutorialState>,
+    pub tutorial: Option<TutorialState>,
     pub scenery_retained_bounds: Option<BoneyardBounds>,
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
     pub scenery_target_retention: Option<Arc<targets::BoneyardSceneryTargetRetention>>,
     pub enemies: EnemyWorld,
-    pub death_weapons: Vec<crate::death_animations::NativeDeathWeaponActor>,
+    pub death_weapons: Vec<crate::death_animations::DeathWeaponActor>,
     pub next_death_weapon_id: u64,
     pub loot: BoneyardLootStore,
-    pub enemy_world_feedback: NativeEnemyWorldFeedback,
+    pub enemy_world_feedback: EnemyWorldFeedback,
     pub enemy_events: Vec<EnemyEvent>,
     pub loot_events: Vec<BoneyardLootEvent>,
     pub player_ouch_deadline_tick: u64,
@@ -196,9 +195,9 @@ impl BoneyardWorld {
             None
         };
         let encounter = match &scene.solomon_dig {
-            Some(dig) if owns_solomon_encounter && tutorial => Some(
-                SolomonEncounter::new_tutorial(dig, &loaded.seed, native_tutorial_dialogue_ticks()),
-            ),
+            Some(dig) if owns_solomon_encounter && tutorial => {
+                Some(SolomonEncounter::new_tutorial(dig, &loaded.seed, tutorial_dialogue_ticks()))
+            }
             Some(dig) if ordinary => Some(SolomonEncounter::new(dig, &loaded.seed)),
             _ => None,
         };
@@ -207,9 +206,8 @@ impl BoneyardWorld {
         } else {
             None
         };
-        let tutorial =
-            tutorial.then(|| NativeTutorialState::new(scene.spawn.position, 0, &loaded.seed));
-        let enemies = EnemyWorld::new(&loaded.seed, native_enemy_registration_base(scene));
+        let tutorial = tutorial.then(|| TutorialState::new(scene.spawn.position, 0, &loaded.seed));
+        let enemies = EnemyWorld::new(&loaded.seed, enemy_registration_base(scene));
         let mut source_goodies = Vec::new();
         for (ordinal, object) in scene.objects.iter().enumerate() {
             if object.type_id != 2061 {
@@ -241,7 +239,7 @@ impl BoneyardWorld {
             death_weapons: Vec::new(),
             next_death_weapon_id: 1,
             loot,
-            enemy_world_feedback: NativeEnemyWorldFeedback::default(),
+            enemy_world_feedback: EnemyWorldFeedback::default(),
             enemy_events: Vec::new(),
             loot_events: Vec::new(),
             player_ouch_deadline_tick: 0,
@@ -311,7 +309,7 @@ impl BoneyardWorld {
                     .as_ref()
                     .is_some_and(|encounter| encounter.player_locked(input.player.id));
             let webbed_scale =
-                native_webbed_movement_scale(self.enemies.webbed_players.get(input.player.id));
+                webbed_movement_scale(self.enemies.webbed_players.get(input.player.id));
             let velocity = if locked { Vec2::ZERO } else { participant.wizard.velocity };
             let movement = if locked { Vec2::ZERO } else { input.movement };
             let scale = if locked { 0.0 } else { input.player.movement_scale * webbed_scale };
@@ -499,8 +497,8 @@ impl BoneyardWorld {
                 safety_bodies.push((maggot.position, maggot.collision_radius));
             }
             for actor in self.loot.actors.iter() {
-                if actor.kind == NativeLootDropKind::Sack {
-                    safety_bodies.push((actor.position, NATIVE_LOOT_CARRIER_PLACEMENT_RADIUS));
+                if actor.kind == LootDropKind::Sack {
+                    safety_bodies.push((actor.position, LOOT_CARRIER_PLACEMENT_RADIUS));
                 }
             }
             let arena = self.arena_transition.as_mut().expect("open arena exists");
@@ -654,7 +652,7 @@ impl BoneyardWorld {
     pub fn camera_bounds(&self) -> BoneyardBounds {
         self.tutorial
             .as_ref()
-            .and_then(native_tutorial_camera_bounds)
+            .and_then(tutorial_camera_bounds)
             .unwrap_or_else(|| self.arena_camera_bounds())
     }
 
@@ -680,7 +678,7 @@ impl BoneyardWorld {
             .filter(|tutorial| {
                 tutorial.camera_lock_triggered && tutorial.camera_lock_ticks_remaining == 0
             })
-            .map(|_| NATIVE_TUTORIAL_CAMERA_TARGET)
+            .map(|_| TUTORIAL_CAMERA_TARGET)
     }
 
     #[must_use]
@@ -784,7 +782,7 @@ fn player_body(id: &str, position: Vec2, delta: Vec2, driven: bool) -> ActorPhys
     }
 }
 
-fn native_enemy_registration_base(scene: &BoneyardScene) -> usize {
+fn enemy_registration_base(scene: &BoneyardScene) -> usize {
     let mut posts = HashSet::new();
     for fence in &scene.fences {
         if fence.code() == 3 {

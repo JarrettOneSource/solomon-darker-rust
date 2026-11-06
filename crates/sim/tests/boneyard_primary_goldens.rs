@@ -13,15 +13,15 @@ use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use solomon_sim::player::PlayerState;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
-use solomon_sim::secondary::NativeSecondarySimulationState;
+use solomon_sim::secondary::SecondarySimulationState;
 use solomon_sim::spells::PrimarySpellInput;
 use solomon_sim::spells::boneyard::*;
 use solomon_sim::spells::model::PrimarySpellTransient;
 use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellProjectilePhase, SpellState};
 use solomon_sim::spells::targeting::{
-    PrimarySpellTarget, PrimarySpellTargetKind, native_primary_view_ray_endpoint,
+    PrimarySpellTarget, PrimarySpellTargetKind, primary_view_ray_endpoint,
 };
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 #[path = "support/website_rows.rs"]
 mod website_rows;
@@ -118,7 +118,7 @@ fn scenery_row(target: &PrimarySpellTarget) -> Value {
         if target.kind == PrimarySpellTargetKind::Gravestone { "gravestone" } else { "scenery" },
         target.registration_order,
         target.cell_binding_order,
-        target.native_priority
+        target.priority
     ])
 }
 
@@ -147,7 +147,7 @@ fn authored_scenery_shared_posts_cleanup_and_view_rays_match_the_source() {
         boneyard_primary_scenery_targets(&world).iter().map(scenery_row).collect();
     website_rows::compare(&json!(scenery), &fixture["cleanedScenery"], "retained cleanup");
     for ray in fixture["viewRays"].as_array().unwrap() {
-        let actual = native_primary_view_ray_endpoint(
+        let actual = primary_view_ray_endpoint(
             vector(&ray["start"]),
             vector(&ray["direction"]),
             bounds(&ray["view"]),
@@ -229,7 +229,7 @@ fn boneyard_primary_phases_use_live_equipment_stats_mana_and_enemy_ownership() {
             .into_iter()
             .find(|element| element.as_str() == case["element"])
             .unwrap();
-        let mut game_rng = NativeRng::new(7);
+        let mut game_rng = Rng::new(7);
         let mut player = PlayerState::new(
             NewGameSelection {
                 name: "Oracle".into(),
@@ -243,19 +243,19 @@ fn boneyard_primary_phases_use_live_equipment_stats_mana_and_enemy_ownership() {
             player.economy.owned_perk_selectors = vec![22];
         }
         let mut spells = SpellState::default();
-        let mut secondary = NativeSecondarySimulationState::new(0);
+        let mut secondary = SecondarySimulationState::new(0);
         if case["boss"] == true {
-            solomon_sim::secondary::apply_native_secondary_target_effect(
+            solomon_sim::secondary::apply_secondary_target_effect(
                 &mut secondary.target_effects,
                 "boneyard:adapter",
                 1,
-                solomon_sim::secondary::NativeSecondaryTargetEffectPatch {
+                solomon_sim::secondary::SecondaryTargetEffectPatch {
                     prismatic_ticks: Some(25),
-                    ..solomon_sim::secondary::NativeSecondaryTargetEffectPatch::default()
+                    ..solomon_sim::secondary::SecondaryTargetEffectPatch::default()
                 },
             );
         }
-        let mut rng = NativeRng::new(17);
+        let mut rng = Rng::new(17);
         let mut order = WorldPainterOrder { next_actor_ordinal: 100, next_transient_ordinal: 70 };
         let navigation = NavigationSet::new("oracle".into(), "oracle".into(), Vec::new());
         let intents = [250.0, 320.0]
@@ -375,7 +375,7 @@ fn boneyard_primary_phases_use_live_equipment_stats_mana_and_enemy_ownership() {
                 .actors
                 .iter()
                 .map(|actor| {
-                    boneyard_native_secondary_target(&world.enemies, actor.id).map(|target| {
+                    boneyard_secondary_target(&world.enemies, actor.id).map(|target| {
                         json!([
                             target.family,
                             target.id,
@@ -398,7 +398,7 @@ fn boneyard_primary_phases_use_live_equipment_stats_mana_and_enemy_ownership() {
                 "secondary": secondary_actors, "targetEffects": target_effects,
                 "secondaryTargets": secondary_targets,
                 "radialTargets": ([0.0, 100.0, 200.0].map(|radius| {
-                    boneyard_native_secondary_targets(&world.enemies, wizard.position, radius)
+                    boneyard_secondary_targets(&world.enemies, wizard.position, radius)
                         .iter().map(|target| target.id).collect::<Vec<_>>()
                 })),
                 "rng": { "indexA": rng.index_a, "indexB": rng.index_b, "words": rng.words.as_slice() },

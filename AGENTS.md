@@ -53,7 +53,7 @@ The full game gate is:
 python3 scripts/verify-client-assets.py
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
+cargo clippy -p solomon-client --target wasm32-unknown-unknown -- -D warnings
 cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
 cargo test --workspace --all-features
 npm run test:browser-support

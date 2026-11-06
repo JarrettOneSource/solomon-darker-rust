@@ -7,7 +7,7 @@ audio, networking, and storage.
 
 ## Composition
 
-`crates/web/src/gpu_ui/` owns egui interaction, layout, text editing, and resource
+`crates/client/src/gpu_ui/` owns egui interaction, layout, text editing, and resource
 lifetimes. Feature controllers borrow accepted models and emit typed actions.
 The shared graphics renderer submits their final shapes.
 
@@ -219,7 +219,7 @@ Saved Leave reports persistence before permitting acknowledgement or reload.
 
 ## Surface map
 
-Paths below are relative to `crates/web/src/`; journeys live in
+Paths below are relative to `crates/client/src/`; journeys live in
 `tools/browser-smoke/`.
 
 | Surface | Main owner | Checks |

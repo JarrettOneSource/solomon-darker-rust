@@ -345,7 +345,7 @@ impl EnemyWorld {
             tick,
             SimpleDeathEffectSpec {
                 alpha: 1.0,
-                alpha_loss_per_tick: super::effects::NATIVE_FADE_ALPHA_LOSS,
+                alpha_loss_per_tick: super::effects::FADE_ALPHA_LOSS,
                 atlas: EnemyEffectAtlas::BadGuys,
                 blend_mode: EnemyEffectBlend::Add,
                 entry: 20,

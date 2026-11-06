@@ -3,7 +3,7 @@
 use super::actor_presentation::{EnemyArtAtlas, EnemySpriteLayer};
 use crate::float;
 use crate::float::{atan2, fround};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct HeartmongerTendril {
@@ -20,7 +20,7 @@ pub struct HeartmongerTendrils {
 impl HeartmongerTendrils {
     /// The second chain continues the first constructor's walk; it does not reset its root.
     #[must_use]
-    pub fn new(position: Vec2, heading_deg: f64, rng: &mut NativeRng) -> Self {
+    pub fn new(position: Vec2, heading_deg: f64, rng: &mut Rng) -> Self {
         let radians = fround(fround(std::f64::consts::PI) * fround(heading_deg + 180.0) / 180.0);
         let direction = Vec2::new(fround(float::sin(radians)), fround(-float::cos(radians)));
         let mut current = position;

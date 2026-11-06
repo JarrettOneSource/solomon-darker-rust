@@ -5,15 +5,14 @@
 //! This module assembles the source authority and callbacks around the canonical
 //! kernels for one local player; it never owns another copy of player or enemy state.
 
-use super::casting::NativePlayerWeaponKind;
+use super::casting::PlayerWeaponKind;
 use super::contacts::{
     BoneyardSpecialDeathResult, BoneyardSpellCombatContext, BoneyardSpellCombatResult,
     BoneyardSpellHitKind, resolve_boneyard_spell_combat,
 };
 use super::model::{PrimarySpellProjectile, PrimarySpellTickResult, SpellState};
 use super::targeting::{
-    PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
-    native_primary_view_ray_endpoint,
+    PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind, primary_view_ray_endpoint,
 };
 use super::{
     PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellTraversalActor,
@@ -24,9 +23,9 @@ use crate::boneyard::collision::{
     first_boneyard_path_block_progress, resolve_boneyard_movement,
 };
 use crate::boneyard::navigation::{NavigationSet, RouteRequest};
-use crate::boneyard::world_light::native_primary_view_bounds;
+use crate::boneyard::world_light::primary_view_bounds;
 use crate::boneyard::{
-    BONEYARD_CAMERA_SCALE, BoneyardBounds, BoneyardWorld, native_boneyard_fence_post_positions,
+    BONEYARD_CAMERA_SCALE, BoneyardBounds, BoneyardWorld, boneyard_fence_post_positions,
 };
 use crate::combat::PlayerLifeState;
 use crate::economy::EquipmentType;
@@ -38,14 +37,13 @@ use crate::float::hypot;
 use crate::hub::HubWizard;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
 use crate::player::PlayerState;
-use crate::profile::native_hagatha_boss_damage_factor;
-use crate::profile::primary::native_primary_skill_profile_with_stat_book;
+use crate::profile::hagatha_boss_damage_factor;
+use crate::profile::primary::primary_skill_profile_with_stat_book;
 use crate::secondary::{
-    NativeSecondaryEtherBurnInput, NativeSecondaryFireBurnInput, NativeSecondarySimulationState,
-    NativeSecondaryTarget, apply_native_secondary_target_effect,
-    enroll_native_secondary_painter_owners, native_secondary_target_effect,
+    SecondaryEtherBurnInput, SecondaryFireBurnInput, SecondarySimulationState, SecondaryTarget,
+    apply_secondary_target_effect, enroll_secondary_painter_owners, secondary_target_effect,
 };
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 /// Values sampled once by the session. Additional scenery is the live loot owner's
 /// actual goodie rows; the authored scenery projection belongs to this module.
@@ -89,22 +87,22 @@ pub fn step_boneyard_primary_cast(
     world: &BoneyardWorld,
     wizard: &mut HubWizard,
     player: &mut PlayerState,
-    secondary: &NativeSecondarySimulationState,
+    secondary: &SecondarySimulationState,
     spells: &mut SpellState,
     frame: BoneyardPrimaryFrame<'_>,
-    combat_rng: &mut NativeRng,
+    combat_rng: &mut Rng,
     painters: &mut WorldPainterOrder,
 ) -> PrimarySpellTickResult {
     let derived = player.derived_stats();
-    let profile = native_primary_skill_profile_with_stat_book(
+    let profile = primary_skill_profile_with_stat_book(
         &player.book,
         &player.stat_book,
         &derived.offensive_factors(&player.skill_runtime),
     );
     let weapon_kind =
         match player.economy.equipment.weapon.as_ref().and_then(|item| item.equipment_type) {
-            Some(EquipmentType::Staff) => Some(NativePlayerWeaponKind::Staff),
-            Some(EquipmentType::Wand) => Some(NativePlayerWeaponKind::Wand),
+            Some(EquipmentType::Staff) => Some(PlayerWeaponKind::Staff),
+            Some(EquipmentType::Wand) => Some(PlayerWeaponKind::Wand),
             _ => None,
         };
     let secondary_player = secondary.players.get(frame.owner_id);
@@ -156,14 +154,14 @@ pub fn step_boneyard_primary_cast(
         geometry.obstruction(start, end, excluded_source_id, native_mask)
     };
     let range_endpoint = |start, direction, padding| {
-        let view = native_primary_view_bounds(
+        let view = primary_view_bounds(
             camera_bounds,
             focus,
             frame.viewport,
             BONEYARD_CAMERA_SCALE,
             padding,
         );
-        native_primary_view_ray_endpoint(start, direction, view)
+        primary_view_ray_endpoint(start, direction, view)
     };
     let result = spells.step_primary(
         wizard,
@@ -171,7 +169,7 @@ pub fn step_boneyard_primary_cast(
         input,
         &PrimarySpellWorldContext {
             enhanced_effects: frame.enhanced_effects,
-            flame_lash_view_bounds: Some(native_primary_view_bounds(
+            flame_lash_view_bounds: Some(primary_view_bounds(
                 camera_bounds,
                 focus,
                 frame.viewport,
@@ -207,10 +205,10 @@ pub fn step_boneyard_primary_cast(
 pub fn resolve_boneyard_primary_contacts(
     world: &mut BoneyardWorld,
     player: &PlayerState,
-    secondary: &mut NativeSecondarySimulationState,
+    secondary: &mut SecondarySimulationState,
     spells: &mut SpellState,
     input: BoneyardPrimaryContactInput<'_>,
-    combat_rng: &mut NativeRng,
+    combat_rng: &mut Rng,
     painters: &mut WorldPainterOrder,
 ) -> BoneyardSpellCombatResult {
     resolve_boneyard_primary_contacts_for_players(
@@ -246,20 +244,20 @@ pub struct BoneyardPrimaryContactPlayer<'a> {
 pub fn resolve_boneyard_primary_contacts_for_players(
     world: &mut BoneyardWorld,
     players: &[BoneyardPrimaryContactPlayer<'_>],
-    secondary: &mut NativeSecondarySimulationState,
+    secondary: &mut SecondarySimulationState,
     spells: &mut SpellState,
     input: BoneyardPrimaryContactEpoch<'_>,
-    combat_rng: &mut NativeRng,
+    combat_rng: &mut Rng,
     painters: &mut WorldPainterOrder,
 ) -> BoneyardSpellCombatResult {
     let world_key = format!("boneyard:{}", world.loaded.run_id);
     let mut scenery = boneyard_primary_scenery_targets(world);
     scenery.extend_from_slice(input.additional_scenery_targets);
-    let native_types: Vec<_> = world
+    let types: Vec<_> = world
         .enemies
         .actors
         .iter()
-        .map(|actor| (actor.id, u32::from(actor.config.native_type_id)))
+        .map(|actor| (actor.id, u32::from(actor.config.type_id)))
         .collect();
     // game-simulation.ts uses full Region bounds for contact LOS/pushback, while
     // cast flight above uses the newly active Arena bounds. Preserve that split.
@@ -273,15 +271,12 @@ pub fn resolve_boneyard_primary_contacts_for_players(
     };
     let damage_multiplier = |target_id, kind, owner_id: &str| {
         let prismatic = kind == BoneyardSpellHitKind::Air
-            && native_secondary_target_effect(&secondary.target_effects, &world_key, target_id)
+            && secondary_target_effect(&secondary.target_effects, &world_key, target_id)
                 .is_some_and(|effect| effect.prismatic_ticks > 0);
         let boss_factor =
-            native_types.iter().find(|(id, _)| *id == target_id).map_or(1.0, |(_, type_id)| {
+            types.iter().find(|(id, _)| *id == target_id).map_or(1.0, |(_, type_id)| {
                 players.iter().find(|row| row.owner_id == owner_id).map_or(1.0, |row| {
-                    native_hagatha_boss_damage_factor(
-                        &row.player.economy.owned_perk_selectors,
-                        *type_id,
-                    )
+                    hagatha_boss_damage_factor(&row.player.economy.owned_perk_selectors, *type_id)
                 })
             });
         if prismatic { 2.0 * boss_factor } else { boss_factor }
@@ -319,9 +314,9 @@ pub fn resolve_boneyard_primary_contacts_for_players(
     let previous_actor_id = secondary.next_actor_id;
     for burn in secondary_deaths.iter().flat_map(|death| &death.combat.burns).chain(&result.burns) {
         if let Some(owner) = players.iter().find(|row| row.owner_id == burn.owner_id)
-            && let Some(target) = boneyard_native_secondary_target(&world.enemies, burn.target_id)
+            && let Some(target) = boneyard_secondary_target(&world.enemies, burn.target_id)
         {
-            secondary.apply_fire_burn(NativeSecondaryFireBurnInput {
+            secondary.apply_fire_burn(SecondaryFireBurnInput {
                 damage: burn.damage,
                 owner_id: burn.owner_id.clone(),
                 rank: owner.player.book.effective_ranks[22].max(1),
@@ -337,9 +332,9 @@ pub fn resolve_boneyard_primary_contacts_for_players(
         .chain(&result.ether_burns)
     {
         if let Some(owner) = players.iter().find(|row| row.owner_id == burn.owner_id)
-            && let Some(target) = boneyard_native_secondary_target(&world.enemies, burn.target_id)
+            && let Some(target) = boneyard_secondary_target(&world.enemies, burn.target_id)
         {
-            secondary.apply_ether_burn(NativeSecondaryEtherBurnInput {
+            secondary.apply_ether_burn(SecondaryEtherBurnInput {
                 owner_id: burn.owner_id.clone(),
                 rank: owner.player.book.effective_ranks[14].max(1),
                 target,
@@ -348,14 +343,14 @@ pub fn resolve_boneyard_primary_contacts_for_players(
         }
     }
     if secondary.next_actor_id != previous_actor_id {
-        enroll_native_secondary_painter_owners(secondary.actors.iter_mut(), painters);
+        enroll_secondary_painter_owners(secondary.actors.iter_mut(), painters);
     }
     for effect in secondary_deaths
         .iter()
         .flat_map(|death| &death.combat.target_effects)
         .chain(&result.target_effects)
     {
-        apply_native_secondary_target_effect(
+        apply_secondary_target_effect(
             &mut secondary.target_effects,
             &effect.world_key,
             effect.target_id,
@@ -368,10 +363,10 @@ pub fn resolve_boneyard_primary_contacts_for_players(
 /// `boneyardNativeSecondaryTarget`: only living, currently hostile bodies can
 /// receive burn ownership; the inherited actor light registration is retained.
 #[must_use]
-pub fn boneyard_native_secondary_target(
+pub fn boneyard_secondary_target(
     enemies: &EnemyWorld,
     target_id: usize,
-) -> Option<NativeSecondaryTarget> {
+) -> Option<SecondaryTarget> {
     if let Some(actor) = enemies.actors.iter().find(|actor| actor.id == target_id) {
         return secondary_actor_target(actor);
     }
@@ -382,11 +377,11 @@ pub fn boneyard_native_secondary_target(
 /// `boneyardNativeSecondaryTargets`: the radial body gather is inclusive and
 /// returns numeric actor order, independently of native primary cell ordering.
 #[must_use]
-pub fn boneyard_native_secondary_targets(
+pub fn boneyard_secondary_targets(
     enemies: &EnemyWorld,
     center: Vec2,
     radius: f64,
-) -> Vec<NativeSecondaryTarget> {
+) -> Vec<SecondaryTarget> {
     assert!(
         radius.is_finite() && radius >= 0.0,
         "secondary target radius must be finite and nonnegative"
@@ -404,11 +399,11 @@ pub fn boneyard_native_secondary_targets(
     targets
 }
 
-fn secondary_actor_target(actor: &EnemyActor) -> Option<NativeSecondaryTarget> {
+fn secondary_actor_target(actor: &EnemyActor) -> Option<SecondaryTarget> {
     if actor.life_state != EnemyLifeState::Alive || boneyard_enemy_actor_flags(actor) & 0x2 == 0 {
         return None;
     }
-    Some(NativeSecondaryTarget {
+    Some(SecondaryTarget {
         family: actor.config.enemy_token.id().into(),
         id: actor.id,
         light_registration: PainterRegistration {
@@ -424,11 +419,11 @@ fn secondary_actor_target(actor: &EnemyActor) -> Option<NativeSecondaryTarget> {
     })
 }
 
-fn secondary_maggot_target(maggot: &EnemyMaggotActor) -> Option<NativeSecondaryTarget> {
+fn secondary_maggot_target(maggot: &EnemyMaggotActor) -> Option<SecondaryTarget> {
     if maggot.life_state != EnemyLifeState::Alive || !maggot.combat_active {
         return None;
     }
-    Some(NativeSecondaryTarget {
+    Some(SecondaryTarget {
         family: "MAGGOT".into(),
         id: maggot.id,
         light_registration: PainterRegistration {
@@ -477,9 +472,7 @@ pub fn boneyard_primary_scenery_targets(world: &BoneyardWorld) -> Vec<PrimarySpe
             },
         ));
     }
-    for (index, position) in
-        native_boneyard_fence_post_positions(&scene.fences).into_iter().enumerate()
-    {
+    for (index, position) in boneyard_fence_post_positions(&scene.fences).into_iter().enumerate() {
         let id = format!("fencepost:{index}");
         if !world.retains_primary_scenery_target(&id) {
             continue;
@@ -512,7 +505,7 @@ fn scenery_target(
         grid_position: None,
         id,
         kind,
-        native_priority: 1000,
+        priority: 1000,
         pending_remove: false,
         position,
         query_lane: PrimarySpellQueryLane::Grid,

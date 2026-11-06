@@ -11,7 +11,7 @@ impl ContactWork<'_, '_> {
         let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
         let radius = fround(fround(effect.visual_scale * 110.0) * 0.5);
         let ordered = if effect.presentation == FireExplosionPresentation::Steam {
-            native_primary_rectangle_targets(effect.origin, radius, radius, 0x2, &targets)
+            primary_rectangle_targets(effect.origin, radius, radius, 0x2, &targets)
                 .into_iter()
                 .filter(|target| {
                     squared_distance(target.position, effect.origin)
@@ -19,7 +19,7 @@ impl ContactWork<'_, '_> {
                 })
                 .collect()
         } else {
-            native_primary_root_targets(effect.origin, radius, 0x2, &targets)
+            primary_root_targets(effect.origin, radius, 0x2, &targets)
         };
         for target in ordered {
             let row = rows
@@ -115,7 +115,7 @@ impl ContactWork<'_, '_> {
                 }
                 FireActorContact::Ember(contact) => {
                     let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
-                    native_primary_root_targets(contact.position, contact.radius, 0x2, &targets)
+                    primary_root_targets(contact.position, contact.radius, 0x2, &targets)
                         .first()
                         .and_then(|target| rows.iter().find(|row| row.target.id == target.id))
                         .into_iter()
@@ -124,7 +124,7 @@ impl ContactWork<'_, '_> {
                 FireActorContact::Patch(contact) => rows
                     .iter()
                     .filter(|row| {
-                        native_primary_target_eligible(&row.target, 0x2)
+                        primary_target_eligible(&row.target, 0x2)
                             && squared_distance(row.target.position, contact.position)
                                 < contact.radius * contact.radius
                     })

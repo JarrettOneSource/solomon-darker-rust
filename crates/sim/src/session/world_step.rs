@@ -1,13 +1,13 @@
 //! Input admission and the one shared movement/world epoch of the public Game tick.
 
 use crate::spells::model::PrimarySpellTransient;
-use crate::spells::staff::NativePlayerStaffTransient;
+use crate::spells::staff::PlayerStaffTransient;
 
 use super::*;
 use crate::Vec2;
 use crate::belt::NativeBeltEntry;
 use crate::boneyard::navigation::NavigationSet;
-use crate::boneyard::tutorial::{NativeTutorialSurfaceAction, native_tutorial_hud_access};
+use crate::boneyard::tutorial::{TutorialSurfaceAction, tutorial_hud_access};
 use crate::boneyard::world::{
     BoneyardPlayerCombatStatus, BoneyardTutorialPlayer, BoneyardWorldParticipant,
     BoneyardWorldTickContext, BoneyardWorldTickResult,
@@ -16,9 +16,9 @@ use crate::boneyard::world_light::BoneyardLightEnvironment;
 use crate::economy::{EquipmentSlot, HubEconomyState, HubInventoryItem, project_inventory_items};
 use crate::game_run::GameRunPhase;
 use crate::hub::interaction::HubNpcMarkerEpoch;
-use crate::loot::{NativeLootAttractionModifiers, native_loot_modifiers};
+use crate::loot::{LootAttractionModifiers, loot_modifiers};
 use crate::painter::WorldManagerLane;
-use crate::profile::native_skill_category;
+use crate::profile::skill_category;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Hosts project pointers/controllers into world-space input exactly once.
@@ -44,7 +44,7 @@ impl Default for GameSessionInput {
 }
 
 impl GameSession {
-    pub fn apply_tutorial_action(&mut self, action: NativeTutorialSurfaceAction) -> bool {
+    pub fn apply_tutorial_action(&mut self, action: TutorialSurfaceAction) -> bool {
         let Some(tutorial) = self.boneyard.as_mut().and_then(|world| world.tutorial.as_mut())
         else {
             return false;
@@ -74,12 +74,12 @@ impl GameSession {
             if let Some(tutorial) = self.boneyard.as_ref().and_then(|world| world.tutorial.as_ref())
             {
                 input.primary &= tutorial.stage.id() >= 2;
-                if !native_tutorial_hud_access(tutorial).quickbar {
+                if !tutorial_hud_access(tutorial).quickbar {
                     input.quickbar = None;
                 }
             }
             let acting_staff = self.spells.transients.iter().any(|effect| match effect {
-                PrimarySpellTransient::Staff(NativePlayerStaffTransient::Action(actor)) => {
+                PrimarySpellTransient::Staff(PlayerStaffTransient::Action(actor)) => {
                     actor.common().owner_id == *id
                 }
                 _ => false,
@@ -101,7 +101,7 @@ impl GameSession {
         let category =
             input.quickbar.and_then(|slot| player.belt.entries.get(slot)).and_then(|entry| {
                 match entry {
-                    Some(NativeBeltEntry::Skill { skill_id }) => native_skill_category(*skill_id),
+                    Some(NativeBeltEntry::Skill { skill_id }) => skill_category(*skill_id),
                     _ => None,
                 }
             });
@@ -179,13 +179,12 @@ impl GameSession {
             let id = participant.id.as_str();
             let player = &*participant.player;
             let derived = player.derived_stats();
-            let has_health_potion =
-                project_inventory_items(&player.economy.backpack).iter().any(|entry| {
-                    entry.item.native_type_id == 7001 && entry.item.native_subtype == Some(0)
-                });
-            let modifiers = native_loot_modifiers(
+            let has_health_potion = project_inventory_items(&player.economy.backpack)
+                .iter()
+                .any(|entry| entry.item.type_id == 7001 && entry.item.subtype == Some(0));
+            let modifiers = loot_modifiers(
                 &player.economy.owned_perk_selectors,
-                NativeLootAttractionModifiers {
+                LootAttractionModifiers {
                     gold_amount: derived.gold_amount_multiplier,
                     orb_pull: derived.orb_pull_multiplier,
                     pickup_factor: derived.pickup_range_scalar,
@@ -262,7 +261,7 @@ impl GameSession {
             return;
         };
         let skill_id = *skill_id;
-        match native_skill_category(skill_id) {
+        match skill_category(skill_id) {
             Some(1) if !primary_unset => {
                 let previous = participant.player.book.primary_skill_id;
                 if participant.player.select_primary(skill_id)

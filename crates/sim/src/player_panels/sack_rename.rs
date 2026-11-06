@@ -6,7 +6,7 @@ use crate::economy::{
     inventory_items_at_sack_path,
 };
 use crate::hud::HudRect;
-use crate::native_ui_text::{NativeUiFontName, native_ui_font};
+use crate::ui_text::{UiFontName, ui_font};
 
 pub const INVENTORY_SACK_RENAME_BUTTON: HudRect = HudRect::new(1310.0, 440.0, 250.0, 44.0);
 pub const INVENTORY_SACK_RENAME_BUTTON_SCALE: f64 = 44.0 / 69.0;
@@ -45,13 +45,13 @@ pub fn inventory_sack_rename_target<'a>(
     } else {
         None
     };
-    item.filter(|item| item.kind == HubItemKind::Sack && item.native_type_id == 7008)
+    item.filter(|item| item.kind == HubItemKind::Sack && item.type_id == 7008)
 }
 
 /// A user name must not silently lose characters absent from the stock Menu atlas.
 #[must_use]
 pub fn inventory_sack_name_needs_browser_font(name: &str) -> bool {
-    let font = native_ui_font(NativeUiFontName::Menu);
+    let font = ui_font(UiFontName::Menu);
     name.chars().any(|character| character != ' ' && font.glyph(character as u32).is_none())
 }
 

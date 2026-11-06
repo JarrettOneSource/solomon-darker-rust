@@ -3,12 +3,12 @@
 //! Selection retries and discarded draws are observable in the shared loot stream.
 //! `loot-goldens.json` replays all equipment types, tiers and advanced-skill pools.
 
-use crate::NativeRng;
+use crate::Rng;
 use crate::economy::EquipmentType;
 use crate::float::fround;
-use crate::profile::{NATIVE_SKILL_CATALOG, native_skill_rule};
+use crate::profile::{SKILL_CATALOG, skill_rule};
 
-use super::NativeEquipmentEffect;
+use super::EquipmentEffect;
 
 const PRIMARY_TARGET_SKILL_IDS: [usize; 18] =
     [8, 11, 15, 16, 21, 22, 23, 27, 29, 32, 40, 50, 52, 55, 65, 72, 73, 74];
@@ -16,23 +16,21 @@ const DISCIPLINE_TARGET_SKILL_IDS: [usize; 14] =
     [57, 58, 59, 60, 61, 62, 63, 65, 66, 67, 68, 69, 70, 71];
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeRandomEquipmentEffects {
-    pub effects: Vec<NativeEquipmentEffect>,
+pub struct RandomEquipmentEffects {
+    pub effects: Vec<EquipmentEffect>,
     pub item_level: u32,
     pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NativeRandomEquipmentSkillPools {
+pub struct RandomEquipmentSkillPools {
     pub all: Vec<usize>,
     pub primary: Vec<usize>,
     pub primary_or_discipline: Vec<usize>,
 }
 
 #[must_use]
-pub fn native_random_equipment_skill_pools(
-    advanced_unlocks: &[bool; 8],
-) -> NativeRandomEquipmentSkillPools {
+pub fn random_equipment_skill_pools(advanced_unlocks: &[bool; 8]) -> RandomEquipmentSkillPools {
     let available = |id: usize| id < 72 || advanced_unlocks[id - 72];
     let all = (8..80).filter(|id| available(*id)).collect();
     let primary: Vec<_> =
@@ -41,17 +39,17 @@ pub fn native_random_equipment_skill_pools(
     primary_or_discipline.extend_from_slice(&DISCIPLINE_TARGET_SKILL_IDS);
     primary_or_discipline.sort_unstable();
     primary_or_discipline.dedup();
-    NativeRandomEquipmentSkillPools { all, primary, primary_or_discipline }
+    RandomEquipmentSkillPools { all, primary, primary_or_discipline }
 }
 
 /// Mutates only the caller's shared native stream; `-1` is the retail starter-item sentinel.
 #[must_use]
-pub fn generate_native_random_equipment_effects(
-    rng: &mut NativeRng,
+pub fn generate_random_equipment_effects(
+    rng: &mut Rng,
     equipment_type: EquipmentType,
     level: i32,
     advanced_unlocks: &[bool; 8],
-) -> NativeRandomEquipmentEffects {
+) -> RandomEquipmentEffects {
     assert!(level >= -1, "random equipment level uses -1 or a non-negative level");
     let native_level = if level == -1 { 1 } else { level };
     let minimum = 1.max(native_level / 2);
@@ -75,7 +73,7 @@ pub fn generate_native_random_equipment_effects(
     let tier = if level == -1 { 0 } else { (tier_draw + 1).clamp(1, 3) as usize };
     let name_side = rng.draw_integer(2);
     let mut prefix_next = effect_count != 2 && name_side == 1;
-    let pools = native_random_equipment_skill_pools(advanced_unlocks);
+    let pools = random_equipment_skill_pools(advanced_unlocks);
     let mut item_level = if effect_count == 2 { 8 } else { 0 };
     let mut prior_selector = None;
     let mut effects = Vec::with_capacity(effect_count);
@@ -124,26 +122,26 @@ pub fn generate_native_random_equipment_effects(
         name.push(' ');
         name.push_str(&suffix);
     }
-    NativeRandomEquipmentEffects { effects, item_level, name }
+    RandomEquipmentEffects { effects, item_level, name }
 }
 
 struct GeneratedEffect {
-    effect: NativeEquipmentEffect,
+    effect: EquipmentEffect,
     item_level: u32,
     prefix: String,
     suffix: String,
 }
 
-fn amount(rng: &mut NativeRng, bound: i32, addend: i32) -> f64 {
+fn amount(rng: &mut Rng, bound: i32, addend: i32) -> f64 {
     f64::from(rng.draw_integer(bound) + addend)
 }
 
-fn by_tier(rng: &mut NativeRng, tier: usize, rows: [(i32, i32); 4]) -> f64 {
+fn by_tier(rng: &mut Rng, tier: usize, rows: [(i32, i32); 4]) -> f64 {
     let (bound, addend) = rows[tier];
     amount(rng, bound, addend)
 }
 
-fn skill_target(rng: &mut NativeRng, pool: &[usize]) -> u32 {
+fn skill_target(rng: &mut Rng, pool: &[usize]) -> u32 {
     pool[rng.draw_integer(pool.len() as i32) as usize] as u32
 }
 
@@ -152,14 +150,13 @@ fn is_wearable(equipment_type: EquipmentType) -> bool {
 }
 
 fn generate_effect(
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     selector: u32,
     tier: usize,
     equipment_type: EquipmentType,
-    pools: &NativeRandomEquipmentSkillPools,
+    pools: &RandomEquipmentSkillPools,
 ) -> GeneratedEffect {
-    let mut effect =
-        NativeEquipmentEffect { kind: selector, magnitude: 0.0, operator: 0, target: 0 };
+    let mut effect = EquipmentEffect { kind: selector, magnitude: 0.0, operator: 0, target: 0 };
     let mut item_level = 0;
     effect.magnitude = match selector {
         0 => {
@@ -206,7 +203,7 @@ fn generate_effect(
         8 => {
             effect.kind = 4;
             effect.target = skill_target(rng, &pools.primary_or_discipline);
-            item_level = native_skill_rule(effect.target as usize)
+            item_level = skill_rule(effect.target as usize)
                 .expect("generated skill targets have native level rules")
                 .minimum_level;
             [1.0, 1.0, 2.0, 4.0][tier]
@@ -296,7 +293,7 @@ fn generate_effect(
     effect.magnitude = fround(effect.magnitude);
     let (prefix, suffix) = effect_names(selector);
     if selector == 9 {
-        let skill_name = NATIVE_SKILL_CATALOG[effect.target as usize].name;
+        let skill_name = SKILL_CATALOG[effect.target as usize].name;
         return GeneratedEffect {
             effect,
             item_level,

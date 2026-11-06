@@ -18,12 +18,10 @@ use solomon_sim::spells::boneyard::{
 };
 use solomon_sim::spells::model::PrimarySpellTransient;
 use solomon_sim::spells::model::{FireExplosionPresentation, PrimarySpellTickResult};
-use solomon_sim::spells::special_death::{
-    NativeSpellSpecialDeathKind, NativeSpellSpecialDeathPayload,
-};
-use solomon_sim::spells::weld::NativeWeldSteamVariant;
-use solomon_sim::spells::weld::NativeWeldWorldActor;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::spells::special_death::{SpellSpecialDeathKind, SpellSpecialDeathPayload};
+use solomon_sim::spells::weld::WeldSteamVariant;
+use solomon_sim::spells::weld::WeldWorldActor;
+use solomon_sim::{Rng, Vec2};
 
 struct OpenGeometry;
 impl EnemyNavigation for OpenGeometry {
@@ -65,13 +63,13 @@ fn transient(value: &PrimarySpellTransient) -> Value {
             "soundPitch":actor.sound_pitch,"presentation":match actor.presentation {
                 FireExplosionPresentation::Fire=>"fire",FireExplosionPresentation::Steam=>"steam"}}),
         ),
-        PrimarySpellTransient::Weld(NativeWeldWorldActor::Steam(actor)) => (
+        PrimarySpellTransient::Weld(WeldWorldActor::Steam(actor)) => (
             "weld-steam",
             json!({
             "position":[actor.position.x,actor.position.y],"velocity":[actor.velocity.x,actor.velocity.y],
             "life":actor.life,"scale":actor.scale,"contactEnabled":actor.contact_enabled,
             "contactDue":actor.contact_due,"contactDamage":actor.contact_damage,"phase":actor.phase,
-            "variant":match actor.variant {NativeWeldSteamVariant::Normal=>"normal",NativeWeldSteamVariant::Over=>"over"}}),
+            "variant":match actor.variant {WeldSteamVariant::Normal=>"normal",WeldSteamVariant::Over=>"over"}}),
         ),
         other => panic!("unexpected secondary special-death birth {other:?}"),
     };
@@ -82,17 +80,17 @@ fn transient(value: &PrimarySpellTransient) -> Value {
     result.as_object_mut().unwrap().extend(detail.as_object().unwrap().clone());
     result
 }
-fn contact(value: &Value) -> NativeSecondaryDamageContact {
-    NativeSecondaryDamageContact {
+fn contact(value: &Value) -> SecondaryDamageContact {
+    SecondaryDamageContact {
         amount: value["amount"].as_f64().unwrap(),
         ether_drain: false,
         hit_strength: value["hitStrength"].as_f64(),
-        kind: NativeSecondaryDamageKind::Fire,
+        kind: SecondaryDamageKind::Fire,
         owner_id: value["ownerId"].as_str().unwrap().into(),
         source_actor_id: value["sourceActorId"].as_u64().unwrap(),
         special_death_payload: value["specialDeathPayload"].as_object().map(|payload| {
-            NativeSpellSpecialDeathPayload {
-                kind: NativeSpellSpecialDeathKind::Steam,
+            SpellSpecialDeathPayload {
+                kind: SpellSpecialDeathKind::Steam,
                 ember_damage: payload["emberDamage"].as_f64().unwrap(),
                 ember_fragments: payload["emberFragments"].as_u64().unwrap() as u32,
                 explode_damage: payload["explodeDamage"].as_f64().unwrap(),
@@ -129,7 +127,7 @@ fn secondary_terminal_dispatch_precedes_next_hit_and_publishes_after_primary_pas
         session.enhanced_effects = case["enhancedEffects"].as_bool().unwrap_or(true);
         session.painter_order =
             WorldPainterOrder { next_actor_ordinal: 100, next_transient_ordinal: 70 };
-        session.combat_rng = NativeRng::new(17);
+        session.combat_rng = Rng::new(17);
         session.spells.next_id = 100;
         let world = &mut session.boneyard.as_mut().unwrap().enemies;
         *world = EnemyWorld::new(case["seed"].as_str().unwrap(), 50);
@@ -167,9 +165,9 @@ fn secondary_terminal_dispatch_precedes_next_hit_and_publishes_after_primary_pas
             world.actors.get_mut(0).unwrap().shield_health = shield;
             world.actors.get_mut(0).unwrap().shield_maximum_health = shield;
         }
-        let result = NativeSecondaryTickResult {
+        let result = SecondaryTickResult {
             damage: case["contacts"].as_array().unwrap().iter().map(contact).collect(),
-            ..NativeSecondaryTickResult::default()
+            ..SecondaryTickResult::default()
         };
         let deaths = session.apply_secondary_contacts(&result, 10);
         assert!(

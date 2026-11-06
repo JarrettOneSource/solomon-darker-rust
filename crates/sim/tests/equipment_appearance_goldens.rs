@@ -9,7 +9,7 @@ use solomon_sim::modding::inventory::{
     ModItemContent, ModItemIcon, ModWearableContent, ModWearableSlot,
 };
 use solomon_sim::profile::WizardElement;
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 
 fn garment(value: PlayerEquipmentTintedSelector) -> Value {
     json!([value.primary_tint, value.secondary_tint, value.selector])
@@ -26,7 +26,7 @@ fn custom_living_art_retains_identity_and_uses_authored_stock_death_shapes() {
         let content = mod_content(&case["content"]);
         item.mod_item_content = Some(content.clone());
         item.recipe_index = None;
-        item.native_selector = None;
+        item.selector = None;
         item.equipment_type = Some(match case["equipmentType"].as_str().unwrap() {
             "hat" => EquipmentType::Hat,
             "robe" => EquipmentType::Robe,
@@ -61,8 +61,7 @@ fn custom_living_art_retains_identity_and_uses_authored_stock_death_shapes() {
             };
             let weapon = appearance.weapon.map(|value| match value {
                 PlayerRenderableWeaponAppearance::Native(value) => {
-                    let kind =
-                        if value.kind == NativePlayerWeaponKind::Staff { "staff" } else { "wand" };
+                    let kind = if value.kind == PlayerWeaponKind::Staff { "staff" } else { "wand" };
                     json!(["native", kind, value.selector])
                 }
                 PlayerRenderableWeaponAppearance::ModStaff(value) => {
@@ -135,10 +134,7 @@ fn mod_content(value: &Value) -> ModItemContent {
     }
 }
 fn weapon(value: PlayerWeaponAppearance) -> Value {
-    json!([
-        if value.kind == NativePlayerWeaponKind::Staff { "staff" } else { "wand" },
-        value.selector
-    ])
+    json!([if value.kind == PlayerWeaponKind::Staff { "staff" } else { "wand" }, value.selector])
 }
 
 #[test]
@@ -185,7 +181,7 @@ fn starter_recipe_dye_and_generated_equipment_appearance_replay_the_website() {
                 _ => (EquipmentType::Wand, EquipmentSlot::Weapon),
             };
             item.equipment_type = Some(kind);
-            item.native_selector = Some(case["selector"].as_u64().unwrap() as u32);
+            item.selector = Some(case["selector"].as_u64().unwrap() as u32);
             item.icon_tints = Some([Some(0x123456), Some(0xabcdef)]);
             equipment.set(slot, Some(item));
         }

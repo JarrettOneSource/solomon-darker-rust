@@ -85,19 +85,19 @@ fn scene(value: &Value) -> BoneyardScene {
     }
 }
 
-fn half(value: Option<NativeBrokenFenceHalf>) -> Value {
+fn half(value: Option<BrokenFenceHalf>) -> Value {
     let Some(half) = value else { return Value::Null };
     json!({"corners":half.corners.map(point_json),"root":point_json(half.root),"seed":half.seed,
         "shadowStart":point_json(half.shadow_start),"shadowEnd":point_json(half.shadow_end),
         "shadowStep":point_json(half.shadow_step),"shadowCount":half.shadow_count})
 }
 
-fn layers(values: &[NativeSceneryLayer]) -> Value {
+fn layers(values: &[SceneryLayer]) -> Value {
     Value::Array(values.iter().map(|layer| {
         let source = match layer.source {
-            NativeScenerySource::Object { index, entry } => json!({"kind":"object","index":index,"entry":entry}),
-            NativeScenerySource::FencePost { index, entry } => json!({"kind":"post","index":index,"entry":entry}),
-            NativeScenerySource::FenceBody { index, piece, broken } => json!({"kind":"body","index":index,"piece":piece,"broken":half(broken)}),
+            ScenerySource::Object { index, entry } => json!({"kind":"object","index":index,"entry":entry}),
+            ScenerySource::FencePost { index, entry } => json!({"kind":"post","index":index,"entry":entry}),
+            ScenerySource::FenceBody { index, piece, broken } => json!({"kind":"body","index":index,"piece":piece,"broken":half(broken)}),
         };
         json!({"source":source,"position":point_json(layer.position),"worldY":layer.world_y,"sortBias":layer.sort_bias,"sourceOrder":layer.source_order})
     }).collect())
@@ -117,7 +117,7 @@ fn authored_placements_shared_posts_and_private_broken_halves_match_source() {
                 .iter()
                 .any(|value| value.as_u64() == Some(entry as u64))
         };
-        let plan = native_scenery_plan(&scene, &empty);
+        let plan = scenery_plan(&scene, &empty);
         website_rows::compare(&json!(plan.underlays), &case["underlays"], "underlays");
         website_rows::compare(&json!(plan.compact), &case["compact"], "compact");
         website_rows::compare(&layers(&plan.main), &case["main"], "main");
@@ -150,11 +150,11 @@ fn shadow_glyph(fixture: &Value, entry: usize) -> Option<NativeSceneryShadowGlyp
     })
 }
 
-fn shadow_quad_json(quad: NativeSceneryShadowQuad) -> Value {
+fn shadow_quad_json(quad: SceneryShadowQuad) -> Value {
     let texture = match quad.texture {
-        NativeSceneryShadowTexture::Glyph(entry) => json!(entry),
-        NativeSceneryShadowTexture::FenceGrate => json!("fence-grate"),
-        NativeSceneryShadowTexture::White => json!("white"),
+        SceneryShadowTexture::Glyph(entry) => json!(entry),
+        SceneryShadowTexture::FenceGrate => json!("fence-grate"),
+        SceneryShadowTexture::White => json!("white"),
     };
     json!({"alphas":quad.alphas,"role":quad.role.id(),"texture":texture,"tint":quad.tint,
         "uvs":quad.uvs.map(point_json),"vertices":quad.vertices.map(point_json)})
@@ -167,14 +167,14 @@ fn original_scenery_masks_flat_glyphs_and_wall_skirts_match_source() {
     let glyph = |entry| shadow_glyph(&fixture, entry);
     for case in fixture["scenes"].as_array().unwrap() {
         let scene = scene(&case["input"]);
-        let plan = native_scenery_plan(&scene, &|entry| glyph(entry).is_none());
+        let plan = scenery_plan(&scene, &|entry| glyph(entry).is_none());
         for mode in case["modes"].as_array().unwrap() {
             let complex = mode["complex"].as_bool().unwrap();
             let actual: Value = plan
                 .main
                 .iter()
                 .map(|layer| {
-                    native_scenery_shadow_plan(&scene, &plan, layer, complex, &glyph)
+                    scenery_shadow_plan(&scene, &plan, layer, complex, &glyph)
                         .into_iter()
                         .map(shadow_quad_json)
                         .collect::<Value>()
@@ -185,7 +185,7 @@ fn original_scenery_masks_flat_glyphs_and_wall_skirts_match_source() {
     }
     for case in fixture["goodies"].as_array().unwrap() {
         let goodie = &case["goodie"];
-        let actual: Value = native_goodie_shadow_plan(
+        let actual: Value = goodie_shadow_plan(
             point(&goodie["position"]),
             goodie["subtype"].as_u64().unwrap() as u32,
             goodie["phase"].as_u64().unwrap() as usize,
@@ -198,7 +198,7 @@ fn original_scenery_masks_flat_glyphs_and_wall_skirts_match_source() {
         website_rows::compare(&actual, &case["quads"], "Goodie auxiliary shadows");
     }
     for case in fixture["walls"].as_array().unwrap() {
-        let actual = native_wall_skirt_plan(point(&case["start"]), point(&case["end"]));
+        let actual = wall_skirt_plan(point(&case["start"]), point(&case["end"]));
         website_rows::compare(&shadow_quad_json(actual), &case["quad"], "wall skirt");
     }
 }
@@ -207,7 +207,7 @@ fn original_scenery_masks_flat_glyphs_and_wall_skirts_match_source() {
 fn scrub_shadow_clock_and_lazy_surface_ownership_match_source() {
     use std::cell::RefCell;
 
-    use solomon_sim::boneyard::shadows::NativeShadowRecord;
+    use solomon_sim::boneyard::shadows::ShadowRecord;
 
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/scenery-shadow-goldens.json")).unwrap();
@@ -215,7 +215,7 @@ fn scrub_shadow_clock_and_lazy_surface_ownership_match_source() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|record| NativeShadowRecord {
+        .map(|record| ShadowRecord {
             base_alpha: record["baseAlpha"].as_f64().unwrap(),
             behind_scalar: record["behindScalar"].as_f64().unwrap(),
             direction: point(&record["direction"]),
@@ -228,7 +228,7 @@ fn scrub_shadow_clock_and_lazy_surface_ownership_match_source() {
     for case in fixture["scrubs"].as_array().unwrap() {
         let input = &case["input"];
         let entry = 264 + input["variant"].as_u64().unwrap() as usize;
-        let mut state = NativeScrubShadowState::new(
+        let mut state = ScrubShadowState::new(
             input["seed"].as_u64().unwrap() as usize,
             input["initialTick"].as_u64().unwrap(),
         );
@@ -242,7 +242,7 @@ fn scrub_shadow_clock_and_lazy_surface_ownership_match_source() {
             };
             let complex = frame["complex"].as_bool().unwrap();
             let quads = if frame["visible"].as_bool().unwrap() {
-                native_scrub_shadow_plan(
+                scrub_shadow_plan(
                     entry,
                     shadow_glyph(&fixture, entry).unwrap(),
                     point(&input["position"]),

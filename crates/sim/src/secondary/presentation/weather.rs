@@ -6,22 +6,19 @@ use super::types::*;
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorState;
 
 #[must_use]
-pub fn storm_cloud_draws(
-    actor: &NativeSecondaryActorState,
-    frame: f64,
-) -> Vec<NativeSecondarySpriteDraw> {
+pub fn storm_cloud_draws(actor: &SecondaryActorState, frame: f64) -> Vec<SecondarySpriteDraw> {
     storm_cloud_draws_at_age(actor, actor.age_ticks as f64, frame, actor.enhanced)
 }
 
 pub(super) fn storm_cloud_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age_ticks: f64,
     frame: f64,
     enhanced_effects: bool,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     if actor.variant != 1 || !enhanced_effects || actor.presentation_rng.is_none() {
         return Vec::new();
     }
@@ -48,7 +45,7 @@ pub(super) fn storm_cloud_draws_at_age(
         for (pass, offset, rotation) in
             [("a", spline.sample(time), angle), ("b", spline.sample(time + 0.1), angle * 1.35)]
         {
-            let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 84);
+            let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 84);
             draw.offset = offset;
             draw.role = format!("storm-cloud-arc-{index}-{pass}");
             draw.rotation_radians = degrees_to_radians(rotation);
@@ -59,7 +56,7 @@ pub(super) fn storm_cloud_draws_at_age(
         }
         scale = scale * 1.1 + 0.1;
     }
-    let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 78);
+    let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 78);
     draw.alpha = actor.alpha * 0.5;
     draw.offset = Vec2::new(0.0, actor.scale * -50.0);
     draw.role = "storm-cloud-core".into();
@@ -71,20 +68,20 @@ pub(super) fn storm_cloud_draws_at_age(
 }
 
 #[must_use]
-pub fn storm_auxiliary_draws(actor: &NativeSecondaryActorState) -> Vec<NativeSecondarySpriteDraw> {
+pub fn storm_auxiliary_draws(actor: &SecondaryActorState) -> Vec<SecondarySpriteDraw> {
     storm_auxiliary_draws_at_age(actor, actor.age_ticks as f64)
 }
 
 pub(super) fn storm_auxiliary_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age_ticks: f64,
-) -> Vec<NativeSecondarySpriteDraw> {
+) -> Vec<SecondarySpriteDraw> {
     let phase = storm_visual_phase(actor);
     let mut draws = Vec::new();
     if actor.variant == 1 {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 78);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 78);
         draw.alpha = actor.alpha * 0.5;
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.offset = Vec2::new(0.0, -175.0 - actor.scale * 50.0);
         draw.role = "storm-weather-moving-composite".into();
         draw.rotation_radians = degrees_to_radians(age_ticks / 48.0 * phase);
@@ -94,9 +91,9 @@ pub(super) fn storm_auxiliary_draws_at_age(
         draws.push(draw);
     }
     if actor.frame > 0.0 {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 78);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 78);
         draw.alpha = actor.alpha * 0.75;
-        draw.color_mode = Some(NativeSecondaryColorMode::AlphaMask);
+        draw.color_mode = Some(SecondaryColorMode::AlphaMask);
         draw.offset = Vec2::new(0.0, -175.0);
         draw.role = "storm-weather-strike-flash".into();
         draw.rotation_radians = degrees_to_radians(age_ticks * 0.0625 * phase);
@@ -109,29 +106,27 @@ pub(super) fn storm_auxiliary_draws_at_age(
 }
 
 #[must_use]
-pub fn storm_weather_composite(
-    actor: &NativeSecondaryActorState,
-) -> Option<NativeStormWeatherComposite> {
+pub fn storm_weather_composite(actor: &SecondaryActorState) -> Option<StormWeatherComposite> {
     storm_weather_composite_at_age(actor, actor.age_ticks as f64)
 }
 
 pub(super) fn storm_weather_composite_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: f64,
-) -> Option<NativeStormWeatherComposite> {
+) -> Option<StormWeatherComposite> {
     if actor.variant == 1 {
         return None;
     }
     let phase = storm_visual_phase(actor);
     let alpha_wave = 0.5 + float::sin(degrees_to_radians(age * 0.5)) * 0.5;
     let scale_wave = 0.5 + float::sin(degrees_to_radians(age / 6.0)) * 0.25;
-    let mut inner = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 78);
+    let mut inner = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 78);
     inner.alpha = actor.alpha * 2.0;
     inner.role = "storm-weather-static-inner".into();
     inner.rotation_radians = degrees_to_radians(age * 0.03125 * phase);
     inner.scale_x = actor.scale;
     inner.scale_y = actor.scale * 0.8;
-    let mut middle = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 78);
+    let mut middle = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 78);
     middle.alpha = actor.alpha * 0.75;
     middle.offset = Vec2::new(0.0, actor.scale * -10.0);
     middle.role = "storm-weather-static-middle".into();
@@ -139,7 +134,7 @@ pub(super) fn storm_weather_composite_at_age(
     middle.scale_x = actor.scale * 0.75;
     middle.scale_y = actor.scale * 0.8 * 0.75;
     middle.tint = 0xccffff;
-    let mut outer = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 78);
+    let mut outer = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 78);
     outer.alpha = actor.alpha * alpha_wave * 0.75;
     outer.offset = Vec2::new(0.0, actor.scale * -6.0);
     outer.role = "storm-weather-static-outer".into();
@@ -147,13 +142,13 @@ pub(super) fn storm_weather_composite_at_age(
     outer.scale_x = actor.scale * 0.5;
     outer.scale_y = actor.scale * 0.8 * scale_wave;
     outer.tint = 0xccffff;
-    Some(NativeStormWeatherComposite {
+    Some(StormWeatherComposite {
         draws: vec![inner, middle, outer],
         offset: Vec2::new(0.0, -175.0),
         scale: 5.0,
     })
 }
-fn storm_visual_phase(actor: &NativeSecondaryActorState) -> f64 {
+fn storm_visual_phase(actor: &SecondaryActorState) -> f64 {
     let mut rng = actor
         .presentation_rng
         .clone()
@@ -163,14 +158,14 @@ fn storm_visual_phase(actor: &NativeSecondaryActorState) -> f64 {
 }
 
 #[must_use]
-pub fn freeze_wave_visual_draws(actor: &NativeSecondaryActorState) -> NativeFreezeWaveVisualDraws {
+pub fn freeze_wave_visual_draws(actor: &SecondaryActorState) -> FreezeWaveVisualDraws {
     freeze_wave_visual_draws_at_age(actor, actor.age_ticks)
 }
 
 pub(super) fn freeze_wave_visual_draws_at_age(
-    actor: &NativeSecondaryActorState,
+    actor: &SecondaryActorState,
     age: u64,
-) -> NativeFreezeWaveVisualDraws {
+) -> FreezeWaveVisualDraws {
     const PERSPECTIVE: f64 = 0.8_f32 as f64;
     const ANGULAR_DECAY: f64 = 0.975_f32 as f64;
     const HEIGHT_DECAY: f64 = 0.99_f32 as f64;
@@ -181,7 +176,7 @@ pub(super) fn freeze_wave_visual_draws_at_age(
         .presentation_rng
         .clone()
         .expect("FreezeWave presentation retains its pre-consumption RNG state");
-    let mut visual = NativeFreezeWaveVisualDraws::default();
+    let mut visual = FreezeWaveVisualDraws::default();
     for (index, (growth, loss)) in
         [(1.02, 0.05), (1.015, 0.05), (1.01, 0.065)].into_iter().enumerate()
     {
@@ -192,9 +187,9 @@ pub(super) fn freeze_wave_visual_draws_at_age(
         }
         let scale = repeated_float_multiply(1.0, growth, age);
         // These are the inline bundle records, separate from compact decorations.
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::DeadHawg, 16);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::DeadHawg, 16);
         draw.alpha = life.min(1.0);
-        draw.blend = NativeSecondaryBlend::Add;
+        draw.blend = SecondaryBlend::Add;
         draw.role = format!("freeze-wave-burst-{index}");
         draw.rotation_radians = degrees_to_radians(rotation);
         draw.scale_x = scale;
@@ -203,7 +198,7 @@ pub(super) fn freeze_wave_visual_draws_at_age(
     }
     let life = repeated_float_decay(1.75, 0.01, age);
     if life > 0.0 {
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::DeadHawg, 17);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::DeadHawg, 17);
         draw.alpha = life.min(1.0);
         draw.role = "freeze-wave-ring".into();
         draw.scale_x = 1.5;
@@ -243,7 +238,7 @@ pub(super) fn freeze_wave_visual_draws_at_age(
         let x = fround(actor.position.x + radius * fround(float::sin(radians)));
         let y = fround(actor.position.y - radius * fround(float::cos(radians)) * PERSPECTIVE);
         let scale = fround(1.0 - scale);
-        let mut draw = NativeSecondarySpriteDraw::new(actor, NativeSecondaryAtlas::BadGuys, 72);
+        let mut draw = SecondarySpriteDraw::new(actor, SecondaryAtlas::BadGuys, 72);
         draw.alpha = life.min(1.0);
         draw.offset = Vec2::new(x - actor.position.x, fround(y - height) - actor.position.y);
         draw.role = format!("freeze-wave-snow-{index}");
@@ -256,11 +251,8 @@ pub(super) fn freeze_wave_visual_draws_at_age(
 }
 
 #[must_use]
-pub fn raindrop_gradient(
-    actor: &NativeSecondaryActorState,
-    acid: bool,
-) -> NativeSecondaryGradientDraw {
-    NativeSecondaryGradientDraw {
+pub fn raindrop_gradient(actor: &SecondaryActorState, acid: bool) -> SecondaryGradientDraw {
+    SecondaryGradientDraw {
         bottom_alpha: 0.5,
         bottom_color: if acid { 0xb3f2bf } else { 0xccf2ff },
         height: actor.quantity,

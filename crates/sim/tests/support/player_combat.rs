@@ -8,7 +8,7 @@ use solomon_sim::profile::{
     refresh_player_combat_from_skill_stats,
 };
 use solomon_sim::spells::casting::PlayerPrimaryCastState;
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 
 pub fn configured_player(spec: &Value) -> (PlayerState, HubWizard, PlayerPrimaryCastState) {
     let mut player = PlayerState::new(
@@ -17,14 +17,14 @@ pub fn configured_player(spec: &Value) -> (PlayerState, HubWizard, PlayerPrimary
             element: WizardElement::Ether,
             discipline: WizardDiscipline::Arcane,
         },
-        &mut NativeRng::new(17),
+        &mut Rng::new(17),
     );
     player.economy.owned_perk_selectors = spec["perks"]
         .as_array()
         .map(|values| values.iter().map(|value| value.as_u64().unwrap() as u32).collect())
         .unwrap_or_default();
     if spec["removePotions"].as_bool().unwrap_or(false) {
-        player.economy.backpack.retain(|item| item.native_type_id != 7001);
+        player.economy.backpack.retain(|item| item.type_id != 7001);
     }
     player.economy.npc.boast.selected = Some(9.into());
     player.economy.npc.boast.succeeded = false;
@@ -142,12 +142,7 @@ pub fn player_snapshot(player: &PlayerState) -> Value {
     let items = project_inventory_items(&economy.backpack)
         .iter()
         .map(|entry| {
-            json!([
-                entry.item.id,
-                entry.item.native_type_id,
-                entry.item.native_subtype,
-                entry.item.quantity
-            ])
+            json!([entry.item.id, entry.item.type_id, entry.item.subtype, entry.item.quantity])
         })
         .collect::<Vec<_>>();
     json!({
@@ -220,7 +215,7 @@ pub fn player_snapshot(player: &PlayerState) -> Value {
     })
 }
 
-pub fn rng_snapshot(rng: &NativeRng) -> Value {
+pub fn rng_snapshot(rng: &Rng) -> Value {
     json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":&rng.words[..]})
 }
 pub fn flash_snapshot(response: &PlayerFlashResponse) -> Value {

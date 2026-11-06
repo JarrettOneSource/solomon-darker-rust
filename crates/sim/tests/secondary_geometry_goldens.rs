@@ -4,12 +4,12 @@ use serde_json::{Value, json};
 use solomon_sim::boneyard::collision::BoneyardCollisionWorld;
 use solomon_sim::boneyard::{BoneyardBounds, BoneyardScene, BoneyardSpawn};
 use solomon_sim::secondary::geometry::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
-fn compare(position: Vec2, rng: &NativeRng, expected: &Value, label: &str) {
+fn compare(position: Vec2, rng: &Rng, expected: &Value, label: &str) {
     assert_eq!(position, point(&expected["position"]), "{label} position");
     assert_eq!(
         rng.index_a,
@@ -33,8 +33,8 @@ fn native_collision_rings_and_teleport_replay_the_source() {
         let origin = point(&case["requested"]);
         let minimum_x = case["minimumX"].as_f64().unwrap();
         let blocked = case["blockedRadius"].as_f64().unwrap();
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let result = resolve_native_collision_adjusted_position(
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let result = resolve_collision_adjusted_position(
             origin,
             case["radius"].as_f64().unwrap(),
             &mut rng,
@@ -71,14 +71,14 @@ fn native_collision_rings_and_teleport_replay_the_source() {
             .as_array()
             .unwrap()
             .iter()
-            .map(|value| BoneyardNativeTeleportBody {
+            .map(|value| BoneyardTeleportBody {
                 position: point(&value["position"]),
                 radius: value["radius"].as_f64().unwrap(),
             })
             .collect::<Vec<_>>();
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let position = resolve_boneyard_native_teleport(
-            BoneyardNativeTeleportWorld { bodies: &bodies, bounds, collision: &collision },
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let position = resolve_boneyard_teleport(
+            BoneyardTeleportWorld { bodies: &bodies, bounds, collision: &collision },
             &mut rng,
         );
         compare(position, &rng, &case["result"], "Teleport");
@@ -90,13 +90,13 @@ fn phase_uses_the_first_legal_unrounded_probe_in_its_authored_range() {
     let origin = Vec2::new(0.125, -0.25);
     let direction = Vec2::new(0.333333333333, 0.666666666667);
     assert_eq!(
-        resolve_native_phasing_destination(origin, direction, |_| true),
+        resolve_phasing_destination(origin, direction, |_| true),
         Some(Vec2::new(origin.x + direction.x * 80.0, origin.y + direction.y * 80.0))
     );
     assert_eq!(
-        resolve_native_phasing_destination(origin, direction, |position| position.x
+        resolve_phasing_destination(origin, direction, |position| position.x
             >= origin.x + direction.x * 270.0),
         Some(Vec2::new(origin.x + direction.x * 270.0, origin.y + direction.y * 270.0))
     );
-    assert_eq!(resolve_native_phasing_destination(origin, direction, |_| false), None);
+    assert_eq!(resolve_phasing_destination(origin, direction, |_| false), None);
 }

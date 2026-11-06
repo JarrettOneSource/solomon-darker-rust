@@ -2,23 +2,20 @@
 //! The cosmetic stream is keyed by the allocated actor ID, never gameplay RNG.
 
 use super::program::actor;
-use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondarySimulationState, NativeSecondaryTarget,
-};
+use super::{SecondaryActorKind as Kind, SecondarySimulationState, SecondaryTarget};
 use crate::Vec2;
 use crate::float::{cos, fround, sin};
-use crate::secondary::NativeSecondaryActorState;
+use crate::secondary::SecondaryActorState;
 use crate::spells::air::{
-    NativeAirLightningInput, NativeAirPresentationRandom, NativeAirRibbonLayer,
-    build_native_air_lightning_body,
+    AirLightningInput, AirPresentationRandom, AirRibbonLayer, build_air_lightning_body,
 };
 
 pub(super) fn spawn_arc(
-    state: &mut NativeSecondarySimulationState,
+    state: &mut SecondarySimulationState,
     owner: &str,
     world_key: &str,
     origin: Vec2,
-    target: &NativeSecondaryTarget,
+    target: &SecondaryTarget,
     enhanced: bool,
     tick: u64,
 ) {
@@ -43,14 +40,14 @@ pub(super) fn spawn_arc(
 }
 
 pub(super) fn spawn_flare(
-    state: &mut NativeSecondarySimulationState,
+    state: &mut SecondarySimulationState,
     owner: &str,
     world_key: &str,
-    target: &NativeSecondaryTarget,
+    target: &SecondaryTarget,
     alpha: f64,
     enhanced: bool,
 ) {
-    let mut random = NativeAirPresentationRandom::new(state.next_actor_id, 0x454c4543);
+    let mut random = AirPresentationRandom::new(state.next_actor_id, 0x454c4543);
     let scale = fround(1.0 + random.float(0.5));
     let rotation = random.float(std::f64::consts::PI * 2.0);
     let radius = random.float(10.0);
@@ -80,8 +77,8 @@ pub(super) fn spawn_flare(
 }
 
 pub(super) fn step_flare(
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let alpha = fround(source.alpha - source.phase);
@@ -91,32 +88,32 @@ pub(super) fn step_flare(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeElectricBurnArcBand {
+pub struct ElectricBurnArcBand {
     pub clip_y: f64,
     pub clip_height: f64,
     pub painter_y: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeElectricBurnArcPlan {
-    pub body: Vec<NativeAirRibbonLayer>,
+pub struct ElectricBurnArcPlan {
+    pub body: Vec<AirRibbonLayer>,
     pub bounds_y: f64,
-    pub bands: Vec<NativeElectricBurnArcBand>,
+    pub bands: Vec<ElectricBurnArcBand>,
 }
 
 /// `NativeElectricBurnArcView`: born quality owns the factory geometry; current
 /// quality changes only its ordinary ZAnimSplit masks. No glow belongs here.
 #[must_use]
-pub fn native_electric_burn_arc_plan(
-    actor: &NativeSecondaryActorState,
+pub fn electric_burn_arc_plan(
+    actor: &SecondaryActorState,
     age_ticks: f64,
     enhanced_effects: bool,
-) -> Option<NativeElectricBurnArcPlan> {
+) -> Option<ElectricBurnArcPlan> {
     assert_eq!(actor.kind, Kind::ElectricBurnArc, "ElectricBurn arc retains its birth kind");
     if age_ticks >= 2.0 {
         return None;
     }
-    let body = build_native_air_lightning_body(NativeAirLightningInput {
+    let body = build_air_lightning_body(AirLightningInput {
         chained: false,
         enhanced_effects: actor.enhanced,
         age_ticks: age_ticks.floor().max(0.0) as u64,
@@ -149,8 +146,8 @@ pub fn native_electric_burn_arc_plan(
         .map(|index| {
             // NativeZAnimSplit uses ordinary Number arithmetic, unlike Flame's stores.
             let y = minimum + index as f64 * height;
-            NativeElectricBurnArcBand { clip_y: y, clip_height: height, painter_y: y + height }
+            ElectricBurnArcBand { clip_y: y, clip_height: height, painter_y: y + height }
         })
         .collect();
-    Some(NativeElectricBurnArcPlan { body, bounds_y: minimum, bands })
+    Some(ElectricBurnArcPlan { body, bounds_y: minimum, bands })
 }

@@ -7,12 +7,12 @@ use super::config::{
     EnemyClassification, EnemyConfig, EnemyConfigRandom, EnemyFamilyConfig, SkeletonWeapon,
     evaluate_enemy_config,
 };
-use super::crow::create_native_crow;
-use super::demon_skull_controller::create_native_demon_skull;
-use super::faculty_controller::{create_native_faculty, register_native_faculty};
+use super::crow::create_crow;
+use super::demon_skull_controller::create_demon_skull;
+use super::faculty_controller::{create_faculty, register_faculty};
 use super::model::*;
-use super::path::{NativeEnemyPathState, native_enemy_target_refresh_ticks};
-use super::ranged::{RangedFamily, construct_native_ranged_attack_range};
+use super::path::{EnemyPathState, enemy_target_refresh_ticks};
+use super::ranged::{RangedFamily, construct_ranged_attack_range};
 use super::targeting::nearest_eligible_target;
 use super::world::{
     EnemyGeometry, EnemySpawnContext, EnemySpawnPlacementRequest, EnemyWorld,
@@ -122,11 +122,11 @@ impl EnemyWorld {
             }
             if let Some(damage) = intent.green_imp_spit_damage {
                 assert!(
-                    config.enemy_token == EnemyToken::Imp && intent.native_type_id == 2044,
+                    config.enemy_token == EnemyToken::Imp && intent.type_id == 2044,
                     "GreenImp requires its native Imp payload"
                 );
                 config.maximum_health = 1.0;
-                config.native_type_id = 2044;
+                config.type_id = 2044;
                 config.primary_damage = Some(damage / 20.0);
                 config.experience = damage / 20.0;
             }
@@ -178,7 +178,7 @@ impl EnemyWorld {
             };
             let gait_pose = self.locomotion_rng.draw_scaled_float(4.0, false);
             let body_gait_phase = self.locomotion_rng.draw_scaled_float(4.0, false);
-            let mut path = NativeEnemyPathState::new(&mut self.steering_rng);
+            let mut path = EnemyPathState::new(&mut self.steering_rng);
             let heading_deg = intent.portal_ejection.map_or_else(
                 || {
                     context
@@ -268,9 +268,9 @@ impl EnemyWorld {
                 loot_seed,
                 next_movement_tick: context.tick + 2,
                 next_target_refresh_tick: context.tick
-                    + native_enemy_target_refresh_ticks(intent.pathfinding_mode),
-                native_cell_binding_order: self.next_native_cell_binding_order,
-                native_registration_order: self.next_native_registration_order,
+                    + enemy_target_refresh_ticks(intent.pathfinding_mode),
+                native_cell_binding_order: self.next_cell_binding_order,
+                native_registration_order: self.next_registration_order,
                 path,
                 position,
                 reward_granted: false,
@@ -289,8 +289,8 @@ impl EnemyWorld {
                 terminal_emitted: false,
                 wave_ordinal: intent.wave_ordinal,
             };
-            self.next_native_cell_binding_order += 1;
-            self.next_native_registration_order += 1;
+            self.next_cell_binding_order += 1;
+            self.next_registration_order += 1;
             self.next_actor_id += 1;
             if self.featured_boss_id.is_none()
                 && matches!(
@@ -331,7 +331,7 @@ impl EnemyWorld {
             }),
             EnemyFamilyConfig::Archer { range_mode, .. } => {
                 let direction = self.steering_rng.draw_sign(1.0);
-                let range = construct_native_ranged_attack_range(
+                let range = construct_ranged_attack_range(
                     RangedFamily::Archer,
                     *range_mode,
                     &mut self.steering_rng,
@@ -355,12 +355,9 @@ impl EnemyWorld {
             }
             EnemyFamilyConfig::Mage { range_mode, shield_interval, .. } => {
                 // The Mage constructor first consumes its inherited Archer range draw.
-                let _ = construct_native_ranged_attack_range(
-                    RangedFamily::Archer,
-                    0,
-                    &mut self.steering_rng,
-                );
-                let range = construct_native_ranged_attack_range(
+                let _ =
+                    construct_ranged_attack_range(RangedFamily::Archer, 0, &mut self.steering_rng);
+                let range = construct_ranged_attack_range(
                     RangedFamily::Mage,
                     *range_mode,
                     &mut self.steering_rng,
@@ -444,7 +441,7 @@ impl EnemyWorld {
                 let resting = self.draw_unit();
                 let flyby_offset = self.draw_integer(601);
                 let initial = self.draw_unit();
-                EnemyBrain::Wraith(super::wraith::create_native_wraith_flight_state(
+                EnemyBrain::Wraith(super::wraith::create_wraith_flight_state(
                     config.chase_speed,
                     resting,
                     initial,
@@ -495,19 +492,15 @@ impl EnemyWorld {
                 })
             }
             EnemyFamilyConfig::DemonSkull { capabilities } => EnemyBrain::DemonSkull(
-                create_native_demon_skull(&mut self.steering_rng, config.scale, *capabilities),
+                create_demon_skull(&mut self.steering_rng, config.scale, *capabilities),
             ),
             EnemyFamilyConfig::Faculty(_) => {
-                let mut brain = create_native_faculty(&mut self.steering_rng);
+                let mut brain = create_faculty(&mut self.steering_rng);
                 if self.faculty_voice_controller.is_none() {
                     self.faculty_voice_controller =
                         Some(FacultyVoiceController::new(&mut self.steering_rng));
                 }
-                register_native_faculty(
-                    &mut brain,
-                    &mut self.steering_rng,
-                    owner.faculty_member_count,
-                );
+                register_faculty(&mut brain, &mut self.steering_rng, owner.faculty_member_count);
                 brain.body_heading_deg = owner.heading_deg;
                 EnemyBrain::Faculty(brain)
             }
@@ -515,10 +508,8 @@ impl EnemyWorld {
                 let mut orbit_phase_deg = self.steering_rng.draw_scaled_float(360.0, false);
                 let mut crows = Vec::with_capacity(*crow_count);
                 for index in 0..*crow_count {
-                    let mut crow = create_native_crow(
-                        self.next_death_effect_id + index,
-                        &mut self.steering_rng,
-                    );
+                    let mut crow =
+                        create_crow(self.next_death_effect_id + index, &mut self.steering_rng);
                     crow.orbit_phase_deg = orbit_phase_deg;
                     orbit_phase_deg = fround(orbit_phase_deg + 360.0 / (*crow_count as f64));
                     crows.push(crow);

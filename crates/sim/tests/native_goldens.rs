@@ -13,7 +13,7 @@ use solomon_sim::constants::PLAYER_MOVEMENT;
 use solomon_sim::float::float32_bits;
 use solomon_sim::rng::{STOCK_DIVISOR, WORD_COUNT};
 use solomon_sim::{
-    CollisionRectangle, KnockbackState, NativeRng, PlayerActor, PlayerMovementState, Vec2,
+    CollisionRectangle, KnockbackState, PlayerActor, PlayerMovementState, Rng, Vec2,
 };
 
 fn fixture_dir() -> PathBuf {
@@ -41,7 +41,7 @@ struct RngSnapshot {
     divisor: u32,
 }
 
-fn assert_rng_state(rng: &NativeRng, expected: &RngSnapshot, label: &str) {
+fn assert_rng_state(rng: &Rng, expected: &RngSnapshot, label: &str) {
     assert_eq!(rng.index_a, expected.index_a, "{label} index_a");
     assert_eq!(rng.index_b, expected.index_b, "{label} index_b");
     assert_eq!(rng.divisor, expected.divisor, "{label} divisor");
@@ -74,7 +74,7 @@ fn integer_rng_sequences_match_the_retail_captures() {
         let label =
             format!("seed {} range {} ({})", sequence.seed, sequence.range, sequence.stream);
         assert_eq!(sequence.outputs.len(), sequence.count, "{label} count");
-        let mut rng = NativeRng::new(sequence.seed);
+        let mut rng = Rng::new(sequence.seed);
         for (index, expected) in sequence.outputs.iter().enumerate() {
             assert_eq!(rng.draw_integer(sequence.range), *expected, "{label} draw {index}");
         }
@@ -86,7 +86,8 @@ fn integer_rng_sequences_match_the_retail_captures() {
 
 #[derive(Deserialize)]
 struct FloatGoldens {
-    native_contract: FloatContract,
+    #[serde(rename = "native_contract")]
+    contract: FloatContract,
     captures: Vec<FloatCapture>,
 }
 
@@ -133,10 +134,10 @@ fn float_from_bits_text(text: &str) -> f64 {
 #[test]
 fn float_rng_corpus_matches_bit_for_bit_including_sign_draws() {
     let goldens: FloatGoldens = read_fixture("float-rng-goldens.json");
-    assert_eq!(goldens.native_contract.scaled_float32_rounding_points, 3);
-    assert_eq!(goldens.native_contract.unit_float32_rounding_points, 2);
-    assert_eq!(goldens.native_contract.stock_divisor, STOCK_DIVISOR);
-    assert_eq!(goldens.native_contract.state_word_count, WORD_COUNT);
+    assert_eq!(goldens.contract.scaled_float32_rounding_points, 3);
+    assert_eq!(goldens.contract.unit_float32_rounding_points, 2);
+    assert_eq!(goldens.contract.stock_divisor, STOCK_DIVISOR);
+    assert_eq!(goldens.contract.state_word_count, WORD_COUNT);
 
     let labels: BTreeSet<&str> =
         goldens.captures.iter().map(|capture| capture.request.label.as_str()).collect();
@@ -160,7 +161,7 @@ fn float_rng_corpus_matches_bit_for_bit_including_sign_draws() {
         let label = request.label.as_str();
         let magnitude = float_from_bits_text(&request.magnitude_float32_bits);
         assert_eq!(capture.draws.len(), request.count, "{label} draw count");
-        let mut rng = NativeRng::new(request.seed);
+        let mut rng = Rng::new(request.seed);
         for draw in &capture.draws {
             let index = draw.draw_index;
             assert_rng_state(&rng, &draw.pre_call, &format!("{label} pre {index}"));

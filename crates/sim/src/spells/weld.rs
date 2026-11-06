@@ -34,4 +34,4 @@ pub use persistent::*;
 pub use presentation::*;
 pub use projectiles::*;
 pub use steam::*;
-pub use world::enroll_native_weld_actor_painter;
+pub use world::enroll_weld_actor_painter;

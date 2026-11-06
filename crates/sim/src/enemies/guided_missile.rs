@@ -3,11 +3,11 @@
 use crate::float;
 use crate::float::fround;
 use crate::heading::heading_degrees_from_vector;
-use crate::spells::targeting::native_heading_turn_direction;
-use crate::{NativeRng, Vec2};
+use crate::spells::targeting::heading_turn_direction;
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeGuidedMissileState {
+pub struct GuidedMissileState {
     pub heading_deg: f64,
     pub minimum_speed: f64,
     pub phase_deg: f64,
@@ -19,23 +19,23 @@ pub struct NativeGuidedMissileState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeGuidedMissileStep {
-    pub state: NativeGuidedMissileState,
+pub struct GuidedMissileStep {
+    pub state: GuidedMissileState,
     pub terrain_probe: Vec2,
 }
 
 #[must_use]
-pub fn create_native_guided_missile(
-    rng: &mut NativeRng,
+pub fn create_guided_missile(
+    rng: &mut Rng,
     position: Vec2,
     heading_deg: f64,
     speed_scale: f64,
-) -> NativeGuidedMissileState {
+) -> GuidedMissileState {
     let phase_deg = rng.draw_scaled_float(360.0, false);
     let turn = rng.draw_scaled_float(0.75, false);
     let floor = rng.draw_scaled_float(0.449_999_988_079_071_04, false);
     let scale = rng.draw_scaled_float(0.200_000_047_683_715_82, false);
-    NativeGuidedMissileState {
+    GuidedMissileState {
         heading_deg,
         minimum_speed: fround(fround(0.75 + floor) * speed_scale),
         phase_deg,
@@ -49,10 +49,10 @@ pub fn create_native_guided_missile(
 
 #[must_use]
 pub fn step_native_guided_missile(
-    source: NativeGuidedMissileState,
+    source: GuidedMissileState,
     target: Option<Vec2>,
     actor_time_scale: f64,
-) -> NativeGuidedMissileStep {
+) -> GuidedMissileStep {
     let radians = source.heading_deg * std::f64::consts::PI / 180.0;
     let delta = Vec2::new(
         fround(fround(float::sin(radians)) * source.speed * actor_time_scale),
@@ -65,11 +65,11 @@ pub fn step_native_guided_missile(
         && actor_time_scale != 0.0
     {
         let aim = heading_degrees_from_vector(target.x - position.x, target.y - position.y);
-        let turn = f64::from(native_heading_turn_direction(source.heading_deg, aim));
+        let turn = f64::from(heading_turn_direction(source.heading_deg, aim));
         heading_deg = fround(source.heading_deg + source.turn_rate * actor_time_scale * turn);
     }
-    NativeGuidedMissileStep {
-        state: NativeGuidedMissileState {
+    GuidedMissileStep {
+        state: GuidedMissileState {
             heading_deg,
             position,
             phase_deg: fround(

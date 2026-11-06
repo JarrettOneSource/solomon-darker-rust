@@ -13,9 +13,7 @@ pub mod skill_text;
 
 use crate::economy::{EquipmentSlot, HubEconomyRejection, HubInventoryAction};
 use crate::hud::HudRect;
-use crate::profile::{
-    NativeSkillBookState, NativeSkillDefinition, native_skill_category, native_skill_rule,
-};
+use crate::profile::{SkillBookState, SkillDefinition, skill_category, skill_rule};
 
 pub const INVENTORY_CAPACITY: usize = 88;
 pub const INVENTORY_CELL_SIZE: f64 = 72.0;
@@ -30,7 +28,7 @@ pub struct InventoryRejectionNotice {
 /// authored Hagatha, Shlorio and required-clothing cases open a message box; machine
 /// reason codes are never product copy. The panel fixture retains the source strings.
 #[must_use]
-pub fn native_inventory_rejection_notice(
+pub fn inventory_rejection_notice(
     action: &HubInventoryAction,
     reason: HubEconomyRejection,
 ) -> Option<InventoryRejectionNotice> {
@@ -103,18 +101,16 @@ pub struct SkillBookPagePlacement {
 /// `SkillScreen_BuildPages`: learned roots own pages and their transitive learned
 /// dependents keep acquisition order. Rows wrap at 1590 units and share the widest origin.
 #[must_use]
-pub fn native_skill_book_page_placements(
-    book: &NativeSkillBookState,
-) -> Vec<SkillBookPagePlacement> {
+pub fn skill_book_page_placements(book: &SkillBookState) -> Vec<SkillBookPagePlacement> {
     let mut learned = Vec::new();
     for id in &book.learned_skill_order {
-        if book.permanent_ranks[*id] > 0 && native_skill_category(*id).is_some() {
+        if book.permanent_ranks[*id] > 0 && skill_category(*id).is_some() {
             learned.push(*id);
         }
     }
     let mut pages = Vec::new();
     for root in &learned {
-        let rule = native_skill_rule(*root).expect("learned skill has a rule");
+        let rule = skill_rule(*root).expect("learned skill has a rule");
         if !rule.all.is_empty() || !rule.any.is_empty() {
             continue;
         }
@@ -160,7 +156,7 @@ fn depends_on(id: usize, root: usize, learned: &[usize], seen: &mut [bool; 83]) 
         return false;
     }
     seen[id] = true;
-    let rule = native_skill_rule(id).expect("learned skill has a rule");
+    let rule = skill_rule(id).expect("learned skill has a rule");
     for dependency in rule.all.iter().chain(rule.any) {
         if *dependency == root || depends_on(*dependency, root, learned, seen) {
             return true;
@@ -172,11 +168,7 @@ fn depends_on(id: usize, root: usize, learned: &[usize], seen: &mut [bool; 83]) 
 /// The authored tooltip grammar accepts lower-case format codes and a missing final `%`.
 /// Numeric values come from the existing stat book, including rank-table saturation.
 #[must_use]
-pub fn format_native_skill_tooltip_line(
-    source: &str,
-    definition: &NativeSkillDefinition,
-    rank: u32,
-) -> String {
+pub fn format_skill_tooltip_line(source: &str, definition: &SkillDefinition, rank: u32) -> String {
     let mut result = String::new();
     let mut index = 0;
     while index < source.len() {
@@ -212,7 +204,7 @@ pub fn format_native_skill_tooltip_line(
                     }
                 }
             };
-            result.push_str(&native_tooltip_fixed(value, digits));
+            result.push_str(&tooltip_fixed(value, digits));
             index = end + usize::from(source.as_bytes().get(end) == Some(&b'%'));
         } else {
             let character = rest.chars().next().expect("remaining source is non-empty");
@@ -227,7 +219,7 @@ pub fn format_native_skill_tooltip_line(
 /// ties-to-even. Work from the binary significand so 2.5 becomes 3 while 2.55 remains 2.5
 /// at one decimal. Multiplying the float first would lose that second distinction.
 #[must_use]
-pub fn native_tooltip_fixed(value: f64, digits: u32) -> String {
+pub fn tooltip_fixed(value: f64, digits: u32) -> String {
     assert!(value.is_finite() && digits <= 2, "native tooltip stat range");
     if value.abs() >= 1e21 {
         return ryu_js::Buffer::new().format(value).to_owned();

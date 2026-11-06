@@ -2,8 +2,8 @@
 
 use serde::Deserialize;
 use solomon_sim::Vec2;
-use solomon_sim::screen_flash::{NativeScreenFlashInput, NativeScreenFlashState};
-use solomon_sim::secondary::NativeSecondaryScreenFlashState;
+use solomon_sim::screen_flash::{ScreenFlashInput, ScreenFlashState};
+use solomon_sim::secondary::SecondaryScreenFlashState;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,8 +59,8 @@ struct Flash {
 }
 
 impl Flash {
-    fn state(&self) -> NativeSecondaryScreenFlashState {
-        NativeSecondaryScreenFlashState {
+    fn state(&self) -> SecondaryScreenFlashState {
+        SecondaryScreenFlashState {
             alpha: self.alpha,
             blue: self.blue,
             decay_per_tick: self.decay_per_tick,
@@ -76,14 +76,14 @@ fn current_shared_screen_writes_keep_conditional_and_cross_world_order() {
     let fixture = include_str!("fixtures/website/current-screen-flash-goldens.json");
     let goldens: Goldens = serde_json::from_str(fixture).unwrap();
     assert_eq!(goldens.source_revision, "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
-    let mut state = NativeScreenFlashState::default();
+    let mut state = ScreenFlashState::default();
     for frame in goldens.frames {
         if frame.reset {
             state.reset();
         }
         let mut writer = state.writer(frame.tick);
         for write in frame.writes {
-            writer.write(NativeScreenFlashInput {
+            writer.write(ScreenFlashInput {
                 tick: write.tick,
                 world_key: write.world_key,
                 position: Vec2::new(write.position.x, write.position.y),

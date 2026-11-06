@@ -3,13 +3,13 @@
 
 use std::collections::BTreeMap;
 
-use super::golem::NativeSecondaryGolemState;
+use super::golem::SecondaryGolemState;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeSecondaryActorKind {
+pub enum SecondaryActorKind {
     Leviathan,
     LeviathanAppendage,
     LeviathanMote,
@@ -79,7 +79,7 @@ pub enum NativeSecondaryActorKind {
     TurnUndead,
 }
 
-impl NativeSecondaryActorKind {
+impl SecondaryActorKind {
     pub const ALL: [Self; 67] = [
         Self::Leviathan,
         Self::LeviathanAppendage,
@@ -227,24 +227,24 @@ impl NativeSecondaryActorKind {
 /// One secondary effect actor. Fields follow the save record's order.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeSecondaryActorState {
+pub struct SecondaryActorState {
     pub age_ticks: u64,
     pub alpha: f64,
     pub damage: f64,
     pub enhanced: bool,
     pub endpoint: Vec2,
     /// Ether Drain fills this on its first tick, when it discovers its targets.
-    pub ether_drain: Option<super::ether_drain::NativeEtherDrainState>,
+    pub ether_drain: Option<super::ether_drain::EtherDrainState>,
     pub frame: f64,
     pub freeze_ticks: u64,
     /// Set on Golem summons.
-    pub golem: Option<NativeSecondaryGolemState>,
+    pub golem: Option<SecondaryGolemState>,
     /// Set on Golem deaths.
-    pub golem_death: Option<crate::death_animations::NativeGolemDeathAnimation>,
+    pub golem_death: Option<crate::death_animations::GolemDeathAnimation>,
     /// This source field holds both enemy IDs and parent secondary actor IDs.
     pub hit_target_ids: Vec<u64>,
     pub id: u64,
-    pub kind: NativeSecondaryActorKind,
+    pub kind: SecondaryActorKind,
     pub lifetime_ticks: u64,
     pub light_registration: Option<PainterRegistration>,
     pub midpoint: Vec2,
@@ -253,7 +253,7 @@ pub struct NativeSecondaryActorState {
     pub painter_registrations: Vec<PainterRegistration>,
     pub phase: f64,
     pub position: Vec2,
-    pub presentation_rng: Option<NativeRng>,
+    pub presentation_rng: Option<Rng>,
     pub quantity: f64,
     pub radius: f64,
     pub rank: u32,
@@ -268,12 +268,12 @@ pub struct NativeSecondaryActorState {
     pub world_key: String,
 }
 
-impl NativeSecondaryActorState {
+impl SecondaryActorState {
     /// The exact `actorSeed` defaults; ability constructors overwrite their authored fields.
     #[must_use]
     pub fn new(
         id: u64,
-        kind: NativeSecondaryActorKind,
+        kind: SecondaryActorKind,
         owner_id: String,
         world_key: String,
         skill_id: Option<usize>,
@@ -317,7 +317,7 @@ impl NativeSecondaryActorState {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSecondaryTarget {
+pub struct SecondaryTarget {
     pub family: String,
     pub id: usize,
     pub light_registration: PainterRegistration,
@@ -330,7 +330,7 @@ pub struct NativeSecondaryTarget {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSecondaryDamageKind {
+pub enum SecondaryDamageKind {
     Acid,
     Fire,
     Ice,
@@ -340,41 +340,41 @@ pub enum NativeSecondaryDamageKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeSecondaryDamageContact {
+pub struct SecondaryDamageContact {
     pub amount: f64,
     pub ether_drain: bool,
     pub hit_strength: Option<f64>,
-    pub kind: NativeSecondaryDamageKind,
+    pub kind: SecondaryDamageKind,
     pub owner_id: String,
     pub source_actor_id: u64,
-    pub special_death_payload: Option<crate::spells::special_death::NativeSpellSpecialDeathPayload>,
+    pub special_death_payload: Option<crate::spells::special_death::SpellSpecialDeathPayload>,
     pub suppress_hit_reaction: bool,
     pub suppress_hurt_sound: bool,
     pub target_id: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryKnockbackContact {
+pub struct SecondaryKnockbackContact {
     pub delta: Vec2,
     pub source_actor_id: u64,
     pub target_id: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeSecondaryTargetHeadingChange {
+pub struct SecondaryTargetHeadingChange {
     pub degrees: f64,
-    pub mode: NativeSecondaryHeadingMode,
+    pub mode: SecondaryHeadingMode,
     pub target_id: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSecondaryHeadingMode {
+pub enum SecondaryHeadingMode {
     Absolute,
     Relative,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeSecondaryLightDisposition {
+pub enum SecondaryLightDisposition {
     ActorProvider,
     Misc,
     None,
@@ -382,24 +382,22 @@ pub enum NativeSecondaryLightDisposition {
 }
 
 #[must_use]
-pub fn native_secondary_light_disposition(
-    actor: &NativeSecondaryActorState,
-) -> NativeSecondaryLightDisposition {
-    use NativeSecondaryActorKind::*;
+pub fn secondary_light_disposition(actor: &SecondaryActorState) -> SecondaryLightDisposition {
+    use SecondaryActorKind::*;
     match actor.kind {
         Leviathan | EtherBolt | MovingFire | Shockwave | MindblastShockwave | RescueShockwave
         | FirePatch | RingFireFragment | StormCloud | FreezeWave | Golem | MagicTrap | AcidRain
-        | EtherDrain | Comet => NativeSecondaryLightDisposition::ActorProvider,
-        RingFireExplosion | ElectricBurnFlare => NativeSecondaryLightDisposition::TransientProvider,
-        EtherFade if actor.variant == 1 => NativeSecondaryLightDisposition::TransientProvider,
-        MagicCircle | FireBurn | EtherBurn | ElectricBurn => NativeSecondaryLightDisposition::Misc,
-        _ => NativeSecondaryLightDisposition::None,
+        | EtherDrain | Comet => SecondaryLightDisposition::ActorProvider,
+        RingFireExplosion | ElectricBurnFlare => SecondaryLightDisposition::TransientProvider,
+        EtherFade if actor.variant == 1 => SecondaryLightDisposition::TransientProvider,
+        MagicCircle | FireBurn | EtherBurn | ElectricBurn => SecondaryLightDisposition::Misc,
+        _ => SecondaryLightDisposition::None,
     }
 }
 
 #[must_use]
-pub fn native_secondary_painter_manager_lane(kind: NativeSecondaryActorKind) -> WorldManagerLane {
-    use NativeSecondaryActorKind::*;
+pub fn secondary_painter_manager_lane(kind: SecondaryActorKind) -> WorldManagerLane {
+    use SecondaryActorKind::*;
     match kind {
         Leviathan | LeviathanAppendage | MovingFire | FirePatch | StormCloud | StormStrike
         | Earthquake | Golem | GolemDeath | GolemAssemblyDebris | ElectricBurnArc | AcidRain
@@ -408,14 +406,14 @@ pub fn native_secondary_painter_manager_lane(kind: NativeSecondaryActorKind) -> 
     }
 }
 
-pub fn enroll_native_secondary_painter_owners<'a>(
-    actors: impl IntoIterator<Item = &'a mut NativeSecondaryActorState>,
+pub fn enroll_secondary_painter_owners<'a>(
+    actors: impl IntoIterator<Item = &'a mut SecondaryActorState>,
     order: &mut WorldPainterOrder,
 ) {
     for actor in actors {
-        let lane = native_secondary_painter_manager_lane(actor.kind);
-        let count = if actor.kind == NativeSecondaryActorKind::GolemDeath {
-            crate::death_animations::NATIVE_GOLEM_DEATH_PAINTER_COUNT
+        let lane = secondary_painter_manager_lane(actor.kind);
+        let count = if actor.kind == SecondaryActorKind::GolemDeath {
+            crate::death_animations::GOLEM_DEATH_PAINTER_COUNT
         } else {
             1
         };
@@ -437,28 +435,28 @@ pub fn enroll_native_secondary_painter_owners<'a>(
     }
 }
 
-pub fn enroll_native_secondary_light_owners(
-    actors: &mut [super::NativeSecondaryActorState],
+pub fn enroll_secondary_light_owners(
+    actors: &mut [super::SecondaryActorState],
     order: Option<&mut WorldPainterOrder>,
     target_light: impl Fn(&str, usize) -> Option<PainterRegistration>,
 ) {
     let mut retained_order = retained_world_manager_order(actors);
     let order = order.unwrap_or(&mut retained_order);
     // Source registers every painter first, then allocates any extra light-only owners.
-    enroll_native_secondary_painter_owners(actors.iter_mut(), order);
+    enroll_secondary_painter_owners(actors.iter_mut(), order);
     let mut next_modifier_ordinal: BTreeMap<(String, usize), usize> = BTreeMap::new();
     for actor in actors.iter_mut() {
-        let disposition = native_secondary_light_disposition(actor);
-        if disposition == NativeSecondaryLightDisposition::None {
+        let disposition = secondary_light_disposition(actor);
+        if disposition == SecondaryLightDisposition::None {
             actor.light_registration = None;
             actor.misc_light_append_ordinal = None;
             continue;
         }
         if matches!(
             actor.kind,
-            NativeSecondaryActorKind::FireBurn
-                | NativeSecondaryActorKind::EtherBurn
-                | NativeSecondaryActorKind::ElectricBurn
+            SecondaryActorKind::FireBurn
+                | SecondaryActorKind::EtherBurn
+                | SecondaryActorKind::ElectricBurn
         ) {
             let target_id = actor
                 .target_id
@@ -474,7 +472,7 @@ pub fn enroll_native_secondary_light_owners(
             *ordinal += 1;
             continue;
         }
-        let expected_lane = if disposition == NativeSecondaryLightDisposition::TransientProvider {
+        let expected_lane = if disposition == SecondaryLightDisposition::TransientProvider {
             WorldManagerLane::Transient
         } else {
             WorldManagerLane::Actor
@@ -492,11 +490,11 @@ pub fn enroll_native_secondary_light_owners(
         );
         actor.light_registration = Some(registration);
         actor.misc_light_append_ordinal =
-            if disposition == NativeSecondaryLightDisposition::Misc { Some(0) } else { None };
+            if disposition == SecondaryLightDisposition::Misc { Some(0) } else { None };
     }
 }
 
-fn retained_world_manager_order(actors: &[NativeSecondaryActorState]) -> WorldPainterOrder {
+fn retained_world_manager_order(actors: &[SecondaryActorState]) -> WorldPainterOrder {
     let mut order = WorldPainterOrder::default();
     for actor in actors {
         for registration in

@@ -3,7 +3,7 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::hud::belt_pull_off::{
-    NativeBeltPullOffStep, native_belt_pull_off_burst_members, native_belt_pull_off_started,
+    BeltPullOffStep, belt_pull_off_burst_members, belt_pull_off_started,
 };
 
 fn number(value: &Value) -> f64 {
@@ -27,7 +27,7 @@ fn belt_pull_off_threshold_random_order_and_every_member_match_current_source() 
         serde_json::from_str(include_str!("fixtures/website/belt-pull-off-goldens.json")).unwrap();
     for case in fixture["threshold"].as_array().unwrap() {
         assert_eq!(
-            native_belt_pull_off_started(point(&case["origin"]), point(&case["current"])),
+            belt_pull_off_started(point(&case["origin"]), point(&case["current"])),
             case["expected"].as_bool().unwrap(),
             "{case}",
         );
@@ -41,11 +41,11 @@ fn belt_pull_off_threshold_random_order_and_every_member_match_current_source() 
             value
         };
         let step = match case["step"].as_u64().unwrap() {
-            90 => NativeBeltPullOffStep::Degrees90,
-            120 => NativeBeltPullOffStep::Degrees120,
+            90 => BeltPullOffStep::Degrees90,
+            120 => BeltPullOffStep::Degrees120,
             other => panic!("Source branch {other}"),
         };
-        let members = native_belt_pull_off_burst_members(step, &mut random);
+        let members = belt_pull_off_burst_members(step, &mut random);
         assert_eq!(draws, case["draws"].as_u64().unwrap() as usize);
         let expected = case["members"].as_array().unwrap();
         assert_eq!(members.len(), expected.len());

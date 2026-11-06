@@ -2,15 +2,14 @@
 //! receiver contacts run here, before the caller resumes its native factory.
 use super::*;
 use crate::spells::fire::{
-    NativeFireProjectilePayload, begin_native_fire_detonation, native_fire_ember_contact,
-    step_native_fire_ember,
+    FireProjectilePayload, begin_fire_detonation, fire_ember_contact, step_fire_ember,
 };
-use crate::spells::special_death::{NativeSpellSpecialDeathKind, NativeSpellSpecialDeathPayload};
+use crate::spells::special_death::{SpellSpecialDeathKind, SpellSpecialDeathPayload};
 
 impl ContactWork<'_, '_> {
     pub(super) fn resolve_special_death_payload(
         &mut self,
-        payload: NativeSpellSpecialDeathPayload,
+        payload: SpellSpecialDeathPayload,
         victim_id: usize,
         origin: Vec2,
         owner_id: &str,
@@ -21,13 +20,13 @@ impl ContactWork<'_, '_> {
         }) {
             return;
         }
-        if payload.kind == NativeSpellSpecialDeathKind::Steam {
+        if payload.kind == SpellSpecialDeathKind::Steam {
             if payload.explode_radius <= 0.0 {
                 return;
             }
             let explosion_id = self.next_id;
-            let detonation = create_native_weld_steam_detonation(
-                NativeWeldSteamDetonationInput {
+            let detonation = create_weld_steam_detonation(
+                WeldSteamDetonationInput {
                     explode_damage: payload.explode_damage,
                     explode_radius: payload.explode_radius,
                     first_fragment_id: explosion_id + 1,
@@ -53,7 +52,7 @@ impl ContactWork<'_, '_> {
             }
             self.next_id = detonation.next_id;
             for fragment in detonation.fragments {
-                let actor = self.enroll_weld_combat_actor(NativeWeldWorldActor::Steam(fragment));
+                let actor = self.enroll_weld_combat_actor(WeldWorldActor::Steam(fragment));
                 self.owned_transients.push(actor);
             }
             return;
@@ -65,16 +64,16 @@ impl ContactWork<'_, '_> {
         let first_ember_id = explosion_id + u64::from(payload.explode_radius > 0.0);
         // Contact impacts can allocate IDs inside an Ember's ten pre-ticks.
         self.next_id = first_ember_id + u64::from(payload.ember_fragments);
-        let mut birth = begin_native_fire_detonation(
+        let mut birth = begin_fire_detonation(
             first_ember_id,
-            NativeFireProjectilePayload {
+            FireProjectilePayload {
                 burn_damage: 0.0,
                 ember_damage: payload.ember_damage,
                 ember_fragments: payload.ember_fragments,
                 explode_damage: payload.explode_damage,
                 explode_radius: payload.explode_radius,
                 private_seed: payload.private_seed as i32,
-                spent_ember: crate::profile::primary::NativeSpentEmber::None,
+                spent_ember: crate::profile::primary::SpentEmber::None,
             },
             origin,
             owner_id,
@@ -93,12 +92,12 @@ impl ContactWork<'_, '_> {
             let mut consumed = false;
             for _ in 0..10 {
                 assert!(
-                    step_native_fire_ember(&mut ember).retained,
+                    step_fire_ember(&mut ember).retained,
                     "newborn Ember survives its ten native pre-ticks"
                 );
                 if ember.contact_due {
                     self.resolve_fire_actor_contacts(vec![FireActorContact::Ember(
-                        native_fire_ember_contact(&ember),
+                        fire_ember_contact(&ember),
                     )]);
                     consumed = self.consumed_transients.contains(&ember.common.id);
                     if consumed {

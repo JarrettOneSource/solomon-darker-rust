@@ -5,19 +5,19 @@ mod stat_book;
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{
-    DOWSING_EQUIPMENT_RECIPES, EquipmentType, HubEconomyState, NativeEquipmentEffect,
+    DOWSING_EQUIPMENT_RECIPES, EquipmentEffect, EquipmentType, HubEconomyState,
     create_equipment_inventory_item,
 };
-use solomon_sim::equipment::{NativeEquipmentModifiers, NativeEquipmentScalarTransform};
-use solomon_sim::profile::primary::native_primary_spell_summary_with_stat_book;
+use solomon_sim::equipment::{EquipmentModifiers, EquipmentScalarTransform};
+use solomon_sim::profile::primary::primary_spell_summary_with_stat_book;
 use solomon_sim::profile::*;
-use solomon_sim::{NativeRng, combat::PlayerCombatState};
+use solomon_sim::{Rng, combat::PlayerCombatState};
 
-fn transform(value: NativeEquipmentScalarTransform) -> Value {
+fn transform(value: EquipmentScalarTransform) -> Value {
     json!({"offset":value.offset,"scale":value.scale})
 }
 
-fn modifiers(value: &NativeEquipmentModifiers) -> Value {
+fn modifiers(value: &EquipmentModifiers) -> Value {
     json!({
         "castSpeedFlat":value.cast_speed_flat,"castSpeedMultiplier":value.cast_speed_multiplier,
         "classCastSpeedFlat":value.class_cast_speed_flat,"classCastSpeedMultiplier":value.class_cast_speed_multiplier,
@@ -58,14 +58,14 @@ fn assert_snapshot(actual: &Value, expected: &Value, path: &str) {
     }
 }
 
-fn book_snapshot(value: &NativeSkillBookState) -> Value {
+fn book_snapshot(value: &SkillBookState) -> Value {
     json!({"advancedUnlocks":value.advanced_unlocks,"disciplineRoot":value.discipline_root,
         "effectiveRanks":&value.effective_ranks[..],"elementRoot":value.element_root,
         "learnedSkillOrder":value.learned_skill_order,"permanentRanks":&value.permanent_ranks[..],
         "primarySkillId":value.primary_skill_id,"weldBuildId":value.weld_build_id,"weldComponentRanks":value.weld_component_ranks})
 }
 
-fn rng_snapshot(rng: &NativeRng) -> Value {
+fn rng_snapshot(rng: &Rng) -> Value {
     json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":&rng.words[..]})
 }
 
@@ -131,7 +131,7 @@ fn derived_snapshot(value: &PlayerSkillDerivedStats) -> Value {
 
 fn setup(
     value: &Value,
-) -> (NativeSkillBookState, HubEconomyState, PlayerSkillRuntimeState, PlayerProgressionState) {
+) -> (SkillBookState, HubEconomyState, PlayerSkillRuntimeState, PlayerProgressionState) {
     let element = WizardElement::ALL
         .into_iter()
         .find(|element| Some(element.as_str()) == value["element"].as_str())
@@ -140,7 +140,7 @@ fn setup(
         .into_iter()
         .find(|discipline| Some(discipline.as_str()) == value["discipline"].as_str())
         .unwrap();
-    let mut book = NativeSkillBookState::new(element, discipline);
+    let mut book = SkillBookState::new(element, discipline);
     if let Some(id) = value["weldBuild"].as_u64() {
         book.grant_weld_build(id as u32);
     }
@@ -171,7 +171,7 @@ fn setup(
     if let Some(effects) = value["effects"].as_array() {
         let mut configured = Vec::new();
         for effect in effects {
-            configured.push(NativeEquipmentEffect {
+            configured.push(EquipmentEffect {
                 kind: effect["kind"].as_u64().unwrap() as u32,
                 magnitude: effect["magnitude"].as_f64().unwrap(),
                 operator: effect["operator"].as_u64().unwrap() as u32,
@@ -204,7 +204,7 @@ fn setup(
 }
 fn verify_derived(
     runtime: &PlayerSkillRuntimeState,
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     progression: &PlayerProgressionState,
     economy: &HubEconomyState,
     expected: &Value,
@@ -223,11 +223,8 @@ fn verify_derived(
         &expected["vitals"],
         context,
     );
-    let primary = native_primary_spell_summary_with_stat_book(
-        book,
-        &stat_book,
-        &derived.offensive_factors(runtime),
-    );
+    let primary =
+        primary_spell_summary_with_stat_book(book, &stat_book, &derived.offensive_factors(runtime));
     assert_snapshot(
         &json!({"damageMinimum":primary.damage_minimum,"damageMaximum":primary.damage_maximum,"manaCost":primary.mana_cost}),
         &expected["primary"],
@@ -257,7 +254,7 @@ fn player_equipment_concentrations_resources_and_live_recovery_replay_the_websit
     }
     for journey in fixture["selectionJourneys"].as_array().unwrap() {
         let (mut book, economy, mut runtime, progression) = setup(&journey["initial"]["setup"]);
-        let mut rng = NativeRng::new(77);
+        let mut rng = Rng::new(77);
         assert_snapshot(
             &runtime_snapshot(&runtime),
             &journey["initial"]["runtime"],
@@ -412,7 +409,7 @@ fn staff_proc_damage_and_creativity_insight_preserve_native_rng_and_rank_gates()
         let (book, economy, runtime, progression) = setup(&case["setup"]);
         let mut derived = player_skill_derived_stats(&runtime, &book, &progression, &economy);
         derived.flailing_chance_percent = case["chance"].as_f64().unwrap();
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let actual = resolve_player_staff_attack(&derived, &mut rng);
         assert_eq!(actual.outcome, staff_outcome(case["result"]["outcome"].as_str().unwrap()));
         assert_eq!(
@@ -436,7 +433,7 @@ fn staff_proc_damage_and_creativity_insight_preserve_native_rng_and_rank_gates()
     for case in fixture["insightCases"].as_array().unwrap() {
         let (book, _economy, runtime, _progression) = setup(&case["setup"]);
         let mut offer = offer(&case["offer"]);
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let stat_book = stat_book::read(case.get("statBook"));
         runtime.mark_creativity_insight_with_stat_book(&mut offer, &book, &stat_book, &mut rng);
         assert_snapshot(
@@ -455,7 +452,7 @@ fn temporary_skills_retain_visible_order_across_provider_and_permanent_changes()
             .unwrap();
     for journey in fixture["equipmentJourneys"].as_array().unwrap() {
         let (mut book, mut economy, mut runtime, _) = setup(&journey["initial"]["setup"]);
-        let mut rng = NativeRng::new(9);
+        let mut rng = Rng::new(9);
         for (index, record) in journey["records"].as_array().unwrap().iter().enumerate() {
             let action = &record["action"];
             let mut increased = None;
@@ -463,7 +460,7 @@ fn temporary_skills_retain_visible_order_across_provider_and_permanent_changes()
                 "equipment" => {
                     let mut effects = Vec::new();
                     for effect in action["effects"].as_array().unwrap() {
-                        effects.push(NativeEquipmentEffect {
+                        effects.push(EquipmentEffect {
                             kind: effect["kind"].as_u64().unwrap() as u32,
                             magnitude: effect["magnitude"].as_f64().unwrap(),
                             operator: effect["operator"].as_u64().unwrap() as u32,

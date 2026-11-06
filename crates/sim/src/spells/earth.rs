@@ -19,10 +19,10 @@ use crate::float::{fround, hypot, hypot3};
 
 pub const EARTH_BOULDER_IDENTITY_ORIENTATION: EarthBoulderOrientation =
     [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
-pub const NATIVE_EARTH_BOULDER_TRAVERSAL_POOL_THRESHOLD: f64 = 0.001;
+pub const EARTH_BOULDER_TRAVERSAL_POOL_THRESHOLD: f64 = 0.001;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEarthBoulderContactInput {
+pub struct EarthBoulderContactInput {
     pub release_base_damage: f64,
     pub release_charge: f64,
     pub remaining_pool: f64,
@@ -30,7 +30,7 @@ pub struct NativeEarthBoulderContactInput {
     pub toughness: f64,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEarthBoulderContactResult {
+pub struct EarthBoulderContactResult {
     pub charge: f64,
     pub continue_traversal: bool,
     pub damage: f64,
@@ -45,7 +45,7 @@ pub struct EarthBoulderVector3 {
 }
 
 #[must_use]
-pub fn advance_native_earth_boulder_charge(
+pub fn advance_earth_boulder_charge(
     charge: f64,
     growth_factor: f64,
     maximum_charge: f64,
@@ -60,11 +60,7 @@ pub fn advance_native_earth_boulder_charge(
 }
 
 #[must_use]
-pub fn native_earth_boulder_released_damage(
-    base_damage: f64,
-    charge: f64,
-    release_factor: f64,
-) -> f64 {
+pub fn earth_boulder_released_damage(base_damage: f64, charge: f64, release_factor: f64) -> f64 {
     require_nonnegative(base_damage);
     require_nonnegative(charge);
     assert!(
@@ -78,9 +74,7 @@ pub fn native_earth_boulder_released_damage(
 }
 
 #[must_use]
-pub fn consume_native_earth_boulder_contact(
-    input: NativeEarthBoulderContactInput,
-) -> NativeEarthBoulderContactResult {
+pub fn consume_earth_boulder_contact(input: EarthBoulderContactInput) -> EarthBoulderContactResult {
     for value in [
         input.release_base_damage,
         input.release_charge,
@@ -107,9 +101,9 @@ pub fn consume_native_earth_boulder_contact(
     } else {
         fround(input.release_charge.min(diminished_charge)).min(input.release_charge)
     };
-    NativeEarthBoulderContactResult {
+    EarthBoulderContactResult {
         charge,
-        continue_traversal: remaining_pool > NATIVE_EARTH_BOULDER_TRAVERSAL_POOL_THRESHOLD,
+        continue_traversal: remaining_pool > EARTH_BOULDER_TRAVERSAL_POOL_THRESHOLD,
         damage,
         depleted: remaining_pool <= 0.0,
         remaining_pool,
@@ -117,7 +111,7 @@ pub fn consume_native_earth_boulder_contact(
 }
 
 #[must_use]
-pub fn native_percent_roll_succeeds(chance_percent: f64, draw_percent: f64) -> bool {
+pub fn percent_roll_succeeds(chance_percent: f64, draw_percent: f64) -> bool {
     assert!(
         (0.0..=100.0).contains(&chance_percent) && (0.0..=100.0).contains(&draw_percent),
         "native percentages lie in zero through one hundred"
@@ -126,14 +120,14 @@ pub fn native_percent_roll_succeeds(chance_percent: f64, draw_percent: f64) -> b
 }
 
 #[must_use]
-pub fn native_earth_boulder_rock_hit_pitch(charge: f64) -> f64 {
+pub fn earth_boulder_rock_hit_pitch(charge: f64) -> f64 {
     require_nonnegative(charge);
     assert!(charge > 0.0, "Boulder terminal charge is positive");
     fround(1.0 + 0.05 / charge)
 }
 
 #[must_use]
-pub fn native_earth_boulder_stone_break_pitch(charge: f64) -> f64 {
+pub fn earth_boulder_stone_break_pitch(charge: f64) -> f64 {
     require_nonnegative(charge);
     fround(1.0 - charge * 0.5)
 }

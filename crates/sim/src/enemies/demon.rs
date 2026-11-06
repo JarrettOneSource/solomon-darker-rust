@@ -7,7 +7,7 @@ use super::movement::{move_toward_target, positive_modulo, staff_attack_speed};
 use super::path::{RadialDirection, TangentDirection};
 use super::projectile_emission::{SpawnEnemyProjectileOptions, spawn_projectile};
 use super::projectiles::EnemyProjectileKind;
-use super::ranged::native_enemy_projectile_velocity;
+use super::ranged::enemy_projectile_velocity;
 use super::targeting::target_within_attack_reach;
 use super::world::{EnemyStepContext, EnemyWorld};
 use crate::Vec2;
@@ -112,7 +112,7 @@ pub fn step_demon(
             let root = demon_articulation_root(&brain.articulation);
             let bearing =
                 positive_modulo(((actor.heading_deg + 10.0) / 20.0).round_ties_even(), 18.0) * 20.0;
-            let forward = native_enemy_projectile_velocity(bearing, 35.0);
+            let forward = enemy_projectile_velocity(bearing, 35.0);
             let position = Vec2::new(fround(root.x + forward.x), fround(root.y + forward.y));
             spawn_projectile(
                 world,

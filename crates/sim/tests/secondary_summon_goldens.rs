@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use solomon_sim::secondary::golem::*;
 use solomon_sim::secondary::leviathan::*;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 
 fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
@@ -11,7 +11,7 @@ fn point(value: &Value) -> Vec2 {
 fn point_snapshot(point: Vec2) -> Value {
     json!({"x":point.x,"y":point.y})
 }
-fn rng_snapshot(rng: &NativeRng) -> Value {
+fn rng_snapshot(rng: &Rng) -> Value {
     json!({"indexA":rng.index_a,"indexB":rng.index_b,"words":&rng.words[..]})
 }
 fn assert_snapshot(actual: &Value, expected: &Value, path: &str) {
@@ -51,8 +51,8 @@ fn leviathan_births_appendages_muzzles_and_active_lane_replay_the_website() {
         serde_json::from_str(include_str!("fixtures/website/secondary-summon-goldens.json"))
             .unwrap();
     for case in fixture["births"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let birth = create_native_leviathan_birth(
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let birth = create_leviathan_birth(
             &mut rng,
             case["maximum"].as_f64().unwrap(),
             case["forced"].as_bool().unwrap(),
@@ -76,39 +76,36 @@ fn leviathan_births_appendages_muzzles_and_active_lane_replay_the_website() {
     for case in fixture["scales"].as_array().unwrap() {
         let age = case["age"].as_u64().unwrap();
         assert_eq!(
-            native_leviathan_current_scale(age),
+            leviathan_current_scale(age),
             case["scale"].as_f64().unwrap(),
             "scale age {age}"
         );
-        assert_eq!(u64::from(native_leviathan_phase(age)), case["phase"].as_u64().unwrap());
-        assert_eq!(native_leviathan_active(age), case["active"].as_bool().unwrap());
+        assert_eq!(u64::from(leviathan_phase(age)), case["phase"].as_u64().unwrap());
+        assert_eq!(leviathan_active(age), case["active"].as_bool().unwrap());
     }
     for case in fixture["geometry"].as_array().unwrap() {
         let heading = case["heading"].as_f64().unwrap();
         let bank = case["bank"].as_u64().unwrap() as u32;
         let parent = point(&case["parent"]);
-        let local = native_leviathan_appendage_local_root(
+        let local = leviathan_appendage_local_root(
             point(&case["base"]),
             point(&case["recoil"]),
             heading,
             case["deployment"].as_f64().unwrap(),
         );
         assert_snapshot(
-            &point_snapshot(native_leviathan_heading_vector(heading)),
+            &point_snapshot(leviathan_heading_vector(heading)),
             &case["vector"],
             "heading vector",
         );
+        assert_eq!(leviathan_direction_frame(heading) as u64, case["frame"].as_u64().unwrap());
         assert_eq!(
-            native_leviathan_direction_frame(heading) as u64,
-            case["frame"].as_u64().unwrap()
-        );
-        assert_eq!(
-            native_leviathan_appendage_record(bank, heading) as u64,
+            leviathan_appendage_record(bank, heading) as u64,
             case["record"].as_u64().unwrap()
         );
         assert_snapshot(&point_snapshot(local), &case["local"], "appendage local");
         assert_snapshot(
-            &point_snapshot(native_leviathan_appendage_presentation_root(
+            &point_snapshot(leviathan_appendage_presentation_root(
                 parent,
                 case["compositeScale"].as_f64().unwrap(),
                 local,
@@ -117,7 +114,7 @@ fn leviathan_births_appendages_muzzles_and_active_lane_replay_the_website() {
             "appendage presentation",
         );
         assert_snapshot(
-            &point_snapshot(native_leviathan_muzzle_position(
+            &point_snapshot(leviathan_muzzle_position(
                 parent,
                 local,
                 bank,
@@ -132,12 +129,12 @@ fn leviathan_births_appendages_muzzles_and_active_lane_replay_the_website() {
         let origin = point(&case["origin"]);
         let target = point(&case["target"]);
         assert_snapshot(
-            &json!(native_leviathan_heading_degrees(origin, target)),
+            &json!(leviathan_heading_degrees(origin, target)),
             &case["headingToTarget"],
             "headingToTarget",
         );
         assert_eq!(
-            native_leviathan_inside_target_lane(origin, case["heading"].as_f64().unwrap(), target),
+            leviathan_inside_target_lane(origin, case["heading"].as_f64().unwrap(), target),
             case["inside"].as_bool().unwrap(),
             "{case}"
         );
@@ -156,15 +153,15 @@ impl NativeGolemWorld for World {
         if self.wall && requested.x > 120.0 { current } else { requested }
     }
 }
-fn read_actor(value: &Value, wall: bool) -> NativeGolemKernelActor {
+fn read_actor(value: &Value, wall: bool) -> GolemKernelActor {
     let state = &value["golem"];
     let position = point(&value["position"]);
     let rotation = value["rotationRadians"].as_f64().unwrap();
     let mut world = World { wall, origin: position };
-    let mut golem = NativeSecondaryGolemState::new(
+    let mut golem = SecondaryGolemState::new(
         position,
         rotation,
-        NativeGolemBirthStats {
+        GolemBirthStats {
             health: state["maximumHealth"].as_f64().unwrap(),
             damage_maximum: state["damageMaximum"].as_f64().unwrap(),
             iron: state["iron"].as_bool().unwrap(),
@@ -183,15 +180,15 @@ fn read_actor(value: &Value, wall: bool) -> NativeGolemKernelActor {
     golem.orbit_direction = state["orbitDirection"].as_f64().unwrap();
     golem.orbit_heading_radians = state["orbitHeadingRadians"].as_f64();
     golem.phase = match state["phase"].as_str().unwrap() {
-        "active" => NativeGolemPhase::Active,
-        "assembly" => NativeGolemPhase::Assembly,
-        "attack" => NativeGolemPhase::Attack,
-        "provoke" => NativeGolemPhase::Provoke,
+        "active" => GolemPhase::Active,
+        "assembly" => GolemPhase::Assembly,
+        "attack" => GolemPhase::Attack,
+        "provoke" => GolemPhase::Provoke,
         other => panic!("unknown Golem phase {other}"),
     };
     golem.provoke_roll_bound = state["provokeRollBound"].as_i64().unwrap() as i32;
     golem.target_poll_ticks_remaining = state["targetPollTicksRemaining"].as_i64().unwrap() as i32;
-    NativeGolemKernelActor {
+    GolemKernelActor {
         age_ticks: value["ageTicks"].as_u64().unwrap(),
         damage_minimum: value["damageMinimum"].as_f64().unwrap(),
         golem,
@@ -202,13 +199,13 @@ fn read_actor(value: &Value, wall: bool) -> NativeGolemKernelActor {
         target_id: value["targetId"].as_u64().map(|id| id as usize),
     }
 }
-fn actor_snapshot(actor: &NativeGolemKernelActor) -> Value {
+fn actor_snapshot(actor: &GolemKernelActor) -> Value {
     let golem = actor.golem;
     let phase = match golem.phase {
-        NativeGolemPhase::Active => "active",
-        NativeGolemPhase::Assembly => "assembly",
-        NativeGolemPhase::Attack => "attack",
-        NativeGolemPhase::Provoke => "provoke",
+        GolemPhase::Active => "active",
+        GolemPhase::Assembly => "assembly",
+        GolemPhase::Attack => "attack",
+        GolemPhase::Provoke => "provoke",
     };
     json!({"ageTicks":actor.age_ticks,"damageMinimum":actor.damage_minimum,"id":actor.id,"ownerId":actor.owner_id,
     "position":point_snapshot(actor.position),"rotationRadians":actor.rotation_radians,"targetId":actor.target_id,
@@ -243,9 +240,9 @@ fn golem_assembly_orbit_contacts_articulation_and_damage_replay_the_website() {
     for case in fixture["damages"].as_array().unwrap() {
         let actor = read_actor(&case["actor"], false);
         let damage = &case["damage"];
-        let result = damage_native_secondary_golem(
+        let result = damage_secondary_golem(
             actor,
-            NativeGolemIncomingDamage {
+            GolemIncomingDamage {
                 primary_damage: damage["primaryDamage"].as_f64().unwrap(),
                 secondary_damage: damage["secondaryDamage"].as_f64().unwrap(),
                 reflectable_physical_source_in_range: damage["reflectablePhysicalSourceInRange"]
@@ -261,12 +258,9 @@ fn golem_assembly_orbit_contacts_articulation_and_damage_replay_the_website() {
         );
     }
     for case in fixture["deathRng"].as_array().unwrap() {
-        let mut rng = NativeRng::new(case["seed"].as_i64().unwrap());
-        let _ = solomon_sim::death_animations::create_native_golem_death_animation(
-            &mut rng,
-            Vec2::ZERO,
-            true,
-        );
+        let mut rng = Rng::new(case["seed"].as_i64().unwrap());
+        let _ =
+            solomon_sim::death_animations::create_golem_death_animation(&mut rng, Vec2::ZERO, true);
         assert_snapshot(&rng_snapshot(&rng), &case["result"], "Golem death stream");
     }
 }
@@ -275,20 +269,20 @@ fn golem_assembly_orbit_contacts_articulation_and_damage_replay_the_website() {
 fn every_secondary_actor_preserves_native_painter_and_light_disposition() {
     use solomon_sim::painter::{WorldManagerLane, WorldPainterOrder};
     use solomon_sim::secondary::{
-        NativeSecondaryActorKind, NativeSecondaryActorState, NativeSecondaryLightDisposition,
-        enroll_native_secondary_painter_owners, native_secondary_light_disposition,
-        native_secondary_painter_manager_lane,
+        SecondaryActorKind, SecondaryActorState, SecondaryLightDisposition,
+        enroll_secondary_painter_owners, secondary_light_disposition,
+        secondary_painter_manager_lane,
     };
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/secondary-summon-goldens.json"))
             .unwrap();
     let mut actors = Vec::new();
     for case in fixture["painterCases"].as_array().unwrap() {
-        let kind = NativeSecondaryActorKind::ALL
+        let kind = SecondaryActorKind::ALL
             .into_iter()
             .find(|kind| Some(kind.as_str()) == case["kind"].as_str())
             .unwrap();
-        let mut actor = NativeSecondaryActorState::new(
+        let mut actor = SecondaryActorState::new(
             case["id"].as_u64().unwrap(),
             kind,
             "player".to_owned(),
@@ -299,18 +293,18 @@ fn every_secondary_actor_preserves_native_painter_and_light_disposition() {
         actors.push(actor);
     }
     let mut order = WorldPainterOrder { next_actor_ordinal: 49, next_transient_ordinal: 10 };
-    enroll_native_secondary_painter_owners(actors.iter_mut(), &mut order);
+    enroll_secondary_painter_owners(actors.iter_mut(), &mut order);
     for (actor, case) in actors.iter().zip(fixture["painterCases"].as_array().unwrap()) {
-        let lane = match native_secondary_painter_manager_lane(actor.kind) {
+        let lane = match secondary_painter_manager_lane(actor.kind) {
             WorldManagerLane::Actor => "actor",
             WorldManagerLane::Transient => "transient",
         };
         assert_eq!(Some(lane), case["lane"].as_str());
-        let disposition = match native_secondary_light_disposition(actor) {
-            NativeSecondaryLightDisposition::ActorProvider => "actor-provider",
-            NativeSecondaryLightDisposition::Misc => "misc",
-            NativeSecondaryLightDisposition::None => "none",
-            NativeSecondaryLightDisposition::TransientProvider => "transient-provider",
+        let disposition = match secondary_light_disposition(actor) {
+            SecondaryLightDisposition::ActorProvider => "actor-provider",
+            SecondaryLightDisposition::Misc => "misc",
+            SecondaryLightDisposition::None => "none",
+            SecondaryLightDisposition::TransientProvider => "transient-provider",
         };
         assert_eq!(Some(disposition), case["disposition"].as_str());
         let registration = actor.painter_registrations[0];
@@ -322,7 +316,7 @@ fn every_secondary_actor_preserves_native_painter_and_light_disposition() {
     }
     let snapshot = |order: WorldPainterOrder| json!({"nextRegistrationOrdinal":{"actor":order.next_actor_ordinal,"transient":order.next_transient_ordinal}});
     assert_snapshot(&snapshot(order), &fixture["nextPainterOrder"], "secondary manager order");
-    enroll_native_secondary_painter_owners(actors.iter_mut(), &mut order);
+    enroll_secondary_painter_owners(actors.iter_mut(), &mut order);
     assert_snapshot(
         &snapshot(order),
         &fixture["repeatedPainterOrder"],
@@ -338,14 +332,14 @@ fn replay_golem_journeys(fixture: &Value) {
         assert_snapshot(&actor_snapshot(&actor), &journey["initial"], "initial Golem");
         let mut world =
             World { wall: journey["mode"].as_str() == Some("wall"), origin: actor.position };
-        let mut rng = NativeRng::new(journey["seed"].as_i64().unwrap());
+        let mut rng = Rng::new(journey["seed"].as_i64().unwrap());
         let mut samples = journey["records"].as_array().unwrap().iter().peekable();
         let mut tick = 0;
         for epoch in journey["epochs"].as_array().unwrap() {
             let owner = epoch["owner"].as_object().map(|_| point(&epoch["owner"]));
             let mut targets = Vec::new();
             for target in epoch["targets"].as_array().unwrap() {
-                targets.push(NativeGolemKernelTarget {
+                targets.push(GolemKernelTarget {
                     id: target["id"].as_u64().unwrap() as usize,
                     position: point(&target["position"]),
                     radius: target["radius"].as_f64().unwrap(),
@@ -358,7 +352,7 @@ fn replay_golem_journeys(fixture: &Value) {
                 tick += 1;
                 world.origin = actor.position;
                 let result =
-                    step_native_secondary_golem(&mut actor, owner, &targets, &mut world, &mut rng);
+                    step_secondary_golem(&mut actor, owner, &targets, &mut world, &mut rng);
                 if samples.peek().is_none_or(|sample| sample["tick"].as_u64() != Some(tick)) {
                     continue;
                 }

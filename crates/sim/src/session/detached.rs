@@ -9,7 +9,7 @@ use crate::profile::{PlayerSkillChoice, SharedPlayerLevelMilestone};
 pub struct DetachedSessionProjection {
     pub participant: SessionParticipant,
     pub(super) next_entity_id: u64,
-    pub(super) gameplay_rng: NativeRng,
+    pub(super) gameplay_rng: Rng,
     painter_order: WorldPainterOrder,
     participant_order: Vec<String>,
     run: GameRunLifecycle,

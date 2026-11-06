@@ -98,11 +98,11 @@ fn spectator_camera_and_status_follow_the_actual_run_and_peer_lifetimes() {
         website_rows::compare(&actual, &case["status"], case["name"].as_str().unwrap());
     }
     for case in fixture["layouts"].as_array().unwrap() {
-        let layout = native_spectator_hud_layout(Vec2::new(
+        let layout = spectator_hud_layout(Vec2::new(
             case["viewport"]["width"].as_f64().unwrap(),
             case["viewport"]["height"].as_f64().unwrap(),
         ));
-        let rail = |rail: NativeSpectatorHudRail| json!({"x":rail.bounds.x,"y":rail.bounds.y,"width":rail.bounds.width,"height":rail.bounds.height,"record":rail.record});
+        let rail = |rail: SpectatorHudRail| json!({"x":rail.bounds.x,"y":rail.bounds.y,"width":rail.bounds.width,"height":rail.bounds.height,"record":rail.record});
         let actual = json!({"surface":bounds(layout.surface),"text":p(layout.text),"horizontalRails":layout.horizontal_rails.map(rail),"verticalRails":layout.vertical_rails.map(rail),"corners":layout.corners.map(|corner|json!({"centerX":corner.center.x,"centerY":corner.center.y,"record":corner.record}))});
         website_rows::compare(&actual, &case["expected"], "spectator layout");
     }

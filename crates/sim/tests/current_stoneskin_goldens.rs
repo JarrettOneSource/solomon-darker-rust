@@ -11,24 +11,22 @@ use serde_json::{Value, json};
 use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::presentation::{
-    NativeSecondaryBlend, NativeSecondaryQueueFamily, NativeSecondarySpriteDraw,
-    native_secondary_presentation_plan,
+    SecondaryBlend, SecondaryQueueFamily, SecondarySpriteDraw, secondary_presentation_plan,
 };
 use solomon_sim::secondary::{
-    NativeSecondaryDampenCandidates, NativeSecondaryPlayerDamageInput,
-    NativeSecondaryPlayerDamagePresentation, NativeSecondarySimulationState, NativeSecondaryTarget,
-    NativeSecondaryTickContext, NativeSecondaryWorld,
+    SecondaryDampenCandidates, SecondaryPlayerDamageInput, SecondaryPlayerDamagePresentation,
+    SecondarySimulationState, SecondaryTarget, SecondaryTickContext, SecondaryWorld,
 };
-use solomon_sim::{HubWizard, NativeRng, Vec2};
+use solomon_sim::{HubWizard, Rng, Vec2};
 use std::collections::BTreeMap;
 
 struct OpenWorld;
-impl NativeSecondaryWorld for OpenWorld {
+impl SecondaryWorld for OpenWorld {
     fn target_exists(&self, _: &str, _: usize) -> bool {
         false
     }
-    fn dampen_candidates(&self, _: &str, _: Vec2) -> NativeSecondaryDampenCandidates {
-        NativeSecondaryDampenCandidates::default()
+    fn dampen_candidates(&self, _: &str, _: Vec2) -> SecondaryDampenCandidates {
+        SecondaryDampenCandidates::default()
     }
     fn phasing_destination(&self, _: &str, _: Vec2, _: Vec2) -> Option<Vec2> {
         None
@@ -36,33 +34,29 @@ impl NativeSecondaryWorld for OpenWorld {
     fn golem_movement(&self, _: &str, _: &str, _: Vec2, requested: Vec2, _: f64) -> Vec2 {
         requested
     }
-    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut NativeRng) -> Vec2 {
+    fn golem_placement(&self, _: &str, _: &str, requested: Vec2, _: &mut Rng) -> Vec2 {
         requested
     }
-    fn teleport_destination(&self, _: &str, _: &mut NativeRng) -> Vec2 {
+    fn teleport_destination(&self, _: &str, _: &mut Rng) -> Vec2 {
         Vec2::ZERO
     }
-    fn target(&self, _: &str, _: usize) -> Option<NativeSecondaryTarget> {
+    fn target(&self, _: &str, _: usize) -> Option<SecondaryTarget> {
         None
     }
-    fn targets(&self, _: &str, _: Vec2, _: f64) -> Vec<NativeSecondaryTarget> {
+    fn targets(&self, _: &str, _: Vec2, _: f64) -> Vec<SecondaryTarget> {
         Vec::new()
     }
 }
 
-fn snapshot(
-    state: &NativeSecondarySimulationState,
-    order: WorldPainterOrder,
-    received: Value,
-) -> Value {
+fn snapshot(state: &SecondarySimulationState, order: WorldPainterOrder, received: Value) -> Value {
     let plans: Vec<_> = state
         .actors
         .iter()
         .take(2)
         .map(|actor| {
-            let plan = native_secondary_presentation_plan(actor, actor.age_ticks as f64, 1.0);
+            let plan = secondary_presentation_plan(actor, actor.age_ticks as f64, 1.0);
             json!({"id":actor.id,"root":plan.root,"worldY":plan.world_y,
-            "queueFamily":if plan.queue_family == NativeSecondaryQueueFamily::OrdinaryDynamic {
+            "queueFamily":if plan.queue_family == SecondaryQueueFamily::OrdinaryDynamic {
                 "ordinary-dynamic"
             } else { "zanim" },
             "draws":plan.draws.iter().map(draw_snapshot).collect::<Vec<_>>(),
@@ -83,9 +77,9 @@ fn snapshot(
     }))
 }
 
-fn draw_snapshot(draw: &NativeSecondarySpriteDraw) -> Value {
+fn draw_snapshot(draw: &SecondarySpriteDraw) -> Value {
     json!({"alpha":draw.alpha,"atlas":draw.atlas.as_str(),
-        "blend":if draw.blend == NativeSecondaryBlend::Add { "add" } else { "normal" },
+        "blend":if draw.blend == SecondaryBlend::Add { "add" } else { "normal" },
         "entry":draw.entry,"offset":draw.offset,"role":draw.role,
         "rotationRadians":draw.rotation_radians,"scaleX":draw.scale_x,
         "scaleY":draw.scale_y,"tint":draw.tint})
@@ -103,7 +97,7 @@ fn current_stoneskin_retains_cast_and_hit_chips_through_actual_expiry() {
         let mut belt = PlayerBeltComponent::new(&book);
         belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 46 });
         let wizard = HubWizard::at(Vec2::ZERO);
-        let mut state = NativeSecondarySimulationState::new(case["seed"].as_i64().unwrap());
+        let mut state = SecondarySimulationState::new(case["seed"].as_i64().unwrap());
         let mut order = WorldPainterOrder::default();
         let frames = case["frames"].as_array().unwrap();
         let mut frame_index = 0;
@@ -112,20 +106,20 @@ fn current_stoneskin_retains_cast_and_hit_chips_through_actual_expiry() {
             authority.input.quickbar = if tick == 1 { Some(0) } else { None };
             let players = BTreeMap::from([("player".to_owned(), authority)]);
             state.step(
-                &NativeSecondaryTickContext { enhanced_effects: None, players: &players, tick },
+                &SecondaryTickContext { enhanced_effects: None, players: &players, tick },
                 &mut OpenWorld,
                 Some(&mut order),
             );
             let mut received = Value::Null;
             if [2, 3, 600, 601].contains(&tick) {
                 let result = state.apply_player_damage(
-                    NativeSecondaryPlayerDamageInput {
+                    SecondaryPlayerDamageInput {
                         player_id: "player",
                         amount: 17.25,
                         tick,
                         position: wizard.position,
                         world_key: "boneyard:oracle",
-                        presentation: NativeSecondaryPlayerDamagePresentation {
+                        presentation: SecondaryPlayerDamagePresentation {
                             physical: case["physical"].as_bool().unwrap(),
                             enhanced_effects: case["enhanced"].as_bool().unwrap(),
                         },

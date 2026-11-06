@@ -48,7 +48,7 @@ mod browser {
         let texture = renderer.upload_rgba(4, 4, &pixels)?;
         let mut cases = Vec::new();
         for centers in [false, true] {
-            renderer.set_native_world_pixel_centers(centers);
+            renderer.set_world_pixel_centers(centers);
             for mode in [TextureColorMode::Texture, TextureColorMode::Premultiplied] {
                 for blend in [BlendMode::Normal, BlendMode::Add, BlendMode::Multiply] {
                     let mut observations = Vec::new();

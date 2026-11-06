@@ -2,26 +2,25 @@
 //! `core-kernels/player-skill-runtime.ts`. Resource state remains in PlayerCombatState.
 
 mod defenses;
-pub use crate::hurricane::{NativeHurricaneChargeTick, native_hurricane_charge_tick};
+pub use crate::hurricane::{HurricaneChargeTick, hurricane_charge_tick};
 pub use defenses::{
-    NativeHardenChannel, NativeHardenState, interpolate_native_harden_coating,
-    native_harden_break_angle_step,
+    HardenChannel, HardenState, harden_break_angle_step, interpolate_harden_coating,
 };
 
-use super::offensive::{NativeOffensiveSpellFactors, resolve_native_skill_damage_value};
+use super::offensive::{OffensiveSpellFactors, resolve_skill_damage_value};
 use super::{
-    NATIVE_HAGATHA_FACTORS, NATIVE_SKILL_CATALOG, NATIVE_WELD_BUILDS, NativeSkillBookState,
-    PlayerProgressionState, PlayerSkillOffer, PlayerStatBookComponent, WizardElement,
-    native_hagatha_derived_modifiers, native_skill_category, native_skill_root, native_weld_build,
+    HAGATHA_FACTORS, PlayerProgressionState, PlayerSkillOffer, PlayerStatBookComponent,
+    SKILL_CATALOG, SkillBookState, WELD_BUILDS, WizardElement, hagatha_derived_modifiers,
+    skill_category, skill_root, weld_build,
 };
-use crate::NativeRng;
+use crate::Rng;
 use crate::combat::{
     PLAYER_HEALTH_RECOVERY_PER_TICK, PLAYER_INITIAL_HEALTH, PLAYER_INITIAL_MANA,
     PLAYER_MANA_RECOVERY_PER_TICK, PlayerCombatState,
 };
 use crate::constants::TICK_RATE_HZ;
 use crate::economy::{EquipmentType, HubEconomyState};
-use crate::equipment::{NativeEquipmentModifiers, resolve_equipped_native_effects};
+use crate::equipment::{EquipmentModifiers, resolve_equipped_effects};
 use crate::float::fround;
 
 pub const CONCENTRATABLE_SKILL_IDS: [usize; 14] =
@@ -39,8 +38,8 @@ pub enum PlayerConcentrationSlot {
 pub struct PlayerSkillRuntimeState {
     pub concentration_skill_id_a: Option<usize>,
     pub concentration_skill_id_b: Option<usize>,
-    pub equipment_modifiers: NativeEquipmentModifiers,
-    pub harden: NativeHardenState,
+    pub equipment_modifiers: EquipmentModifiers,
+    pub harden: HardenState,
     pub harden_armor_maximum: f64,
     pub harden_armor_per_tick: f64,
     pub hurricane_charge: f64,
@@ -111,21 +110,21 @@ pub struct PlayerSkillRuntimeTickResult {
 
 impl PlayerSkillRuntimeState {
     #[must_use]
-    pub fn new(book: &mut NativeSkillBookState, economy: &HubEconomyState) -> Self {
+    pub fn new(book: &mut SkillBookState, economy: &HubEconomyState) -> Self {
         Self::new_with_stat_book(book, &PlayerStatBookComponent::default(), economy)
     }
 
     #[must_use]
     pub fn new_with_stat_book(
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         stat_book: &PlayerStatBookComponent,
         economy: &HubEconomyState,
     ) -> Self {
         let mut state = Self {
             concentration_skill_id_a: None,
             concentration_skill_id_b: None,
-            equipment_modifiers: NativeEquipmentModifiers::default(),
-            harden: NativeHardenState::default(),
+            equipment_modifiers: EquipmentModifiers::default(),
+            harden: HardenState::default(),
             harden_armor_maximum: 0.0,
             harden_armor_per_tick: 0.0,
             hurricane_charge: 0.0,
@@ -141,17 +140,17 @@ impl PlayerSkillRuntimeState {
         state
     }
 
-    pub fn refresh(&mut self, book: &mut NativeSkillBookState, economy: &HubEconomyState) {
+    pub fn refresh(&mut self, book: &mut SkillBookState, economy: &HubEconomyState) {
         self.refresh_with_stat_book(book, &PlayerStatBookComponent::default(), economy);
     }
 
     pub fn refresh_with_stat_book(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         stat_book: &PlayerStatBookComponent,
         economy: &HubEconomyState,
     ) {
-        let equipment = resolve_equipped_native_effects(
+        let equipment = resolve_equipped_effects(
             &book.permanent_ranks,
             &economy.equipment,
             &economy.owned_perk_selectors,
@@ -160,7 +159,7 @@ impl PlayerSkillRuntimeState {
         if equipment.modifiers.feature_bits & 0x0800 != 0 {
             // Maximum Weld energizes only the modifier rows, leaving unlearned elemental
             // primaries untouched. Repeated build membership has no further effect.
-            for build in NATIVE_WELD_BUILDS {
+            for build in WELD_BUILDS {
                 for id in build.component_skill_ids {
                     if ![8, 16, 24, 32, 40].contains(&id) && ranks[id] == 0 {
                         ranks[id] = 1;
@@ -171,7 +170,7 @@ impl PlayerSkillRuntimeState {
         if self.mindstar_active {
             for id in 8..=77 {
                 if ranks[id] > 0 {
-                    ranks[id] = NATIVE_SKILL_CATALOG[id].maximum_level.min(ranks[id] + 1);
+                    ranks[id] = SKILL_CATALOG[id].maximum_level.min(ranks[id] + 1);
                 }
             }
         }
@@ -184,7 +183,7 @@ impl PlayerSkillRuntimeState {
                 book.learned_skill_order.push(id);
             }
         }
-        if let Some(build) = book.weld_build_id.and_then(native_weld_build)
+        if let Some(build) = book.weld_build_id.and_then(weld_build)
             && (book.weld_component_ranks.is_none() || economy.owned_perk_selectors.contains(&13))
         {
             let component_ranks = build.component_skill_ids.map(|id| ranks[id]);
@@ -229,7 +228,7 @@ impl PlayerSkillRuntimeState {
     pub fn set_mindstar_active(
         &mut self,
         active: bool,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         economy: &HubEconomyState,
     ) {
         self.set_mindstar_active_with_stat_book(
@@ -243,7 +242,7 @@ impl PlayerSkillRuntimeState {
     pub fn set_mindstar_active_with_stat_book(
         &mut self,
         active: bool,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         stat_book: &PlayerStatBookComponent,
         economy: &HubEconomyState,
     ) {
@@ -260,7 +259,7 @@ impl PlayerSkillRuntimeState {
 
     pub fn set_concentration(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         economy: &HubEconomyState,
         skill_id: usize,
     ) -> bool {
@@ -274,7 +273,7 @@ impl PlayerSkillRuntimeState {
 
     pub fn set_concentration_with_stat_book(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         stat_book: &PlayerStatBookComponent,
         economy: &HubEconomyState,
         skill_id: usize,
@@ -304,7 +303,7 @@ impl PlayerSkillRuntimeState {
 
     pub fn set_concentration_slot(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         economy: &HubEconomyState,
         skill_id: usize,
         slot: PlayerConcentrationSlot,
@@ -320,7 +319,7 @@ impl PlayerSkillRuntimeState {
 
     pub fn set_concentration_slot_with_stat_book(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         stat_book: &PlayerStatBookComponent,
         economy: &HubEconomyState,
         skill_id: usize,
@@ -365,9 +364,9 @@ impl PlayerSkillRuntimeState {
 
     pub fn autofill_selections(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         economy: &HubEconomyState,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
     ) {
         self.autofill_selections_with_stat_book(
             book,
@@ -379,10 +378,10 @@ impl PlayerSkillRuntimeState {
 
     pub fn autofill_selections_with_stat_book(
         &mut self,
-        book: &mut NativeSkillBookState,
+        book: &mut SkillBookState,
         stat_book: &PlayerStatBookComponent,
         economy: &HubEconomyState,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
     ) {
         self.refresh_with_stat_book(book, stat_book, economy);
         if self.concentration_skill_id_a.is_none() {
@@ -393,12 +392,12 @@ impl PlayerSkillRuntimeState {
             self.concentration_skill_id_b =
                 draw_concentration(book, self.concentration_skill_id_a, rng);
         }
-        if native_skill_category(book.primary_skill_id) != Some(1)
+        if skill_category(book.primary_skill_id) != Some(1)
             || book.effective_ranks[book.primary_skill_id] < 1
         {
             let mut candidates = Vec::new();
             for (id, rank) in book.effective_ranks.iter().enumerate() {
-                if *rank > 0 && native_skill_category(id) == Some(1) {
+                if *rank > 0 && skill_category(id) == Some(1) {
                     candidates.push(id);
                 }
             }
@@ -437,7 +436,7 @@ impl PlayerSkillRuntimeState {
         };
         let meditation = if ready { derived.mana_recovery_per_tick * multiplier } else { 0.0 };
         self.meditation_activity_ramp_ticks = self.meditation_activity_ramp_ticks.saturating_sub(1);
-        let hurricane = native_hurricane_charge_tick(
+        let hurricane = hurricane_charge_tick(
             self.hurricane_charge,
             self.hurricane_refreshed,
             self.hurricane_enabled,
@@ -447,14 +446,14 @@ impl PlayerSkillRuntimeState {
         self.hurricane_refreshed = hurricane.refreshed;
         let channel = if activity.primary_channel == Some(WizardElement::Water) {
             if activity.primary_underpowered {
-                NativeHardenChannel::WeakWater
+                HardenChannel::WeakWater
             } else {
-                NativeHardenChannel::Water
+                HardenChannel::Water
             }
         } else if activity.primary_channel.is_some() || activity.primary_active {
-            NativeHardenChannel::Other
+            HardenChannel::Other
         } else {
-            NativeHardenChannel::Idle
+            HardenChannel::Idle
         };
         self.harden.step(channel, self.harden_armor_per_tick, self.harden_armor_maximum);
         PlayerSkillRuntimeTickResult {
@@ -466,8 +465,8 @@ impl PlayerSkillRuntimeState {
     pub fn mark_creativity_insight(
         &self,
         offer: &mut PlayerSkillOffer,
-        book: &NativeSkillBookState,
-        rng: &mut NativeRng,
+        book: &SkillBookState,
+        rng: &mut Rng,
     ) {
         self.mark_creativity_insight_with_stat_book(
             offer,
@@ -480,9 +479,9 @@ impl PlayerSkillRuntimeState {
     pub fn mark_creativity_insight_with_stat_book(
         &self,
         offer: &mut PlayerSkillOffer,
-        book: &NativeSkillBookState,
+        book: &SkillBookState,
         stat_book: &PlayerStatBookComponent,
-        rng: &mut NativeRng,
+        rng: &mut Rng,
     ) {
         if (self.concentration_skill_id_a != Some(63) && self.concentration_skill_id_b != Some(63))
             || rng.draw_integer(5) != 1
@@ -496,7 +495,7 @@ impl PlayerSkillRuntimeState {
                 continue;
             }
             let rank = book.effective_ranks[option.skill_id];
-            if native_skill_category(option.skill_id) == Some(4) && rank == 0 {
+            if skill_category(option.skill_id) == Some(4) && rank == 0 {
                 continue;
             }
             let maximum =
@@ -520,7 +519,7 @@ impl PlayerSkillRuntimeState {
 #[must_use]
 pub fn player_skill_derived_stats(
     runtime: &PlayerSkillRuntimeState,
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     progression: &PlayerProgressionState,
     economy: &HubEconomyState,
 ) -> PlayerSkillDerivedStats {
@@ -536,7 +535,7 @@ pub fn player_skill_derived_stats(
 #[must_use]
 pub fn player_skill_derived_stats_with_stat_book(
     runtime: &PlayerSkillRuntimeState,
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
     progression: &PlayerProgressionState,
     economy: &HubEconomyState,
@@ -554,7 +553,7 @@ pub fn player_skill_derived_stats_with_stat_book(
     let rush = value(67, "mValue");
     let resist_poison = value(69, "mValue");
     let faster_caster = value(70, "mValue");
-    let hagatha = native_hagatha_derived_modifiers(
+    let hagatha = hagatha_derived_modifiers(
         &economy.owned_perk_selectors,
         progression.hagatha_runtime,
         economy.equipment.weapon.is_some(),
@@ -568,7 +567,7 @@ pub fn player_skill_derived_stats_with_stat_book(
         - (battle_mage + if selected(59) { value(59, "mConcentration") } else { 0.0 }) / 100.0)
         .max(0.0)
         * hagatha.offensive_mana_factor;
-    let class = native_skill_root(book.primary_skill_id).expect("primary skill has a native class");
+    let class = skill_root(book.primary_skill_id).expect("primary skill has a native class");
     let cast_base = 1.0
         + (faster_caster + if selected(70) { value(70, "mConcentration") } else { 0.0 }) / 100.0;
     let cast_progress = ((modifiers.cast_speed_multiplier * cast_base + modifiers.cast_speed_flat)
@@ -598,9 +597,9 @@ pub fn player_skill_derived_stats_with_stat_book(
         .as_ref()
         .is_some_and(|item| item.equipment_type == Some(EquipmentType::Staff));
     let life_charm =
-        if economy.owned_perk_selectors.contains(&0) { NATIVE_HAGATHA_FACTORS.life } else { 1.0 };
+        if economy.owned_perk_selectors.contains(&0) { HAGATHA_FACTORS.life } else { 1.0 };
     let mana_charm =
-        if economy.owned_perk_selectors.contains(&1) { NATIVE_HAGATHA_FACTORS.mana } else { 1.0 };
+        if economy.owned_perk_selectors.contains(&1) { HAGATHA_FACTORS.mana } else { 1.0 };
     // Native MELEEDAMAGE formats the two body values, separately from staff
     // contact's row-65 offensive resolution below. Preserve both f32 stores.
     let melee_multiplier = fround(
@@ -690,11 +689,8 @@ pub fn player_skill_derived_stats_with_stat_book(
 
 impl PlayerSkillDerivedStats {
     #[must_use]
-    pub fn offensive_factors(
-        &self,
-        runtime: &PlayerSkillRuntimeState,
-    ) -> NativeOffensiveSpellFactors {
-        NativeOffensiveSpellFactors {
+    pub fn offensive_factors(&self, runtime: &PlayerSkillRuntimeState) -> OffensiveSpellFactors {
+        OffensiveSpellFactors {
             damage: self.offensive_damage_factor,
             mana_cost: self.offensive_mana_cost_factor,
             global_flat_damage: self.offensive_damage_flat,
@@ -758,7 +754,7 @@ pub struct PlayerStaffAttackResult {
 #[must_use]
 pub fn resolve_player_staff_attack(
     derived: &PlayerSkillDerivedStats,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> PlayerStaffAttackResult {
     assert!(derived.staff_equipped, "staff attack requires an equipped staff");
     let chance = rng.draw_scaled_float(100.0, false);
@@ -783,7 +779,7 @@ pub fn player_staff_damage(
     outcome: PlayerStaffAttackOutcome,
 ) -> f64 {
     let factors = derived.offensive_factors(runtime);
-    let base = resolve_native_skill_damage_value(65, derived.staff_damage_primary, &factors);
+    let base = resolve_skill_damage_value(65, derived.staff_damage_primary, &factors);
     base.max(1.0)
         * if outcome == PlayerStaffAttackOutcome::CriticalHit { 3.0 } else { 1.0 }
         * if outcome != PlayerStaffAttackOutcome::Normal && runtime.is_concentrated(progression, 71)
@@ -812,7 +808,7 @@ pub fn player_poison_duration_seconds(
 /// and authored row zero can contribute even before their skill is learned.
 #[must_use]
 pub fn effective_skill_numeric_value(
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     skill_id: usize,
     property: &str,
 ) -> f64 {
@@ -826,7 +822,7 @@ pub fn effective_skill_numeric_value(
 
 #[must_use]
 pub fn effective_skill_numeric_value_with_stat_book(
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
     skill_id: usize,
     property: &str,
@@ -839,13 +835,13 @@ pub fn effective_skill_numeric_value_with_stat_book(
     entry.stat(property, book.effective_ranks[skill_id]).unwrap_or(0.0)
 }
 
-fn valid_concentration(selection: Option<usize>, book: &NativeSkillBookState) -> Option<usize> {
+fn valid_concentration(selection: Option<usize>, book: &SkillBookState) -> Option<usize> {
     selection.filter(|id| CONCENTRATABLE_SKILL_IDS.contains(id) && book.effective_ranks[*id] > 0)
 }
 fn draw_concentration(
-    book: &NativeSkillBookState,
+    book: &SkillBookState,
     excluded: Option<usize>,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
 ) -> Option<usize> {
     let mut candidates = Vec::new();
     for id in CONCENTRATABLE_SKILL_IDS {
@@ -859,10 +855,7 @@ fn draw_concentration(
         Some(candidates[rng.draw_integer(candidates.len() as i32) as usize])
     }
 }
-fn meditation_idle_delay_ticks(
-    book: &NativeSkillBookState,
-    stat_book: &PlayerStatBookComponent,
-) -> i64 {
+fn meditation_idle_delay_ticks(book: &SkillBookState, stat_book: &PlayerStatBookComponent) -> i64 {
     if book.effective_ranks[58] > 0 {
         (effective_skill_numeric_value_with_stat_book(book, stat_book, 58, "mSeconds") * 100.0)
             .trunc() as i64

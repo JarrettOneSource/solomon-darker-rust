@@ -4,8 +4,8 @@ use serde::Deserialize;
 use solomon_sim::appearance::equipment::PlayerWeaponAppearance;
 use solomon_sim::death_animations::*;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::spells::casting::PlayerWeaponKind;
+use solomon_sim::{Rng, Vec2};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,13 +45,13 @@ struct WeaponFrame {
     actors: Vec<[f64; 11]>,
 }
 
-fn rng_values(rng: &NativeRng) -> Vec<u32> {
+fn rng_values(rng: &Rng) -> Vec<u32> {
     let mut values = vec![rng.index_a as u32, rng.index_b as u32];
     values.extend(rng.words);
     values
 }
 
-fn motion_values(motion: &NativeBouncerMotion) -> [f64; 9] {
+fn motion_values(motion: &BouncerMotion) -> [f64; 9] {
     [
         motion.bounce_velocity,
         motion.height,
@@ -71,14 +71,14 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
     let goldens: Goldens = serde_json::from_str(fixture).unwrap();
     assert_eq!(goldens.source_revision, "fa08ae249ff5563570bdb2a653e2ef9358ce7b83");
     for case in goldens.golems {
-        let mut rng = NativeRng::new(case.seed);
+        let mut rng = Rng::new(case.seed);
         let mut animation =
-            create_native_golem_death_animation(&mut rng, Vec2::new(321.25, 245.5), case.enhanced);
+            create_golem_death_animation(&mut rng, Vec2::new(321.25, 245.5), case.enhanced);
         let mut tick = 0;
         for frame in case.frames {
             while tick < frame.tick {
                 tick += 1;
-                step_native_golem_death_animation(&mut animation, tick, &mut rng);
+                step_golem_death_animation(&mut animation, tick, &mut rng);
             }
             let context = format!("Golem seed{} enhanced{} tick{tick}", case.seed, case.enhanced);
             assert_eq!(rng_values(&rng), frame.rng, "{context} shared RNG");
@@ -102,9 +102,9 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
         }
     }
     for case in goldens.weapons {
-        let mut rng = NativeRng::new(case.seed);
-        let mut actors = [create_native_death_weapon_actor(
-            NativeDeathWeaponBirth {
+        let mut rng = Rng::new(case.seed);
+        let mut actors = [create_death_weapon_actor(
+            DeathWeaponBirth {
                 death_epoch: 4,
                 heading_index: case.heading_index,
                 id: 9,
@@ -115,7 +115,7 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
                 },
                 position: Vec2::new(321.25, 245.5),
                 tick: 10,
-                weapon: PlayerWeaponAppearance { kind: NativePlayerWeaponKind::Staff, selector: 2 },
+                weapon: PlayerWeaponAppearance { kind: PlayerWeaponKind::Staff, selector: 2 },
             },
             &mut rng,
         )]
@@ -125,7 +125,7 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
         for frame in case.frames {
             while tick < frame.tick {
                 tick += 1;
-                step_native_death_weapon_actors(&mut actors, tick, &mut rng);
+                step_death_weapon_actors(&mut actors, tick, &mut rng);
             }
             let context =
                 format!("Weapon seed{} facing{} tick{tick}", case.seed, case.heading_index);
@@ -156,7 +156,7 @@ fn current_retained_death_fragments_and_weapons_match_the_source_through_groundi
             assert_eq!(actor.owner_id, "hero");
             assert_eq!(
                 actor.weapon,
-                PlayerWeaponAppearance { kind: NativePlayerWeaponKind::Staff, selector: 2 }
+                PlayerWeaponAppearance { kind: PlayerWeaponKind::Staff, selector: 2 }
             );
             assert_eq!(actor.painter_registration.registration_ordinal, 83);
         }

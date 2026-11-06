@@ -7,17 +7,17 @@ use super::model::{CrowPhase, CrowState};
 use crate::float;
 use crate::float::fround;
 use crate::heading::heading_degrees_from_vector;
-use crate::spells::targeting::native_heading_turn_direction;
-use crate::{NativeRng, Vec2};
+use crate::spells::targeting::heading_turn_direction;
+use crate::{Rng, Vec2};
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeCrowTarget<'a> {
+pub struct CrowTarget<'a> {
     pub id: &'a str,
     pub position: Vec2,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeCrowStep {
+pub struct CrowStep {
     pub retained: bool,
     pub parent_cooldown_ticks: Option<u64>,
     pub return_pitch: Option<f64>,
@@ -25,7 +25,7 @@ pub struct NativeCrowStep {
 }
 
 #[must_use]
-pub fn create_native_crow(id: usize, rng: &mut NativeRng) -> CrowState {
+pub fn create_crow(id: usize, rng: &mut Rng) -> CrowState {
     let phase = rng.draw_scaled_float(360.0, false);
     let radius = rng.draw_scaled_float(40.0, false);
     let speed = rng.draw_scaled_float(0.150_000_035_762_786_87, false);
@@ -55,14 +55,14 @@ pub fn create_native_crow(id: usize, rng: &mut NativeRng) -> CrowState {
 }
 
 #[must_use]
-pub fn step_native_crow(
+pub fn step_crow(
     crow: &mut CrowState,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     parent_position: Option<Vec2>,
     may_attack: bool,
-    targets: &[NativeCrowTarget<'_>],
+    targets: &[CrowTarget<'_>],
     is_visible: &dyn Fn(Vec2) -> bool,
-) -> NativeCrowStep {
+) -> CrowStep {
     crow.age += 1;
     let mut parent_cooldown_ticks = None;
     let mut return_pitch = None;
@@ -81,7 +81,7 @@ pub fn step_native_crow(
         }
     } else {
         if crow.position.is_none() {
-            return NativeCrowStep {
+            return CrowStep {
                 retained: false,
                 parent_cooldown_ticks,
                 return_pitch,
@@ -91,7 +91,7 @@ pub fn step_native_crow(
         step_detached_crow(crow);
         let position = crow.position.expect("detached crow has a root");
         if !is_visible(Vec2::new(position.x, position.y - crow.height)) {
-            return NativeCrowStep {
+            return CrowStep {
                 retained: false,
                 parent_cooldown_ticks,
                 return_pitch,
@@ -99,7 +99,7 @@ pub fn step_native_crow(
             };
         }
     }
-    NativeCrowStep { retained: true, parent_cooldown_ticks, return_pitch, struck_target_id }
+    CrowStep { retained: true, parent_cooldown_ticks, return_pitch, struck_target_id }
 }
 
 fn step_orbit(crow: &mut CrowState, parent: Vec2) {
@@ -118,7 +118,7 @@ fn step_orbit(crow: &mut CrowState, parent: Vec2) {
     );
     let position = crow.position.expect("orbit initialized the root");
     let desired = heading_degrees_from_vector(goal.x - position.x, goal.y - position.y);
-    let turn = f64::from(native_heading_turn_direction(crow.heading_deg, desired));
+    let turn = f64::from(heading_turn_direction(crow.heading_deg, desired));
     crow.heading_deg = normalize(fround(crow.heading_deg + turn * 1.25));
     move_crow(crow, fround(crow.speed * 2.5));
     let position = crow.position.expect("orbit retains its root");
@@ -131,8 +131,8 @@ fn step_orbit(crow: &mut CrowState, parent: Vec2) {
 
 fn acquire_dive_target(
     crow: &mut CrowState,
-    rng: &mut NativeRng,
-    targets: &[NativeCrowTarget<'_>],
+    rng: &mut Rng,
+    targets: &[CrowTarget<'_>],
 ) -> Option<u64> {
     let position = crow.position.expect("orbit initialized the root");
     for target in targets {
@@ -158,7 +158,7 @@ fn acquire_dive_target(
     None
 }
 
-fn step_orbit_wings(crow: &mut CrowState, rng: &mut NativeRng) {
+fn step_orbit_wings(crow: &mut CrowState, rng: &mut Rng) {
     if crow.glide_ticks > 0 && crow.height > 100.0 {
         crow.glide_ticks -= 1;
         crow.height = 100.0_f64.max(fround(crow.height - 0.25));
@@ -189,7 +189,7 @@ fn step_orbit_wings(crow: &mut CrowState, rng: &mut NativeRng) {
 
 fn step_dive(
     crow: &mut CrowState,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     return_pitch: &mut Option<f64>,
     struck_target_id: &mut Option<String>,
 ) {

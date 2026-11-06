@@ -8,13 +8,13 @@ use solomon_sim::Vec2;
 use solomon_sim::belt::{NativeBeltEntry, PLAYER_BELT_SLOT_COUNT};
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::game_run::GameRunPhase;
-use solomon_sim::loot::{NativeLootDropKind, NativeOrbKind};
+use solomon_sim::loot::{LootDropKind, OrbKind};
 use solomon_sim::ml_bot::{BoneyardEntranceNavigator, MlBotEntranceNavigationError};
 use solomon_sim::modding::definition::WebLuaScopeKind;
 use solomon_sim::modding::extensions::GameSimulationExtensions;
 use solomon_sim::modding::runtime::ModIntent;
 use solomon_sim::modding::{LuaObject, LuaValue};
-use solomon_sim::profile::{NATIVE_SKILL_CATALOG, PlayerSkillChoice, native_skill_category};
+use solomon_sim::profile::{PlayerSkillChoice, SKILL_CATALOG, skill_category};
 use solomon_sim::session::{GameSession, GameSessionInput};
 
 use crate::intents::ModIntentExecutionContext;
@@ -238,7 +238,7 @@ pub fn mod_player_control_observation(
             continue;
         };
         let skill_id = *skill_id;
-        if native_skill_category(skill_id) != Some(2)
+        if skill_category(skill_id) != Some(2)
             || profile.book.permanent_ranks[skill_id] == 0
             || profile.book.effective_ranks[skill_id] == 0
         {
@@ -281,7 +281,7 @@ pub fn mod_player_control_observation(
                                 (
                                     "name",
                                     LuaValue::String(
-                                        NATIVE_SKILL_CATALOG
+                                        SKILL_CATALOG
                                             .get(option.skill_id)
                                             .map_or("", |definition| definition.name)
                                             .into(),
@@ -289,7 +289,7 @@ pub fn mod_player_control_observation(
                                 ),
                                 (
                                     "category",
-                                    native_skill_category(option.skill_id)
+                                    skill_category(option.skill_id)
                                         .map_or(LuaValue::Null, |value| {
                                             LuaValue::Number(f64::from(value))
                                         }),
@@ -372,10 +372,10 @@ pub fn mod_player_control_observation(
                                 "kind",
                                 LuaValue::String(
                                     match actor.kind {
-                                        NativeLootDropKind::Orb => "orb",
-                                        NativeLootDropKind::Gold => "gold",
-                                        NativeLootDropKind::Sack => "sack",
-                                        NativeLootDropKind::Bonus => "bonus",
+                                        LootDropKind::Orb => "orb",
+                                        LootDropKind::Gold => "gold",
+                                        LootDropKind::Sack => "sack",
+                                        LootDropKind::Bonus => "bonus",
                                     }
                                     .into(),
                                 ),
@@ -385,8 +385,8 @@ pub fn mod_player_control_observation(
                                 actor.orb_kind.map_or(LuaValue::Null, |kind| {
                                     LuaValue::String(
                                         match kind {
-                                            NativeOrbKind::Health => "health",
-                                            NativeOrbKind::Mana => "mana",
+                                            OrbKind::Health => "health",
+                                            OrbKind::Mana => "mana",
                                         }
                                         .into(),
                                     )

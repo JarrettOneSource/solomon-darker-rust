@@ -17,7 +17,7 @@ fn sack_pages_keep_the_native_clip_and_every_transition_tick() {
     }
     for case in fixture["heights"].as_array().unwrap() {
         assert_eq!(
-            native_inventory_sack_page_height(case["height"].as_f64().unwrap()),
+            inventory_sack_page_height(case["height"].as_f64().unwrap()),
             case["expected"].as_f64().unwrap(),
             "height {}",
             case["height"]

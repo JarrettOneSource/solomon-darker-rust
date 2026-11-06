@@ -1,8 +1,7 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::presentation::{
-    BoneyardPainterEntry, BoneyardPainterProxy, TreeOcclusion, boneyard_painter_order,
-    native_gate_art,
+    BoneyardPainterEntry, BoneyardPainterProxy, TreeOcclusion, boneyard_painter_order, gate_art,
 };
 use solomon_sim::hub::painter::{PainterLane, PainterLayer};
 
@@ -43,7 +42,7 @@ fn tree_fading_gate_art_and_proxy_order_replay_the_website() {
         }
     }
     for case in fixture["gates"].as_array().unwrap() {
-        let art = native_gate_art(point(&case["hinge"]), point(&case["tip"]));
+        let art = gate_art(point(&case["hinge"]), point(&case["tip"]));
         let expected = case["vertices"].as_array().unwrap();
         for (index, vertex) in art.vertices.iter().enumerate() {
             assert_eq!(

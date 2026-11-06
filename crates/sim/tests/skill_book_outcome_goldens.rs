@@ -7,12 +7,10 @@ mod player_snapshot;
 
 use serde_json::{Value, json};
 use solomon_sim::economy::{
-    HubInventoryAction, NATIVE_SKILL_BOOK_DEFINITIONS, NativeSkillBookOutcome,
-    create_native_skill_book_inventory_item, find_inventory_item,
+    HubInventoryAction, SKILL_BOOK_DEFINITIONS, SkillBookOutcome, create_skill_book_inventory_item,
+    find_inventory_item,
 };
-use solomon_sim::profile::{
-    NATIVE_SKILL_CATALOG, NewGameSelection, WizardDiscipline, WizardElement,
-};
+use solomon_sim::profile::{NewGameSelection, SKILL_CATALOG, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionOptions};
 
 #[test]
@@ -38,19 +36,17 @@ fn current_book_receipts_follow_choice_rank_and_exhaustion() {
             player.grant_experience(95.0, &mut session.gameplay_rng);
         }
         if case["capped"].as_bool().unwrap() {
-            for (id, definition) in NATIVE_SKILL_CATALOG.iter().enumerate().take(80).skip(8) {
+            for (id, definition) in SKILL_CATALOG.iter().enumerate().take(80).skip(8) {
                 if id != 52 && definition.maximum_level > 0 {
                     player.book.grant_ranks(id, 1000);
                 }
             }
         }
-        let definition = NATIVE_SKILL_BOOK_DEFINITIONS
+        let definition = SKILL_BOOK_DEFINITIONS
             .iter()
-            .find(|definition| {
-                Some(u64::from(definition.native_subtype)) == case["subtype"].as_u64()
-            })
+            .find(|definition| Some(u64::from(definition.subtype)) == case["subtype"].as_u64())
             .unwrap();
-        player.economy.backpack.push(create_native_skill_book_inventory_item(definition, 1000));
+        player.economy.backpack.push(create_skill_book_inventory_item(definition, 1000));
         for (index, expected) in case["records"].as_array().unwrap().iter().enumerate() {
             // A choice book opens the actual Session barrier. A second command
             // rejected there retains its first receipt, just as the Source Game API.
@@ -68,8 +64,8 @@ fn current_book_receipts_follow_choice_rank_and_exhaustion() {
                     "reason": feedback.reason.map(|reason| reason.as_str()),
                     "sequence": feedback.sequence,
                     "skillBookOutcome": feedback.skill_book_outcome.map(|outcome| match outcome {
-                        NativeSkillBookOutcome::Choice => json!({"kind": "choice"}),
-                        NativeSkillBookOutcome::Rank { skill_id } => json!({"kind": "rank", "skillId": skill_id}),
+                        SkillBookOutcome::Choice => json!({"kind": "choice"}),
+                        SkillBookOutcome::Rank { skill_id } => json!({"kind": "rank", "skillId": skill_id}),
                     }),
                     "transferDirection": null,
                     "transferGesture": null,

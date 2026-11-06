@@ -2,17 +2,16 @@
 
 use crate::float::{self, fround};
 use crate::spells::earth_debris::{
-    NativeWeldBoulderDebrisParticleState, NativeWeldMeteorDebrisSeed,
-    create_native_weld_boulder_debris_particle,
+    WeldBoulderDebrisParticleState, WeldMeteorDebrisSeed, create_weld_boulder_debris_particle,
 };
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
 #[must_use]
-pub fn create_native_golem_assembly_debris(
-    rng: &mut NativeRng,
+pub fn create_golem_assembly_debris(
+    rng: &mut Rng,
     scale: f64,
     enhanced: bool,
-) -> Vec<NativeWeldBoulderDebrisParticleState> {
+) -> Vec<WeldBoulderDebrisParticleState> {
     assert!(scale.is_finite() && scale > 0.0, "Golem scale must be positive");
     let mut particles = Vec::with_capacity(24);
     for index in 0..24 {
@@ -51,8 +50,8 @@ pub fn create_native_golem_assembly_debris(
         );
         let speed = fround(1.0 + rng.draw_scaled_float(fround(scale * 0.5), false));
         let velocity = Vec2::new(fround(direction.x * speed), fround(direction.y * speed));
-        let mut particle = create_native_weld_boulder_debris_particle(
-            NativeWeldMeteorDebrisSeed {
+        let mut particle = create_weld_boulder_debris_particle(
+            WeldMeteorDebrisSeed {
                 alpha: 2.0,
                 color_green: 1.0,
                 height,

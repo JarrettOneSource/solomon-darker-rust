@@ -3,13 +3,13 @@
 
 use crate::float::fround;
 
-use super::NativeHagathaRuntimeState;
+use super::HagathaRuntimeState;
 
-pub const NATIVE_HAGATHA_LAST_WORD_DEATH_TICK: u64 = 200;
+pub const HAGATHA_LAST_WORD_DEATH_TICK: u64 = 200;
 
 /// Native constants have already been narrowed to float32 before any multiplication.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHagathaFactors {
+pub struct HagathaFactors {
     pub bare_hands_damage: f64,
     pub bare_hands_mana: f64,
     pub brute_melee: f64,
@@ -25,7 +25,7 @@ pub struct NativeHagathaFactors {
     pub war_mana: f64,
 }
 
-pub const NATIVE_HAGATHA_FACTORS: NativeHagathaFactors = NativeHagathaFactors {
+pub const HAGATHA_FACTORS: HagathaFactors = HagathaFactors {
     bare_hands_damage: 1.15_f32 as f64,
     bare_hands_mana: 0.85_f32 as f64,
     brute_melee: 3.0,
@@ -42,7 +42,7 @@ pub const NATIVE_HAGATHA_FACTORS: NativeHagathaFactors = NativeHagathaFactors {
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeHagathaDerivedModifiers {
+pub struct HagathaDerivedModifiers {
     pub cast_speed_factor: f64,
     pub incoming_damage_factor: f64,
     pub melee_damage_factor: f64,
@@ -55,12 +55,12 @@ pub struct NativeHagathaDerivedModifiers {
 }
 
 #[must_use]
-pub fn native_hagatha_derived_modifiers(
+pub fn hagatha_derived_modifiers(
     owned_selectors: &[u32],
-    runtime: NativeHagathaRuntimeState,
+    runtime: HagathaRuntimeState,
     weapon_equipped: bool,
-) -> NativeHagathaDerivedModifiers {
-    let factors = NATIVE_HAGATHA_FACTORS;
+) -> HagathaDerivedModifiers {
+    let factors = HAGATHA_FACTORS;
     let glass = owned_selectors.contains(&16);
     let bare_hands = !weapon_equipped && owned_selectors.contains(&20);
     let speed = if owned_selectors.contains(&2) { factors.speed } else { 1.0 };
@@ -75,7 +75,7 @@ pub fn native_hagatha_derived_modifiers(
 
     // Keep the source multiplication order, especially the float32 store after combining
     // Bare Hands, Glass Cannon and the two temporary until-hurt effects.
-    NativeHagathaDerivedModifiers {
+    HagathaDerivedModifiers {
         cast_speed_factor: speed,
         incoming_damage_factor: glass_damage,
         melee_damage_factor: fround(glass_damage * melee_damage),
@@ -93,17 +93,17 @@ pub fn native_hagatha_derived_modifiers(
 }
 
 #[must_use]
-pub fn native_hagatha_revelation_rank(rank: u32, owned_selectors: &[u32]) -> u32 {
+pub fn hagatha_revelation_rank(rank: u32, owned_selectors: &[u32]) -> u32 {
     if owned_selectors.contains(&6) { rank.max(2) } else { rank }
 }
 
 #[must_use]
-pub fn native_hagatha_boss_damage_factor(owned_selectors: &[u32], native_type_id: u32) -> f64 {
-    if owned_selectors.contains(&22) && (1008..=1011).contains(&native_type_id) { 3.0 } else { 1.0 }
+pub fn hagatha_boss_damage_factor(owned_selectors: &[u32], type_id: u32) -> f64 {
+    if owned_selectors.contains(&22) && (1008..=1011).contains(&type_id) { 3.0 } else { 1.0 }
 }
 
 #[must_use]
-pub fn native_hagatha_drinker_should_use_health_potion(
+pub fn hagatha_drinker_should_use_health_potion(
     owned_selectors: &[u32],
     current_health: f64,
 ) -> bool {
@@ -111,7 +111,7 @@ pub fn native_hagatha_drinker_should_use_health_potion(
 }
 
 #[must_use]
-pub fn native_hagatha_drinker_should_use_mana_potion(
+pub fn hagatha_drinker_should_use_mana_potion(
     owned_selectors: &[u32],
     current_mana: f64,
     maximum_mana: f64,

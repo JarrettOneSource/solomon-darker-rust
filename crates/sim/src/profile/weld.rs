@@ -5,18 +5,16 @@
 
 use crate::float::fround;
 
-use super::{
-    NATIVE_SKILL_ROW_COUNT, NativeSkillBookState, PlayerStatBookComponent, native_weld_build,
-};
+use super::{PlayerStatBookComponent, SKILL_ROW_COUNT, SkillBookState, weld_build};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeWeldCastKind {
+pub enum WeldCastKind {
     Channel,
     OneShot,
     Persistent,
 }
 
-impl NativeWeldCastKind {
+impl WeldCastKind {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -28,18 +26,18 @@ impl NativeWeldCastKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NativeWeldPrimaryVector {
+pub struct WeldPrimaryVector {
     pub build_id: u32,
-    pub cast_kind: NativeWeldCastKind,
+    pub cast_kind: WeldCastKind,
     pub values: Vec<f64>,
 }
 
 #[must_use]
-pub fn native_weld_primary_cast_mode(build_id: u32) -> NativeWeldCastKind {
+pub fn weld_primary_cast_mode(build_id: u32) -> WeldCastKind {
     match build_id {
-        1000..=1002 | 1009 => NativeWeldCastKind::OneShot,
-        1003..=1005 => NativeWeldCastKind::Channel,
-        1006..=1008 => NativeWeldCastKind::Persistent,
+        1000..=1002 | 1009 => WeldCastKind::OneShot,
+        1003..=1005 => WeldCastKind::Channel,
+        1006..=1008 => WeldCastKind::Persistent,
         _ => panic!("weld build {build_id} is not native"),
     }
 }
@@ -62,12 +60,12 @@ const F32_29: f64 = 2.9_f32 as f64;
 
 /// Freezes component ranks at the same seam as `nativeWeldPrimaryVector`.
 #[must_use]
-pub fn native_weld_primary_vector(
-    book: &NativeSkillBookState,
+pub fn weld_primary_vector(
+    book: &SkillBookState,
     build_id: u32,
     weld_effect: f64,
-) -> NativeWeldPrimaryVector {
-    native_weld_primary_vector_with_stat_book(
+) -> WeldPrimaryVector {
+    weld_primary_vector_with_stat_book(
         book,
         &PlayerStatBookComponent::default(),
         build_id,
@@ -76,20 +74,20 @@ pub fn native_weld_primary_vector(
 }
 
 #[must_use]
-pub fn native_weld_primary_vector_with_stat_book(
-    book: &NativeSkillBookState,
+pub fn weld_primary_vector_with_stat_book(
+    book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
     build_id: u32,
     weld_effect: f64,
-) -> NativeWeldPrimaryVector {
+) -> WeldPrimaryVector {
     assert!(
         weld_effect.is_finite() && weld_effect > 0.0,
         "weld effect must be finite and positive"
     );
-    let build = native_weld_build(build_id).expect("requested weld build is native");
+    let build = weld_build(build_id).expect("requested weld build is native");
     let frozen =
         if book.weld_build_id == Some(build_id) { book.weld_component_ranks } else { None };
-    let mut ranks = [0; NATIVE_SKILL_ROW_COUNT];
+    let mut ranks = [0; SKILL_ROW_COUNT];
     for (index, &skill_id) in build.component_skill_ids.iter().enumerate() {
         ranks[skill_id] = match frozen {
             Some(frozen) => frozen[index],
@@ -366,15 +364,15 @@ pub fn native_weld_primary_vector_with_stat_book(
         }
         _ => unreachable!("weld build was checked above"),
     };
-    NativeWeldPrimaryVector {
+    WeldPrimaryVector {
         build_id,
-        cast_kind: native_weld_primary_cast_mode(build_id),
+        cast_kind: weld_primary_cast_mode(build_id),
         values: values.into_iter().map(fround).collect(),
     }
 }
 
 struct WeldInputs<'a> {
-    ranks: [u32; NATIVE_SKILL_ROW_COUNT],
+    ranks: [u32; SKILL_ROW_COUNT],
     weld_effect: f64,
     stat_book: &'a PlayerStatBookComponent,
 }

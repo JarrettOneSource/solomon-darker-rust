@@ -4,7 +4,7 @@
 use crate::economy::{EquipmentType, HubEquipmentState, HubInventoryItem};
 use crate::modding::inventory::{ModItemContent, ModWearableSlot};
 use crate::profile::WizardElement;
-use crate::spells::casting::NativePlayerWeaponKind;
+use crate::spells::casting::PlayerWeaponKind;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -17,7 +17,7 @@ pub struct PlayerEquipmentTintedSelector {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerWeaponAppearance {
-    pub kind: NativePlayerWeaponKind,
+    pub kind: PlayerWeaponKind,
     pub selector: usize,
 }
 
@@ -67,10 +67,10 @@ pub enum PlayerRenderableWeaponAppearance {
 
 impl PlayerRenderableWeaponAppearance {
     #[must_use]
-    pub const fn kind(&self) -> NativePlayerWeaponKind {
+    pub const fn kind(&self) -> PlayerWeaponKind {
         match self {
             Self::Native(weapon) => weapon.kind,
-            Self::ModStaff(_) => NativePlayerWeaponKind::Staff,
+            Self::ModStaff(_) => PlayerWeaponKind::Staff,
         }
     }
 }
@@ -134,13 +134,13 @@ pub fn player_death_equipment_appearance(
         robe: living.robe.unwrap_or_else(|| default_garment(element)),
         weapon: living
             .weapon
-            .unwrap_or(PlayerWeaponAppearance { kind: NativePlayerWeaponKind::Staff, selector: 0 }),
+            .unwrap_or(PlayerWeaponAppearance { kind: PlayerWeaponKind::Staff, selector: 0 }),
     }
 }
 
 fn default_garment(element: WizardElement) -> PlayerEquipmentTintedSelector {
     PlayerEquipmentTintedSelector {
-        primary_tint: native_wizard_icon_primary_tint(element),
+        primary_tint: wizard_icon_primary_tint(element),
         secondary_tint: 0xffffff,
         selector: 0,
     }
@@ -148,7 +148,7 @@ fn default_garment(element: WizardElement) -> PlayerEquipmentTintedSelector {
 
 /// `HUB_STARTER_EQUIPMENT_PRIMARY_TINT`: shared stock sprite/icon fallback palette.
 #[must_use]
-pub const fn native_wizard_icon_primary_tint(element: WizardElement) -> u32 {
+pub const fn wizard_icon_primary_tint(element: WizardElement) -> u32 {
     match element {
         WizardElement::Air => 0xa0c3c3,
         WizardElement::Earth => 0x90b390,
@@ -197,7 +197,7 @@ fn tinted_appearance(
             item.icon_tints.map(required_tints).unwrap_or((primary_tint, secondary_tint));
         return PlayerEquipmentTintedSelector { primary_tint, secondary_tint, selector };
     }
-    if item.native_selector.is_none() && item.icon_tints.is_none() {
+    if item.selector.is_none() && item.icon_tints.is_none() {
         return fallback;
     }
     assert_eq!(item.equipment_type, Some(kind), "native equipment type");
@@ -206,7 +206,7 @@ fn tinted_appearance(
     PlayerEquipmentTintedSelector {
         primary_tint,
         secondary_tint,
-        selector: item.native_selector.unwrap_or(0) as usize,
+        selector: item.selector.unwrap_or(0) as usize,
     }
 }
 
@@ -224,23 +224,23 @@ fn weapon_appearance(item: &HubInventoryItem) -> PlayerWeaponAppearance {
         assert_eq!(wearable.slot, ModWearableSlot::Staff, "mod death weapon slot");
         assert_eq!(item.equipment_type, Some(EquipmentType::Staff), "mod death weapon type");
         return PlayerWeaponAppearance {
-            kind: NativePlayerWeaponKind::Staff,
+            kind: PlayerWeaponKind::Staff,
             selector: wearable.death_shape,
         };
     }
     if let Some(recipe) = item.recipe_index {
         let (kind, selector) = match recipe {
-            2 => (NativePlayerWeaponKind::Wand, 2),
-            8 => (NativePlayerWeaponKind::Staff, 1),
-            13 => (NativePlayerWeaponKind::Wand, 4),
-            18 => (NativePlayerWeaponKind::Staff, 3),
-            28 => (NativePlayerWeaponKind::Wand, 3),
-            33 => (NativePlayerWeaponKind::Staff, 0),
-            34 => (NativePlayerWeaponKind::Staff, 2),
-            41..=45 => (NativePlayerWeaponKind::Wand, 5),
+            2 => (PlayerWeaponKind::Wand, 2),
+            8 => (PlayerWeaponKind::Staff, 1),
+            13 => (PlayerWeaponKind::Wand, 4),
+            18 => (PlayerWeaponKind::Staff, 3),
+            28 => (PlayerWeaponKind::Wand, 3),
+            33 => (PlayerWeaponKind::Staff, 0),
+            34 => (PlayerWeaponKind::Staff, 2),
+            41..=45 => (PlayerWeaponKind::Wand, 5),
             _ => panic!("unsupported native weapon appearance recipe {recipe}"),
         };
-        let expected = if kind == NativePlayerWeaponKind::Staff {
+        let expected = if kind == PlayerWeaponKind::Staff {
             EquipmentType::Staff
         } else {
             EquipmentType::Wand
@@ -248,12 +248,12 @@ fn weapon_appearance(item: &HubInventoryItem) -> PlayerWeaponAppearance {
         assert_eq!(item.equipment_type, Some(expected), "recipe weapon type");
         return PlayerWeaponAppearance { kind, selector };
     }
-    let Some(selector) = item.native_selector else {
-        return PlayerWeaponAppearance { kind: NativePlayerWeaponKind::Staff, selector: 0 };
+    let Some(selector) = item.selector else {
+        return PlayerWeaponAppearance { kind: PlayerWeaponKind::Staff, selector: 0 };
     };
     let kind = match item.equipment_type {
-        Some(EquipmentType::Staff) => NativePlayerWeaponKind::Staff,
-        Some(EquipmentType::Wand) => NativePlayerWeaponKind::Wand,
+        Some(EquipmentType::Staff) => PlayerWeaponKind::Staff,
+        Some(EquipmentType::Wand) => PlayerWeaponKind::Wand,
         _ => panic!("native weapon has Staff or Wand type"),
     };
     PlayerWeaponAppearance { kind, selector: selector as usize }

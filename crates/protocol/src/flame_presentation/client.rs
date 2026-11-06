@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use solomon_sim::spells::model::SpellState;
 use solomon_sim::spells::weld::{
-    NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS, NativeFlameCameraProposal, NativeFlameChannelVisual,
+    FLAME_CAMERA_MAX_PRESENTATION_TICKS, FlameCameraProposal, FlameChannelVisual,
 };
 
 use super::{
@@ -71,7 +71,7 @@ impl RetainedFlamePresentation {
         spells: &SpellState,
         stopped_world_tick: f64,
         live_region_tick: f64,
-    ) -> Result<Vec<NativeFlameCameraProposal>, String> {
+    ) -> Result<Vec<FlameCameraProposal>, String> {
         if stopped_world_tick < self.reset_tick as f64 {
             return Ok(Vec::new());
         }
@@ -87,8 +87,7 @@ impl RetainedFlamePresentation {
         let mut proposals = Vec::new();
         for birth in known.into_values() {
             let FlamePresentationRecipe::Ribbon {
-                birth: NativeFlameChannelVisual::NativeBirth(visual),
-                ..
+                birth: FlameChannelVisual::Birth(visual), ..
             } = birth.recipe
             else {
                 continue;
@@ -96,11 +95,11 @@ impl RetainedFlamePresentation {
             let Some(displacement) = visual.camera_displacement else { continue };
             if birth.birth_tick as f64 > stopped_world_tick
                 || live_region_tick
-                    >= (birth.birth_tick + NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS) as f64
+                    >= (birth.birth_tick + FLAME_CAMERA_MAX_PRESENTATION_TICKS) as f64
             {
                 continue;
             }
-            proposals.push(NativeFlameCameraProposal {
+            proposals.push(FlameCameraProposal {
                 id: birth.id,
                 birth_tick: birth.birth_tick,
                 world_key: birth.world_key,
@@ -147,13 +146,11 @@ impl RetainedFlamePresentation {
 }
 
 fn retained_camera_end_tick(birth: &FlamePresentationBirth) -> u64 {
-    if let FlamePresentationRecipe::Ribbon {
-        birth: NativeFlameChannelVisual::NativeBirth(visual),
-        ..
-    } = &birth.recipe
+    if let FlamePresentationRecipe::Ribbon { birth: FlameChannelVisual::Birth(visual), .. } =
+        &birth.recipe
         && visual.camera_displacement.is_some()
     {
-        return birth.birth_tick + NATIVE_FLAME_CAMERA_MAX_PRESENTATION_TICKS;
+        return birth.birth_tick + FLAME_CAMERA_MAX_PRESENTATION_TICKS;
     }
     birth.end_tick_exclusive
 }

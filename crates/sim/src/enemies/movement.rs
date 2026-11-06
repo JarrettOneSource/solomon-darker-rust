@@ -28,7 +28,7 @@ pub fn staff_movement_speed(actor: &EnemyActor) -> f64 {
 }
 
 /// Shared Spider/Wraith inherited route branch from `enemies/movement.ts`.
-pub fn route_native_enemy_goal(
+pub fn route_enemy_goal(
     actor: &mut EnemyActor,
     raw_goal: Vec2,
     target: Option<Vec2>,
@@ -37,7 +37,7 @@ pub fn route_native_enemy_goal(
 ) -> EnemyPathGoal {
     let goal = if target.is_none() {
         context
-            .native_movement_view
+            .movement_view
             .and_then(|view| {
                 crate::line_obstruction::line_bounds_exit_obstruction(
                     actor.position,
@@ -49,7 +49,7 @@ pub fn route_native_enemy_goal(
     } else {
         raw_goal
     };
-    let routed = resolve_native_enemy_path_goal(
+    let routed = resolve_enemy_path_goal(
         actor.path,
         EnemyPathGoalRequest {
             actor_position: actor.position,
@@ -58,7 +58,7 @@ pub fn route_native_enemy_goal(
             navigation_clearance: 25.0,
             raw_goal: goal,
             target_position: target,
-            target_refresh_ticks: native_enemy_target_refresh_ticks(actor.config.pathfinding_mode),
+            target_refresh_ticks: enemy_target_refresh_ticks(actor.config.pathfinding_mode),
         },
         context.geometry,
     );
@@ -81,7 +81,7 @@ pub fn move_toward_target(
         if status_factor <= 0.0001_f32 as f64 {
             return;
         }
-        let view = context.native_movement_view;
+        let view = context.movement_view;
         let visible = view.is_none_or(|view| {
             view.cameras.iter().any(|camera| {
                 actor.position.x + 100.0 >= camera.x
@@ -92,7 +92,7 @@ pub fn move_toward_target(
         });
         let illuminated =
             context.native_visibility.is_none_or(|sample| sample(actor.position).admitted);
-        let clock = native_enemy_movement_clock(
+        let clock = enemy_movement_clock(
             actor.id,
             context.tick,
             visible,
@@ -148,10 +148,10 @@ pub fn move_toward_target(
     if !uses_target_route {
         path.clear_route();
     }
-    let raw_goal = native_enemy_steering_goal(&path, &request);
+    let raw_goal = enemy_steering_goal(&path, &request);
     let mut goal = raw_goal;
     if !fleeing {
-        let routed = resolve_native_enemy_path_goal(
+        let routed = resolve_enemy_path_goal(
             path,
             EnemyPathGoalRequest {
                 actor_position: actor.position,
@@ -164,9 +164,7 @@ pub fn move_toward_target(
                 } else {
                     None
                 },
-                target_refresh_ticks: native_enemy_target_refresh_ticks(
-                    actor.config.pathfinding_mode,
-                ),
+                target_refresh_ticks: enemy_target_refresh_ticks(actor.config.pathfinding_mode),
             },
             context.geometry,
         );
@@ -177,7 +175,7 @@ pub fn move_toward_target(
         }
     }
     request.goal_position = Some(goal);
-    let steering = build_native_enemy_steering(path, request);
+    let steering = build_enemy_steering(path, request);
     let delta = steering.delta;
     let requested_position = Vec2::new(actor.position.x + delta.x, actor.position.y + delta.y);
     let position = context.geometry.resolve_movement(EnemyMovementRequest {

@@ -3,10 +3,10 @@
 //! Service admission failures and NPC hint acknowledgements do not replace it.
 
 use super::{
-    HubEconomyRejection, HubEconomyResult, HubEconomyState, HubInventoryAction,
-    NativeUnforgeOutcome, TransferDirection,
+    HubEconomyRejection, HubEconomyResult, HubEconomyState, HubInventoryAction, TransferDirection,
+    UnforgeOutcome,
 };
-use crate::profile::NATIVE_SKILL_CATALOG;
+use crate::profile::SKILL_CATALOG;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
@@ -79,7 +79,7 @@ impl HubActionFeedbackAction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeSkillBookOutcome {
+pub enum SkillBookOutcome {
     Choice,
     Rank { skill_id: Option<usize> },
 }
@@ -95,35 +95,32 @@ pub struct HubActionFeedback {
     pub reason: Option<HubEconomyRejection>,
     pub sequence: u64,
     #[cfg_attr(feature = "persistence", serde(default))]
-    pub skill_book_outcome: Option<NativeSkillBookOutcome>,
+    pub skill_book_outcome: Option<SkillBookOutcome>,
     pub transfer_direction: Option<TransferDirection>,
     pub transfer_gesture: Option<HubTransferGesture>,
-    pub unforge_outcome: Option<NativeUnforgeOutcome>,
+    pub unforge_outcome: Option<UnforgeOutcome>,
 }
 
-/// `skill-book-feedback.ts::NativeSkillBookFeedbackCursor`: retained receipts never replay.
+/// `skill-book-feedback.ts::SkillBookFeedbackCursor`: retained receipts never replay.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct NativeSkillBookFeedbackCursor {
+pub struct SkillBookFeedbackCursor {
     sequence: u64,
 }
 
 /// One newer accepted native book outcome, shared by the modal and world-text consumers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeSkillBookReceipt {
+pub struct SkillBookReceipt {
     pub sequence: u64,
-    pub outcome: NativeSkillBookOutcome,
+    pub outcome: SkillBookOutcome,
 }
 
-impl NativeSkillBookFeedbackCursor {
+impl SkillBookFeedbackCursor {
     #[must_use]
     pub fn new(initial: Option<&HubActionFeedback>) -> Self {
         Self { sequence: initial.map_or(0, |feedback| feedback.sequence) }
     }
 
-    pub fn consume(
-        &mut self,
-        feedback: Option<&HubActionFeedback>,
-    ) -> Option<NativeSkillBookReceipt> {
+    pub fn consume(&mut self, feedback: Option<&HubActionFeedback>) -> Option<SkillBookReceipt> {
         let feedback = feedback?;
         if feedback.sequence <= self.sequence {
             return None;
@@ -134,16 +131,16 @@ impl NativeSkillBookFeedbackCursor {
         }
         feedback
             .skill_book_outcome
-            .map(|outcome| NativeSkillBookReceipt { sequence: feedback.sequence, outcome })
+            .map(|outcome| SkillBookReceipt { sequence: feedback.sequence, outcome })
     }
 }
 
 /// `nativeSkillBookResultText`: only the authored rank-award rows 8..81 are valid.
-pub fn native_skill_book_result_text(skill_id: usize) -> Result<String, String> {
+pub fn skill_book_result_text(skill_id: usize) -> Result<String, String> {
     if !(8..=81).contains(&skill_id) {
         return Err("Book result must name a native rank-award skill".to_owned());
     }
-    Ok(format!("{} +1", NATIVE_SKILL_CATALOG[skill_id].name))
+    Ok(format!("{} +1", SKILL_CATALOG[skill_id].name))
 }
 
 impl HubEconomyState {

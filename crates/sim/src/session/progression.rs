@@ -5,9 +5,9 @@ use crate::enemies::model::{EnemyDamageRequest, EnemyDamageResult};
 use crate::game_run::GameRunPhase;
 use crate::painter::WorldManagerLane;
 use crate::profile::{PlayerSkillChoice, SharedPlayerLevelMilestone};
-use crate::score::NativeHallOfFamePlayerScoreState;
-use crate::secondary::NativePlayerMindblastInput;
-use crate::spells::boneyard::boneyard_native_secondary_targets;
+use crate::score::HallOfFamePlayerScoreState;
+use crate::secondary::PlayerMindblastInput;
+use crate::spells::boneyard::boneyard_secondary_targets;
 
 impl GameSession {
     pub fn grant_experience(&mut self, id: &str, amount: f64) -> Vec<u64> {
@@ -259,7 +259,7 @@ impl GameSession {
         let world_key = self.world_key(id).unwrap();
         let light = self.painter_order.register(WorldManagerLane::Actor);
         let triggered = self.secondary.trigger_player_mindblast(
-            NativePlayerMindblastInput {
+            PlayerMindblastInput {
                 direct_damage: None,
                 element: participant.player.selection.element,
                 level: participant.player.progression.level,
@@ -274,11 +274,8 @@ impl GameSession {
         if triggered.direct_damage > 0.0
             && let Some(world) = &self.boneyard
         {
-            let targets = boneyard_native_secondary_targets(
-                &world.enemies,
-                position,
-                triggered.direct_radius,
-            );
+            let targets =
+                boneyard_secondary_targets(&world.enemies, position, triggered.direct_radius);
             for target in targets {
                 let x = target.position.x - position.x;
                 let y = target.position.y - position.y;
@@ -323,7 +320,7 @@ impl GameSession {
             && let Some(id) = credited
             && let Some(participant) = self.participants.get_mut(&id)
         {
-            let player = NativeHallOfFamePlayerScoreState {
+            let player = HallOfFamePlayerScoreState {
                 current_health: participant.player.combat.current_health,
                 maximum_health: participant.player.combat.maximum_health,
                 level: participant.player.progression.level,

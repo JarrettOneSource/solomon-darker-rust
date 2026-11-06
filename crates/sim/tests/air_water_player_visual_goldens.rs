@@ -2,15 +2,15 @@
 use serde_json::{Value, json};
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::{WorldManagerLane, WorldPainterOrder};
-use solomon_sim::profile::offensive::NativeOffensiveSpellFactors;
-use solomon_sim::profile::primary::{NativePrimarySkillProfile, native_primary_skill_profile};
-use solomon_sim::profile::{NativeSkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::offensive::OffensiveSpellFactors;
+use solomon_sim::profile::primary::{PrimarySkillProfile, primary_skill_profile};
+use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
 use solomon_sim::spells::air_water::*;
-use solomon_sim::spells::casting::NativePlayerWeaponKind;
+use solomon_sim::spells::casting::PlayerWeaponKind;
 use solomon_sim::spells::model::PrimarySpellTransient;
 use solomon_sim::spells::model::*;
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
-use solomon_sim::{NativeRng, Vec2};
+use solomon_sim::{Rng, Vec2};
 #[path = "support/website_rows.rs"]
 mod website_rows;
 
@@ -57,16 +57,16 @@ fn actor_row(actor: &PrimarySpellTransient) -> Value {
 }
 fn hurricane_plan(actor: &PrimarySpellAirHurricane) -> Value {
     json!(
-        native_hurricane_visual_plan(actor)
+        hurricane_visual_plan(actor)
             .iter()
             .map(|draw| json!([
                 draw.alpha,
                 draw.additive,
                 point(draw.position),
                 match draw.role {
-                    NativeHurricaneSpriteRole::Core => "core",
-                    NativeHurricaneSpriteRole::Lane => "lane",
-                    NativeHurricaneSpriteRole::LaneCopy => "lane-copy",
+                    HurricaneSpriteRole::Core => "core",
+                    HurricaneSpriteRole::Lane => "lane",
+                    HurricaneSpriteRole::LaneCopy => "lane-copy",
                 },
                 draw.rotation_radians,
                 point(draw.scale),
@@ -83,11 +83,11 @@ fn visual_row(actor: &PrimarySpellTransient) -> Value {
             json!({"full":hurricane_plan(actor),"reduced":hurricane_plan(&reduced)})
         }
         PrimarySpellTransient::WaterAura(actor) => {
-            let draw = native_water_aura_visual_plan(actor);
+            let draw = water_aura_visual_plan(actor);
             json!({"alpha":draw.alpha,"rotationRadians":draw.rotation_radians,"scale":draw.scale,"tint":draw.tint})
         }
         PrimarySpellTransient::WaterHail(actor) => {
-            let draw = native_hail_visual_plan(actor);
+            let draw = hail_visual_plan(actor);
             json!({"alpha":draw.alpha,"offsetY":draw.offset_y,"rotationRadians":draw.rotation_radians,"scale":draw.scale})
         }
         _ => Value::Null,
@@ -98,9 +98,9 @@ fn owner_synchronization_hail_births_bounces_and_aura_finalization_preserve_sour
     let fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/air-water-player-visual-goldens.json"))
             .unwrap();
-    let book = NativeSkillBookState::new(WizardElement::Water, WizardDiscipline::Arcane);
-    let NativePrimarySkillProfile::Water(mut water) =
-        native_primary_skill_profile(&book, &NativeOffensiveSpellFactors::default())
+    let book = SkillBookState::new(WizardElement::Water, WizardDiscipline::Arcane);
+    let PrimarySkillProfile::Water(mut water) =
+        primary_skill_profile(&book, &OffensiveSpellFactors::default())
     else {
         unreachable!()
     };
@@ -109,12 +109,12 @@ fn owner_synchronization_hail_births_bounces_and_aura_finalization_preserve_sour
     water.hail_damage_minimum = 0.25;
     water.hail_damage_maximum = 1.5;
     water.widen_half_degrees = 10.0;
-    let profile = NativePrimarySkillProfile::Water(water);
+    let profile = PrimarySkillProfile::Water(water);
     for case in fixture["cases"].as_array().unwrap() {
         let mode = case["mode"].as_str().unwrap();
         let mut wizard = HubWizard::at(Vec2::new(150.0, 250.0));
         let mut spells = SpellState::default();
-        let mut rng = NativeRng::new(931);
+        let mut rng = Rng::new(931);
         let mut order = WorldPainterOrder { next_actor_ordinal: 50, next_transient_ordinal: 3 };
         let mut mana = if mode == "underpowered-water" { 0.001 } else { 1000.0 };
         for tick in 0..=180 {
@@ -122,7 +122,7 @@ fn owner_synchronization_hail_births_bounces_and_aura_finalization_preserve_sour
             let result = spells.step_primary(
                 &mut wizard,
                 PrimarySpellCastAuthority {
-                    weapon_kind: Some(NativePlayerWeaponKind::Staff),
+                    weapon_kind: Some(PlayerWeaponKind::Staff),
                     alive: true,
                     available_mana: mana,
                     cast_progress_factor: 1.0,

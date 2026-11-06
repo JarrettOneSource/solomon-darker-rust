@@ -2,85 +2,82 @@
 //! words and registrations. Path lights reuse these samples without RNG draws.
 
 use super::effects::{
-    NativeWeldChannelActorState, NativeWeldChannelInput, NativeWeldFlameLashFadeInput,
-    NativeWeldFlameLashFadeState, NativeWeldFlameLashFadeVariant, create_native_weld_channel_actor,
-    create_native_weld_flame_lash_fade,
+    WeldChannelActorState, WeldChannelInput, WeldFlameLashFadeInput, WeldFlameLashFadeState,
+    WeldFlameLashFadeVariant, create_weld_channel_actor, create_weld_flame_lash_fade,
 };
 use super::flame_geometry::{
-    NATIVE_FLAME_MAXIMUM_PATH_POINTS, NativeFlameLashFactoryInput, NativeFlameLashGeometryKind,
-    native_flame_lash_birth_phase, native_flame_lash_factory_geometry,
-    native_flame_lash_path_points,
+    FLAME_MAXIMUM_PATH_POINTS, FlameLashFactoryInput, FlameLashGeometryKind,
+    flame_lash_birth_phase, flame_lash_factory_geometry, flame_lash_path_points,
 };
 use super::flame_state::{
-    NativeFlameChannelBirth, NativeFlameChannelRole, NativeFlameChannelVisual,
-    NativeFlameFadeVisual, NativeFlamePathBirth, NativeFlameRibbonBirth,
-    native_flame_fade_wrapper_intensity,
+    FlameChannelBirth, FlameChannelRole, FlameChannelVisual, FlameFadeVisual, FlamePathBirth,
+    FlameRibbonBirth, flame_fade_wrapper_intensity,
 };
-use super::model::NativeWeldActorBirth;
-use crate::boneyard::lighting::NativeBoneyardLightSource;
+use super::model::WeldActorBirth;
+use crate::boneyard::lighting::BoneyardLightSource;
 use crate::float::fround;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub struct NativeFlameLashFactoryBirthInput<'a> {
-    pub channel: NativeWeldChannelInput<'a>,
+pub struct FlameLashFactoryBirthInput<'a> {
+    pub channel: WeldChannelInput<'a>,
     pub source_fade_id: u64,
-    pub geometry: NativeFlameLashFactoryInput,
-    pub role: NativeFlameChannelRole,
+    pub geometry: FlameLashFactoryInput,
+    pub role: FlameChannelRole,
     pub camera_displacement: Option<Vec2>,
     pub width: f64,
     pub creator_registration: PainterRegistration,
     pub misc_append_ordinal: usize,
 }
 
-pub struct NativeFlameLashFactoryBirth {
-    pub channel: NativeWeldChannelActorState,
-    pub source: NativeWeldFlameLashFadeState,
+pub struct FlameLashFactoryBirth {
+    pub channel: WeldChannelActorState,
+    pub source: WeldFlameLashFadeState,
 }
 
 /// Source flare first, short-only width, path intensity, then each ordered radius.
-pub fn create_native_flame_lash_factory(
-    input: NativeFlameLashFactoryBirthInput<'_>,
-    rng: &mut NativeRng,
+pub fn create_flame_lash_factory(
+    input: FlameLashFactoryBirthInput<'_>,
+    rng: &mut Rng,
     painters: &mut WorldPainterOrder,
-) -> Result<NativeFlameLashFactoryBirth, String> {
-    let needs_camera = input.role == NativeFlameChannelRole::Main && !input.channel.underpowered;
+) -> Result<FlameLashFactoryBirth, String> {
+    let needs_camera = input.role == FlameChannelRole::Main && !input.channel.underpowered;
     if needs_camera != input.camera_displacement.is_some() {
         return Err("Flame camera birth sample does not match its caller".into());
     }
-    let source = create_native_weld_flame_lash_fade(
-        NativeWeldFlameLashFadeInput {
-            birth: NativeWeldActorBirth {
+    let source = create_weld_flame_lash_fade(
+        WeldFlameLashFadeInput {
+            birth: WeldActorBirth {
                 id: input.source_fade_id,
                 origin: input.geometry.start,
                 ..input.channel.birth
             },
             alpha: 0.5,
-            variant: NativeWeldFlameLashFadeVariant::Source,
+            variant: WeldFlameLashFadeVariant::Source,
             enhanced_effects: input.channel.enhanced_effects,
         },
         rng,
         Some(painters),
     );
-    let geometry = native_flame_lash_factory_geometry(input.geometry)?;
+    let geometry = flame_lash_factory_geometry(input.geometry)?;
     let ribbon = match geometry.kind {
-        NativeFlameLashGeometryKind::Short => NativeFlameRibbonBirth::Short {
+        FlameLashGeometryKind::Short => FlameRibbonBirth::Short {
             width_factor: fround(0.75 + rng.draw_scaled_float(0.25, false)),
         },
-        NativeFlameLashGeometryKind::Long => NativeFlameRibbonBirth::Long {
-            phase_degrees: native_flame_lash_birth_phase(input.channel.birth.tick),
+        FlameLashGeometryKind::Long => FlameRibbonBirth::Long {
+            phase_degrees: flame_lash_birth_phase(input.channel.birth.tick),
         },
     };
     let mut intensity = fround(0.25 + rng.draw_scaled_float(0.75, false));
     if input.channel.underpowered {
         intensity = fround(intensity * 0.25);
     }
-    let points = native_flame_lash_path_points(&geometry, NATIVE_FLAME_MAXIMUM_PATH_POINTS)?;
+    let points = flame_lash_path_points(&geometry, FLAME_MAXIMUM_PATH_POINTS)?;
     let mut radius_factors = Vec::with_capacity(points.len());
     for _ in points {
         radius_factors.push(fround(0.75 + rng.draw_scaled_float(0.25, false)));
     }
-    let birth = NativeFlameChannelBirth {
+    let birth = FlameChannelBirth {
         role: input.role,
         camera_displacement: input.camera_displacement,
         start: geometry.start,
@@ -89,38 +86,38 @@ pub fn create_native_flame_lash_factory(
         offset: Vec2::new(fround(input.geometry.offset.x), fround(input.geometry.offset.y)),
         width: input.width,
         ribbon,
-        path: NativeFlamePathBirth {
+        path: FlamePathBirth {
             intensity,
             radius_factors,
             creator_registration: input.creator_registration,
             misc_append_ordinal: input.misc_append_ordinal,
         },
     };
-    let mut channel = create_native_weld_channel_actor(NativeWeldChannelInput {
-        flame_visual: Some(NativeFlameChannelVisual::NativeBirth(birth)),
+    let mut channel = create_weld_channel_actor(WeldChannelInput {
+        flame_visual: Some(FlameChannelVisual::Birth(birth)),
         ..input.channel
     });
     channel.common.owner.painter_registrations.push(painters.register(WorldManagerLane::Actor));
-    Ok(NativeFlameLashFactoryBirth { channel, source })
+    Ok(FlameLashFactoryBirth { channel, source })
 }
 
-pub fn native_flame_lash_path_lights(
-    birth: &NativeFlameChannelBirth,
+pub fn flame_lash_path_lights(
+    birth: &FlameChannelBirth,
     enhanced_effects: bool,
-) -> Result<Vec<NativeBoneyardLightSource>, String> {
-    let geometry = native_flame_lash_factory_geometry(NativeFlameLashFactoryInput {
+) -> Result<Vec<BoneyardLightSource>, String> {
+    let geometry = flame_lash_factory_geometry(FlameLashFactoryInput {
         start: birth.start,
         control: birth.control,
         end: birth.end,
         offset: birth.offset,
     })?;
-    let points = native_flame_lash_path_points(&geometry, NATIVE_FLAME_MAXIMUM_PATH_POINTS)?;
+    let points = flame_lash_path_points(&geometry, FLAME_MAXIMUM_PATH_POINTS)?;
     if points.len() != birth.path.radius_factors.len() {
         return Err("Flame path lost a birth radius".into());
     }
     let mut lights = Vec::with_capacity(points.len());
     for (index, position) in points.into_iter().enumerate() {
-        lights.push(NativeBoneyardLightSource::new(
+        lights.push(BoneyardLightSource::new(
             position,
             birth.path.radius_factors[index],
             birth.path.intensity,
@@ -131,17 +128,15 @@ pub fn native_flame_lash_path_lights(
 }
 
 #[must_use]
-pub fn native_flame_lash_fade_light(
-    actor: &NativeWeldFlameLashFadeState,
-) -> Option<NativeBoneyardLightSource> {
-    let NativeFlameFadeVisual::NativeBirth(birth) = actor.flame_visual else { return None };
-    if actor.variant == NativeWeldFlameLashFadeVariant::Source || actor.alpha <= 0.0 {
+pub fn flame_lash_fade_light(actor: &WeldFlameLashFadeState) -> Option<BoneyardLightSource> {
+    let FlameFadeVisual::Birth(birth) = actor.flame_visual else { return None };
+    if actor.variant == WeldFlameLashFadeVariant::Source || actor.alpha <= 0.0 {
         return None;
     }
-    Some(NativeBoneyardLightSource::new(
+    Some(BoneyardLightSource::new(
         actor.position,
         fround(birth.birth_alpha * actor.wrapper_scalar),
-        native_flame_fade_wrapper_intensity(birth.birth_alpha, actor.common.owner.age_ticks),
+        flame_fade_wrapper_intensity(birth.birth_alpha, actor.common.owner.age_ticks),
         false,
     ))
 }

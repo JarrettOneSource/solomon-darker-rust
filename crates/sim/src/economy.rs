@@ -9,42 +9,41 @@ mod feedback;
 mod inventory;
 mod services;
 
-pub use crate::equipment::NativeEquipmentEffect;
-pub use archive::{CompletedRunEconomyArchive, NATIVE_RETAINED_SACK_SUFFIXES};
+pub use crate::equipment::EquipmentEffect;
+pub use archive::{CompletedRunEconomyArchive, RETAINED_SACK_SUFFIXES};
 pub use catalog::{
-    DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS,
-    NATIVE_SKILL_BOOK_DEFINITIONS,
+    DOWSING_EQUIPMENT_RECIPES, FOMENTIUS_STOCK_DEFINITIONS, HAGATHA_PERKS, SKILL_BOOK_DEFINITIONS,
 };
 pub use feedback::{
-    HubActionFeedback, HubActionFeedbackAction, HubTransferGesture, NativeSkillBookFeedbackCursor,
-    NativeSkillBookOutcome, NativeSkillBookReceipt, native_skill_book_result_text,
+    HubActionFeedback, HubActionFeedbackAction, HubTransferGesture, SkillBookFeedbackCursor,
+    SkillBookOutcome, SkillBookReceipt, skill_book_result_text,
 };
 pub(crate) use inventory::base_item;
 pub use inventory::{
     INVENTORY_SACK_NAME_MAX_LENGTH, ProjectedInventoryItem, ProjectedInventoryRootSlot,
     create_equipment_inventory_item, create_fomentius_inventory_item,
-    create_native_skill_book_inventory_item, find_inventory_item, inventory_items_at_sack_path,
-    inventory_items_share_stack, native_equipment_meets_level_requirement,
-    native_equipment_required_level, normalize_inventory_sack_name, project_inventory_items,
-    project_inventory_root_slots, reconcile_inventory_sack_path,
+    create_skill_book_inventory_item, equipment_meets_level_requirement, equipment_required_level,
+    find_inventory_item, inventory_items_at_sack_path, inventory_items_share_stack,
+    normalize_inventory_sack_name, project_inventory_items, project_inventory_root_slots,
+    reconcile_inventory_sack_path,
 };
 pub use services::{
-    native_dye_committed_tint, native_dye_mixed_tint, native_hagatha_bundle_state_is_valid,
-    native_hagatha_outcome_state_is_valid,
+    dye_committed_tint, dye_mixed_tint, hagatha_bundle_state_is_valid,
+    hagatha_outcome_state_is_valid,
 };
 
-use crate::NativeRng;
-use crate::appearance::roll_native_starter_equipment_appearance;
+use crate::Rng;
+use crate::appearance::roll_starter_equipment_appearance;
 use crate::modding::content::ModBoastSelection;
 use crate::modding::inventory::{ModConsumableContent, ModEquipmentAffix, ModItemContent};
 use crate::profile::WizardElement;
 
-pub const NATIVE_FRESH_PROFILE_GOLD: u64 = 500;
+pub const FRESH_PROFILE_GOLD: u64 = 500;
 pub const HUB_INVENTORY_SLOT_CAPACITY: usize = 88;
 pub const HUB_STORAGE_SLOT_CAPACITY: usize = 28;
-pub const NATIVE_DOWSING_MAX_OFFERS: usize = 6;
-pub const NATIVE_LOOT_BACKPACK_REPLICATION_LIMIT: usize = 2048;
-pub const HUB_SACK_CHILD_REPLICATION_LIMIT: usize = NATIVE_LOOT_BACKPACK_REPLICATION_LIMIT + 7;
+pub const DOWSING_MAX_OFFERS: usize = 6;
+pub const LOOT_BACKPACK_REPLICATION_LIMIT: usize = 2048;
+pub const HUB_SACK_CHILD_REPLICATION_LIMIT: usize = LOOT_BACKPACK_REPLICATION_LIMIT + 7;
 pub const HUB_SACK_REPLICATION_DEPTH_LIMIT: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -198,10 +197,13 @@ pub struct HubInventoryItem {
     #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
     pub mod_affixes: Option<Vec<ModEquipmentAffix>>,
     pub name: String,
-    pub native_subtype: Option<u32>,
-    pub native_selector: Option<u32>,
-    pub native_effects: Option<Vec<NativeEquipmentEffect>>,
-    pub native_type_id: u32,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_subtype"))]
+    pub subtype: Option<u32>,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_selector"))]
+    pub selector: Option<u32>,
+    pub native_effects: Option<Vec<EquipmentEffect>>,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+    pub type_id: u32,
     pub quantity: u32,
     pub rarity: Option<ItemRarity>,
     pub recipe_index: Option<usize>,
@@ -221,7 +223,7 @@ pub struct EquipmentRecipe {
     pub icon_tints: [Option<u32>; 2],
     pub level: u32,
     pub name: &'static str,
-    pub native_type_id: u32,
+    pub type_id: u32,
     pub rarity: ItemRarity,
     pub set_name: Option<&'static str>,
     pub source_index: usize,
@@ -234,20 +236,20 @@ pub struct FomentiusStockDefinition {
     pub icon_records: &'static [usize],
     pub kind: HubItemKind,
     pub name: &'static str,
-    pub native_subtype: u32,
-    pub native_type_id: u32,
+    pub subtype: u32,
+    pub type_id: u32,
     pub price: u64,
     pub quantity_offset: u32,
     pub roll_bound: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeSkillBookDefinition {
+pub struct SkillBookDefinition {
     pub icon_records: &'static [usize],
     pub key: &'static str,
     pub name: &'static str,
-    pub native_subtype: u32,
-    pub native_type_id: u32,
+    pub subtype: u32,
+    pub type_id: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -373,7 +375,7 @@ impl Default for NativeHubNpcState {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeUnforgeBonuses {
+pub struct UnforgeBonuses {
     pub experience: f64,
     pub mana_cost_reduction: f64,
     pub maximum_health: f64,
@@ -384,7 +386,7 @@ pub struct NativeUnforgeBonuses {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeUnforgeOutcomeKind {
+pub enum UnforgeOutcomeKind {
     Experience,
     Fizzle,
     FullRejuvenation,
@@ -396,7 +398,7 @@ pub enum NativeUnforgeOutcomeKind {
     OffensiveDamage,
 }
 
-impl NativeUnforgeOutcomeKind {
+impl UnforgeOutcomeKind {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -415,10 +417,10 @@ impl NativeUnforgeOutcomeKind {
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeUnforgeOutcome {
+pub struct UnforgeOutcome {
     pub amount: Option<f64>,
     pub item_name: String,
-    pub kind: NativeUnforgeOutcomeKind,
+    pub kind: UnforgeOutcomeKind,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -444,11 +446,11 @@ pub struct HubEconomyState {
     pub npc: NativeHubNpcState,
     pub owned_perk_selectors: Vec<u32>,
     pub revision: u64,
-    pub rng: NativeRng,
+    pub rng: Rng,
     pub storage: Vec<HubInventoryItem>,
     pub tonic_purchases: u32,
     pub tutorial_pending: bool,
-    pub unforge_bonuses: NativeUnforgeBonuses,
+    pub unforge_bonuses: UnforgeBonuses,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -501,8 +503,8 @@ pub struct HubEconomyResult {
     pub reason: Option<HubEconomyRejection>,
     pub dowsing_pitch: Option<f64>,
     #[cfg_attr(feature = "persistence", serde(default))]
-    pub dye_session: Option<NativeInventoryDyeSession>,
-    pub unforge_outcome: Option<NativeUnforgeOutcome>,
+    pub dye_session: Option<InventoryDyeSession>,
+    pub unforge_outcome: Option<UnforgeOutcome>,
 }
 
 impl HubEconomyResult {
@@ -535,7 +537,7 @@ pub enum TransferDirection {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeDyeLayer {
+pub enum DyeLayer {
     Cloth,
     Trim,
 }
@@ -543,7 +545,7 @@ pub enum NativeDyeLayer {
 /// One open Fabric Dye painting, owned transiently by the Session rather than a save.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeInventoryDyeSession {
+pub struct InventoryDyeSession {
     pub id: String,
     pub dye_item_id: u64,
     pub kit_consumed: bool,
@@ -619,7 +621,7 @@ pub enum HubInventoryAction {
     Dye {
         session_id: String,
         target_item_id: u64,
-        layer: NativeDyeLayer,
+        layer: DyeLayer,
         swatch_rows: Vec<usize>,
     },
     Unforge {
@@ -665,7 +667,7 @@ impl HubInventoryAction {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeUnforgeVitals {
+pub struct UnforgeVitals {
     pub current_health: f64,
     pub current_mana: f64,
     pub maximum_health: f64,
@@ -678,7 +680,7 @@ pub struct HubEconomyContext {
     pub player_level: u32,
     pub creativity_rank: u32,
     pub advanced_unlocks: [bool; 8],
-    pub vitals: NativeUnforgeVitals,
+    pub vitals: UnforgeVitals,
 }
 
 impl Default for HubEconomyContext {
@@ -687,7 +689,7 @@ impl Default for HubEconomyContext {
             player_level: 1,
             creativity_rank: 0,
             advanced_unlocks: [false; 8],
-            vitals: NativeUnforgeVitals {
+            vitals: UnforgeVitals {
                 current_health: 100.0,
                 current_mana: 100.0,
                 maximum_health: 100.0,
@@ -702,8 +704,7 @@ impl HubEconomyState {
     /// independently, as the source does; appearance draws do not advance the shop stream.
     #[must_use]
     pub fn new(seed: i64, element: WizardElement) -> Self {
-        let appearance =
-            roll_native_starter_equipment_appearance(&mut NativeRng::new(seed), element.into());
+        let appearance = roll_starter_equipment_appearance(&mut Rng::new(seed), element.into());
         let (backpack, equipment, next_item_id) = inventory::starter_loadout(1, appearance);
         let mut state = Self {
             action_feedback: None,
@@ -716,18 +717,18 @@ impl HubEconomyState {
             equipment,
             first_mixed_selectors: Vec::new(),
             fomentius_stock: Vec::new(),
-            gold: NATIVE_FRESH_PROFILE_GOLD,
+            gold: FRESH_PROFILE_GOLD,
             hagatha_bundle_selectors: Vec::new(),
             next_item_id,
             next_offer_id: 1,
             npc: NativeHubNpcState::default(),
             owned_perk_selectors: Vec::new(),
             revision: 0,
-            rng: NativeRng::new(seed),
+            rng: Rng::new(seed),
             storage: Vec::new(),
             tonic_purchases: 0,
             tutorial_pending: true,
-            unforge_bonuses: NativeUnforgeBonuses::default(),
+            unforge_bonuses: UnforgeBonuses::default(),
         };
         state.roll_fomentius_stock();
         state
@@ -756,7 +757,7 @@ impl HubEconomyState {
         action: &HubInventoryAction,
         context: &HubEconomyContext,
         extensions: Option<&dyn crate::modding::extensions::GameSimulationExtensions>,
-        dye_session: Option<&NativeInventoryDyeSession>,
+        dye_session: Option<&InventoryDyeSession>,
     ) -> HubEconomyResult {
         let original = self.clone();
         let result = self.apply_command(action, context, extensions, dye_session);

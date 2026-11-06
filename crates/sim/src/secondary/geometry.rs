@@ -5,27 +5,24 @@ use crate::boneyard::BoneyardBounds;
 use crate::boneyard::collision::{BoneyardCollisionWorld, can_place_boneyard_body};
 use crate::float;
 use crate::float::fround;
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 
-pub const NATIVE_TELEPORT_COLLISION_RADIUS: f64 = 40.0;
-pub const NATIVE_GOLEM_PLACEMENT_RADIUS: f64 = 25.0;
+pub const TELEPORT_COLLISION_RADIUS: f64 = 40.0;
+pub const GOLEM_PLACEMENT_RADIUS: f64 = 25.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct BoneyardNativeTeleportBody {
+pub struct BoneyardTeleportBody {
     pub position: Vec2,
     pub radius: f64,
 }
 
-pub struct BoneyardNativeTeleportWorld<'a> {
-    pub bodies: &'a [BoneyardNativeTeleportBody],
+pub struct BoneyardTeleportWorld<'a> {
+    pub bodies: &'a [BoneyardTeleportBody],
     pub bounds: BoneyardBounds,
     pub collision: &'a BoneyardCollisionWorld,
 }
 
-pub fn resolve_boneyard_native_teleport(
-    world: BoneyardNativeTeleportWorld<'_>,
-    rng: &mut NativeRng,
-) -> Vec2 {
+pub fn resolve_boneyard_teleport(world: BoneyardTeleportWorld<'_>, rng: &mut Rng) -> Vec2 {
     let mut candidates = Vec::new();
     let maximum_x = fround(world.bounds.x + world.bounds.width - 100.0);
     let maximum_y = fround(world.bounds.y + world.bounds.height - 100.0);
@@ -64,35 +61,30 @@ pub fn resolve_boneyard_native_teleport(
         let x = rng.draw_scaled_float(world.bounds.width, false);
         Vec2::new(fround(world.bounds.x + x), fround(world.bounds.y + y))
     });
-    resolve_native_collision_adjusted_position(
-        selected,
-        NATIVE_TELEPORT_COLLISION_RADIUS,
-        rng,
-        |position| {
-            if !can_place_boneyard_body(
-                position,
-                world.bounds,
-                world.collision,
-                NATIVE_TELEPORT_COLLISION_RADIUS,
-            ) {
-                return false;
-            }
-            world.bodies.iter().all(|body| {
-                let minimum = NATIVE_TELEPORT_COLLISION_RADIUS + body.radius;
-                let dx = position.x - body.position.x;
-                let dy = position.y - body.position.y;
-                dx * dx + dy * dy >= minimum * minimum
-            })
-        },
-    )
+    resolve_collision_adjusted_position(selected, TELEPORT_COLLISION_RADIUS, rng, |position| {
+        if !can_place_boneyard_body(
+            position,
+            world.bounds,
+            world.collision,
+            TELEPORT_COLLISION_RADIUS,
+        ) {
+            return false;
+        }
+        world.bodies.iter().all(|body| {
+            let minimum = TELEPORT_COLLISION_RADIUS + body.radius;
+            let dx = position.x - body.position.x;
+            let dy = position.y - body.position.y;
+            dx * dx + dy * dy >= minimum * minimum
+        })
+    })
 }
 
 /// Source legalization searches expanding, vertically compressed rings and returns
 /// the first legal probe. The host supplies the real hub/Boneyard static predicate.
-pub fn resolve_native_collision_adjusted_position(
+pub fn resolve_collision_adjusted_position(
     requested: Vec2,
     body_radius: f64,
-    rng: &mut NativeRng,
+    rng: &mut Rng,
     can_place: impl Fn(Vec2) -> bool,
 ) -> Vec2 {
     assert!(
@@ -133,7 +125,7 @@ pub fn resolve_native_collision_adjusted_position(
 /// Phase uses unrounded positions and the first traversable 80..270 unit probe.
 /// `can_place` includes the actual player's radius and current world geometry.
 #[must_use]
-pub fn resolve_native_phasing_destination(
+pub fn resolve_phasing_destination(
     origin: Vec2,
     direction: Vec2,
     can_place: impl Fn(Vec2) -> bool,

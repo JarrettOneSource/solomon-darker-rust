@@ -1,12 +1,9 @@
 use serde::Deserialize;
 use solomon_sim::economy::{EquipmentSlot, HubEconomyRejection, HubInventoryAction};
 use solomon_sim::player_panels::{
-    format_native_skill_tooltip_line, native_inventory_rejection_notice,
-    native_skill_book_page_placements,
+    format_skill_tooltip_line, inventory_rejection_notice, skill_book_page_placements,
 };
-use solomon_sim::profile::{
-    NATIVE_SKILL_CATALOG, NativeSkillBookState, WizardDiscipline, WizardElement,
-};
+use solomon_sim::profile::{SKILL_CATALOG, SkillBookState, WizardDiscipline, WizardElement};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,7 +48,7 @@ fn inventory_rejections_use_authored_notices_and_keep_ordinary_failures_non_moda
             "required-clothing" => HubEconomyRejection::RequiredClothing,
             _ => panic!("unknown source rejection"),
         };
-        let actual = native_inventory_rejection_notice(&action, reason).unwrap();
+        let actual = inventory_rejection_notice(&action, reason).unwrap();
         assert_eq!(actual.title, expected.title);
         assert_eq!(actual.body, expected.body);
     }
@@ -69,7 +66,7 @@ fn inventory_rejections_use_authored_notices_and_keep_ordinary_failures_non_moda
         HubEconomyRejection::SlotLocked,
     ] {
         assert!(
-            native_inventory_rejection_notice(&action, reason).is_none(),
+            inventory_rejection_notice(&action, reason).is_none(),
             "{reason:?} uses native bad-action feedback, not reason-code copy"
         );
     }
@@ -96,11 +93,7 @@ fn authored_tooltip_templates_match_website_formatting() {
         serde_json::from_str(include_str!("fixtures/website/player-panels-goldens.json")).unwrap();
     for stat in fixture.formatted_stats {
         assert_eq!(
-            format_native_skill_tooltip_line(
-                &stat.source,
-                &NATIVE_SKILL_CATALOG[stat.id],
-                stat.rank
-            ),
+            format_skill_tooltip_line(&stat.source, &SKILL_CATALOG[stat.id], stat.rank),
             stat.expected,
             "{} rank {}: {}",
             stat.id,
@@ -129,11 +122,11 @@ fn learned_dependency_pages_match_the_website_in_order_and_geometry() {
             .into_iter()
             .find(|value| value.as_str() == case.discipline)
             .unwrap();
-        let mut book = NativeSkillBookState::new(element, discipline);
+        let mut book = SkillBookState::new(element, discipline);
         for id in case.extra_skills {
             book.grant_ranks(id, 1);
         }
-        let actual: Vec<Placement> = native_skill_book_page_placements(&book)
+        let actual: Vec<Placement> = skill_book_page_placements(&book)
             .into_iter()
             .map(|page| Placement {
                 root: page.root_skill_id,

@@ -137,7 +137,7 @@ staging artifact. `--profile debug` selects an unoptimized development build.
 | `crates/sim` | Gameplay, movement, spells, enemies, inventory, and session state |
 | `crates/assets` | Sprite bundles, map data, and save-document codec |
 | `crates/graphics` | Shared GPU renderer and asset decoding |
-| `crates/web` | Shared Rust Game, input, audio, menus, HUD, and native/browser adapters |
+| `crates/client` | Shared Rust Game, input, audio, menus, HUD, and native/browser adapters |
 | `crates/loader` | WebAssembly loading screen |
 | `crates/protocol` | Messages between the client and host |
 | `crates/launcher` | Native host, asset server, and durable saves |
@@ -155,7 +155,7 @@ Run from the repository root:
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo clippy -p solomon-web --target wasm32-unknown-unknown -- -D warnings
+cargo clippy -p solomon-client --target wasm32-unknown-unknown -- -D warnings
 cargo clippy -p solomon-loader --target wasm32-unknown-unknown -- -D warnings
 cargo test --workspace --all-features
 npm run test:browser-support

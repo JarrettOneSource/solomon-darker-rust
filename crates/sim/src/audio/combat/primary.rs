@@ -6,21 +6,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::audio::AudioCue;
 use crate::float::fround;
 use crate::profile::WizardElement;
-use crate::secondary::NativeSecondaryActorKind;
-use crate::spells::earth::{
-    native_earth_boulder_rock_hit_pitch, native_earth_boulder_stone_break_pitch,
-};
-use crate::spells::fire::native_fire_impact_pitch;
+use crate::secondary::SecondaryActorKind;
+use crate::spells::earth::{earth_boulder_rock_hit_pitch, earth_boulder_stone_break_pitch};
+use crate::spells::fire::fire_impact_pitch;
 use crate::spells::model::{
     FireExplosionPresentation, PrimarySpellProjectile, PrimarySpellProjectilePhase,
     PrimarySpellTransient, PrimarySpellTransientBase,
 };
-use crate::spells::weld::{
-    NativeWeldMeteorPhase, NativeWeldPersistentActorState, NativeWeldWorldActor,
-};
+use crate::spells::weld::{WeldMeteorPhase, WeldPersistentActorState, WeldWorldActor};
 
 use super::skills::{
-    active_weld_build, is_secondary_loop, native_weld_cast_sound_cues, selected_primary_element,
+    active_weld_build, is_secondary_loop, selected_primary_element, weld_cast_sound_cues,
     weld_one_shot,
 };
 use super::{
@@ -86,17 +82,15 @@ impl PrimarySoundMemory {
                     memory.hail_sequences.insert(common.id, hail.bounce_sound_sequence);
                 }
                 PrimarySpellTransient::Weld(weld) => match weld {
-                    NativeWeldWorldActor::Meteor(meteor)
-                        if meteor.phase == NativeWeldMeteorPhase::Impact =>
-                    {
+                    WeldWorldActor::Meteor(meteor) if meteor.phase == WeldMeteorPhase::Impact => {
                         memory.meteor_impacts.insert(key(common));
                     }
-                    NativeWeldWorldActor::Impact(_) => {
+                    WeldWorldActor::Impact(_) => {
                         memory.weld_impacts.insert(key(common));
                     }
-                    NativeWeldWorldActor::Persistent(
-                        NativeWeldPersistentActorState::Hailstones(hail),
-                    ) if hail.phase == PrimarySpellProjectilePhase::Flight => {
+                    WeldWorldActor::Persistent(WeldPersistentActorState::Hailstones(hail))
+                        if hail.phase == PrimarySpellProjectilePhase::Flight =>
+                    {
                         memory.flying_hailstones.insert(key(common));
                     }
                     _ => {}
@@ -108,7 +102,7 @@ impl PrimarySoundMemory {
             memory.staff_contacts.insert(key(&actor.common));
         }
         for actor in frame.secondary.actors.iter() {
-            if actor.kind == NativeSecondaryActorKind::MindblastBurst {
+            if actor.kind == SecondaryActorKind::MindblastBurst {
                 memory.mindblasts.insert((actor.world_key.clone(), actor.id));
             }
         }
@@ -133,7 +127,7 @@ impl CombatAudioCursor {
                 if let Some(build) = build {
                     if !weld_one_shot(build) {
                         for _ in previous.cast..player.cast.cast_sequence {
-                            for cue in native_weld_cast_sound_cues(build, None) {
+                            for cue in weld_cast_sound_cues(build, None) {
                                 play(
                                     output,
                                     cue,
@@ -178,10 +172,9 @@ impl CombatAudioCursor {
                             .last_weld_playback_rate
                             .expect("Weld emission carries its accepted playback rate");
                         for _ in previous.emission..player.cast.emission_sequence {
-                            for cue in native_weld_cast_sound_cues(
-                                build,
-                                player.cast.last_weld_sound_variant,
-                            ) {
+                            for cue in
+                                weld_cast_sound_cues(build, player.cast.last_weld_sound_variant)
+                            {
                                 play(output, cue, pitch, volume);
                             }
                         }
@@ -221,7 +214,7 @@ impl CombatAudioCursor {
                 play(
                     output,
                     AudioCue::FireballHit,
-                    native_fire_impact_pitch(impact.common.id),
+                    fire_impact_pitch(impact.common.id),
                     distance_gain(listener.position, impact.origin),
                 );
             }
@@ -263,7 +256,7 @@ impl CombatAudioCursor {
                 play(
                     output,
                     AudioCue::MagicMissileHit,
-                    native_ether_impact_pitch(impact.common.id),
+                    ether_impact_pitch(impact.common.id),
                     distance_gain(listener.position, impact.origin),
                 );
             }
@@ -293,9 +286,9 @@ impl CombatAudioCursor {
     fn project_weld_impacts(&self, frame: &CombatAudioFrame<'_>, output: &mut CombatAudioOutput) {
         let listener = listener(frame).unwrap();
         for actor in frame.primary.transients.iter() {
-            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Meteor(meteor)) = actor
+            if let PrimarySpellTransient::Weld(WeldWorldActor::Meteor(meteor)) = actor
                 && meteor.common.owner.world_key == listener.world_key
-                && meteor.phase == NativeWeldMeteorPhase::Impact
+                && meteor.phase == WeldMeteorPhase::Impact
                 && !self.primary.meteor_impacts.contains(&key(&meteor.common.owner))
             {
                 let volume = if meteor.underpowered {
@@ -315,7 +308,7 @@ impl CombatAudioCursor {
             }
         }
         for actor in frame.primary.transients.iter() {
-            let PrimarySpellTransient::Weld(NativeWeldWorldActor::Impact(impact)) = actor else {
+            let PrimarySpellTransient::Weld(WeldWorldActor::Impact(impact)) = actor else {
                 continue;
             };
             if impact.common.owner.world_key != listener.world_key
@@ -361,8 +354,8 @@ impl CombatAudioCursor {
     ) {
         let listener = listener(frame).unwrap();
         for actor in frame.primary.transients.iter() {
-            if let PrimarySpellTransient::Weld(NativeWeldWorldActor::Persistent(
-                NativeWeldPersistentActorState::Hailstones(hail),
+            if let PrimarySpellTransient::Weld(WeldWorldActor::Persistent(
+                WeldPersistentActorState::Hailstones(hail),
             )) = actor
                 && hail.common.owner.world_key == listener.world_key
                 && hail.phase == PrimarySpellProjectilePhase::Flight
@@ -460,7 +453,7 @@ impl CombatAudioCursor {
             }
         }
         for actor in frame.secondary.actors.iter() {
-            if actor.kind == NativeSecondaryActorKind::MindblastBurst
+            if actor.kind == SecondaryActorKind::MindblastBurst
                 && actor.world_key == listener.world_key
                 && !self.primary.mindblasts.contains(&(actor.world_key.clone(), actor.id))
             {
@@ -478,14 +471,14 @@ fn key(common: &PrimarySpellTransientBase) -> ActorKey {
 }
 
 fn earth_impact(output: &mut CombatAudioOutput, charge: f64, volume: f64) {
-    play(output, AudioCue::RockHit, native_earth_boulder_rock_hit_pitch(charge), volume * charge);
-    play(output, AudioCue::StoneBreak, native_earth_boulder_stone_break_pitch(charge), volume);
+    play(output, AudioCue::RockHit, earth_boulder_rock_hit_pitch(charge), volume * charge);
+    play(output, AudioCue::StoneBreak, earth_boulder_stone_break_pitch(charge), volume);
 }
 
 /// `primary-spell-ether-native.ts::nativeEtherImpactPitch`: a presentation-only hash of
 /// the accepted actor ID. It consumes no world entropy and narrows at the source fround.
 #[must_use]
-pub fn native_ether_impact_pitch(id: u64) -> f64 {
+pub fn ether_impact_pitch(id: u64) -> f64 {
     let mut value = (id as u32).wrapping_mul(0x9e3779b1) ^ 0xc2b2ae35;
     value = (value ^ (value >> 16)).wrapping_mul(0x21f0aaad);
     value = (value ^ (value >> 15)).wrapping_mul(0x735a2d97);

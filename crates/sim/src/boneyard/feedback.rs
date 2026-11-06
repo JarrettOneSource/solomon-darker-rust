@@ -6,16 +6,16 @@
 use crate::enemies::model::EnemyTerminalOutput;
 use crate::float::fround;
 
-pub const NATIVE_EXPLOSION_FEEDBACK_INTENSITY: f64 = 4.0;
+pub const EXPLOSION_FEEDBACK_INTENSITY: f64 = 4.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub struct NativeEnemyWorldFeedback {
+pub struct EnemyWorldFeedback {
     pub accumulator: f64,
     pub magnitude: f64,
 }
 
-impl NativeEnemyWorldFeedback {
+impl EnemyWorldFeedback {
     pub fn step(&mut self, elapsed_ticks: u64) {
         if elapsed_ticks == 0 {
             return;
@@ -36,14 +36,14 @@ impl NativeEnemyWorldFeedback {
     }
 
     pub fn apply_terminal(&mut self, output: EnemyTerminalOutput, output_count: Option<usize>) {
-        for &intensity in native_enemy_world_feedback_impulses(output, output_count) {
+        for &intensity in enemy_world_feedback_impulses(output, output_count) {
             self.apply(intensity);
         }
     }
 }
 
 #[must_use]
-pub fn native_enemy_world_feedback_impulses(
+pub fn enemy_world_feedback_impulses(
     output: EnemyTerminalOutput,
     output_count: Option<usize>,
 ) -> &'static [f64] {

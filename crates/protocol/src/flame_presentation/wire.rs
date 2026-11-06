@@ -4,9 +4,8 @@ use serde::{Deserialize, Serialize};
 use solomon_sim::Vec2;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
 use solomon_sim::spells::weld::{
-    NativeFlameChannelBirth, NativeFlameChannelRole, NativeFlameChannelVisual,
-    NativeFlameFadeBirth, NativeFlameFadeVisual, NativeFlamePathBirth, NativeFlameRibbonBirth,
-    NativeWeldFlameLashFadeVariant,
+    FlameChannelBirth, FlameChannelRole, FlameChannelVisual, FlameFadeBirth, FlameFadeVisual,
+    FlamePathBirth, FlameRibbonBirth, WeldFlameLashFadeVariant,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -52,7 +51,7 @@ pub(super) struct Registration {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(
-    remote = "NativeFlameRibbonBirth",
+    remote = "FlameRibbonBirth",
     tag = "kind",
     rename_all = "lowercase",
     rename_all_fields = "camelCase",
@@ -63,7 +62,7 @@ pub(super) enum RibbonBirth {
     Long { phase_degrees: f64 },
 }
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "NativeFlamePathBirth", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(remote = "FlamePathBirth", rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct PathBirth {
     pub intensity: f64,
     pub radius_factors: Vec<f64>,
@@ -72,9 +71,9 @@ pub(super) struct PathBirth {
     pub misc_append_ordinal: usize,
 }
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "NativeFlameChannelBirth", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(remote = "FlameChannelBirth", rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ChannelBirth {
-    pub role: NativeFlameChannelRole,
+    pub role: FlameChannelRole,
     #[serde(with = "optional_point")]
     pub camera_displacement: Option<Vec2>,
     #[serde(with = "Point")]
@@ -87,33 +86,33 @@ pub(super) struct ChannelBirth {
     pub offset: Vec2,
     pub width: f64,
     #[serde(with = "RibbonBirth")]
-    pub ribbon: NativeFlameRibbonBirth,
+    pub ribbon: FlameRibbonBirth,
     #[serde(with = "PathBirth")]
-    pub path: NativeFlamePathBirth,
+    pub path: FlamePathBirth,
 }
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "NativeFlameChannelVisual", tag = "kind", deny_unknown_fields)]
+#[serde(remote = "FlameChannelVisual", tag = "kind", deny_unknown_fields)]
 pub(super) enum ChannelVisual {
     #[serde(rename = "legacy-suppressed")]
     LegacySuppressed,
     #[serde(rename = "native-birth-v1")]
-    NativeBirth(#[serde(with = "ChannelBirth")] NativeFlameChannelBirth),
+    Birth(#[serde(with = "ChannelBirth")] FlameChannelBirth),
 }
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "NativeFlameFadeBirth", rename_all = "camelCase", deny_unknown_fields)]
+#[serde(remote = "FlameFadeBirth", rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct FadeBirth {
     pub birth_alpha: f64,
 }
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "NativeFlameFadeVisual", tag = "kind", deny_unknown_fields)]
+#[serde(remote = "FlameFadeVisual", tag = "kind", deny_unknown_fields)]
 pub(super) enum FadeVisual {
     #[serde(rename = "legacy-suppressed")]
     LegacySuppressed,
     #[serde(rename = "native-birth-v1")]
-    NativeBirth(#[serde(with = "FadeBirth")] NativeFlameFadeBirth),
+    Birth(#[serde(with = "FadeBirth")] FlameFadeBirth),
 }
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "NativeWeldFlameLashFadeVariant", rename_all = "lowercase")]
+#[serde(remote = "WeldFlameLashFadeVariant", rename_all = "lowercase")]
 pub(super) enum FadeVariant {
     Chain,
     Endpoint,

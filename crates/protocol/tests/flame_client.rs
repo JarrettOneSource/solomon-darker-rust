@@ -5,7 +5,7 @@ use solomon_sim::Vec2;
 use solomon_sim::spells::model::{
     PrimarySpellFireParticle, PrimarySpellTransient, PrimarySpellTransientBase, SpellState,
 };
-use solomon_sim::spells::weld::NativeWeldWorldActor;
+use solomon_sim::spells::weld::WeldWorldActor;
 
 #[path = "../../sim/tests/support/website_rows.rs"]
 mod website_rows;
@@ -44,10 +44,8 @@ fn rows(state: &SpellState) -> Value {
         .iter()
         .map(|actor| {
             let (kind, alpha) = match actor {
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::Channel(_)) => {
-                    ("weld-channel", None)
-                }
-                PrimarySpellTransient::Weld(NativeWeldWorldActor::FlameLashFade(fade)) => {
+                PrimarySpellTransient::Weld(WeldWorldActor::Channel(_)) => ("weld-channel", None),
+                PrimarySpellTransient::Weld(WeldWorldActor::FlameLashFade(fade)) => {
                     ("weld-flame-lash-fade", Some(fade.alpha))
                 }
                 PrimarySpellTransient::FireParticle(_) => ("fire", None),

@@ -3,9 +3,7 @@
 use super::boss_spells::spawn_faculty_spell;
 use super::config::EnemyFamilyConfig;
 use super::effects::DeathEffectOwner;
-use super::faculty_controller::{
-    NativeFacultyContext, advance_native_faculty_orbit, step_native_faculty,
-};
+use super::faculty_controller::{FacultyContext, advance_faculty_orbit, step_native_faculty};
 use super::faculty_effects::{FacultySmokePhase, spawn_faculty_smoke};
 use super::model::*;
 use super::movement::{move_toward_target, staff_attack_speed};
@@ -31,7 +29,7 @@ pub fn step_faculty(
     let primary = family.primary;
     let source_heading = actor.heading_deg;
     let orbit_sign = source_brain.orbit_sign;
-    advance_native_faculty_orbit(&mut actor.path, orbit_sign, &mut world.steering_rng);
+    advance_faculty_orbit(&mut actor.path, orbit_sign, &mut world.steering_rng);
     let effect = context.ability_effect(actor.id);
     let disrupted = effect.disrupted_ticks > 0;
     let fleeing = effect.flee_ticks > 0;
@@ -82,7 +80,7 @@ pub fn step_faculty(
         &mut brain,
         &mut world.steering_rng,
         primary,
-        NativeFacultyContext {
+        FacultyContext {
             advance_action,
             actor_time_scale: staff_attack_speed(actor),
             line_of_sight,

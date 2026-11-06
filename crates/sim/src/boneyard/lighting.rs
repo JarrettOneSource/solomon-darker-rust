@@ -8,27 +8,25 @@ pub mod secondary;
 pub mod weld;
 
 pub use primary::*;
-pub use query::{
-    NativeBoneyardLightFactors, NativeBoneyardLightQuery, native_boneyard_source_light_factors,
-};
+pub use query::{BoneyardLightFactors, BoneyardLightQuery, boneyard_source_light_factors};
 
 use crate::Vec2;
 use crate::float;
 use crate::float::fround;
-use crate::random_domain::{native_random_float_from_word, native_random_int_from_word};
+use crate::random_domain::{random_float_from_word, random_int_from_word};
 
-pub const NATIVE_LIGHT_INNER_DISTANCE: f64 = 75.0;
-pub const NATIVE_LIGHT_OUTER_DISTANCE: f64 = 145.0;
-pub const NATIVE_LIGHT_VERTICAL_SCALE: f64 = 0.85_f32 as f64;
-pub const NATIVE_PLAYER_LIGHT_RADIUS: f64 = 2.6_f32 as f64;
-pub const NATIVE_PLAYER_LIGHT_OFFSET: f64 = 15.0;
-pub const NATIVE_DEFAULT_LIGHT_QUALITY: f64 = 0.25;
+pub const LIGHT_INNER_DISTANCE: f64 = 75.0;
+pub const LIGHT_OUTER_DISTANCE: f64 = 145.0;
+pub const LIGHT_VERTICAL_SCALE: f64 = 0.85_f32 as f64;
+pub const PLAYER_LIGHT_RADIUS: f64 = 2.6_f32 as f64;
+pub const PLAYER_LIGHT_OFFSET: f64 = 15.0;
+pub const DEFAULT_LIGHT_QUALITY: f64 = 0.25;
 const LIGHT_GRID_CELL_SIZE: f64 = 150.0;
 const LIGHT_WORLD_SCALE: f64 = 0.8;
 const LIGHT_BOTTOM_PADDING: f64 = 350.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeBoneyardLightSource {
+pub struct BoneyardLightSource {
     pub intensity: f64,
     pub position: Vec2,
     pub radius: f64,
@@ -36,7 +34,7 @@ pub struct NativeBoneyardLightSource {
     pub raster_scale: Option<f64>,
 }
 
-impl NativeBoneyardLightSource {
+impl BoneyardLightSource {
     #[must_use]
     pub const fn new(position: Vec2, radius: f64, intensity: f64, casts_shadow: bool) -> Self {
         Self {
@@ -61,7 +59,7 @@ impl NativeBoneyardLightSource {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativePlayerLightOwner<'a> {
+pub struct PlayerLightOwner<'a> {
     pub id: &'a str,
     pub position: Vec2,
     pub heading_index: usize,
@@ -70,30 +68,30 @@ pub struct NativePlayerLightOwner<'a> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeBoneyardLightManagerView {
+pub struct BoneyardLightManagerView {
     pub camera_position: Vec2,
     pub zoom: f64,
     pub viewport: Vec2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeRegionLightTargetPlan {
+pub struct RegionLightTargetPlan {
     pub logical_side: f64,
     pub physical_side: u32,
     pub render_resolution: f64,
 }
 
 #[must_use]
-pub fn native_region_light_target_plan(
+pub fn region_light_target_plan(
     viewport: Vec2,
     device_resolution: f64,
     quality: f64,
-) -> NativeRegionLightTargetPlan {
+) -> RegionLightTargetPlan {
     let requested = (viewport.x.max(viewport.y) * device_resolution * quality).trunc().max(1.0);
     let physical_side = (requested as u32).next_power_of_two();
     let render_resolution =
         fround(fround(device_resolution) * fround(fround(quality) * fround(LIGHT_WORLD_SCALE)));
-    NativeRegionLightTargetPlan {
+    RegionLightTargetPlan {
         logical_side: f64::from(physical_side) / render_resolution,
         physical_side,
         render_resolution,
@@ -103,15 +101,15 @@ pub fn native_region_light_target_plan(
 /// A bounded native grid. Buckets keep their allocation between rebuilds, and source
 /// indices retain manager submission order. No scene query depends on map iteration order.
 #[derive(Clone, Debug)]
-pub struct NativeBoneyardLightIndex {
-    accepted: Vec<NativeBoneyardLightSource>,
+pub struct BoneyardLightIndex {
+    accepted: Vec<BoneyardLightSource>,
     buckets: Vec<Vec<usize>>,
     maximum_column: i32,
     maximum_row: i32,
     row_count: usize,
 }
 
-impl NativeBoneyardLightIndex {
+impl BoneyardLightIndex {
     #[must_use]
     pub fn new(extent: Vec2) -> Self {
         let maximum_column =
@@ -129,9 +127,9 @@ impl NativeBoneyardLightIndex {
 
     pub fn rebuild(
         &mut self,
-        providers: &[NativeBoneyardLightSource],
-        misc_tail: &[NativeBoneyardLightSource],
-        view: NativeBoneyardLightManagerView,
+        providers: &[BoneyardLightSource],
+        misc_tail: &[BoneyardLightSource],
+        view: BoneyardLightManagerView,
         quality: f64,
     ) {
         self.accepted.clear();
@@ -140,7 +138,7 @@ impl NativeBoneyardLightIndex {
         }
         for source in providers.iter().chain(misc_tail) {
             let candidate = source.submitted();
-            if !native_boneyard_light_visible_in_manager(candidate, view, quality) {
+            if !boneyard_light_visible_in_manager(candidate, view, quality) {
                 continue;
             }
             if !candidate.casts_directional_shadow && self.candidate_contained(candidate) {
@@ -153,7 +151,7 @@ impl NativeBoneyardLightIndex {
     }
 
     #[must_use]
-    pub fn accepted_sources(&self) -> &[NativeBoneyardLightSource] {
+    pub fn accepted_sources(&self) -> &[BoneyardLightSource] {
         &self.accepted
     }
 
@@ -169,15 +167,11 @@ impl NativeBoneyardLightIndex {
 
     #[must_use]
     pub fn scalar_at(&self, position: Vec2) -> f64 {
-        self.factors_at(position, NativeBoneyardLightQuery::default()).radial
+        self.factors_at(position, BoneyardLightQuery::default()).radial
     }
 
     #[must_use]
-    pub fn factors_at(
-        &self,
-        position: Vec2,
-        query: NativeBoneyardLightQuery,
-    ) -> NativeBoneyardLightFactors {
+    pub fn factors_at(&self, position: Vec2, query: BoneyardLightQuery) -> BoneyardLightFactors {
         query::factors(
             position,
             self.source_indices_at(position).iter().map(|&index| self.accepted[index]),
@@ -187,15 +181,11 @@ impl NativeBoneyardLightIndex {
 
     #[must_use]
     pub fn surface_scalar_at(&self, position: Vec2) -> f64 {
-        self.surface_scalar_with_query(position, NativeBoneyardLightQuery::default())
+        self.surface_scalar_with_query(position, BoneyardLightQuery::default())
     }
 
     #[must_use]
-    pub fn surface_scalar_with_query(
-        &self,
-        position: Vec2,
-        query: NativeBoneyardLightQuery,
-    ) -> f64 {
+    pub fn surface_scalar_with_query(&self, position: Vec2, query: BoneyardLightQuery) -> f64 {
         query::surface(
             position,
             self.source_indices_at(position).iter().map(|&index| self.accepted[index]),
@@ -203,7 +193,7 @@ impl NativeBoneyardLightIndex {
         )
     }
 
-    fn candidate_contained(&self, candidate: NativeBoneyardLightSource) -> bool {
+    fn candidate_contained(&self, candidate: BoneyardLightSource) -> bool {
         for &index in self.source_indices_at(candidate.position) {
             let existing = self.accepted[index];
             if existing.intensity < candidate.intensity || existing.radius < candidate.radius {
@@ -211,7 +201,7 @@ impl NativeBoneyardLightIndex {
             }
             let dx = existing.position.x - candidate.position.x;
             let dy = existing.position.y - candidate.position.y;
-            let reach = (existing.radius - candidate.radius) * NATIVE_LIGHT_OUTER_DISTANCE;
+            let reach = (existing.radius - candidate.radius) * LIGHT_OUTER_DISTANCE;
             if dx * dx + dy * dy < reach * reach {
                 return true;
             }
@@ -219,8 +209,8 @@ impl NativeBoneyardLightIndex {
         false
     }
 
-    fn index(&mut self, source: NativeBoneyardLightSource, source_index: usize) {
-        let reach = fround(fround(source.radius) * fround(NATIVE_LIGHT_OUTER_DISTANCE));
+    fn index(&mut self, source: BoneyardLightSource, source_index: usize) {
+        let reach = fround(fround(source.radius) * fround(LIGHT_OUTER_DISTANCE));
         let min_x = grid_coordinate(fround(fround(source.position.x) - reach))
             .clamp(-2, self.maximum_column);
         let max_x = grid_coordinate(fround(fround(source.position.x) + reach))
@@ -243,55 +233,48 @@ impl NativeBoneyardLightIndex {
 }
 
 #[must_use]
-pub fn native_boneyard_radial_light_contribution(
-    position: Vec2,
-    source: NativeBoneyardLightSource,
-) -> f64 {
-    native_boneyard_source_light_factors(position, source, NativeBoneyardLightQuery::default())
-        .radial
+pub fn boneyard_radial_light_contribution(position: Vec2, source: BoneyardLightSource) -> f64 {
+    boneyard_source_light_factors(position, source, BoneyardLightQuery::default()).radial
 }
 
 #[must_use]
-pub fn native_boneyard_light_scalar(position: Vec2, sources: &[NativeBoneyardLightSource]) -> f64 {
-    query::factors(position, sources.iter().copied(), NativeBoneyardLightQuery::default()).radial
+pub fn boneyard_light_scalar(position: Vec2, sources: &[BoneyardLightSource]) -> f64 {
+    query::factors(position, sources.iter().copied(), BoneyardLightQuery::default()).radial
 }
 
 #[must_use]
-pub fn native_boneyard_light_factors(
+pub fn boneyard_light_factors(
     position: Vec2,
-    sources: &[NativeBoneyardLightSource],
-    query: NativeBoneyardLightQuery,
-) -> NativeBoneyardLightFactors {
+    sources: &[BoneyardLightSource],
+    query: BoneyardLightQuery,
+) -> BoneyardLightFactors {
     query::factors(position, sources.iter().copied(), query)
 }
 
 #[must_use]
-pub fn native_boneyard_surface_light_scalar_with_query(
+pub fn boneyard_surface_light_scalar_with_query(
     position: Vec2,
-    sources: &[NativeBoneyardLightSource],
-    query: NativeBoneyardLightQuery,
+    sources: &[BoneyardLightSource],
+    query: BoneyardLightQuery,
 ) -> f64 {
     query::surface(position, sources.iter().copied(), query)
 }
 
 #[must_use]
-pub fn native_boneyard_surface_light_scalar(
-    position: Vec2,
-    sources: &[NativeBoneyardLightSource],
-) -> f64 {
-    query::surface(position, sources.iter().copied(), NativeBoneyardLightQuery::default())
+pub fn boneyard_surface_light_scalar(position: Vec2, sources: &[BoneyardLightSource]) -> f64 {
+    query::surface(position, sources.iter().copied(), BoneyardLightQuery::default())
 }
 
 #[must_use]
-pub fn native_boneyard_light_tint(scalar: f64) -> u32 {
+pub fn boneyard_light_tint(scalar: f64) -> u32 {
     let lane = fround(fround(scalar.clamp(0.0, 1.0)) * 255.0).trunc() as u32;
     lane * 0x010101
 }
 
 #[must_use]
-pub fn native_boneyard_light_visible_in_manager(
-    source: NativeBoneyardLightSource,
-    view: NativeBoneyardLightManagerView,
+pub fn boneyard_light_visible_in_manager(
+    source: BoneyardLightSource,
+    view: BoneyardLightManagerView,
     quality: f64,
 ) -> bool {
     let source = source.submitted();
@@ -307,77 +290,72 @@ pub fn native_boneyard_light_visible_in_manager(
     let x = fround(fround(fround(source.position.x) - top_left.x) * manager_scale);
     let y = fround(fround(fround(source.position.y) - top_left.y) * manager_scale);
     let reach =
-        fround(fround(fround(source.radius) * fround(NATIVE_LIGHT_OUTER_DISTANCE)) * manager_scale);
+        fround(fround(fround(source.radius) * fround(LIGHT_OUTER_DISTANCE)) * manager_scale);
     let dx = fround(x - x.clamp(0.0, target_width));
     let dy = fround(y - y.clamp(0.0, target_height));
     fround(dx * dx + dy * dy) < fround(reach * reach)
 }
 
 #[must_use]
-pub fn native_player_light_source(
-    player: NativePlayerLightOwner<'_>,
+pub fn player_light_source(
+    player: PlayerLightOwner<'_>,
     frame: u64,
     is_local: bool,
-) -> Option<NativeBoneyardLightSource> {
+) -> Option<BoneyardLightSource> {
     if player.drive_active && !is_local {
         return None;
     }
     let heading = player.heading_index as f64 * 15.0 * std::f64::consts::PI / 180.0;
     let jitter = presentation_random(frame, stable_string_hash(player.id) ^ 0x5299a0, 0.2);
-    Some(NativeBoneyardLightSource {
+    Some(BoneyardLightSource {
         intensity: 1.0,
         casts_directional_shadow: true,
         position: Vec2::new(
-            player.position.x + float::sin(heading) * NATIVE_PLAYER_LIGHT_OFFSET,
-            player.position.y - float::cos(heading) * NATIVE_PLAYER_LIGHT_OFFSET,
+            player.position.x + float::sin(heading) * PLAYER_LIGHT_OFFSET,
+            player.position.y - float::cos(heading) * PLAYER_LIGHT_OFFSET,
         ),
-        radius: (1.0 + player.overlay_effect_phase) * NATIVE_PLAYER_LIGHT_RADIUS,
-        raster_scale: Some(fround(fround(NATIVE_PLAYER_LIGHT_RADIUS) - jitter)),
+        radius: (1.0 + player.overlay_effect_phase) * PLAYER_LIGHT_RADIUS,
+        raster_scale: Some(fround(fround(PLAYER_LIGHT_RADIUS) - jitter)),
     })
 }
 
 #[must_use]
-pub fn native_lantern_light_source(
+pub fn lantern_light_source(
     position: Vec2,
     frame: u64,
     multiple_shadows: bool,
-) -> NativeBoneyardLightSource {
+) -> BoneyardLightSource {
     let intensity = fround(fround(0.55) + presentation_signed_random(frame, 0, 0.2));
-    NativeBoneyardLightSource::new(position, 0.65, intensity, multiple_shadows)
+    BoneyardLightSource::new(position, 0.65, intensity, multiple_shadows)
 }
 
 #[must_use]
-pub fn native_missile_light_source(
+pub fn missile_light_source(
     id: u32,
     position: Vec2,
     frame: u64,
     multiple_shadows: bool,
-) -> NativeBoneyardLightSource {
+) -> BoneyardLightSource {
     let radius = fround(fround(0.75) + presentation_signed_random(frame, id ^ 0x5e4af0, 0.1));
-    NativeBoneyardLightSource::new(position, radius, 0.75, multiple_shadows)
+    BoneyardLightSource::new(position, radius, 0.75, multiple_shadows)
 }
 
 #[must_use]
-pub fn native_boulder_light_source(
+pub fn boulder_light_source(
     position: Vec2,
     charge: f64,
     multiple_shadows: bool,
-) -> NativeBoneyardLightSource {
-    NativeBoneyardLightSource::new(position, (2.0 * charge).max(1.0), 0.5, multiple_shadows)
+) -> BoneyardLightSource {
+    BoneyardLightSource::new(position, (2.0 * charge).max(1.0), 0.5, multiple_shadows)
 }
 
 #[must_use]
-pub fn native_fire_patch_light_source(
+pub fn fire_patch_light_source(
     position: Vec2,
     life: f64,
     multiple_shadows: bool,
-) -> NativeBoneyardLightSource {
-    NativeBoneyardLightSource::new(
-        position,
-        0.6_f32 as f64,
-        (3.0 * life).min(1.0),
-        multiple_shadows,
-    )
+) -> BoneyardLightSource {
+    BoneyardLightSource::new(position, 0.6_f32 as f64, (3.0 * life).min(1.0), multiple_shadows)
 }
 
 #[must_use]
@@ -390,13 +368,13 @@ pub fn presentation_random_word(frame: u64, salt: u32) -> u32 {
 
 #[must_use]
 pub fn presentation_random(frame: u64, salt: u32, maximum: f64) -> f64 {
-    native_random_float_from_word(presentation_random_word(frame, salt), maximum)
+    random_float_from_word(presentation_random_word(frame, salt), maximum)
 }
 
 #[must_use]
 pub fn presentation_signed_random(frame: u64, salt: u32, maximum: f64) -> f64 {
     let magnitude = presentation_random(frame, salt, maximum);
-    let sign = native_random_int_from_word(presentation_random_word(frame, salt ^ 0x7f4a_7c15), 2);
+    let sign = random_int_from_word(presentation_random_word(frame, salt ^ 0x7f4a_7c15), 2);
     if sign == 1 { fround(-magnitude) } else { magnitude }
 }
 

@@ -5,28 +5,34 @@ use crate::economy::{
     EquipmentSlot, EquipmentType, HubEconomyState, HubInventoryItem, HubItemKind,
     find_inventory_item, project_inventory_items,
 };
-use crate::profile::{NativeSkillBookState, native_skill_category};
+use crate::profile::{SkillBookState, skill_category};
 
-pub const NATIVE_BELT_SLOT_COUNT: usize = 8;
+pub const BELT_SLOT_COUNT: usize = 8;
 pub const PLAYER_HOTBAR_COUNT: usize = 3;
-pub const PLAYER_BELT_SLOT_COUNT: usize = NATIVE_BELT_SLOT_COUNT * PLAYER_HOTBAR_COUNT;
-pub const NATIVE_HEALTH_BELT_SLOT: usize = 3;
-pub const NATIVE_MANA_BELT_SLOT: usize = 4;
-pub const NATIVE_BELT_ITEM_TYPE_IDS: [u32; 10] =
+pub const PLAYER_BELT_SLOT_COUNT: usize = BELT_SLOT_COUNT * PLAYER_HOTBAR_COUNT;
+pub const HEALTH_BELT_SLOT: usize = 3;
+pub const MANA_BELT_SLOT: usize = 4;
+pub const BELT_ITEM_TYPE_IDS: [u32; 10] =
     [7001, 7002, 7003, 7004, 7005, 7006, 7008, 7009, 7010, 7011];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 pub enum NativeBeltEntry {
-    Skill { skill_id: usize },
+    Skill {
+        skill_id: usize,
+    },
     HealthPotion,
     ManaPotion,
-    Item { item_id: u64, native_type_id: u32 },
+    Item {
+        item_id: u64,
+        #[cfg_attr(feature = "persistence", serde(rename = "native_type_id"))]
+        type_id: u32,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeBeltCommand {
+pub enum BeltCommand {
     BindSkill { skill_id: Option<usize>, slot: usize },
     BindItem { item_id: u64, slot: usize },
 }
@@ -44,17 +50,17 @@ pub struct PlayerBeltComponent {
 impl PlayerBeltComponent {
     /// `createNativePlayerBelt`: the first slot is the learned secondary, not the primary attack.
     #[must_use]
-    pub fn new(book: &NativeSkillBookState) -> Self {
+    pub fn new(book: &SkillBookState) -> Self {
         let skill_id = book
             .learned_skill_order
             .iter()
-            .find(|id| native_skill_category(**id) == Some(2))
+            .find(|id| skill_category(**id) == Some(2))
             .copied()
             .expect("a fresh native belt has one learned secondary skill");
         let mut entries = [None; PLAYER_BELT_SLOT_COUNT];
         entries[0] = Some(NativeBeltEntry::Skill { skill_id });
-        entries[NATIVE_HEALTH_BELT_SLOT] = Some(NativeBeltEntry::HealthPotion);
-        entries[NATIVE_MANA_BELT_SLOT] = Some(NativeBeltEntry::ManaPotion);
+        entries[HEALTH_BELT_SLOT] = Some(NativeBeltEntry::HealthPotion);
+        entries[MANA_BELT_SLOT] = Some(NativeBeltEntry::ManaPotion);
         Self { entries }
     }
 
@@ -62,7 +68,7 @@ impl PlayerBeltComponent {
     /// The accepted component always has three banks, including after old-save restore.
     #[must_use]
     pub fn from_entries(source: &[Option<NativeBeltEntry>]) -> Option<Self> {
-        if source.len() != NATIVE_BELT_SLOT_COUNT && source.len() != PLAYER_BELT_SLOT_COUNT {
+        if source.len() != BELT_SLOT_COUNT && source.len() != PLAYER_BELT_SLOT_COUNT {
             return None;
         }
         let mut entries = [None; PLAYER_BELT_SLOT_COUNT];
@@ -72,47 +78,43 @@ impl PlayerBeltComponent {
 
     /// `migrateSkillQuickbarToNativeBelt`: legacy empty potion cells acquire native aliases.
     #[must_use]
-    pub fn from_skill_quickbar(quickbar: [Option<usize>; NATIVE_BELT_SLOT_COUNT]) -> Option<Self> {
-        if quickbar.iter().flatten().any(|id| !is_native_belt_skill(*id)) {
+    pub fn from_skill_quickbar(quickbar: [Option<usize>; BELT_SLOT_COUNT]) -> Option<Self> {
+        if quickbar.iter().flatten().any(|id| !is_belt_skill(*id)) {
             return None;
         }
         let mut entries =
             quickbar.map(|skill_id| skill_id.map(|skill_id| NativeBeltEntry::Skill { skill_id }));
-        entries[NATIVE_HEALTH_BELT_SLOT].get_or_insert(NativeBeltEntry::HealthPotion);
-        entries[NATIVE_MANA_BELT_SLOT].get_or_insert(NativeBeltEntry::ManaPotion);
+        entries[HEALTH_BELT_SLOT].get_or_insert(NativeBeltEntry::HealthPotion);
+        entries[MANA_BELT_SLOT].get_or_insert(NativeBeltEntry::ManaPotion);
         Self::from_entries(&entries)
     }
 
     pub fn apply(
         &mut self,
-        command: NativeBeltCommand,
-        book: &NativeSkillBookState,
+        command: BeltCommand,
+        book: &SkillBookState,
         economy: &HubEconomyState,
     ) -> bool {
         let (slot, entry) = match command {
-            NativeBeltCommand::BindSkill { skill_id, slot } => {
+            BeltCommand::BindSkill { skill_id, slot } => {
                 if skill_id.is_some_and(|id| {
-                    !is_native_belt_skill(id)
-                        || book.effective_ranks.get(id).is_none_or(|rank| *rank < 1)
+                    !is_belt_skill(id) || book.effective_ranks.get(id).is_none_or(|rank| *rank < 1)
                 }) {
                     return false;
                 }
                 (slot, skill_id.map(|skill_id| NativeBeltEntry::Skill { skill_id }))
             }
-            NativeBeltCommand::BindItem { item_id, slot } => {
-                let Some(item) = native_belt_owned_item(economy, item_id) else {
+            BeltCommand::BindItem { item_id, slot } => {
+                let Some(item) = belt_owned_item(economy, item_id) else {
                     return false;
                 };
-                if !native_inventory_item_can_bind_to_belt(item) {
+                if !inventory_item_can_bind_to_belt(item) {
                     return false;
                 }
-                let entry = match (item.native_type_id, item.native_subtype) {
+                let entry = match (item.type_id, item.subtype) {
                     (7001, Some(0)) => NativeBeltEntry::HealthPotion,
                     (7001, Some(1)) => NativeBeltEntry::ManaPotion,
-                    _ => NativeBeltEntry::Item {
-                        item_id: item.id,
-                        native_type_id: item.native_type_id,
-                    },
+                    _ => NativeBeltEntry::Item { item_id: item.id, type_id: item.type_id },
                 };
                 (slot, Some(entry))
             }
@@ -124,15 +126,11 @@ impl PlayerBeltComponent {
         true
     }
 
-    pub fn autofill_newly_learned(
-        &mut self,
-        previous: &NativeSkillBookState,
-        current: &NativeSkillBookState,
-    ) {
+    pub fn autofill_newly_learned(&mut self, previous: &SkillBookState, current: &SkillBookState) {
         for skill_id in &current.learned_skill_order {
             if previous.learned_skill_order.contains(skill_id)
                 || current.effective_ranks[*skill_id] < 1
-                || !matches!(native_skill_category(*skill_id), Some(1 | 2))
+                || !matches!(skill_category(*skill_id), Some(1 | 2))
             {
                 continue;
             }
@@ -145,18 +143,17 @@ impl PlayerBeltComponent {
 
     /// `refreshNativePlayerBelt`: potion aliases survive empty stacks; stale item and skill
     /// references disappear when ownership changes, including transfers into storage.
-    pub fn refresh(&mut self, book: &NativeSkillBookState, economy: &HubEconomyState) {
+    pub fn refresh(&mut self, book: &SkillBookState, economy: &HubEconomyState) {
         for entry in &mut self.entries {
             let retained = match *entry {
                 None | Some(NativeBeltEntry::HealthPotion | NativeBeltEntry::ManaPotion) => true,
                 Some(NativeBeltEntry::Skill { skill_id }) => {
-                    is_native_belt_skill(skill_id)
+                    is_belt_skill(skill_id)
                         && book.effective_ranks.get(skill_id).is_some_and(|rank| *rank > 0)
                 }
-                Some(NativeBeltEntry::Item { item_id, native_type_id }) => {
-                    native_belt_owned_item(economy, item_id).is_some_and(|item| {
-                        item.native_type_id == native_type_id
-                            && native_inventory_item_can_bind_to_belt(item)
+                Some(NativeBeltEntry::Item { item_id, type_id }) => {
+                    belt_owned_item(economy, item_id).is_some_and(|item| {
+                        item.type_id == type_id && inventory_item_can_bind_to_belt(item)
                     })
                 }
             };
@@ -167,10 +164,10 @@ impl PlayerBeltComponent {
     }
 
     #[must_use]
-    pub fn skill_projection(&self) -> [Option<usize>; NATIVE_BELT_SLOT_COUNT] {
+    pub fn skill_projection(&self) -> [Option<usize>; BELT_SLOT_COUNT] {
         // Retail export and the fixed eight-action bot consume only the original bank.
-        let mut projection = [None; NATIVE_BELT_SLOT_COUNT];
-        for (slot, entry) in self.entries[..NATIVE_BELT_SLOT_COUNT].iter().enumerate() {
+        let mut projection = [None; BELT_SLOT_COUNT];
+        for (slot, entry) in self.entries[..BELT_SLOT_COUNT].iter().enumerate() {
             if let Some(NativeBeltEntry::Skill { skill_id }) = entry {
                 projection[slot] = Some(*skill_id);
             }
@@ -198,36 +195,33 @@ where
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeBeltPotionKind {
+pub enum BeltPotionKind {
     Health,
     Mana,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeBeltPotionProjection<'a> {
+pub struct BeltPotionProjection<'a> {
     pub count: u64,
     pub item: Option<&'a HubInventoryItem>,
 }
 
 #[must_use]
-pub fn is_native_belt_skill(skill_id: usize) -> bool {
-    matches!(native_skill_category(skill_id), Some(1..=3))
+pub fn is_belt_skill(skill_id: usize) -> bool {
+    matches!(skill_category(skill_id), Some(1..=3))
 }
 
 #[must_use]
-pub fn native_inventory_item_can_bind_to_belt(item: &HubInventoryItem) -> bool {
+pub fn inventory_item_can_bind_to_belt(item: &HubInventoryItem) -> bool {
     if matches!(item.kind, HubItemKind::ModItem | HubItemKind::ModPotion) {
         return false;
     }
-    NATIVE_BELT_ITEM_TYPE_IDS.contains(&item.native_type_id)
-        && (item.native_type_id != 7001 || item.native_subtype.is_some_and(|subtype| subtype <= 5))
+    BELT_ITEM_TYPE_IDS.contains(&item.type_id)
+        && (item.type_id != 7001 || item.subtype.is_some_and(|subtype| subtype <= 5))
 }
 
 #[must_use]
-pub fn native_belt_owned_item(
-    economy: &HubEconomyState,
-    item_id: u64,
-) -> Option<&HubInventoryItem> {
+pub fn belt_owned_item(economy: &HubEconomyState, item_id: u64) -> Option<&HubInventoryItem> {
     if let Some(item) = find_inventory_item(&economy.backpack, item_id) {
         return Some(item);
     }
@@ -246,35 +240,35 @@ pub fn native_belt_owned_item(
 }
 
 #[must_use]
-pub fn native_belt_entry_item(
+pub fn belt_entry_item(
     entry: NativeBeltEntry,
     economy: &HubEconomyState,
 ) -> Option<&HubInventoryItem> {
     match entry {
         NativeBeltEntry::Skill { .. } => None,
         NativeBeltEntry::HealthPotion => {
-            native_belt_potion_projection(&economy.backpack, NativeBeltPotionKind::Health).item
+            belt_potion_projection(&economy.backpack, BeltPotionKind::Health).item
         }
         NativeBeltEntry::ManaPotion => {
-            native_belt_potion_projection(&economy.backpack, NativeBeltPotionKind::Mana).item
+            belt_potion_projection(&economy.backpack, BeltPotionKind::Mana).item
         }
-        NativeBeltEntry::Item { item_id, .. } => native_belt_owned_item(economy, item_id),
+        NativeBeltEntry::Item { item_id, .. } => belt_owned_item(economy, item_id),
     }
 }
 
 #[must_use]
-pub fn native_belt_potion_projection(
+pub fn belt_potion_projection(
     backpack: &[HubInventoryItem],
-    kind: NativeBeltPotionKind,
-) -> NativeBeltPotionProjection<'_> {
+    kind: BeltPotionKind,
+) -> BeltPotionProjection<'_> {
     let subtype = match kind {
-        NativeBeltPotionKind::Health => 0,
-        NativeBeltPotionKind::Mana => 1,
+        BeltPotionKind::Health => 0,
+        BeltPotionKind::Mana => 1,
     };
     let mut count = 0;
     let mut item = None;
     for entry in project_inventory_items(backpack) {
-        if entry.item.native_type_id != 7001 || entry.item.native_subtype != Some(subtype) {
+        if entry.item.type_id != 7001 || entry.item.subtype != Some(subtype) {
             continue;
         }
         count += u64::from(entry.item.quantity);
@@ -282,11 +276,11 @@ pub fn native_belt_potion_projection(
             item = Some(entry.item);
         }
     }
-    NativeBeltPotionProjection { count, item }
+    BeltPotionProjection { count, item }
 }
 
 #[must_use]
-pub fn native_belt_equipment_slots(
+pub fn belt_equipment_slots(
     item: &HubInventoryItem,
     third_ring_unlocked: bool,
 ) -> Vec<EquipmentSlot> {
@@ -314,7 +308,7 @@ mod tests {
 
     #[test]
     fn the_potion_alias_remains_bound_when_its_last_owned_potion_is_drunk() {
-        let book = NativeSkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
+        let book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
         let mut economy = HubEconomyState::new(1, WizardElement::Ether);
         let mut belt = PlayerBeltComponent::new(&book);
         assert!(
@@ -323,21 +317,18 @@ mod tests {
                 .accepted
         );
         belt.refresh(&book, &economy);
-        assert_eq!(belt.entries[NATIVE_HEALTH_BELT_SLOT], Some(NativeBeltEntry::HealthPotion));
-        assert_eq!(
-            native_belt_potion_projection(&economy.backpack, NativeBeltPotionKind::Health).count,
-            0
-        );
+        assert_eq!(belt.entries[HEALTH_BELT_SLOT], Some(NativeBeltEntry::HealthPotion));
+        assert_eq!(belt_potion_projection(&economy.backpack, BeltPotionKind::Health).count, 0);
     }
 
     #[cfg(feature = "persistence")]
     #[test]
     fn legacy_belts_restore_into_three_banks_without_losing_the_original_entries() {
-        let legacy = [Some(NativeBeltEntry::Skill { skill_id: 11 }); NATIVE_BELT_SLOT_COUNT];
+        let legacy = [Some(NativeBeltEntry::Skill { skill_id: 11 }); BELT_SLOT_COUNT];
         let saved = serde_json::json!({ "entries": legacy });
         let restored: PlayerBeltComponent = serde_json::from_value(saved).unwrap();
-        assert_eq!(&restored.entries[..NATIVE_BELT_SLOT_COUNT], &legacy);
-        assert!(restored.entries[NATIVE_BELT_SLOT_COUNT..].iter().all(Option::is_none));
+        assert_eq!(&restored.entries[..BELT_SLOT_COUNT], &legacy);
+        assert!(restored.entries[BELT_SLOT_COUNT..].iter().all(Option::is_none));
         assert_eq!(
             serde_json::to_value(restored).unwrap()["entries"].as_array().unwrap().len(),
             PLAYER_BELT_SLOT_COUNT,

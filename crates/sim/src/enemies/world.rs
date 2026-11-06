@@ -16,7 +16,7 @@ pub use super::voices::FacultyVoiceController;
 use super::{EnemySpawnIntent, SpawnPositionPolicy};
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
 use crate::rng::{next_xorshift_random, seed_from_text};
-use crate::{NativeRng, Vec2};
+use crate::{Rng, Vec2};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,7 +47,7 @@ pub struct EnemySpawnPlacementRequest {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum EnemyProjectileWorldQuery {
-    Line { projectile_id: usize, start: Vec2, end: Vec2, native_exclusion_mask: u32 },
+    Line { projectile_id: usize, start: Vec2, end: Vec2, exclusion_mask: u32 },
     Point { projectile_id: usize, position: Vec2, radius: f64 },
     Bounds { projectile_id: usize, position: Vec2, margin: f64 },
     View { projectile_id: usize, position: Vec2, margin: f64 },
@@ -70,7 +70,7 @@ pub trait EnemyGeometry: EnemyNavigation {
     fn resolve_pike_player_position(&self, _current: Vec2, requested: Vec2) -> Vec2 {
         requested
     }
-    fn line_obstruction(&self, start: Vec2, end: Vec2, native_exclusion_mask: u32) -> Option<Vec2>;
+    fn line_obstruction(&self, start: Vec2, end: Vec2, exclusion_mask: u32) -> Option<Vec2>;
     fn projectile_world_blocked(&self, query: EnemyProjectileWorldQuery) -> bool;
     fn on_projectile_explosion(&self, _position: Vec2) {}
     fn on_collision_recipient_cleared(&self, _actor_id: usize) {}
@@ -84,11 +84,7 @@ pub trait EnemyGeometry: EnemyNavigation {
     fn clip_spell_segment(&self, start: Vec2, end: Vec2) -> Vec2 {
         self.line_obstruction(start, end, 0).unwrap_or(end)
     }
-    fn resolve_spawn_placement(
-        &self,
-        request: EnemySpawnPlacementRequest,
-        _rng: &mut NativeRng,
-    ) -> Vec2 {
+    fn resolve_spawn_placement(&self, request: EnemySpawnPlacementRequest, _rng: &mut Rng) -> Vec2 {
         self.resolve_movement(EnemyMovementRequest {
             actor_id: request.actor_id,
             delta: Vec2::ZERO,
@@ -117,12 +113,12 @@ pub struct EnemyAbilityEffect {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeEnemyVisibility {
+pub struct EnemyVisibility {
     pub admitted: bool,
     pub intensity: f64,
 }
 
-impl Default for NativeEnemyVisibility {
+impl Default for EnemyVisibility {
     fn default() -> Self {
         Self { admitted: true, intensity: 1.0 }
     }
@@ -140,7 +136,7 @@ impl Default for EnemyAbilityEffect {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NativeEnemyMovementView<'a> {
+pub struct EnemyMovementView<'a> {
     pub arena_bounds: crate::boneyard::BoneyardBounds,
     pub cameras: &'a [crate::boneyard::BoneyardBounds],
     pub enhanced_effects: bool,
@@ -156,12 +152,12 @@ pub struct EnemyStepContext<'a> {
     pub arena_scalars: EnemyArenaScalars,
     pub dialogue_busy: bool,
     pub roll_loot_seed: Option<&'a mut dyn FnMut(u32) -> u32>,
-    pub native_visibility: Option<&'a dyn Fn(Vec2) -> NativeEnemyVisibility>,
+    pub native_visibility: Option<&'a dyn Fn(Vec2) -> EnemyVisibility>,
     pub projected_point_visible: Option<&'a dyn Fn(Vec2) -> bool>,
-    pub native_view_bounds: Option<crate::boneyard::BoneyardBounds>,
+    pub view_bounds: Option<crate::boneyard::BoneyardBounds>,
     pub puppet_targets: &'a [super::puppet_hits::EnemyPuppetTarget],
     pub light_at: Option<&'a dyn Fn(Vec2) -> f64>,
-    pub native_movement_view: Option<NativeEnemyMovementView<'a>>,
+    pub movement_view: Option<EnemyMovementView<'a>>,
 }
 impl EnemyStepContext<'_> {
     pub(super) fn with_players<'a>(
@@ -182,10 +178,10 @@ impl EnemyStepContext<'_> {
             roll_loot_seed,
             native_visibility: self.native_visibility,
             projected_point_visible: self.projected_point_visible,
-            native_view_bounds: self.native_view_bounds,
+            view_bounds: self.view_bounds,
             puppet_targets: self.puppet_targets,
             light_at: self.light_at,
-            native_movement_view: self.native_movement_view,
+            movement_view: self.movement_view,
         }
     }
     #[must_use]
@@ -219,9 +215,9 @@ pub struct EnemyWorld {
     pub maggots: Vec<EnemyMaggotActor>,
     pub webbed_players: BTreeMap<String, WebbedState>,
     pub rng_state: u32,
-    pub steering_rng: NativeRng,
-    pub locomotion_rng: NativeRng,
-    pub head_facing_rng: NativeRng,
+    pub steering_rng: Rng,
+    pub locomotion_rng: Rng,
+    pub head_facing_rng: Rng,
     pub last_step_tick: Option<u64>,
     pub next_actor_id: usize,
     pub next_death_epoch: u64,
@@ -231,8 +227,10 @@ pub struct EnemyWorld {
     pub next_projectile_id: usize,
     pub next_mage_lightning_pulse_id: usize,
     pub next_projectile_effect_id: usize,
-    pub next_native_cell_binding_order: usize,
-    pub next_native_registration_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "next_native_cell_binding_order"))]
+    pub next_cell_binding_order: usize,
+    #[cfg_attr(feature = "persistence", serde(rename = "next_native_registration_order"))]
+    pub next_registration_order: usize,
     pub featured_boss_id: Option<usize>,
     pub faculty_voice_controller: Option<FacultyVoiceController>,
     pub boss_narration: BossNarration,
@@ -252,7 +250,7 @@ pub struct EnemyWorld {
     pub retired: Vec<super::model::EnemyRetirement>,
     pub rewards: Vec<super::model::EnemyReward>,
     pub silks: Vec<super::silk::EnemySilkActor>,
-    pub silk_fragments: Vec<super::silk_force::NativeFadeLineActor>,
+    pub silk_fragments: Vec<super::silk_force::FadeLineActor>,
     pub spider_spit_ticks_remaining: u64,
     pub spider_remains: Vec<super::spider_remains::SpiderRemains>,
     pub detached_crows: Vec<super::heartmonger::DetachedCrow>,
@@ -262,20 +260,18 @@ pub struct EnemyWorld {
 
 impl EnemyWorld {
     #[must_use]
-    pub fn new(seed: &str, native_registration_base: usize) -> Self {
+    pub fn new(seed: &str, registration_base: usize) -> Self {
         Self {
             deferred_projectile_painters: None,
             actors: Vec::new(),
             maggots: Vec::new(),
             webbed_players: BTreeMap::new(),
             rng_state: seed_from_text(&format!("{seed}:enemy-actors")),
-            steering_rng: NativeRng::new(i64::from(seed_from_text(&format!(
-                "{seed}:enemy-steering"
-            )))),
-            locomotion_rng: NativeRng::new(i64::from(seed_from_text(&format!(
+            steering_rng: Rng::new(i64::from(seed_from_text(&format!("{seed}:enemy-steering")))),
+            locomotion_rng: Rng::new(i64::from(seed_from_text(&format!(
                 "{seed}:enemy-locomotion"
             )))),
-            head_facing_rng: NativeRng::new(i64::from(seed_from_text(&format!(
+            head_facing_rng: Rng::new(i64::from(seed_from_text(&format!(
                 "{seed}:skeleton-head-facing"
             )))),
             last_step_tick: None,
@@ -287,8 +283,8 @@ impl EnemyWorld {
             next_projectile_id: 1,
             next_mage_lightning_pulse_id: 1,
             next_projectile_effect_id: 1,
-            next_native_cell_binding_order: native_registration_base,
-            next_native_registration_order: native_registration_base,
+            next_cell_binding_order: registration_base,
+            next_registration_order: registration_base,
             featured_boss_id: None,
             faculty_voice_controller: None,
             boss_narration: BossNarration::default(),

@@ -5,26 +5,25 @@ use super::program::*;
 use super::spawns;
 use super::step::StepEngine;
 use super::{
-    NativeSecondaryActorKind as Kind, NativeSecondaryDamageKind as Damage,
-    NativeSecondaryEventKind as Event, NativeSecondaryWorld,
+    SecondaryActorKind as Kind, SecondaryDamageKind as Damage, SecondaryEventKind as Event,
+    SecondaryWorld,
 };
 use crate::Vec2;
 use crate::float;
 use crate::float::{fround, hypot};
-use crate::profile::offensive::resolve_native_skill_damage_value;
-use crate::secondary::NativeSecondaryActorState;
+use crate::profile::offensive::resolve_skill_damage_value;
+use crate::secondary::SecondaryActorState;
 
-pub(super) fn step<W: NativeSecondaryWorld>(
+pub(super) fn step<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     match actor.kind {
         Kind::Leviathan => {
-            actor.phase = f64::from(native_leviathan_phase(actor.age_ticks));
-            actor.scale =
-                fround(actor.slow_factor * native_leviathan_current_scale(actor.age_ticks));
+            actor.phase = f64::from(leviathan_phase(actor.age_ticks));
+            actor.scale = fround(actor.slow_factor * leviathan_current_scale(actor.age_ticks));
             if actor.age_ticks == 1 {
                 let mut event = actor_event(actor, engine.context.tick, Event::Pulse, None);
                 event.screen_flash = Some(screen_flash(1.0, 0.5, 1.0, 0.05, true));
@@ -157,10 +156,10 @@ pub(super) fn step<W: NativeSecondaryWorld>(
     }
 }
 
-fn appendage<W: NativeSecondaryWorld>(
+fn appendage<W: SecondaryWorld>(
     engine: &mut StepEngine<'_, '_, '_, W>,
-    source: &NativeSecondaryActorState,
-    actor: &mut NativeSecondaryActorState,
+    source: &SecondaryActorState,
+    actor: &mut SecondaryActorState,
     retain: &mut bool,
 ) {
     let Some(parent_id) = source.hit_target_ids.first().copied() else {
@@ -174,7 +173,7 @@ fn appendage<W: NativeSecondaryWorld>(
         return;
     };
     let age = parent.age_ticks + 1;
-    let current_scale = native_leviathan_current_scale(age);
+    let current_scale = leviathan_current_scale(age);
     let composite = fround(parent.slow_factor * current_scale);
     let mut spin = actor.velocity.x;
     let mut heading = actor.rotation_radians * 180.0 / std::f64::consts::PI;
@@ -184,7 +183,7 @@ fn appendage<W: NativeSecondaryWorld>(
     let mut countdown = actor.quantity;
     let mut target_id = actor.target_id;
     let mut depth = actor.frame - 100.0;
-    if native_leviathan_active(age) {
+    if leviathan_active(age) {
         spin = fround(spin + actor.velocity.y);
         recoil =
             Vec2::new(fround(recoil.x * (0.9_f32 as f64)), fround(recoil.y * (0.9_f32 as f64)));
@@ -198,7 +197,7 @@ fn appendage<W: NativeSecondaryWorld>(
         } else {
             fround(deployment + (0.07_f32 as f64))
         };
-        depth = (native_leviathan_heading_vector(heading).y * 100.0 + 0.5).floor();
+        depth = (leviathan_heading_vector(heading).y * 100.0 + 0.5).floor();
         if deployment < (0.05_f32 as f64) {
             let origin = Vec2::new(
                 fround(parent.position.x + actor.endpoint.x),
@@ -206,23 +205,23 @@ fn appendage<W: NativeSecondaryWorld>(
             );
             if let Some(id) = target_id {
                 if let Some(target) = engine.world.target(&actor.world_key, id) {
-                    heading = native_leviathan_heading_degrees(origin, target.position);
+                    heading = leviathan_heading_degrees(origin, target.position);
                     countdown -= 1.0;
                     if countdown < 1.0 {
-                        let root = native_leviathan_appendage_local_root(
+                        let root = leviathan_appendage_local_root(
                             actor.endpoint,
                             recoil,
                             spin,
                             deployment,
                         );
-                        let muzzle = native_leviathan_muzzle_position(
+                        let muzzle = leviathan_muzzle_position(
                             parent.position,
                             root,
                             bank as u32,
                             heading,
                             actor.radius,
                         );
-                        let direction = native_leviathan_heading_vector(heading);
+                        let direction = leviathan_heading_vector(heading);
                         spawns::ether_fade(
                             engine.state,
                             actor,
@@ -238,12 +237,12 @@ fn appendage<W: NativeSecondaryWorld>(
                             actor.rank,
                             Vec2::new(muzzle.x, fround(muzzle.y + 25.0)),
                         );
-                        shot.damage = fround(resolve_native_skill_damage_value(
+                        shot.damage = fround(resolve_skill_damage_value(
                             11,
                             parent.damage,
                             &engine.context.players[&actor.owner_id].offensive_factors,
                         ));
-                        shot.lifetime_ticks = NATIVE_ETHER_BOLT_LIFETIME_TICKS;
+                        shot.lifetime_ticks = ETHER_BOLT_LIFETIME_TICKS;
                         shot.quantity = 100.0;
                         shot.radius = 10.0;
                         shot.rotation_radians = heading * std::f64::consts::PI / 180.0;
@@ -263,11 +262,11 @@ fn appendage<W: NativeSecondaryWorld>(
                 let mut targets = stable_targets(engine.world.targets(
                     &actor.world_key,
                     origin,
-                    NATIVE_LEVIATHAN_TARGET_RANGE,
+                    LEVIATHAN_TARGET_RANGE,
                 ));
                 targets.retain(|target| {
                     target.native_flags.unwrap_or(2) & 2 != 0
-                        && native_leviathan_inside_target_lane(origin, heading, target.position)
+                        && leviathan_inside_target_lane(origin, heading, target.position)
                         && !engine.world.line_obstruction(&actor.world_key, origin, target.position)
                 });
                 targets.sort_by(|a, b| {
@@ -279,18 +278,18 @@ fn appendage<W: NativeSecondaryWorld>(
             }
         }
     }
-    let root = native_leviathan_appendage_local_root(actor.endpoint, recoil, spin, deployment);
+    let root = leviathan_appendage_local_root(actor.endpoint, recoil, spin, deployment);
     actor.frame = depth + 100.0;
     actor.midpoint = recoil;
     actor.phase = bank;
-    actor.position = native_leviathan_appendage_presentation_root(parent.position, composite, root);
+    actor.position = leviathan_appendage_presentation_root(parent.position, composite, root);
     actor.quantity = countdown;
     actor.rotation_radians = heading * std::f64::consts::PI / 180.0;
     actor.scale = composite;
     actor.slow_factor = deployment;
     actor.target_id = target_id;
     actor.velocity = Vec2::new(spin, actor.velocity.y);
-    *retain = age < NATIVE_LEVIATHAN_LIFETIME_TICKS;
+    *retain = age < LEVIATHAN_LIFETIME_TICKS;
     if engine.last_appendages.get(&parent_id) == Some(&actor.id)
         && engine.context.enhanced_effects_for(&actor.owner_id)
     {

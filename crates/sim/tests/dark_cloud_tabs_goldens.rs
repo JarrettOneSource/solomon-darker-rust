@@ -15,10 +15,8 @@ fn five_cloud_routes_preserve_source_bands_and_scrollable_minimum_scale() {
     }
     assert_eq!(DarkCloudTab::from_id("unknown"), None);
     for case in fixture["frames"].as_array().unwrap() {
-        let actual = native_dark_cloud_tab_strip(
-            case["width"].as_f64().unwrap(),
-            case["height"].as_f64().unwrap(),
-        );
+        let actual =
+            dark_cloud_tab_strip(case["width"].as_f64().unwrap(), case["height"].as_f64().unwrap());
         let expected = &case["expected"];
         assert_eq!(actual.width, expected["width"].as_f64().unwrap(), "{case}");
         assert_eq!(actual.height, expected["height"].as_f64().unwrap(), "{case}");

@@ -6,8 +6,8 @@ use crate::boneyard::world::BoneyardSnapshot;
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct GameSnapshot<'a> {
     pub inventory_dye_sessions:
-        &'a std::collections::BTreeMap<String, crate::economy::NativeInventoryDyeSession>,
-    pub screen_flashes: &'a crate::screen_flash::NativeScreenFlashState,
+        &'a std::collections::BTreeMap<String, crate::economy::InventoryDyeSession>,
+    pub screen_flashes: &'a crate::screen_flash::ScreenFlashState,
     pub enhanced_effects: &'a bool,
     pub participants: GameSnapshotParticipants<'a>,
     pub participant_order: &'a Vec<String>,
@@ -18,9 +18,9 @@ pub struct GameSnapshot<'a> {
     pub hub_trader_animation_seed: &'a u32,
     pub hub_memorial: &'a crate::hub::memorial::HubMemorialState,
     pub collision_rng: &'a u32,
-    pub gameplay_rng: &'a NativeRng,
-    pub combat_rng: &'a NativeRng,
-    pub secondary: &'a NativeSecondarySimulationState,
+    pub gameplay_rng: &'a Rng,
+    pub combat_rng: &'a Rng,
+    pub secondary: &'a SecondarySimulationState,
     pub spells: &'a SpellState,
     pub hall_of_fame_clock_started_at_tick: &'a u64,
     pub painter_order: &'a WorldPainterOrder,

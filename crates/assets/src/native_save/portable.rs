@@ -6,10 +6,8 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use solomon_sim::economy::{
-    native_hagatha_bundle_state_is_valid, native_hagatha_outcome_state_is_valid,
-};
-use solomon_sim::profile::native_skill_category;
+use solomon_sim::economy::{hagatha_bundle_state_is_valid, hagatha_outcome_state_is_valid};
+use solomon_sim::profile::skill_category;
 
 use super::archive::{
     NativeArchiveFile, NativeSaveArchive, retained_path_is_safe, run_name_is_valid,
@@ -255,7 +253,7 @@ fn hagatha_bundle(value: &Value) -> Result<Vec<u32>, String> {
         .into_iter()
         .map(|value| value as u32)
         .collect();
-    if !native_hagatha_bundle_state_is_valid(&outcomes) {
+    if !hagatha_bundle_state_is_valid(&outcomes) {
         return Err("portable Hagatha bundle is not a native outcome list".into());
     }
     Ok(outcomes)
@@ -737,12 +735,12 @@ pub fn parse_portable_game_profile(document: &str) -> Result<PortableGameProfile
         return Err("portable wizard progression is internally inconsistent".into());
     }
     if (wizard.selected_primary_skill_id != 80
-        && native_skill_category(wizard.selected_primary_skill_id as usize) != Some(1))
+        && skill_category(wizard.selected_primary_skill_id as usize) != Some(1))
         || wizard
             .concentration_skill_ids
             .iter()
             .flatten()
-            .any(|id| native_skill_category(*id as usize) != Some(3))
+            .any(|id| skill_category(*id as usize) != Some(3))
         || (wizard.concentration_skill_ids[0].is_some()
             && wizard.concentration_skill_ids[0] == wizard.concentration_skill_ids[1])
         || (wizard.concentration_skill_ids[1].is_some() && !wizard.perk_selectors.contains(&21))
@@ -750,21 +748,17 @@ pub fn parse_portable_game_profile(document: &str) -> Result<PortableGameProfile
             .skill_quickbar
             .iter()
             .flatten()
-            .any(|id| !matches!(native_skill_category(*id as usize), Some(1 | 2)))
+            .any(|id| !matches!(skill_category(*id as usize), Some(1 | 2)))
     {
         return Err("portable selected-skill state is invalid".into());
     }
     let tonics = wizard.perk_selectors.iter().filter(|selector| **selector == 27).count() as u32;
     let ordinary: BTreeSet<u32> =
         wizard.perk_selectors.iter().copied().filter(|selector| *selector != 27).collect();
-    if !native_hagatha_outcome_state_is_valid(
-        &wizard.perk_selectors,
-        tonics,
-        wizard.perk_capacity as u32,
-    ) || wizard.hagatha_ownership[..27]
-        .iter()
-        .enumerate()
-        .any(|(selector, owned)| selector != 8 && *owned != ordinary.contains(&(selector as u32)))
+    if !hagatha_outcome_state_is_valid(&wizard.perk_selectors, tonics, wizard.perk_capacity as u32)
+        || wizard.hagatha_ownership[..27].iter().enumerate().any(|(selector, owned)| {
+            selector != 8 && *owned != ordinary.contains(&(selector as u32))
+        })
         || wizard.hagatha_ownership[27] != (tonics > 0)
     {
         return Err("portable Hagatha outcomes and ownership are inconsistent".into());

@@ -5,7 +5,7 @@
 //! `Website/frontend/src/game/core-kernels/native-starter-equipment.ts`.
 
 use crate::float::fround;
-use crate::rng::NativeRng;
+use crate::rng::Rng;
 
 pub mod equipment;
 
@@ -41,7 +41,7 @@ pub struct StarterEquipmentAppearance {
 }
 
 /// The tutorial wizard's fixed equipment colours.
-pub const NATIVE_TUTORIAL_EQUIPMENT_APPEARANCE: StarterEquipmentAppearance =
+pub const TUTORIAL_EQUIPMENT_APPEARANCE: StarterEquipmentAppearance =
     StarterEquipmentAppearance { primary_tint: 0xc4_91_5e, secondary_tint: 0xff_ff_ff };
 
 // The Website mixes these as `Math.fround` singles, so the constants carry f32 rounding;
@@ -62,8 +62,8 @@ pub(crate) fn rgb_tint(color: [f64; 3]) -> u32 {
 
 /// Rolls a starter appearance, consuming three float draws from `rng`.
 #[must_use]
-pub fn roll_native_starter_equipment_appearance(
-    rng: &mut NativeRng,
+pub fn roll_starter_equipment_appearance(
+    rng: &mut Rng,
     owner: StarterColorOwner,
 ) -> StarterEquipmentAppearance {
     let mut color = owner.base_color().map(fround);
@@ -88,10 +88,9 @@ mod tests {
 
     #[test]
     fn the_roll_consumes_three_draws_and_stays_in_range() {
-        let mut rng = NativeRng::new(1);
-        let mut witness = NativeRng::new(1);
-        let appearance =
-            roll_native_starter_equipment_appearance(&mut rng, StarterColorOwner::Ether);
+        let mut rng = Rng::new(1);
+        let mut witness = Rng::new(1);
+        let appearance = roll_starter_equipment_appearance(&mut rng, StarterColorOwner::Ether);
         for _ in 0..3 {
             witness.draw_scaled_float(JITTER_MAXIMUM, false);
         }

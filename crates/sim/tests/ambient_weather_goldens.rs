@@ -15,7 +15,7 @@ fn arena_rain_collision_lifetimes_birth_lighting_and_ramp_match_source() {
     for case in fixture["cases"].as_array().unwrap() {
         let mode = case["mode"].as_u64().unwrap() as u32;
         let enhanced = case["enhanced"].as_bool().unwrap();
-        let mut weather = NativeBoneyardWeather::new(17, mode, enhanced);
+        let mut weather = BoneyardWeather::new(17, mode, enhanced);
         for frame in case["frames"].as_array().unwrap() {
             let tick = frame["tick"].as_u64().unwrap();
             let bounds = &frame["bounds"];
@@ -93,9 +93,9 @@ fn arena_rain_collision_lifetimes_birth_lighting_and_ramp_match_source() {
     }
     for seed in fixture["seeds"].as_array().unwrap() {
         assert_eq!(
-            u64::from(native_boneyard_weather_tick_seed(seed[0].as_u64().unwrap())),
+            u64::from(boneyard_weather_tick_seed(seed[0].as_u64().unwrap())),
             seed[1].as_u64().unwrap()
         );
     }
-    assert_eq!(json!(native_boneyard_weather_streak_ramp().as_slice()), fixture["ramp"]);
+    assert_eq!(json!(boneyard_weather_streak_ramp().as_slice()), fixture["ramp"]);
 }
