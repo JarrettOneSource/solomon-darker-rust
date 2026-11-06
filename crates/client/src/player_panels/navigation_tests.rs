@@ -410,3 +410,46 @@ fn pending_dye_rename_and_suspended_owner_do_not_leak_book_keys() {
         }
     }
 }
+
+const STOCK_PANEL_IMAGES: [&str; 6] = [
+    "assets/stock/UI.png",
+    "assets/stock/Inventory.png",
+    "assets/stock/Skills.png",
+    "assets/stock/Library.png",
+    "assets/stock/ControlPanel.png",
+    "assets/stock/Fonts.png",
+];
+
+#[test]
+fn controller_scope_is_the_layer_holding_the_dialogue_controls() {
+    // Controller focus and A only search the scope's layer, so a dialogue that claims
+    // another layer leaves every controller input with nothing to reach.
+    let fixture = Fixture::new();
+    let mut panels = panels();
+    let context = HubDialogueContext {
+        interaction: HubInteractionId::ArchChancellor,
+        story_office: true,
+        eulogy_override: None,
+        random_index: 0,
+    };
+    panels.show_college_intro_dialogue(context, &fixture.economy.npc, 0.0).unwrap();
+    // The first speech, then its questions after Skip.
+    for (now, skip, control) in
+        [(10.0, false, "panel:dialogue-next"), (20.0, true, "panel:dialogue-choice:0")]
+    {
+        if skip {
+            update(&mut panels, &fixture, now, Some(PanelEvent::Activate(Target::DialogueNext)));
+        }
+        update(&mut panels, &fixture, now, None);
+        let ctx = egui::Context::default();
+        let frame = crate::gpu_ui::record_frame(&ctx, &STOCK_PANEL_IMAGES, |frame| {
+            panels.paint(frame).unwrap();
+        });
+        let (layer, _) = frame.input_scope.expect("the open dialogue claims the controller");
+        assert_eq!(
+            frame.widgets[control].layer_id,
+            Some(layer),
+            "{control} is in the controller scope"
+        );
+    }
+}

@@ -23,7 +23,7 @@ pub(crate) mod unforge;
 #[cfg(all(target_arch = "wasm32", feature = "browser-fixtures"))]
 mod unforge_fixture;
 #[cfg(all(test, not(target_arch = "wasm32")))]
-pub(crate) use tests::record_shapes;
+pub(crate) use tests::{record_frame, record_shapes};
 #[cfg(test)]
 mod tests;
 
@@ -146,7 +146,7 @@ pub struct WidgetGeometry {
     #[serde(skip)]
     egui_id: Option<egui::Id>,
     #[serde(skip)]
-    layer_id: Option<egui::LayerId>,
+    pub(crate) layer_id: Option<egui::LayerId>,
     #[serde(skip)]
     duplicate: bool,
     #[serde(skip)]
