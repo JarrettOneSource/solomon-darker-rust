@@ -1,5 +1,6 @@
 //! Born no-item Cast1 action (`0x0044B400`) and its retained terminal frame.
 
+use crate::profile::WeldBuildId;
 use crate::profile::primary::PrimarySkillProfile;
 use crate::{Rng, float::fround};
 
@@ -12,10 +13,10 @@ pub fn hand_cast1_rate(profile: &PrimarySkillProfile, cast_factor: f64) -> f64 {
         PrimarySkillProfile::Ether(_) => rate,
         PrimarySkillProfile::Fire(_) => fround(rate * 0.75),
         PrimarySkillProfile::Weld(profile) => match profile.build_id {
-            1000 => fround(rate * 0.87_f32 as f64),
-            1001 => rate,
-            1002 => fround(rate * 1.3_f32 as f64),
-            1009 => fround(rate * profile.vector.values[5]),
+            WeldBuildId::BurningBolt => fround(rate * 0.87_f32 as f64),
+            WeldBuildId::FrostMissile => rate,
+            WeldBuildId::BallLightning => fround(rate * 1.3_f32 as f64),
+            WeldBuildId::CrawlingShock => fround(rate * profile.vector.values[5]),
             _ => panic!("only one-shot Welds construct HandCast1"),
         },
         _ => panic!("channel primaries construct Constant instead of HandCast1"),

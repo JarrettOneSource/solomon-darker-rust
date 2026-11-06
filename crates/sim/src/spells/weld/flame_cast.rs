@@ -8,6 +8,7 @@ use super::{
 use crate::boneyard::BoneyardBounds;
 use crate::float::{fround, hypot};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use crate::profile::WeldBuildId;
 use crate::profile::primary::PrimarySkillProfile;
 use crate::spells::model::{
     PrimarySpellChannelEmission, PrimarySpellFlameLashPresentation, PrimarySpellTransient,
@@ -128,7 +129,7 @@ impl SpellState {
             let PrimarySkillProfile::Weld(profile) = &emission.primary_skill else {
                 continue;
             };
-            if profile.build_id != 1003 {
+            if profile.build_id != WeldBuildId::FlameLash {
                 continue;
             }
             let Some(main) = &emission.flame_lash_presentation else { continue };
@@ -138,7 +139,7 @@ impl SpellState {
                 continue;
             };
             let birth = WeldActorBirth {
-                build_id: 1003,
+                build_id: WeldBuildId::FlameLash,
                 direction: emission.direction,
                 id: emission.id,
                 origin: emission.origin,

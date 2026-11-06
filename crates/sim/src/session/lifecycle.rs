@@ -235,7 +235,7 @@ pub(super) fn new_hub_participant(
 
 pub(super) fn reset_selected_primary(wizard: &mut HubWizard, player: &PlayerState) {
     let selected = if player.book.primary_skill_id == 52 {
-        player.book.weld_build_id.expect("selected Weld has a build")
+        player.book.weld_build_id.expect("selected Weld has a build").id()
     } else {
         player.book.primary_skill_id as u32
     };

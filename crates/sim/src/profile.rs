@@ -255,23 +255,76 @@ pub fn skill_stat(skill_id: usize, property: &str, rank: u32) -> Option<f64> {
     SKILL_CATALOG.get(skill_id)?.stat(property, rank)
 }
 
+/// One of the ten Weld builds, numbered by the original game's build IDs 1000 to 1009.
+/// Saves, snapshots and the developer console carry the number; reading any other number
+/// there is an error.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "persistence", serde(try_from = "u32", into = "u32"))]
+pub enum WeldBuildId {
+    BurningBolt = 1000,
+    FrostMissile = 1001,
+    BallLightning = 1002,
+    FlameLash = 1003,
+    BlizzardBeam = 1004,
+    SteamJet = 1005,
+    EtherealBoulder = 1006,
+    MeteorSwarm = 1007,
+    Hailstones = 1008,
+    CrawlingShock = 1009,
+}
+
+impl WeldBuildId {
+    /// The original game's build ID.
+    #[must_use]
+    pub const fn id(self) -> u32 {
+        self as u32
+    }
+}
+
+impl From<WeldBuildId> for u32 {
+    fn from(build: WeldBuildId) -> Self {
+        build.id()
+    }
+}
+
+impl TryFrom<u32> for WeldBuildId {
+    type Error = String;
+
+    fn try_from(id: u32) -> Result<Self, Self::Error> {
+        match id {
+            1000 => Ok(Self::BurningBolt),
+            1001 => Ok(Self::FrostMissile),
+            1002 => Ok(Self::BallLightning),
+            1003 => Ok(Self::FlameLash),
+            1004 => Ok(Self::BlizzardBeam),
+            1005 => Ok(Self::SteamJet),
+            1006 => Ok(Self::EtherealBoulder),
+            1007 => Ok(Self::MeteorSwarm),
+            1008 => Ok(Self::Hailstones),
+            1009 => Ok(Self::CrawlingShock),
+            _ => Err(format!("unknown Weld build ID {id}")),
+        }
+    }
+}
+
 /// One of the ten Weld builds: component and primary skills, color roots, icon, name and
 /// description.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WeldBuild {
     pub color_roots: [usize; 2],
     pub component_skill_ids: [usize; 6],
-    pub id: u32,
+    pub id: WeldBuildId,
     pub pair_description: &'static str,
     pub primary_skill_ids: [usize; 2],
     pub icon_record: usize,
     pub synthetic_name: &'static str,
 }
 
+/// A build's catalog entry. `WELD_BUILDS` lists the builds in ID order.
 #[must_use]
-pub fn weld_build(build_id: u32) -> Option<&'static WeldBuild> {
-    let index = build_id.checked_sub(1000)? as usize;
-    WELD_BUILDS.get(index)
+pub fn weld_build(build_id: WeldBuildId) -> &'static WeldBuild {
+    &WELD_BUILDS[(build_id.id() - 1000) as usize]
 }
 
 /// Permanent acquisition and equipment-adjusted ranks share one canonical skillbook.
@@ -287,7 +340,7 @@ pub struct SkillBookState {
     #[cfg_attr(feature = "persistence", serde(with = "crate::persistence::fixed_array"))]
     pub permanent_ranks: [u32; SKILL_ROW_COUNT],
     pub primary_skill_id: usize,
-    pub weld_build_id: Option<u32>,
+    pub weld_build_id: Option<WeldBuildId>,
     pub weld_component_ranks: Option<[u32; 6]>,
 }
 
@@ -355,8 +408,8 @@ impl SkillBookState {
     }
 
     /// Acquires the build's missing components before the synthetic Weld skill.
-    pub fn grant_weld_build(&mut self, build_id: u32) {
-        let build = weld_build(build_id).expect("an authored native Weld build");
+    pub fn grant_weld_build(&mut self, build_id: WeldBuildId) {
+        let build = weld_build(build_id);
         for skill_id in build.component_skill_ids {
             if self.permanent_ranks[skill_id] < 1 {
                 self.grant_ranks(skill_id, 1);
@@ -393,8 +446,61 @@ impl SkillBookState {
             return SKILL_CATALOG[skill_id].icon_record;
         }
         match self.weld_build_id {
-            Some(id) => weld_build(id).expect("the learned native Weld build").icon_record,
+            Some(id) => weld_build(id).icon_record,
             None => SKILL_CATALOG[skill_id].icon_record,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_weld_build_keeps_its_original_number_and_catalog_entry() {
+        let builds = [
+            (WeldBuildId::BurningBolt, 1000, "Burning Bolt"),
+            (WeldBuildId::FrostMissile, 1001, "Frost Missile"),
+            (WeldBuildId::BallLightning, 1002, "Ball Lightning"),
+            (WeldBuildId::FlameLash, 1003, "Flame Lash"),
+            (WeldBuildId::BlizzardBeam, 1004, "Blizzard Beam"),
+            (WeldBuildId::SteamJet, 1005, "Steam Jet"),
+            (WeldBuildId::EtherealBoulder, 1006, "Ethereal Boulder"),
+            (WeldBuildId::MeteorSwarm, 1007, "Meteor Swarm"),
+            (WeldBuildId::Hailstones, 1008, "Hailstones"),
+            (WeldBuildId::CrawlingShock, 1009, "Crawling Shock"),
+        ];
+        assert_eq!(WELD_BUILDS.len(), builds.len());
+        for (index, (build, number, name)) in builds.into_iter().enumerate() {
+            assert_eq!(build.id(), number, "{name} number");
+            assert_eq!(u32::from(build), number, "{name} number");
+            assert_eq!(WeldBuildId::try_from(number), Ok(build), "{name} from {number}");
+            assert_eq!(WELD_BUILDS[index].id, build, "catalog row {index}");
+            assert_eq!(weld_build(build).synthetic_name, name, "{name} catalog entry");
+        }
+    }
+
+    #[test]
+    fn numbers_outside_the_ten_builds_are_not_weld_builds() {
+        for number in [0, 52, 999, 1010, 1014, u32::MAX] {
+            assert_eq!(
+                WeldBuildId::try_from(number),
+                Err(format!("unknown Weld build ID {number}")),
+                "{number}"
+            );
+        }
+    }
+
+    #[cfg(feature = "persistence")]
+    #[test]
+    fn saved_weld_builds_are_their_original_numbers() {
+        assert_eq!(serde_json::to_string(&WeldBuildId::FlameLash).unwrap(), "1003");
+        assert_eq!(serde_json::to_string(&Some(WeldBuildId::Hailstones)).unwrap(), "1008");
+        assert_eq!(
+            serde_json::from_str::<Option<WeldBuildId>>("1009").unwrap(),
+            Some(WeldBuildId::CrawlingShock)
+        );
+        let error = serde_json::from_str::<WeldBuildId>("1010").unwrap_err().to_string();
+        assert!(error.contains("unknown Weld build ID 1010"), "{error}");
     }
 }

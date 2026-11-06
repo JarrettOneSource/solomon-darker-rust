@@ -4,6 +4,7 @@
 use crate::float::fround;
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use crate::profile::WeldBuildId;
 use crate::profile::primary::WeldPrimarySkillProfile;
 use crate::profile::weld::WeldCastKind;
 use crate::spells::model::{PrimarySpellProjectileBase, PrimarySpellProjectilePhase};
@@ -31,7 +32,7 @@ pub struct WeldProjectileState {
     pub common: PrimarySpellProjectileBase,
     pub ball_lightning_acceleration: Option<f64>,
     pub base_presentation_phase_degrees: Option<f64>,
-    pub build_id: u32,
+    pub build_id: WeldBuildId,
     pub cast_playback_rate: f64,
     pub cast_sound_variant: Option<u32>,
     pub contacts_remaining: u32,
@@ -89,15 +90,25 @@ pub fn spawn_weld_one_shot(
     let profile = input.primary_skill;
     let build_id = profile.build_id;
     assert!(
-        profile.cast_kind == WeldCastKind::OneShot && matches!(build_id, 1000..=1002 | 1009),
+        profile.cast_kind == WeldCastKind::OneShot
+            && matches!(
+                build_id,
+                WeldBuildId::BurningBolt
+                    | WeldBuildId::FrostMissile
+                    | WeldBuildId::BallLightning
+                    | WeldBuildId::CrawlingShock
+            ),
         "weld build is not a one-shot actor"
     );
+    let crawling_shock = build_id == WeldBuildId::CrawlingShock;
+    let ball_lightning = build_id == WeldBuildId::BallLightning;
+    let frost_missile = build_id == WeldBuildId::FrostMissile;
     let damage =
         draw_weld_damage(rng, profile.common.damage_minimum, profile.common.damage_maximum);
     let aim_heading = heading_degrees_from_vector(input.aim_direction.x, input.aim_direction.y);
     let quantity = if input.underpowered {
         1
-    } else if build_id == 1009 {
+    } else if crawling_shock {
         3
     } else {
         profile.vector.values[3].round() as usize
@@ -105,18 +116,18 @@ pub fn spawn_weld_one_shot(
     let mut playback = if input.underpowered { 0.75_f32 as f64 } else { 1.0 };
     let mut ball_turn_scale = 1.0;
     match build_id {
-        1001 => {
+        WeldBuildId::FrostMissile => {
             let draw = rng.draw_scaled_float(0.1_f32 as f64, false);
             if !input.underpowered {
                 playback = fround(1.0 + draw);
             }
         }
-        1002 => {
+        WeldBuildId::BallLightning => {
             let draw = rng.draw_scaled_float(0.25_f32 as f64, false);
             ball_turn_scale = if input.underpowered { 0.75_f32 as f64 } else { fround(1.0 + draw) };
             playback = ball_turn_scale;
         }
-        1009 => {
+        WeldBuildId::CrawlingShock => {
             let draw = rng.draw_scaled_float(0.05_f32 as f64, true);
             playback = fround(1.0 + draw);
             if input.underpowered {
@@ -126,13 +137,13 @@ pub fn spawn_weld_one_shot(
         _ => {}
     }
     let cast_sound_variant = match build_id {
-        1002 => Some(rng.draw_integer(2) as u32),
-        1009 => Some(rng.draw_integer(3) as u32),
+        WeldBuildId::BallLightning => Some(rng.draw_integer(2) as u32),
+        WeldBuildId::CrawlingShock => Some(rng.draw_integer(3) as u32),
         _ => None,
     };
     let mut projectiles = Vec::with_capacity(quantity);
     for index in 0..quantity {
-        let heading = if build_id == 1009 {
+        let heading = if crawling_shock {
             normalize_degrees(
                 aim_heading
                     + match index {
@@ -147,42 +158,42 @@ pub fn spawn_weld_one_shot(
         let direction = direction_from_heading(heading);
         let position = Vec2::new(
             input.origin.x,
-            fround(input.origin.y + if build_id == 1009 { 15.0 } else { 10.0 }),
+            fround(input.origin.y + if crawling_shock { 15.0 } else { 10.0 }),
         );
-        let speed_factor = if build_id == 1009 {
+        let speed_factor = if crawling_shock {
             if index == 0 { 4.0 } else { 3.0 }
         } else if input.underpowered {
             0.8_f32 as f64
-        } else if build_id == 1002 {
+        } else if ball_lightning {
             fround(profile.vector.values[4] * 0.8500000238418579)
         } else {
             profile.vector.values[4]
         };
-        let speed = if build_id == 1009 { speed_factor } else { fround(3.0 * speed_factor) };
-        let target = if build_id == 1009 {
+        let speed = if crawling_shock { speed_factor } else { fround(3.0 * speed_factor) };
+        let target = if crawling_shock {
             None
         } else {
             select_ether_primary_target(position, direction, input.targets)
         };
         let base_phase =
-            if build_id == 1009 { None } else { Some(rng.draw_scaled_float(360.0, false)) };
+            if crawling_shock { None } else { Some(rng.draw_scaled_float(360.0, false)) };
         let mut secondary_phase = None;
         let mut frost_aspect = None;
-        if build_id == 1001 {
+        if frost_missile {
             secondary_phase = Some(rng.draw_scaled_float(360.0, false));
             frost_aspect = Some(fround(0.5 + rng.draw_scaled_float(0.25_f32 as f64, false)));
         }
         let mut private_seed = None;
         let mut age = None;
-        if build_id == 1000 || build_id == 1009 {
-            private_seed =
-                Some(rng.draw_integer(if build_id == 1000 { 100_000 } else { 1_000_000 }) as u32);
-            if build_id == 1009 {
+        if build_id == WeldBuildId::BurningBolt || crawling_shock {
+            let seed_range = if build_id == WeldBuildId::BurningBolt { 100_000 } else { 1_000_000 };
+            private_seed = Some(rng.draw_integer(seed_range) as u32);
+            if crawling_shock {
                 age = Some(rng.draw_integer(360) as u64);
             }
         }
         let vector = underpowered_vector(build_id, &profile.vector.values, input.underpowered);
-        let acceleration = (build_id == 1002).then_some(2.0);
+        let acceleration = ball_lightning.then_some(2.0);
         let movement_speed = acceleration
             .map_or(speed, |acceleration| ball_lightning_movement_speed(speed, acceleration));
         let id = input.first_id + index as u64;
@@ -217,11 +228,11 @@ pub fn spawn_weld_one_shot(
             build_id,
             cast_playback_rate: playback,
             cast_sound_variant,
-            contacts_remaining: if build_id == 1009 { vector[4].round() as u32 + 1 } else { 1 },
+            contacts_remaining: if crawling_shock { vector[4].round() as u32 + 1 } else { 1 },
             heading_degrees: heading,
             hit_target_ids: Vec::new(),
             frost_pulse_aspect: frost_aspect,
-            frost_presentation_lanes: if build_id == 1001 {
+            frost_presentation_lanes: if frost_missile {
                 Some([
                     WeldFrostPresentationLane { aspect: 0.0, rotation_degrees: 0.0, scale: 0.0 },
                     WeldFrostPresentationLane {
@@ -233,9 +244,9 @@ pub fn spawn_weld_one_shot(
             } else {
                 None
             },
-            frost_turn_degrees: (build_id == 1001).then_some(0.0),
+            frost_turn_degrees: frost_missile.then_some(0.0),
             ground_spark_age_ticks: age,
-            ground_spark_turn_ticks_remaining: (build_id == 1009).then_some(0),
+            ground_spark_turn_ticks_remaining: crawling_shock.then_some(0),
             presentation_seed: private_seed,
             projectile_index: index,
             reacquires_target: missile_reacquires(build_id, speed_factor, input.underpowered),
@@ -243,12 +254,12 @@ pub fn spawn_weld_one_shot(
             speed,
             target_id: target.map(|target| target.id.clone()),
             turn_accumulator: ETHER_PRIMARY_INITIAL_TURN,
-            turn_input: if build_id == 1009 {
+            turn_input: if crawling_shock {
                 0.0
             } else {
                 fround(
                     2.0 * speed_factor
-                        * if build_id == 1002 { ball_turn_scale } else { 1.0 }
+                        * if ball_lightning { ball_turn_scale } else { 1.0 }
                         * missile_fan_turn_scale(index),
                 )
             },
@@ -260,7 +271,7 @@ pub fn spawn_weld_one_shot(
 }
 
 pub fn step_weld_projectile_presentation(projectile: &mut WeldProjectileState, rng: &mut Rng) {
-    if projectile.build_id != 1001 {
+    if projectile.build_id != WeldBuildId::FrostMissile {
         return;
     }
     for lane in projectile.frost_presentation_lanes.as_mut().expect("Frost Missile owns two lanes")
@@ -278,7 +289,7 @@ pub fn step_weld_projectile_presentation(projectile: &mut WeldProjectileState, r
 }
 
 pub fn step_weld_projectile(projectile: &mut WeldProjectileState, targets: &[PrimarySpellTarget]) {
-    if projectile.build_id == 1009 {
+    if projectile.build_id == WeldBuildId::CrawlingShock {
         projectile.common.position = Vec2::new(
             fround(projectile.common.position.x + projectile.common.velocity.x),
             fround(projectile.common.position.y + projectile.common.velocity.y),
@@ -374,45 +385,45 @@ fn ball_lightning_movement_speed(speed: f64, acceleration: f64) -> f64 {
 fn normalize_degrees(value: f64) -> f64 {
     fround(((value % 360.0) + 360.0) % 360.0)
 }
-fn missile_reacquires(build_id: u32, speed: f64, underpowered: bool) -> bool {
-    if underpowered || build_id == 1009 {
+fn missile_reacquires(build_id: WeldBuildId, speed: f64, underpowered: bool) -> bool {
+    if underpowered || build_id == WeldBuildId::CrawlingShock {
         return false;
     }
     match build_id {
-        1000 => speed > 1.255_f32 as f64,
-        1001 => speed > 1.0,
-        1002 => speed > 0.8600000143051147,
-        _ => unreachable!(),
+        WeldBuildId::BurningBolt => speed > 1.255_f32 as f64,
+        WeldBuildId::FrostMissile => speed > 1.0,
+        WeldBuildId::BallLightning => speed > 0.8600000143051147,
+        _ => unreachable!("only one-shot Welds fire projectiles"),
     }
 }
-fn underpowered_vector(build_id: u32, source: &[f64], underpowered: bool) -> Vec<f64> {
+fn underpowered_vector(build_id: WeldBuildId, source: &[f64], underpowered: bool) -> Vec<f64> {
     let mut vector = source.to_vec();
     if !underpowered {
         return vector;
     }
     match build_id {
-        1000 => {
+        WeldBuildId::BurningBolt => {
             vector[3] = 1.0;
             vector[4] = 0.8_f32 as f64;
             vector[5..=8].fill(0.0);
         }
-        1001 => {
+        WeldBuildId::FrostMissile => {
             vector[3] = 1.0;
             vector[4] = 0.8_f32 as f64;
             vector[5..=6].fill(0.0);
         }
-        1002 => {
+        WeldBuildId::BallLightning => {
             vector[3] = 1.0;
             vector[4] = 0.8_f32 as f64;
             vector[5] = 0.0;
             vector[6] = 1.0;
         }
-        1009 => {
+        WeldBuildId::CrawlingShock => {
             vector[2] = 0.0;
             vector[3] = 1.0;
             vector[4] = 0.0;
         }
-        _ => unreachable!(),
+        _ => unreachable!("only one-shot Welds fire projectiles"),
     }
     vector
 }

@@ -1,6 +1,7 @@
 //! Canonical player component projection shared by command and session replays.
 
 use serde_json::{Value, json};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::{Rng, player::PlayerState};
 
 pub fn rng_snapshot(rng: &Rng) -> Value {
@@ -25,7 +26,7 @@ pub fn snapshot(player: &PlayerState, rng: &Rng) -> Value {
                     value["insight"] = json!(true);
                 }
                 if let Some(build) = option.weld_build_id {
-                    value["weldBuildId"] = json!(build);
+                    value["weldBuildId"] = json!(build.id());
                 }
                 value
             })
@@ -42,7 +43,7 @@ pub fn snapshot(player: &PlayerState, rng: &Rng) -> Value {
             "advancedUnlocks": book.advanced_unlocks, "disciplineRoot": book.discipline_root,
             "effectiveRanks": &book.effective_ranks[..], "elementRoot": book.element_root,
             "learnedSkillOrder": book.learned_skill_order, "permanentRanks": &book.permanent_ranks[..],
-            "primarySkillId": book.primary_skill_id, "weldBuildId": book.weld_build_id,
+            "primarySkillId": book.primary_skill_id, "weldBuildId": book.weld_build_id.map(WeldBuildId::id),
             "weldComponentRanks": book.weld_component_ranks,
         },
         "gold": economy.gold,

@@ -8,6 +8,7 @@ mod weld;
 use std::collections::{BTreeMap, BTreeSet};
 
 use solomon_sim::painter::PainterRegistration;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::ether::ETHER_BLAST_PARTICLE_LIFETIME_TICKS;
 use solomon_sim::spells::fire::{
     FIRE_EXPLOSION_LIFETIME_TICKS, FIRE_IMPACT_LIFETIME_TICKS, fire_particle_lifetime_ticks,
@@ -292,7 +293,7 @@ fn fixed_timing(effect: &PrimarySpellTransient, snapshot_tick: u64) -> Option<Fi
         }
         PrimarySpellTransient::Weld(WeldWorldActor::FrostFade(effect)) => (
             effect.common.birth_tick as f64,
-            if effect.common.build_id == 1004 { 3.0 } else { 20.0 },
+            if effect.common.build_id == WeldBuildId::BlizzardBeam { 3.0 } else { 20.0 },
             0.0,
         ),
         _ => return None,

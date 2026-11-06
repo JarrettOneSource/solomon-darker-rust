@@ -3,7 +3,7 @@
 //! is involved.
 
 use crate::float;
-use crate::profile::WizardElement;
+use crate::profile::{WeldBuildId, WizardElement};
 
 /// A sprite family used by element effects; `records` lists its frames.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -131,6 +131,7 @@ pub fn element_vfx_plan_at_phase(
     }
 }
 
+/// The plan for a selected primary: an elemental primary's skill ID or a Weld build ID.
 #[must_use]
 pub fn selected_primary_element_vfx_plan(
     skill_id: u32,
@@ -138,18 +139,29 @@ pub fn selected_primary_element_vfx_plan(
     scale: f64,
 ) -> Vec<ElementVfxDraw> {
     let tick = tick.floor();
-    let element = match skill_id {
-        8 => Some(WizardElement::Ether),
-        16 => Some(WizardElement::Fire),
-        24 => Some(WizardElement::Air),
-        32 => Some(WizardElement::Water),
-        40 => Some(WizardElement::Earth),
-        _ => None,
-    };
-    if let Some(element) = element {
-        return element_vfx_plan_at_phase(element, tick, scale);
+    if let Ok(build) = WeldBuildId::try_from(skill_id) {
+        return selected_weld_plan(build, tick, scale);
     }
-    selected_weld_plan(skill_id, tick, scale)
+    let (element, doubled) = match skill_id {
+        8 => (WizardElement::Ether, false),
+        16 => (WizardElement::Fire, false),
+        24 => (WizardElement::Air, false),
+        32 => (WizardElement::Water, false),
+        40 => (WizardElement::Earth, false),
+        // Codes 1010 to 1014 follow the ten Weld builds, one per element, and draw that
+        // element twice. No build uses them.
+        1010 => (WizardElement::Ether, true),
+        1011 => (WizardElement::Fire, true),
+        1012 => (WizardElement::Water, true),
+        1013 => (WizardElement::Air, true),
+        1014 => (WizardElement::Earth, true),
+        _ => return Vec::new(),
+    };
+    let mut plan = element_vfx_plan_at_phase(element, tick, scale);
+    if doubled {
+        plan.extend(element_vfx_plan_at_phase(element, tick, scale));
+    }
+    plan
 }
 
 fn frame(tick: f64, count: usize, divisor: f64) -> usize {
@@ -408,16 +420,18 @@ fn steam_plan(tick: f64, scale: f64) -> Vec<ElementVfxDraw> {
     ]
 }
 
-fn selected_weld_plan(build: u32, tick: f64, scale: f64) -> Vec<ElementVfxDraw> {
+fn selected_weld_plan(build: WeldBuildId, tick: f64, scale: f64) -> Vec<ElementVfxDraw> {
     let mut plan = match build {
-        1000 | 1011 => fire_plan(tick, scale),
-        1001 | 1004 | 1012 => water_plan(tick, scale),
-        1002 | 1013 => air_plan(tick, scale),
-        1003 => multiply_plan(earth_plan(tick, scale), FIRE, 1.0, None),
-        1005 => return steam_plan(tick, scale),
-        1006 => multiply_plan(earth_plan(tick, scale * 0.75), ETHER, 1.0, None),
-        1007 | 1008 | 1014 => earth_plan(tick, scale),
-        1009 => vec![ElementVfxDraw {
+        WeldBuildId::BurningBolt => fire_plan(tick, scale),
+        WeldBuildId::FrostMissile | WeldBuildId::BlizzardBeam => water_plan(tick, scale),
+        WeldBuildId::BallLightning => air_plan(tick, scale),
+        WeldBuildId::FlameLash => multiply_plan(earth_plan(tick, scale), FIRE, 1.0, None),
+        WeldBuildId::SteamJet => steam_plan(tick, scale),
+        WeldBuildId::EtherealBoulder => {
+            multiply_plan(earth_plan(tick, scale * 0.75), ETHER, 1.0, None)
+        }
+        WeldBuildId::MeteorSwarm | WeldBuildId::Hailstones => earth_plan(tick, scale),
+        WeldBuildId::CrawlingShock => vec![ElementVfxDraw {
             color: [0.5, 0.75, 0.5],
             rotation: tick * 8.0,
             ..ElementVfxDraw::new(
@@ -425,12 +439,12 @@ fn selected_weld_plan(build: u32, tick: f64, scale: f64) -> Vec<ElementVfxDraw> 
                 (1.5 + float::sin(tick * std::f64::consts::PI / 180.0).abs() * 0.5) * scale,
             )
         }],
-        1010 => ether_plan(tick, scale),
-        _ => return Vec::new(),
     };
     match build {
-        1000..=1002 => plan.extend(multiply_plan(ether_plan(tick, scale), WHITE, 0.25, None)),
-        1003 => {
+        WeldBuildId::BurningBolt | WeldBuildId::FrostMissile | WeldBuildId::BallLightning => {
+            plan.extend(multiply_plan(ether_plan(tick, scale), WHITE, 0.25, None))
+        }
+        WeldBuildId::FlameLash => {
             plan.push(ElementVfxDraw {
                 color: [1.0, 0.75, 0.0],
                 ..ElementVfxDraw::new(ElementVfxSprite::Core, scale * 2.0)
@@ -445,22 +459,19 @@ fn selected_weld_plan(build: u32, tick: f64, scale: f64) -> Vec<ElementVfxDraw> 
             }
             plan.extend(air_companion_plan(tick, scale));
         }
-        1004 => plan.extend(air_companion_plan(tick, scale)),
-        1006 => plan.extend(multiply_plan(
+        WeldBuildId::BlizzardBeam => plan.extend(air_companion_plan(tick, scale)),
+        WeldBuildId::SteamJet => {}
+        WeldBuildId::EtherealBoulder => plan.extend(multiply_plan(
             earth_plan(tick, scale),
             ETHER,
             1.0,
             Some(ElementVfxBlend::Add),
         )),
-        1007 => plan.extend(fire_plan(tick, scale)),
-        1008 => plan.extend(water_plan(tick, scale)),
-        1009 => plan.extend(multiply_plan(air_plan(tick, scale * 1.25), WHITE, 0.5, None)),
-        1010 => plan.extend(ether_plan(tick, scale)),
-        1011 => plan.extend(fire_plan(tick, scale)),
-        1012 => plan.extend(water_plan(tick, scale)),
-        1013 => plan.extend(air_plan(tick, scale)),
-        1014 => plan.extend(earth_plan(tick, scale)),
-        _ => {}
+        WeldBuildId::MeteorSwarm => plan.extend(fire_plan(tick, scale)),
+        WeldBuildId::Hailstones => plan.extend(water_plan(tick, scale)),
+        WeldBuildId::CrawlingShock => {
+            plan.extend(multiply_plan(air_plan(tick, scale * 1.25), WHITE, 0.5, None))
+        }
     }
     plan
 }

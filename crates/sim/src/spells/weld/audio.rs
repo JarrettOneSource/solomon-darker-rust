@@ -1,5 +1,7 @@
 //! Each Weld build's stock cast cue and its one-shot, variant and loop sounds.
 
+use crate::profile::WeldBuildId;
+
 /// The named cast cue of each Weld build.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WeldCastCue {
@@ -36,7 +38,7 @@ impl WeldCastCue {
 /// A Weld build's sounds: its cue, loop sounds, one-shot sounds and random variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WeldAudioPlan {
-    pub build_id: u32,
+    pub build_id: WeldBuildId,
     pub cue: WeldCastCue,
     pub looping: bool,
     pub loop_ids: &'static [u32],
@@ -45,20 +47,19 @@ pub struct WeldAudioPlan {
 }
 
 #[must_use]
-pub fn weld_audio_plan(build_id: u32) -> WeldAudioPlan {
+pub fn weld_audio_plan(build_id: WeldBuildId) -> WeldAudioPlan {
     let (cue, loops, sounds, variants): (_, &'static [u32], &'static [u32], &'static [u32]) =
         match build_id {
-            1000 => (WeldCastCue::BurningBolt, &[], &[57, 97], &[]),
-            1001 => (WeldCastCue::FrostMissile, &[], &[38], &[]),
-            1002 => (WeldCastCue::BallLightning, &[], &[], &[224, 225]),
-            1003 => (WeldCastCue::FlameLashLoop, &[157], &[33], &[]),
-            1004 => (WeldCastCue::BlizzardBeamLoop, &[160], &[44], &[]),
-            1005 => (WeldCastCue::SteamJetLoop, &[172, 157], &[], &[]),
-            1006 => (WeldCastCue::EtherealBoulderLoop, &[159], &[87], &[]),
-            1007 => (WeldCastCue::MeteorSwarmLoop, &[165], &[], &[]),
-            1008 => (WeldCastCue::HailstonesLoop, &[160, 159], &[87], &[]),
-            1009 => (WeldCastCue::CrawlingShock, &[], &[], &[203, 204, 205]),
-            _ => panic!("unknown native Weld build"),
+            WeldBuildId::BurningBolt => (WeldCastCue::BurningBolt, &[], &[57, 97], &[]),
+            WeldBuildId::FrostMissile => (WeldCastCue::FrostMissile, &[], &[38], &[]),
+            WeldBuildId::BallLightning => (WeldCastCue::BallLightning, &[], &[], &[224, 225]),
+            WeldBuildId::FlameLash => (WeldCastCue::FlameLashLoop, &[157], &[33], &[]),
+            WeldBuildId::BlizzardBeam => (WeldCastCue::BlizzardBeamLoop, &[160], &[44], &[]),
+            WeldBuildId::SteamJet => (WeldCastCue::SteamJetLoop, &[172, 157], &[], &[]),
+            WeldBuildId::EtherealBoulder => (WeldCastCue::EtherealBoulderLoop, &[159], &[87], &[]),
+            WeldBuildId::MeteorSwarm => (WeldCastCue::MeteorSwarmLoop, &[165], &[], &[]),
+            WeldBuildId::Hailstones => (WeldCastCue::HailstonesLoop, &[160, 159], &[87], &[]),
+            WeldBuildId::CrawlingShock => (WeldCastCue::CrawlingShock, &[], &[], &[203, 204, 205]),
         };
     WeldAudioPlan {
         build_id,

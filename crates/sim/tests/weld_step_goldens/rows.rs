@@ -31,7 +31,7 @@ fn owner(
 pub fn projectile(value: &PrimarySpellProjectile) -> Value {
     let PrimarySpellProjectile::Weld(spell) = value else { panic!("Weld journey projectile") };
     let common = &spell.common;
-    json!({"age":common.age_ticks,"build":spell.build_id,"id":common.id,"kind":"weld","light":registration(common.registration),"painters":[registration(common.registration)],
+    json!({"age":common.age_ticks,"build":spell.build_id.id(),"id":common.id,"kind":"weld","light":registration(common.registration),"painters":[registration(common.registration)],
         "physics":{"damage":common.damage,"contactsRemaining":spell.contacts_remaining,"hitTargetIds":spell.hit_target_ids,"headingDegrees":spell.heading_degrees,"underpowered":spell.underpowered,"targetId":spell.target_id,"flightTicks":common.flight_ticks,"direction":point(common.direction),"position":point(common.position),"velocity":point(common.velocity),"phase":"flight"}})
 }
 pub fn transient(effect: &PrimarySpellTransient) -> Value {
@@ -154,5 +154,5 @@ fn world(actor: &WeldWorldActor) -> Value {
     };
     physics["direction"] = json!(point(common.direction));
     physics["origin"] = json!(point(common.origin));
-    owner(&common.owner, kind, Some(common.build_id), physics)
+    owner(&common.owner, kind, Some(common.build_id.id()), physics)
 }

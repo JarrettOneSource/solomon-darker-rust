@@ -1,5 +1,6 @@
 //! Flame Lash, Blizzard and Steam channel contacts, with their native pushback helpers.
 
+use crate::profile::WeldBuildId;
 use crate::spells::model::PrimarySpellTransient;
 use crate::spells::weld::WeldWorldActor;
 
@@ -33,9 +34,9 @@ impl ContactWork<'_, '_> {
             panic!("Weld channel requires its own profile")
         };
         match profile.build_id {
-            1003 => self.resolve_flame_lash(emission),
-            1004 => self.resolve_blizzard(emission),
-            1005 => self.resolve_steam_pushback(emission),
+            WeldBuildId::FlameLash => self.resolve_flame_lash(emission),
+            WeldBuildId::BlizzardBeam => self.resolve_blizzard(emission),
+            WeldBuildId::SteamJet => self.resolve_steam_pushback(emission),
             _ => panic!("Weld channel build is not supported"),
         }
     }
@@ -52,7 +53,7 @@ impl ContactWork<'_, '_> {
                     && channel.common.owner.id == emission.id
                     && channel.common.owner.owner_id == emission.owner_id
                     && channel.common.owner.world_key == emission.world_key
-                    && channel.common.build_id == 1003
+                    && channel.common.build_id == WeldBuildId::FlameLash
                 {
                     channel.target_id.clone()
                 } else {

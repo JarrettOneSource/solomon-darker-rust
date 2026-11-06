@@ -268,7 +268,12 @@ impl GameSession {
                     && previous != participant.player.book.primary_skill_id
                 {
                     let selected = if skill_id == 52 {
-                        participant.player.book.weld_build_id.expect("selected Weld has a build")
+                        participant
+                            .player
+                            .book
+                            .weld_build_id
+                            .expect("selected Weld has a build")
+                            .id()
                     } else {
                         skill_id as u32
                     };

@@ -2,6 +2,7 @@
 
 use serde_json::Value;
 use solomon_assets::website_save::{self, CreateSaveOptions};
+use solomon_sim::profile::WeldBuildId;
 
 #[path = "../../sim/tests/support/mod.rs"]
 mod support;
@@ -92,7 +93,9 @@ fn current_document_expectation(recorded: &Value) -> Value {
         return expected;
     };
     for actor in actors {
-        if actor["kind"] != "weld-persistent" || actor["buildId"] != 1006 {
+        if actor["kind"] != "weld-persistent"
+            || actor["buildId"] != WeldBuildId::EtherealBoulder.id()
+        {
             continue;
         }
         // These four frozen actors predate schema 52. Held rocks receive the

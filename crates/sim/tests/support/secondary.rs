@@ -2,6 +2,7 @@
 
 use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::secondary::golem::*;
 use solomon_sim::secondary::*;
 use solomon_sim::spells::casting::PlayerWeaponKind;
@@ -408,7 +409,9 @@ pub fn read_book(value: &Value) -> SkillBookState {
             .collect(),
         permanent_ranks: ranks("permanentRanks"),
         primary_skill_id: value["primarySkillId"].as_u64().unwrap() as usize,
-        weld_build_id: value["weldBuildId"].as_u64().map(|value| value as u32),
+        weld_build_id: value["weldBuildId"]
+            .as_u64()
+            .map(|value| WeldBuildId::try_from(value as u32).unwrap()),
         weld_component_ranks: value["weldComponentRanks"].as_array().map(|values| {
             values
                 .iter()

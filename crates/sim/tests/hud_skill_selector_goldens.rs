@@ -1,7 +1,7 @@
 //! Source HUD target admission, learned option filtering and native strip placement.
 use serde_json::Value;
 use solomon_sim::hud::skill_selector::*;
-use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{SkillBookState, WeldBuildId, WizardDiscipline, WizardElement};
 
 #[test]
 fn hud_selectors_exclude_the_other_slot_unlearned_welds_and_exhausted_skills() {
@@ -23,7 +23,8 @@ fn hud_selectors_exclude_the_other_slot_unlearned_welds_and_exhausted_skills() {
             book.permanent_ranks[id] = row[1].as_u64().unwrap() as u32;
             book.effective_ranks[id] = row[2].as_u64().unwrap() as u32;
         }
-        book.weld_build_id = case["weldBuildId"].as_u64().map(|id| id as u32);
+        book.weld_build_id =
+            case["weldBuildId"].as_u64().map(|id| WeldBuildId::try_from(id as u32).unwrap());
         assert_eq!(target.title(), case["title"].as_str().unwrap());
         let actual = hud_skill_selector_options(&book, &slots, target);
         let expected = case["options"].as_array().unwrap();

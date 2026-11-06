@@ -7,7 +7,8 @@ use crate::float::fround;
 
 use super::{
     HAGATHA_FACTORS, SKILL_CATALOG, SPELL_WELDING_SKILL_ID, SkillBookState, WELD_BUILDS,
-    WizardElement, hagatha_revelation_rank, skill_category, skill_rule, skill_stat, weld_build,
+    WeldBuildId, WizardElement, hagatha_revelation_rank, skill_category, skill_rule, skill_stat,
+    weld_build,
 };
 
 pub const MAX_PLAYER_LEVEL: u32 = 75;
@@ -114,7 +115,7 @@ pub struct PlayerSkillOfferOption {
     pub insight: bool,
     pub skill_id: usize,
     pub target_rank: u32,
-    pub weld_build_id: Option<u32>,
+    pub weld_build_id: Option<WeldBuildId>,
 }
 
 /// A pending level-up skill offer: its sequence, level, options and any automatic choice.
@@ -358,7 +359,7 @@ impl PlayerProgressionState {
             return false;
         };
         let rank = book.permanent_ranks[chosen.skill_id];
-        let weld = chosen.weld_build_id.and_then(weld_build);
+        let weld = chosen.weld_build_id.map(weld_build);
         if chosen.skill_id == SPELL_WELDING_SKILL_ID {
             if chosen.insight || weld.is_none() || rank > 0 || chosen.target_rank != 1 {
                 return false;

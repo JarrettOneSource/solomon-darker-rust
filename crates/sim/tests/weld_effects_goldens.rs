@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::weld::flame_state::{FlameChannelVisual, FlameFadeVisual};
 use solomon_sim::spells::weld::*;
 use solomon_sim::{Rng, Vec2};
@@ -26,7 +27,7 @@ fn registration(value: PainterRegistration) -> Value {
 
 fn row(actor: &WeldWorldActor) -> Value {
     let common = actor.common();
-    let mut row = json!({"ageTicks":common.owner.age_ticks,"birthTick":common.birth_tick,"buildId":common.build_id,
+    let mut row = json!({"ageTicks":common.owner.age_ticks,"birthTick":common.birth_tick,"buildId":common.build_id.id(),
         "direction":point(common.direction),"id":common.owner.id,"lightRegistration":common.owner.light_registration.map(registration),"origin":point(common.origin),
         "ownerId":common.owner.owner_id,"vector":common.vector,"worldKey":common.owner.world_key});
     if !common.owner.painter_registrations.is_empty() {
@@ -96,9 +97,9 @@ fn weld_channels_native_fades_and_blizzard_contact_geometry_match_the_source() {
             input["vector"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
         let birth = WeldActorBirth {
             build_id: match input["family"].as_str().unwrap() {
-                "lash" => 1003,
-                "glows" | "chain" => 1004,
-                _ => input["buildId"].as_u64().unwrap() as u32,
+                "lash" => WeldBuildId::FlameLash,
+                "glows" | "chain" => WeldBuildId::BlizzardBeam,
+                _ => WeldBuildId::try_from(input["buildId"].as_u64().unwrap() as u32).unwrap(),
             },
             direction: vector(&input["direction"]),
             id: 300,

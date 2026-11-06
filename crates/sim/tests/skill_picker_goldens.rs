@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use solomon_sim::profile::PlayerSkillOfferOption;
+use solomon_sim::profile::{PlayerSkillOfferOption, WeldBuildId};
 use solomon_sim::skill_picker::{
     skill_picker_card, skill_picker_centers, skill_picker_close, skill_picker_panel,
     skill_picker_reveal,
@@ -92,7 +92,7 @@ fn native_offer_cards_welds_layout_and_modal_timing_match_the_source() {
             skill_id: option.skill_id,
             target_rank: option.target_rank,
             insight: option.insight,
-            weld_build_id: option.weld_build_id,
+            weld_build_id: option.weld_build_id.map(|id| WeldBuildId::try_from(id).unwrap()),
         });
         let expected = card.expected;
         assert_eq!(actual.family_label, expected.family_label);

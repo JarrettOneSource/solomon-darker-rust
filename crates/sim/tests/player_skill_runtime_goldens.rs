@@ -63,7 +63,7 @@ fn book_snapshot(value: &SkillBookState) -> Value {
     json!({"advancedUnlocks":value.advanced_unlocks,"disciplineRoot":value.discipline_root,
         "effectiveRanks":&value.effective_ranks[..],"elementRoot":value.element_root,
         "learnedSkillOrder":value.learned_skill_order,"permanentRanks":&value.permanent_ranks[..],
-        "primarySkillId":value.primary_skill_id,"weldBuildId":value.weld_build_id,"weldComponentRanks":value.weld_component_ranks})
+        "primarySkillId":value.primary_skill_id,"weldBuildId":value.weld_build_id.map(WeldBuildId::id),"weldComponentRanks":value.weld_component_ranks})
 }
 
 fn rng_snapshot(rng: &Rng) -> Value {
@@ -143,7 +143,7 @@ fn setup(
         .unwrap();
     let mut book = SkillBookState::new(element, discipline);
     if let Some(id) = value["weldBuild"].as_u64() {
-        book.grant_weld_build(id as u32);
+        book.grant_weld_build(WeldBuildId::try_from(id as u32).unwrap());
     }
     for grant in value["learned"].as_array().unwrap() {
         book.grant_ranks(grant[0].as_u64().unwrap() as usize, grant[1].as_u64().unwrap() as u32);
@@ -372,7 +372,9 @@ fn offer(value: &Value) -> PlayerSkillOffer {
                 insight: option["insight"].as_bool().unwrap_or(false),
                 skill_id: option["skillId"].as_u64().unwrap() as usize,
                 target_rank: option["targetRank"].as_u64().unwrap() as u32,
-                weld_build_id: option["weldBuildId"].as_u64().map(|id| id as u32),
+                weld_build_id: option["weldBuildId"]
+                    .as_u64()
+                    .map(|id| WeldBuildId::try_from(id as u32).unwrap()),
             })
             .collect(),
     }
@@ -388,7 +390,7 @@ fn offer_snapshot(offer: &PlayerSkillOffer) -> Value {
                 result["insight"] = json!(true);
             }
             if let Some(build) = option.weld_build_id {
-                result["weldBuildId"] = json!(build);
+                result["weldBuildId"] = json!(build.id());
             }
             result
         })

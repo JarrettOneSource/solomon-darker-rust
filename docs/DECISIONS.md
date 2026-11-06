@@ -187,6 +187,12 @@ save record's struct name: supported save-import decoders use typed field and
 enum visitors to translate values. `serde(flatten)` buffers untyped values and
 would bypass those conversions, so records stay flat instead.
 
+Closed integer codes become enums that keep their number in saves and snapshots.
+`WeldBuildId` serializes through `serde(try_from = "u32", into = "u32")`, so
+documents still carry the original build IDs 1000–1009 and the save-import
+visitors see the same integer. Reading any other number fails where the document
+is decoded instead of reaching a panic in a later match.
+
 ## Numeric contract
 
 Kernels use `f64` arithmetic with explicit `fround` boundaries where required.

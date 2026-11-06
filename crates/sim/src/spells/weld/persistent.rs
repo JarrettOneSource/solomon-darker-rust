@@ -5,6 +5,7 @@ use super::model::{WeldActorBase, WeldActorBirth};
 use crate::float::{fround, hypot, hypot3};
 use crate::heading::heading_degrees_from_vector;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use crate::profile::WeldBuildId;
 use crate::spells::earth::{
     EARTH_BOULDER_IDENTITY_ORIENTATION, earth_boulder_flight_orientation_step,
     earth_boulder_held_orientation_step, earth_boulder_released_damage,
@@ -209,38 +210,40 @@ pub fn create_weld_persistent_actor(
     let vector = birth.vector;
     let initial_scale = 0.18_f32 as f64;
     match birth.build_id {
-        1006 => WeldPersistentActorState::EtherealBoulder(WeldEtherealBoulderState {
-            common: birth.actor_with_light(painters),
-            assembly_scale: initial_scale,
-            damage: vector[0],
-            flight_ticks: 0,
-            hit_target_ids: Vec::new(),
-            flight_speed: 2.25,
-            heading_degrees: fround(heading_degrees_from_vector(
-                birth.direction.x,
-                birth.direction.y,
-            )),
-            reacquires_target: vector[3] > 1.0,
-            target_id: None,
-            tracking_ticks_remaining: if vector[3] > 1.0 {
-                (vector[3] * 1_000.0 + 250.0).trunc() as u64
-            } else {
-                250
-            },
-            turn_accumulator: 0.01_f32 as f64,
-            turn_input: fround(vector[3]),
-            maximum_scale: 0.75,
-            orientation: EARTH_BOULDER_IDENTITY_ORIENTATION,
-            phase: PrimarySpellProjectilePhase::Held,
-            pulse_sequence: 0,
-            quantity: (vector[2].round() as u32).clamp(1, 4),
-            remaining_damage: vector[0],
-            scale: initial_scale,
-            shell_scale: initial_scale,
-            toughness: vector[4],
-            velocity: Vec2::ZERO,
-        }),
-        1008 => WeldPersistentActorState::Hailstones(WeldHailstonesState {
+        WeldBuildId::EtherealBoulder => {
+            WeldPersistentActorState::EtherealBoulder(WeldEtherealBoulderState {
+                common: birth.actor_with_light(painters),
+                assembly_scale: initial_scale,
+                damage: vector[0],
+                flight_ticks: 0,
+                hit_target_ids: Vec::new(),
+                flight_speed: 2.25,
+                heading_degrees: fround(heading_degrees_from_vector(
+                    birth.direction.x,
+                    birth.direction.y,
+                )),
+                reacquires_target: vector[3] > 1.0,
+                target_id: None,
+                tracking_ticks_remaining: if vector[3] > 1.0 {
+                    (vector[3] * 1_000.0 + 250.0).trunc() as u64
+                } else {
+                    250
+                },
+                turn_accumulator: 0.01_f32 as f64,
+                turn_input: fround(vector[3]),
+                maximum_scale: 0.75,
+                orientation: EARTH_BOULDER_IDENTITY_ORIENTATION,
+                phase: PrimarySpellProjectilePhase::Held,
+                pulse_sequence: 0,
+                quantity: (vector[2].round() as u32).clamp(1, 4),
+                remaining_damage: vector[0],
+                scale: initial_scale,
+                shell_scale: initial_scale,
+                toughness: vector[4],
+                velocity: Vec2::ZERO,
+            })
+        }
+        WeldBuildId::Hailstones => WeldPersistentActorState::Hailstones(WeldHailstonesState {
             common: birth.actor_with_light(painters),
             collision_radius: 40.0,
             damage: vector[0],
@@ -255,7 +258,7 @@ pub fn create_weld_persistent_actor(
             toughness: vector[3],
             widen: vector[5],
         }),
-        1007 => WeldPersistentActorState::MeteorField(WeldMeteorFieldState {
+        WeldBuildId::MeteorSwarm => WeldPersistentActorState::MeteorField(WeldMeteorFieldState {
             common: birth.actor(),
             pulse_sequence: 0,
         }),
@@ -394,7 +397,7 @@ pub fn release_weld_persistent_actor(
             actor.release_age_ticks = Some(0);
             actor.release_fade_scale = Some(fround(presentation + 0.75));
             let fade_birth = WeldActorBirth {
-                build_id: 1008,
+                build_id: WeldBuildId::Hailstones,
                 direction: actor.common.direction,
                 id: first_child_id,
                 origin: Vec2::new(actor.common.origin.x, fround(actor.common.origin.y - 20.0)),

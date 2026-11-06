@@ -6,7 +6,9 @@ use solomon_sim::profile::create::{
     CREATE_ENTRY_FADE_MS, CREATE_RANDOMIZE_FINALIZE_MS, CreateLoadoutSelection,
     finalize_create_loadout,
 };
-use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement, wizard_class_title};
+use solomon_sim::profile::{
+    SkillBookState, WeldBuildId, WizardDiscipline, WizardElement, wizard_class_title,
+};
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/website/create-loadout-goldens.json")).unwrap()
@@ -45,7 +47,7 @@ fn all_current_create_root_pairs_preserve_their_source_book_and_class() {
                 "learnedSkillOrder": book.learned_skill_order,
                 "permanentRanks": &book.permanent_ranks[..],
                 "primarySkillId": book.primary_skill_id,
-                "weldBuildId": book.weld_build_id,
+                "weldBuildId": book.weld_build_id.map(WeldBuildId::id),
                 "weldComponentRanks": book.weld_component_ranks,
             }),
             case["book"],

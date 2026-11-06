@@ -3,8 +3,8 @@
 use serde_json::{Value, json};
 use solomon_sim::profile::{
     PlayerProgressionState, PlayerSkillChoice, PlayerSkillOffer, PotionKind, SkillBookState,
-    WizardDiscipline, WizardElement, boneyard_enemy_experience_award, build_player_skill_offer,
-    draw_player_creation_offer_seed,
+    WeldBuildId, WizardDiscipline, WizardElement, boneyard_enemy_experience_award,
+    build_player_skill_offer, draw_player_creation_offer_seed,
 };
 use solomon_sim::{Rng, combat::PlayerCombatState};
 
@@ -56,7 +56,9 @@ fn read_book(value: &Value) -> SkillBookState {
             .collect(),
         permanent_ranks: ranks("permanentRanks"),
         primary_skill_id: value["primarySkillId"].as_u64().unwrap() as usize,
-        weld_build_id: value["weldBuildId"].as_u64().map(|value| value as u32),
+        weld_build_id: value["weldBuildId"]
+            .as_u64()
+            .map(|value| WeldBuildId::try_from(value as u32).unwrap()),
         weld_component_ranks: value["weldComponentRanks"].as_array().map(|values| {
             values
                 .iter()
@@ -71,7 +73,7 @@ fn book_snapshot(value: &SkillBookState) -> Value {
     json!({"advancedUnlocks":value.advanced_unlocks,"disciplineRoot":value.discipline_root,
         "effectiveRanks":&value.effective_ranks[..],"elementRoot":value.element_root,
         "learnedSkillOrder":value.learned_skill_order,"permanentRanks":&value.permanent_ranks[..],
-        "primarySkillId":value.primary_skill_id,"weldBuildId":value.weld_build_id,"weldComponentRanks":value.weld_component_ranks})
+        "primarySkillId":value.primary_skill_id,"weldBuildId":value.weld_build_id.map(WeldBuildId::id),"weldComponentRanks":value.weld_component_ranks})
 }
 fn offer_snapshot(value: &PlayerSkillOffer) -> Value {
     let options: Vec<_> = value
@@ -83,7 +85,7 @@ fn offer_snapshot(value: &PlayerSkillOffer) -> Value {
                 result["insight"] = json!(true);
             }
             if let Some(id) = option.weld_build_id {
-                result["weldBuildId"] = json!(id);
+                result["weldBuildId"] = json!(id.id());
             }
             result
         })

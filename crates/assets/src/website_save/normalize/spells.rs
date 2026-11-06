@@ -1,6 +1,7 @@
 //! Versioned primary and secondary actor migrations; both retain their canonical RNG.
 
 use serde_json::{Value, json};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::{Rng, Vec2};
 
 use super::super::contract::{MAX_SAFE_INTEGER, record};
@@ -16,7 +17,10 @@ pub(super) fn primary(value: &Value, version: u64) -> Result<Value, String> {
         let mut actor =
             record(value, &format!("game save primary spell transient {index}"))?.clone();
         let kind = value["kind"].as_str();
-        if version < 52 && kind == Some("weld-persistent") && value["buildId"] == 1006 {
+        if version < 52
+            && kind == Some("weld-persistent")
+            && value["buildId"] == WeldBuildId::EtherealBoulder.id()
+        {
             crate::save_document::migrate_website_boulder_guidance(&mut actor)?;
         }
 
@@ -26,7 +30,7 @@ pub(super) fn primary(value: &Value, version: u64) -> Result<Value, String> {
             continue;
         }
         if version <= 50
-            && value["buildId"] == 1003
+            && value["buildId"] == WeldBuildId::FlameLash.id()
             && matches!(kind, Some("weld-channel" | "weld-flame-lash-fade"))
             && !actor.contains_key("flameVisual")
         {

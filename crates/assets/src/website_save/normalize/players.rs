@@ -9,8 +9,8 @@ use solomon_sim::combat::PlayerCombatState;
 use solomon_sim::economy::HubEconomyState;
 use solomon_sim::profile::{
     PlayerConcentrationSlot, PlayerProgressionState, PlayerSkillRuntimeState,
-    PlayerStatBookComponent, SkillBookState, player_skill_derived_stats_with_stat_book,
-    refresh_player_combat_from_skill_stats, weld_build,
+    PlayerStatBookComponent, SkillBookState, WeldBuildId,
+    player_skill_derived_stats_with_stat_book, refresh_player_combat_from_skill_stats, weld_build,
 };
 use solomon_sim::spells::casting::PlayerPrimaryCastState;
 
@@ -146,7 +146,7 @@ pub(super) fn normalize(value: &Value, version: u64, tick: u64) -> Result<Value,
         );
         if !value["primaryCasts"][index]["selectedPrimaryId"].is_number() {
             let selected = if book.primary_skill_id == 52 {
-                book.weld_build_id.map_or(-1, i64::from)
+                book.weld_build_id.map_or(-1, |build| i64::from(build.id()))
             } else {
                 book.primary_skill_id as i64
             };
@@ -302,7 +302,16 @@ fn skill_book(value: &Value, index: usize) -> Result<SkillBookState, String> {
             .filter(|value| !value.is_null())
             .unwrap_or(&value["activeWeldBuildId"]),
     );
-    let build = weld_id.as_u64().and_then(|id| u32::try_from(id).ok()).and_then(weld_build);
+    let build = match weld_id.as_u64() {
+        None => None,
+        Some(id) => {
+            let Some(build) = u32::try_from(id).ok().and_then(|id| WeldBuildId::try_from(id).ok())
+            else {
+                return Err(format!("game save player skill book {index} Weld build is invalid"));
+            };
+            Some(weld_build(build))
+        }
+    };
     let components = if let Some(components) = value.get("weldComponentRanks") {
         components.clone()
     } else {

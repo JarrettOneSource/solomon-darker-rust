@@ -73,9 +73,6 @@ pub fn apply_web_lua_commands(
                 );
             }
             WebLuaCommand::GrantWeld { build_id, player_id } => {
-                if web_lua_developer_weld(*build_id).is_none() {
-                    continue;
-                }
                 let participant = game.participants.get_mut(player_id).unwrap();
                 let before = (
                     participant.player.book.primary_skill_id,
@@ -84,7 +81,8 @@ pub fn apply_web_lua_commands(
                 participant.player.grant_weld_build(*build_id, &mut game.gameplay_rng);
                 let book = &participant.player.book;
                 if before != (book.primary_skill_id, book.weld_build_id) {
-                    let primary = book.weld_build_id.unwrap_or(book.primary_skill_id as u32);
+                    let primary =
+                        book.weld_build_id.map_or(book.primary_skill_id as u32, WeldBuildId::id);
                     participant.wizard.primary_cast.reset_for_selection(primary);
                 }
             }

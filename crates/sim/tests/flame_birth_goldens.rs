@@ -2,6 +2,7 @@
 use serde_json::{Value, json};
 use solomon_sim::boneyard::lighting::BoneyardLightSource;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::weld::*;
 use solomon_sim::{Rng, Vec2};
 
@@ -21,7 +22,7 @@ fn registration(value: PainterRegistration) -> Value {
 }
 fn base(actor: &WeldActorBase) -> Value {
     let owner = &actor.owner;
-    json!({"ageTicks":owner.age_ticks,"birthTick":actor.birth_tick,"buildId":actor.build_id,
+    json!({"ageTicks":owner.age_ticks,"birthTick":actor.birth_tick,"buildId":actor.build_id.id(),
         "direction":coordinates(actor.direction),"id":owner.id,"origin":coordinates(actor.origin),
         "ownerId":owner.owner_id,"vector":actor.vector,"worldKey":owner.world_key,
         "lightRegistration":owner.light_registration.map(registration),
@@ -86,7 +87,7 @@ fn assert_tail(rng: &Rng, order: WorldPainterOrder, expected: &Value) {
 }
 fn birth<'a>(input: &Value, vector: &'a [f64]) -> WeldActorBirth<'a> {
     WeldActorBirth {
-        build_id: 1003,
+        build_id: WeldBuildId::FlameLash,
         direction: point(&input["direction"]),
         id: input["id"].as_u64().unwrap(),
         origin: point(&input["origin"]),

@@ -23,7 +23,7 @@ use crate::boneyard::encounter::SolomonEncounter;
 use crate::boneyard::loot::BoneyardLootEvent;
 use crate::enemies::model::EnemyEvent;
 use crate::enemies::world::EnemyWorld;
-use crate::profile::WizardElement;
+use crate::profile::{WeldBuildId, WizardElement};
 use crate::secondary::SecondarySimulationState;
 use crate::spells::casting::PlayerPrimaryCastState;
 use crate::spells::model::SpellState;
@@ -65,7 +65,7 @@ pub struct CombatAudioPlayer<'a> {
     pub position: Vec2,
     pub element: WizardElement,
     pub selected_primary_skill_id: u32,
-    pub weld_build_id: Option<u32>,
+    pub weld_build_id: Option<WeldBuildId>,
     pub cast: &'a PlayerPrimaryCastState,
     pub footstep_tick: u64,
 }

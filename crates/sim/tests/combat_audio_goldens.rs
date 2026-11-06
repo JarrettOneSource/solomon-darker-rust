@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use solomon_sim::audio::combat::*;
 use solomon_sim::audio::{AudioEvent, AudioKind};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
-use solomon_sim::profile::{PlayerStaffAttackOutcome, WizardElement};
+use solomon_sim::profile::{PlayerStaffAttackOutcome, WeldBuildId, WizardElement};
 use solomon_sim::secondary::*;
 use solomon_sim::spells::casting::PlayerPrimaryCastState;
 use solomon_sim::spells::fire::{SpawnFireGoodImpOptions, spawn_fire_good_imp};
@@ -111,7 +111,9 @@ fn transient(value: &Value) -> PrimarySpellTransient {
             PrimarySpellTransient::FireGoodImp(imp)
         }
         "weld-impact" | "weld-meteor" | "weld-persistent" => {
-            let build_id = value["buildId"].as_u64().unwrap_or(1007) as u32;
+            let build_id = value["buildId"]
+                .as_u64()
+                .map_or(WeldBuildId::MeteorSwarm, |id| WeldBuildId::try_from(id as u32).unwrap());
             let birth = WeldActorBirth {
                 id: common.id,
                 build_id,
@@ -396,7 +398,7 @@ fn accepted_casts_actor_edges_and_owned_loops_match_the_source_synchronizer() {
                     .unwrap() as u32,
                 weld_build_id: player["progression"]["weldBuildId"]
                     .as_u64()
-                    .map(|value| value as u32),
+                    .map(|value| WeldBuildId::try_from(value as u32).unwrap()),
                 cast: &cast,
                 footstep_tick: 0,
             }];
@@ -427,18 +429,14 @@ fn accepted_casts_actor_edges_and_owned_loops_match_the_source_synchronizer() {
         compare(&output_json(&output)["loops"], &scenario["destroy"]["loops"], "destroy loops");
     }
     for record in fixture["weld"].as_array().unwrap() {
-        let sounds: Vec<_> = weld_cast_sound_cues(
-            record["buildId"].as_u64().unwrap() as u32,
-            record["variant"].as_u64().map(|value| value as u32),
-        )
-        .iter()
-        .map(|cue| cue.as_str())
-        .collect();
+        let build_id = WeldBuildId::try_from(record["buildId"].as_u64().unwrap() as u32).unwrap();
+        let sounds: Vec<_> =
+            weld_cast_sound_cues(build_id, record["variant"].as_u64().map(|value| value as u32))
+                .iter()
+                .map(|cue| cue.as_str())
+                .collect();
         assert_eq!(json!(sounds), record["sounds"]);
-        let loops: Vec<_> = weld_loop_cues(record["buildId"].as_u64().unwrap() as u32)
-            .iter()
-            .map(|cue| cue.as_str())
-            .collect();
+        let loops: Vec<_> = weld_loop_cues(build_id).iter().map(|cue| cue.as_str()).collect();
         assert_eq!(json!(loops), record["loops"]);
     }
     for record in fixture["accepted"].as_array().unwrap() {

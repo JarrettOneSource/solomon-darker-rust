@@ -121,7 +121,7 @@ impl PlayerPanels {
             for (index, id) in page.skills.iter().copied().enumerate() {
                 let def = &SKILL_CATALOG[id];
                 let weld = if id == 52 {
-                    Some(s.book.weld_build_id.and_then(weld_build).expect("native welding build"))
+                    Some(s.book.weld_build_id.map(weld_build).expect("native welding build"))
                 } else {
                     None
                 };

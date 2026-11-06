@@ -7,6 +7,7 @@ use std::f64::consts::PI;
 
 use crate::Vec2;
 use crate::float::{fround, hypot};
+use crate::profile::WeldBuildId;
 
 /// The staff's start and end sockets in one frame, and whether it draws in front of the
 /// wizard.
@@ -30,7 +31,7 @@ pub struct EnchantStaffDrawInput {
     pub selected_primary_skill_id: Option<u32>,
     pub selector: usize,
     pub tick: f64,
-    pub weld_build_id: Option<u32>,
+    pub weld_build_id: Option<WeldBuildId>,
     pub width_sample: Option<f64>,
 }
 
@@ -55,6 +56,8 @@ pub fn enchant_staff_glow_alpha(tick: f64) -> f64 {
     fround(float::sin(tick * 5.0 * PI / 180.0) * 0.2 + 0.5)
 }
 
+/// The Weld color table has fifteen rows, five beyond the ten builds, so it is indexed by the
+/// build number.
 #[must_use]
 pub fn enchant_staff_glow_tint(
     selected_primary_skill_id: Option<u32>,
@@ -92,7 +95,10 @@ pub fn enchant_staff_draw_plan(input: EnchantStaffDrawInput) -> Option<EnchantSt
         return None;
     }
     let frame = input.attachment;
-    let tint = enchant_staff_glow_tint(input.selected_primary_skill_id, input.weld_build_id)?;
+    let tint = enchant_staff_glow_tint(
+        input.selected_primary_skill_id,
+        input.weld_build_id.map(WeldBuildId::id),
+    )?;
     let width_sample = input.width_sample.unwrap_or_else(|| {
         visual_width_sample(input.tick, input.heading_index % 24, input.pose, input.selector)
     });

@@ -15,7 +15,7 @@ use solomon_sim::profile::primary::{
     primary_skill_profile_with_stat_book, primary_spell_descriptor,
     primary_spell_summary_with_stat_book,
 };
-use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{SkillBookState, WeldBuildId, WizardDiscipline, WizardElement};
 
 fn number(value: &Value) -> f64 {
     value.as_f64().expect("a recorded finite number")
@@ -29,7 +29,8 @@ fn skillbook(value: &Value) -> SkillBookState {
         *rank = value.as_u64().expect("a recorded skill rank") as u32;
     }
     book.primary_skill_id = value["primarySkillId"].as_u64().unwrap() as usize;
-    book.weld_build_id = value["weldBuildId"].as_u64().map(|id| id as u32);
+    book.weld_build_id =
+        value["weldBuildId"].as_u64().map(|id| WeldBuildId::try_from(id as u32).unwrap());
     book.weld_component_ranks = value["weldComponentRanks"].as_array().map(|values| {
         let mut ranks = [0; 6];
         for (rank, value) in ranks.iter_mut().zip(values) {
@@ -207,7 +208,7 @@ fn assert_variant(profile: &PrimarySkillProfile, expected: &Value, label: &str) 
         }
         PrimarySkillProfile::Weld(profile) => {
             assert_eq!(expected["kind"], "weld");
-            assert_eq!(profile.build_id, expected["buildId"].as_u64().unwrap() as u32);
+            assert_eq!(profile.build_id.id(), expected["buildId"].as_u64().unwrap() as u32);
             assert_eq!(profile.cast_kind.as_str(), expected["castKind"].as_str().unwrap());
             let values: Vec<f64> =
                 expected["vector"]["values"].as_array().unwrap().iter().map(number).collect();

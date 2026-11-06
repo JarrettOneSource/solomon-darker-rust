@@ -1,5 +1,6 @@
 //! Source argument admission precedes the one actual queued-mutation producer.
 use super::*;
+use solomon_sim::profile::WeldBuildId;
 use values::js_string;
 
 pub(super) fn invoke(
@@ -88,11 +89,8 @@ pub(super) fn invoke(
         }
         "dev.grant_weld" => {
             let id = integer_within(&first, "Weld build id", 1000, 1009)? as u32;
-            if web_lua_developer_weld(id).is_none() {
-                return Err(format!("unknown native Weld build: {id}"));
-            }
             WebLuaCommand::GrantWeld {
-                build_id: id,
+                build_id: WeldBuildId::try_from(id)?,
                 player_id: resolve_player(lua, shared, &second)?.id,
             }
         }

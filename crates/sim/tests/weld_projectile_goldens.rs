@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 use solomon_sim::painter::WorldPainterOrder;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::profile::primary::{PrimarySkillProfileBase, WeldPrimarySkillProfile};
 use solomon_sim::profile::weld::{WeldCastKind, WeldPrimaryVector};
 use solomon_sim::spells::targeting::{
@@ -37,7 +38,7 @@ fn projectile_row(spell: &WeldProjectileState) -> Value {
     });
     json!({
         "ageTicks":common.age_ticks,"ballLightningAcceleration":spell.ball_lightning_acceleration,
-        "basePresentationPhaseDegrees":spell.base_presentation_phase_degrees,"buildId":spell.build_id,
+        "basePresentationPhaseDegrees":spell.base_presentation_phase_degrees,"buildId":spell.build_id.id(),
         "castPlaybackRate":spell.cast_playback_rate,"castSoundVariant":spell.cast_sound_variant,
         "charge":common.charge,"contactsRemaining":spell.contacts_remaining,"damage":common.damage,
         "direction":point(common.direction),"flightTicks":common.flight_ticks,"headingDegrees":spell.heading_degrees,
@@ -53,7 +54,7 @@ fn projectile_row(spell: &WeldProjectileState) -> Value {
     })
 }
 fn profile(value: &Value) -> WeldPrimarySkillProfile {
-    let build_id = value["buildId"].as_u64().unwrap() as u32;
+    let build_id = WeldBuildId::try_from(value["buildId"].as_u64().unwrap() as u32).unwrap();
     WeldPrimarySkillProfile {
         common: PrimarySkillProfileBase {
             damage_minimum: number(value, "damageMinimum"),
@@ -181,8 +182,10 @@ fn four_welded_projectile_builds_keep_birth_rng_tracking_and_private_turn_state(
         );
     }
     for expected in fixture["audioPlans"].as_array().unwrap() {
-        let plan = weld_audio_plan(expected["buildId"].as_u64().unwrap() as u32);
-        let actual = json!({"buildId":plan.build_id,"cue":plan.cue.as_str(),"loop":plan.looping,
+        let plan = weld_audio_plan(
+            WeldBuildId::try_from(expected["buildId"].as_u64().unwrap() as u32).unwrap(),
+        );
+        let actual = json!({"buildId":plan.build_id.id(),"cue":plan.cue.as_str(),"loop":plan.looping,
             "nativeLoopIds":plan.loop_ids,"nativeSoundIds":plan.sound_ids,
             "nativeSoundVariantIds":plan.sound_variant_ids});
         website_rows::compare(&actual, expected, "Weld native audio ownership");

@@ -423,7 +423,7 @@ pub struct SessionPartition {
 
 fn selected_primary_id(player: &PlayerState) -> u32 {
     if player.book.primary_skill_id == 52 {
-        player.book.weld_build_id.expect("selected Weld has a build")
+        player.book.weld_build_id.expect("selected Weld has a build").id()
     } else {
         player.book.primary_skill_id as u32
     }

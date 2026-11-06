@@ -2,7 +2,7 @@
 
 use crate::profile::{
     PlayerSkillChoice, PlayerStatBookComponent, SKILL_CATALOG, SkillBookState, SkillDefinition,
-    SkillStatBookValue, WELD_BUILDS, WizardElement, skill_category,
+    SkillStatBookValue, WeldBuildId, WizardElement, skill_category, weld_build,
 };
 use crate::session::GameSession;
 
@@ -10,7 +10,8 @@ use super::OPTION_DESCRIPTOR_WIDTH;
 use super::spec::{OPTION_DESCRIPTOR_NAMES, scales};
 
 /// What a skill descriptor describes: the skill, the rank it would reach, how many ranks it
-/// applies and any Weld build.
+/// applies and any Weld build. The policy reads the build as its number, and describing an
+/// unknown number is an error.
 #[derive(Clone, Copy, Debug)]
 pub struct MlBotPolicySkillDescriptorInput {
     pub apply_count: f64,
@@ -123,10 +124,9 @@ pub fn describe_ml_bot_policy_skill(
     values.set("is_health_up", f64::from(id == 64));
     values.set("is_mana_up", f64::from(id == 56));
     if let Some(build_id) = input.weld_build_id {
-        let weld = WELD_BUILDS
-            .iter()
-            .find(|weld| weld.id == build_id)
-            .ok_or_else(|| format!("ML bot policy weld build {build_id} is not native"))?;
+        let weld = WeldBuildId::try_from(build_id)
+            .map(weld_build)
+            .map_err(|_| format!("ML bot policy weld build {build_id} is not native"))?;
         for primary in weld.primary_skill_ids {
             let element = match primary {
                 8 => "ether",
@@ -138,8 +138,8 @@ pub fn describe_ml_bot_policy_skill(
             };
             values.set(&format!("weld_element_{element}"), 1.0);
         }
-        values.set("weld_build_index_scaled", scaled((weld.id - 1000) as f64, 10.0));
-        values.identity("weld_build_id", weld.id as usize)?;
+        values.set("weld_build_index_scaled", scaled(f64::from(build_id - 1000), 10.0));
+        values.identity("weld_build_id", build_id as usize)?;
     }
     let property = |name: &str| stats.and_then(|row| row.numeric_properties.get(name));
     let ranked_property = |name: &str| ranked(property(name), input.target_rank);
@@ -218,8 +218,8 @@ fn ranked(value: Option<&SkillStatBookValue>, rank: f64) -> Option<f64> {
 }
 
 pub fn ml_bot_policy_skill_coverage_key(id: usize, weld_build_id: Option<u32>) -> String {
-    if let Some(weld) = weld_build_id.and_then(|id| WELD_BUILDS.iter().find(|weld| weld.id == id)) {
-        format!("weld:{}", weld.id)
+    if let Some(build) = weld_build_id.and_then(|id| WeldBuildId::try_from(id).ok()) {
+        format!("weld:{}", build.id())
     } else {
         format!("family:{}", policy_skill_catalog_row(id).map_or("unknown", |row| row.family))
     }
@@ -258,11 +258,14 @@ pub fn describe_ml_bot_policy_skill_offer(
                 apply_count: f64::from(option.target_rank.saturating_sub(permanent)),
                 skill_id: option.skill_id,
                 target_rank: f64::from(option.target_rank),
-                weld_build_id: option.weld_build_id,
+                weld_build_id: option.weld_build_id.map(WeldBuildId::id),
             },
         )?);
         option_ids.push(option.skill_id);
-        coverage_keys.push(ml_bot_policy_skill_coverage_key(option.skill_id, option.weld_build_id));
+        coverage_keys.push(ml_bot_policy_skill_coverage_key(
+            option.skill_id,
+            option.weld_build_id.map(WeldBuildId::id),
+        ));
     }
     Ok(Some(MlBotPolicySkillOfferDescription {
         coverage_keys,
@@ -295,7 +298,11 @@ pub fn observe_ml_bot_policy_skill_loadout(
                 apply_count: 0.0,
                 skill_id: id,
                 target_rank: f64::from(player.book.effective_ranks.get(id).copied().unwrap_or(0)),
-                weld_build_id: if id == 52 { player.book.weld_build_id } else { None },
+                weld_build_id: if id == 52 {
+                    player.book.weld_build_id.map(WeldBuildId::id)
+                } else {
+                    None
+                },
             },
         )?;
         values[row * OPTION_DESCRIPTOR_WIDTH..(row + 1) * OPTION_DESCRIPTOR_WIDTH]
@@ -334,12 +341,9 @@ pub fn choose_ml_bot_policy_scripted_skill(
     for (index, option) in offer.options.iter().enumerate() {
         let id = option.skill_id;
         let priority = if id == 52 && option.weld_build_id.is_some() {
-            let eligible = WELD_BUILDS
-                .iter()
-                .find(|weld| Some(weld.id) == option.weld_build_id)
-                .is_some_and(|weld| {
-                    weld.primary_skill_ids.iter().all(|id| player.book.effective_ranks[*id] > 0)
-                });
+            let eligible = option.weld_build_id.map(weld_build).is_some_and(|weld| {
+                weld.primary_skill_ids.iter().all(|id| player.book.effective_ranks[*id] > 0)
+            });
             if eligible { 0 } else { usize::MAX }
         } else if (band_start..=band_start + 7).contains(&id) {
             if id == band_start { 1 } else { 10 + id - band_start }

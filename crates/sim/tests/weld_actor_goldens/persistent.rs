@@ -3,6 +3,7 @@ use super::{
 };
 use serde_json::{Value, json};
 use solomon_sim::painter::WorldPainterOrder;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::earth_debris::create_weld_ethereal_boulder_breakup_debris_program;
 use solomon_sim::spells::model::PrimarySpellProjectilePhase;
 use solomon_sim::spells::weld::*;
@@ -58,7 +59,7 @@ fn held_growth_native_rock_assembly_split_and_flight_keep_source_state_and_rng()
         let input = &case["birth"];
         let values = values(input);
         let birth = WeldActorBirth {
-            build_id: input["buildId"].as_u64().unwrap() as u32,
+            build_id: WeldBuildId::try_from(input["buildId"].as_u64().unwrap() as u32).unwrap(),
             direction: vector(&input["direction"]),
             id: 100,
             origin: vector(&input["origin"]),
@@ -189,7 +190,7 @@ fn held_growth_native_rock_assembly_split_and_flight_keep_source_state_and_rng()
                     .collect();
                 let actual = json!({"tick":tick,"actors":actors.iter().map(persistent_row).collect::<Vec<_>>(),
                     "terrainContacts":terrain_contacts,"contactSubsteps":contact_substeps,"rng":random(&rng)});
-                let obsolete_ttl = input["buildId"] == 1006
+                let obsolete_ttl = input["buildId"] == WeldBuildId::EtherealBoulder.id()
                     && tick >= 1250
                     && case["blockTick"].as_u64().unwrap() > tick;
                 if obsolete_ttl {
@@ -257,7 +258,7 @@ fn compare_recording(actual: &Value, expected: &Value, path: &str) {
     fn qualify(value: &mut Value) {
         match value {
             Value::Object(fields) => {
-                if fields.get("buildId") == Some(&json!(1006))
+                if fields.get("buildId") == Some(&json!(WeldBuildId::EtherealBoulder.id()))
                     && fields.get("kind") == Some(&json!("weld-persistent"))
                 {
                     fields.remove("lifetimeTicksRemaining");

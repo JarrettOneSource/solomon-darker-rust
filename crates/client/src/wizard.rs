@@ -15,7 +15,7 @@ use solomon_sim::hub::HubWizard;
 use solomon_sim::player::PlayerState;
 use solomon_sim::player_presentation::*;
 use solomon_sim::presentation::{multiply_tints, wizard_draw_plan};
-use solomon_sim::profile::WizardElement;
+use solomon_sim::profile::{WeldBuildId, WizardElement};
 use solomon_sim::secondary::SecondaryPlayerState;
 use solomon_sim::secondary::presentation::{PlayerMagicShieldPlan, player_magic_shield_plan};
 use solomon_sim::spells::casting::*;
@@ -82,7 +82,7 @@ struct WizardPresentationState {
     staff_action_pose: Option<usize>,
     secondary_cast: Option<PlayerSecondaryCastPresentation>,
     plane_active: bool,
-    weld_build_id: Option<u32>,
+    weld_build_id: Option<WeldBuildId>,
     harden_coating: f64,
     stoneskin: bool,
     webbed: Option<WebbedState>,

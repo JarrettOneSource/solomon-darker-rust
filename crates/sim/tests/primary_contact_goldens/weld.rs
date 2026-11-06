@@ -2,6 +2,7 @@
 //! fixtures already own the constructors; these rows preserve their real fields.
 use super::{integer, number, transient_common, values, vector};
 use serde_json::Value;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::earth_debris::WeldMeteorDebrisSeed;
 use solomon_sim::spells::model::{PrimarySpellProjectileBase, PrimarySpellProjectilePhase};
 use solomon_sim::spells::weld::*;
@@ -26,7 +27,7 @@ fn common(value: &Value) -> WeldActorBase {
     WeldActorBase {
         owner: transient_common(value),
         birth_tick: integer(value, "birthTick"),
-        build_id: integer(value, "buildId") as u32,
+        build_id: WeldBuildId::try_from(integer(value, "buildId") as u32).unwrap(),
         direction: vector(&value["direction"]),
         origin: vector(&value["origin"]),
         vector: scalars(value, "vector"),
@@ -40,7 +41,7 @@ pub fn projectile(value: &Value, common: PrimarySpellProjectileBase) -> WeldProj
         frost_pulse_aspect: value["frostPulseAspect"].as_f64(),
         frost_turn_degrees: value["frostTurnDegrees"].as_f64(),
         secondary_presentation_phase_degrees: value["secondaryPresentationPhaseDegrees"].as_f64(),
-        build_id: integer(value, "buildId") as u32,
+        build_id: WeldBuildId::try_from(integer(value, "buildId") as u32).unwrap(),
         contacts_remaining: integer(value, "contactsRemaining") as u32,
         cast_playback_rate: number(value, "castPlaybackRate"),
         heading_degrees: number(value, "headingDegrees"),
@@ -79,7 +80,7 @@ pub fn actor(value: &Value) -> WeldWorldActor {
         "weld-channel" => WeldWorldActor::Channel(WeldChannelActorState {
             common: common(value),
             enhanced_effects: true,
-            flame_visual: if value["buildId"] == 1003 {
+            flame_visual: if value["buildId"] == WeldBuildId::FlameLash.id() {
                 Some(FlameChannelVisual::LegacySuppressed)
             } else {
                 None
@@ -97,7 +98,7 @@ pub fn actor(value: &Value) -> WeldWorldActor {
     }
 }
 fn persistent(value: &Value) -> WeldPersistentActorState {
-    if value["buildId"] == 1006 {
+    if value["buildId"] == WeldBuildId::EtherealBoulder.id() {
         return WeldPersistentActorState::EtherealBoulder(WeldEtherealBoulderState {
             common: common(value),
             phase: phase(value),

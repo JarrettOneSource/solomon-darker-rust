@@ -2,7 +2,7 @@
 //! has a named owner, so the cursor can start and stop it independently.
 
 use crate::audio::{AudioCue, AudioEvent, AudioOptions};
-use crate::profile::WizardElement;
+use crate::profile::{WeldBuildId, WizardElement};
 use crate::secondary::SecondaryActorKind;
 use crate::spells::model::{
     PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient,
@@ -53,11 +53,11 @@ pub fn air_water_accepted_cast_audio(skill_id: u32) -> Option<Vec<AudioEvent>> {
 }
 
 #[must_use]
-pub fn weld_cast_sound_cues(build_id: u32, sound_variant: Option<u32>) -> Vec<AudioCue> {
+pub fn weld_cast_sound_cues(build_id: WeldBuildId, sound_variant: Option<u32>) -> Vec<AudioCue> {
     let plan = weld_audio_plan(build_id);
     let mut stock_ids = plan.sound_ids.to_vec();
     if plan.sound_variant_ids.is_empty() {
-        assert!(sound_variant.is_none(), "Weld build {build_id} has no native sound variant");
+        assert!(sound_variant.is_none(), "Weld build {build_id:?} has no native sound variant");
     } else {
         let variant = sound_variant.expect("Weld cast requires its native sound variant") as usize;
         stock_ids.push(
@@ -87,7 +87,7 @@ pub fn weld_cast_sound_cues(build_id: u32, sound_variant: Option<u32>) -> Vec<Au
 }
 
 #[must_use]
-pub fn weld_loop_cues(build_id: u32) -> Vec<AudioCue> {
+pub fn weld_loop_cues(build_id: WeldBuildId) -> Vec<AudioCue> {
     weld_audio_plan(build_id)
         .loop_ids
         .iter()
@@ -113,15 +113,21 @@ pub(super) fn selected_primary_element(player: &CombatAudioPlayer<'_>) -> Wizard
     }
 }
 
-pub(super) fn active_weld_build(player: &CombatAudioPlayer<'_>) -> Option<u32> {
+pub(super) fn active_weld_build(player: &CombatAudioPlayer<'_>) -> Option<WeldBuildId> {
     if player.selected_primary_skill_id != 52 {
         return None;
     }
-    player.weld_build_id.filter(|id| (1000..=1009).contains(id))
+    player.weld_build_id
 }
 
-pub(super) fn weld_one_shot(build_id: u32) -> bool {
-    matches!(build_id, 1000 | 1001 | 1002 | 1009)
+pub(super) fn weld_one_shot(build_id: WeldBuildId) -> bool {
+    matches!(
+        build_id,
+        WeldBuildId::BurningBolt
+            | WeldBuildId::FrostMissile
+            | WeldBuildId::BallLightning
+            | WeldBuildId::CrawlingShock
+    )
 }
 
 impl CombatAudioCursor {
@@ -141,7 +147,9 @@ impl CombatAudioCursor {
                         owner: owner.clone(),
                         options: AudioOptions {
                             volume,
-                            playback_rate: if build_id == 1007 && player.cast.underpowered {
+                            playback_rate: if build_id == WeldBuildId::MeteorSwarm
+                                && player.cast.underpowered
+                            {
                                 0.75
                             } else {
                                 1.0

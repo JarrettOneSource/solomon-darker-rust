@@ -100,7 +100,9 @@ mod tests {
         match value {
             Value::Object(fields) => {
                 if fields.get("kind") == Some(&serde_json::json!("weld-persistent"))
-                    && fields.get("buildId") == Some(&serde_json::json!(1006))
+                    && fields.get("buildId").is_some_and(|build| {
+                        *build == solomon_sim::profile::WeldBuildId::EtherealBoulder.id()
+                    })
                 {
                     for key in [
                         "lifetimeTicksRemaining",

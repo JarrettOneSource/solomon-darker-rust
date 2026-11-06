@@ -11,6 +11,7 @@ use solomon_sim::enemies::world::{
 };
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::profile::primary::*;
 use solomon_sim::profile::weld::{WeldCastKind, WeldPrimaryVector};
 use solomon_sim::secondary::SecondaryTargetEffectPatch;
@@ -260,7 +261,7 @@ fn channel(value: &Value) -> PrimarySpellChannelEmission {
             }),
         )
     } else if value["kind"] == "weld" {
-        let build_id = integer(skill, "buildId") as u32;
+        let build_id = WeldBuildId::try_from(integer(skill, "buildId") as u32).unwrap();
         (
             PrimarySpellChannelKind::Weld,
             PrimarySkillProfile::Weld(WeldPrimarySkillProfile {
@@ -370,7 +371,7 @@ fn projectile_row(spell: &PrimarySpellProjectile) -> Value {
     let (kind, detail) = match spell {
         PrimarySpellProjectile::Weld(spell) => (
             "weld",
-            json!([spell.build_id, spell.contacts_remaining, spell.target_id, spell.vector]),
+            json!([spell.build_id.id(), spell.contacts_remaining, spell.target_id, spell.vector]),
         ),
         PrimarySpellProjectile::Earth(spell) => {
             ("earth", json!([spell.remaining_damage, spell.hit_target_ids, spell.shell_charge]))
@@ -526,7 +527,7 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
         }
         let mut held = create_weld_persistent_actor(
             WeldActorBirth {
-                build_id: 1006,
+                build_id: WeldBuildId::EtherealBoulder,
                 direction: Vec2::new(1.0, 0.0),
                 id: 33,
                 origin: Vec2::ZERO,
@@ -591,7 +592,7 @@ fn released_no_bind_ethereal_boulder_ends_after_its_first_contact_without_panick
         );
         assert!(spells.transients.iter().any(|effect| matches!(
             effect, PrimarySpellTransient::Weld(WeldWorldActor::Impact(actor))
-                if actor.common.build_id == 1006
+                if actor.common.build_id == WeldBuildId::EtherealBoulder
         )));
         #[cfg(feature = "persistence")]
         {
@@ -633,7 +634,7 @@ fn no_bind_hail_exhausts_each_contacted_rock_and_preserves_finite_survivors() {
         }
         let mut held = create_weld_persistent_actor(
             WeldActorBirth {
-                build_id: 1008,
+                build_id: WeldBuildId::Hailstones,
                 direction: Vec2::new(1.0, 0.0),
                 id: 33,
                 origin: Vec2::ZERO,

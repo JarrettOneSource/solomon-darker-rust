@@ -6,7 +6,7 @@ use crate::Vec2;
 use crate::element_vfx::{ElementVfxBlend, element_vfx_plan_at_phase};
 use crate::float;
 use crate::float::{atan2, fround};
-use crate::profile::WizardElement;
+use crate::profile::{WeldBuildId, WizardElement};
 use crate::spells::air::{AirCoronaInput, AirMesh, build_air_corona_plan};
 use crate::spells::earth_presentation::{
     EarthBoulderPresentationState, earth_boulder_presentation_plan,
@@ -230,8 +230,9 @@ pub fn weld_visual_plan_at_age(
         }
         WeldWorldActor::FrostFade(actor) => {
             let mut plan = WeldVisualPlan::at(actor.common.origin);
-            let alpha =
-                (1.0 - age * if actor.common.build_id == 1004 { 0.4 } else { 0.05 }).max(0.0);
+            let fade_rate =
+                if actor.common.build_id == WeldBuildId::BlizzardBeam { 0.4 } else { 0.05 };
+            let alpha = (1.0 - age * fade_rate).max(0.0);
             plan.sprites =
                 element_vfx_sprites(WizardElement::Water, frame as f64, actor.scale, alpha);
             plan
@@ -296,7 +297,7 @@ fn projectile_plan(state: &WeldProjectileState, frame: u64, age: f64) -> WeldVis
     let id = state.common.id;
     let alpha = if state.underpowered { 0.5 } else { 1.0 };
     match state.build_id {
-        1000 => {
+        WeldBuildId::BurningBolt => {
             let fire = fireball_plan(
                 FireballPresentationState {
                     age_ticks: age,
@@ -309,7 +310,7 @@ fn projectile_plan(state: &WeldProjectileState, frame: u64, age: f64) -> WeldVis
             );
             plan.sprites = fire.draws.into_iter().map(WeldSpriteDraw::from).collect();
         }
-        1001 => {
+        WeldBuildId::FrostMissile => {
             plan.sprites.push(
                 SpellSprite {
                     alpha: alpha * (0.75 + visual_unit(id, frame, 0) * 0.25),
@@ -375,7 +376,7 @@ fn projectile_plan(state: &WeldProjectileState, frame: u64, age: f64) -> WeldVis
                 }
             }
         }
-        1002 => {
+        WeldBuildId::BallLightning => {
             plan.sprites = lightning_core(
                 id,
                 frame,
@@ -399,14 +400,14 @@ fn projectile_plan(state: &WeldProjectileState, frame: u64, age: f64) -> WeldVis
                 0.1,
             ));
         }
-        1009 => {} // Its visible forks are separate tick-created fade actors.
+        WeldBuildId::CrawlingShock => {} // Its visible forks are separate tick-created fade actors.
         _ => unreachable!("native one-shot Weld build"),
     }
     plan
 }
 
 fn channel_plan(state: &WeldChannelActorState, age: f64) -> WeldVisualPlan {
-    if state.common.build_id == 1003 {
+    if state.common.build_id == WeldBuildId::FlameLash {
         // The constructor already consumed the first child update. Age one is
         // retained lifecycle state, but never receives a second ribbon draw.
         let Some(FlameChannelVisual::Birth(birth)) = &state.flame_visual else {
@@ -498,7 +499,7 @@ fn channel_plan(state: &WeldChannelActorState, age: f64) -> WeldVisualPlan {
 fn impact_plan(state: &WeldImpactActorState, frame: u64, age: f64) -> WeldVisualPlan {
     let mut plan = WeldVisualPlan::at(state.position);
     match state.common.build_id {
-        1006 => {
+        WeldBuildId::EtherealBoulder => {
             plan.sprites = element_vfx_sprites(
                 WizardElement::Ether,
                 frame as f64,
@@ -507,7 +508,7 @@ fn impact_plan(state: &WeldImpactActorState, frame: u64, age: f64) -> WeldVisual
             );
             plan.region_light_point = Some(state.position);
         }
-        1001 => {
+        WeldBuildId::FrostMissile => {
             plan.sprites = element_vfx_sprites(
                 WizardElement::Water,
                 frame as f64,
@@ -515,7 +516,7 @@ fn impact_plan(state: &WeldImpactActorState, frame: u64, age: f64) -> WeldVisual
                 state.alpha,
             )
         }
-        1002 | 1009 => {
+        WeldBuildId::BallLightning | WeldBuildId::CrawlingShock => {
             plan.sprites = lightning_core(
                 state.common.owner.id,
                 frame,

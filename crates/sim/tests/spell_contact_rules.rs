@@ -11,7 +11,7 @@ use solomon_sim::boneyard::{
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::enemies::model::{EnemyEvent, EnemyEventKind};
 use solomon_sim::enemies::{EnemySpawnIntent, EnemyToken};
-use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{NewGameSelection, WeldBuildId, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::SecondaryActorKind;
 use solomon_sim::secondary::presentation::secondary_presentation_plan;
 use solomon_sim::session::{
@@ -270,7 +270,7 @@ fn steam_normal_particles_damage_a_mob_with_empty_insufficient_or_funded_mana() 
         for reserve in [Some(0.0), Some(0.000_001), None] {
             let (mut session, navigation) = drain_session();
             let player = &mut session.participants.get_mut(caster).unwrap().player;
-            player.grant_weld_build(1005, &mut session.gameplay_rng);
+            player.grant_weld_build(WeldBuildId::SteamJet, &mut session.gameplay_rng);
             assert!(player.select_primary(52));
             let other = if caster == "owner" { "peer" } else { "owner" };
             session.participants.get_mut(other).unwrap().wizard.position = Vec2::new(90.0, 250.0);
@@ -345,7 +345,7 @@ fn boulder_real_cast_release_acquires_and_guidance_runs_after_the_world_move() {
     for funded in [true, false] {
         let (mut session, navigation) = drain_session();
         let player = &mut session.participants.get_mut("owner").unwrap().player;
-        player.grant_weld_build(1006, &mut session.gameplay_rng);
+        player.grant_weld_build(WeldBuildId::EtherealBoulder, &mut session.gameplay_rng);
         player.grant_skill_ranks(10, 2, &mut session.gameplay_rng);
         player.grant_skill_ranks(9, 3, &mut session.gameplay_rng);
         assert!(player.select_primary(52));

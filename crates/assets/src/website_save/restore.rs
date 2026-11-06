@@ -122,7 +122,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
     let player = &mut participant.player;
     if player.autofill_skill_selections(&mut session.gameplay_rng) {
         let selected = if player.book.primary_skill_id == 52 {
-            player.book.weld_build_id.expect("normalized Weld book retains its build")
+            player.book.weld_build_id.expect("normalized Weld book retains its build").id()
         } else {
             player.book.primary_skill_id as u32
         };

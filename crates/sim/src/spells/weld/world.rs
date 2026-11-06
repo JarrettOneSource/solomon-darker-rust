@@ -4,6 +4,7 @@
 use super::*;
 use crate::float::fround;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
+use crate::profile::WeldBuildId;
 use crate::spells::model::{
     PrimarySpellProjectile, PrimarySpellProjectilePhase, PrimarySpellTransient, SpellState,
 };
@@ -34,12 +35,12 @@ impl SpellState {
         crate::spells::projectiles::advance_projectile(spell, targets);
         let PrimarySpellProjectile::Weld(weld) = spell else { return };
         step_weld_projectile_presentation(weld, rng);
-        if weld.build_id == 1009 {
+        if weld.build_id == WeldBuildId::CrawlingShock {
             let fades = create_weld_ground_spark_fade_program(weld, rng);
             for seed in fades {
                 let actor = create_weld_ground_spark_fade_actor(
                     WeldActorBirth {
-                        build_id: 1009,
+                        build_id: WeldBuildId::CrawlingShock,
                         direction: weld.common.direction,
                         id: self.next_id,
                         origin: seed.position,
@@ -137,7 +138,7 @@ impl SpellState {
             for debris in step.debris {
                 children.push(WeldWorldActor::BoulderDebris(create_weld_boulder_debris_actor(
                     WeldActorBirth {
-                        build_id: 1007,
+                        build_id: WeldBuildId::MeteorSwarm,
                         direction: meteor.common.direction,
                         id: self.next_id,
                         origin: meteor.position,

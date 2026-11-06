@@ -4,7 +4,7 @@ use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::profile::offensive::OffensiveSpellFactors;
 use solomon_sim::profile::primary::primary_skill_profile;
-use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{SkillBookState, WeldBuildId, WizardDiscipline, WizardElement};
 use solomon_sim::spells::model::{PrimarySpellProjectile, PrimarySpellProjectilePhase, SpellState};
 use solomon_sim::spells::{
     PrimarySpellCastAuthority, PrimarySpellEpochContext, PrimarySpellInput,
@@ -21,7 +21,7 @@ fn cast(
 ) -> PrimarySpellProjectile {
     let mut book = SkillBookState::new(element, WizardDiscipline::Arcane);
     if weld {
-        book.grant_weld_build(1001);
+        book.grant_weld_build(WeldBuildId::FrostMissile);
     }
     let profile = primary_skill_profile(&book, &OffensiveSpellFactors::default());
     let mut wizard = HubWizard::at(Vec2::new(100.0, 200.0));
@@ -181,7 +181,7 @@ fn mixed_transients_retire_in_place_and_meteor_children_follow_their_parent() {
         WeldActorBirth {
             id: 3,
             tick: 0,
-            build_id: 1007,
+            build_id: WeldBuildId::MeteorSwarm,
             owner_id: "wizard",
             world_key: "boneyard:order",
             origin: Vec2::new(100.0, 200.0),

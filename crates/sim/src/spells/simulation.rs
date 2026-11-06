@@ -19,11 +19,11 @@ use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
 use crate::hub::HubWizard;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
-use crate::profile::WizardElement;
 use crate::profile::primary::{
     EarthPrimarySkillProfile, PrimarySkillProfile, WaterPrimarySkillProfile,
 };
 use crate::profile::weld::WeldCastKind;
+use crate::profile::{WeldBuildId, WizardElement};
 use crate::{Rng, Vec2};
 
 /// The session's casting limits for one player: alive and eligible, available mana, cast
@@ -63,7 +63,12 @@ pub fn primary_birth_terrain_exclusion_mask(spell: &PrimarySpellProjectile) -> u
     match spell {
         PrimarySpellProjectile::Fire(_) => PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
         PrimarySpellProjectile::Ether(_) => PRIMARY_CAST_TERRAIN_EXCLUSION_MASK,
-        PrimarySpellProjectile::Weld(spell) if matches!(spell.build_id, 1000..=1002) => {
+        PrimarySpellProjectile::Weld(spell)
+            if matches!(
+                spell.build_id,
+                WeldBuildId::BurningBolt | WeldBuildId::FrostMissile | WeldBuildId::BallLightning
+            ) =>
+        {
             PRIMARY_CAST_TERRAIN_EXCLUSION_MASK
         }
         _ => 0,
@@ -77,7 +82,10 @@ pub fn primary_flight_terrain_exclusion_mask(spell: PrimarySpellTraversalActor<'
             PrimarySpellProjectile::Fire(_) | PrimarySpellProjectile::Ether(_),
         ) => PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK,
         PrimarySpellTraversalActor::Projectile(PrimarySpellProjectile::Weld(spell))
-            if matches!(spell.build_id, 1000..=1002) =>
+            if matches!(
+                spell.build_id,
+                WeldBuildId::BurningBolt | WeldBuildId::FrostMissile | WeldBuildId::BallLightning
+            ) =>
         {
             PRIMARY_FLIGHT_TERRAIN_EXCLUSION_MASK
         }
@@ -216,7 +224,7 @@ impl<'a> PrimaryCastTick<'a> {
         };
         // Steam 0x00542D20 multiplies its per-tick debit by the class cast rate.
         let steam_cast_factor = match authority.primary_skill {
-            PrimarySkillProfile::Weld(profile) if profile.build_id == 1005 => {
+            PrimarySkillProfile::Weld(profile) if profile.build_id == WeldBuildId::SteamJet => {
                 authority.cast_progress_factor
             }
             _ => 1.0,
@@ -341,7 +349,8 @@ impl SpellState {
         self.advance_projectiles(epoch, rng, order, &mut result.tick);
         for projectile in self.projectiles.iter() {
             if matches!(projectile, PrimarySpellProjectile::Fire(_))
-                || matches!(projectile, PrimarySpellProjectile::Weld(spell) if spell.build_id==1000)
+                || matches!(projectile, PrimarySpellProjectile::Weld(spell)
+                    if spell.build_id == WeldBuildId::BurningBolt)
             {
                 self.transients.push(PrimarySpellTransient::FireParticle(create_fire_particle(
                     self.next_id,
@@ -696,7 +705,8 @@ impl SpellState {
             common.position.x + common.velocity.x * 5.0,
             common.position.y + common.velocity.y * 5.0,
         );
-        let initial_clear = matches!(&born, PrimarySpellProjectile::Weld(spell) if spell.build_id==1009)
+        let initial_clear = matches!(&born, PrimarySpellProjectile::Weld(spell)
+            if spell.build_id == WeldBuildId::CrawlingShock)
             || (context.can_traverse)(
                 PrimarySpellTraversalActor::Projectile(&born),
                 wizard.position,
@@ -721,7 +731,8 @@ impl SpellState {
                 rng,
             );
             if matches!(&spell, PrimarySpellProjectile::Fire(_))
-                || matches!(&spell, PrimarySpellProjectile::Weld(weld) if weld.build_id==1000)
+                || matches!(&spell, PrimarySpellProjectile::Weld(weld)
+                    if weld.build_id == WeldBuildId::BurningBolt)
             {
                 self.transients.push(PrimarySpellTransient::FireParticle(create_fire_particle(
                     self.next_id,
@@ -1142,7 +1153,7 @@ impl SpellState {
                     vector: &spell.vector,
                     world_key: &spell.common.world_key,
                 };
-                if spell.build_id == 1000 {
+                if spell.build_id == WeldBuildId::BurningBolt {
                     let detonation = create_primary_spell_weld_fire_detonation(
                         birth,
                         rng,
@@ -1156,7 +1167,7 @@ impl SpellState {
                         .fire_actor_contacts
                         .extend(detonation.contacts.into_iter().map(FireActorContact::Ember));
                 } else {
-                    if spell.build_id == 1001 {
+                    if spell.build_id == WeldBuildId::FrostMissile {
                         result.frost_missile_world_contacts.push(spell.clone());
                     }
                     self.transients.push(PrimarySpellTransient::Weld(WeldWorldActor::Impact(

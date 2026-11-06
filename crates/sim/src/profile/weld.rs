@@ -6,7 +6,7 @@
 
 use crate::float::fround;
 
-use super::{PlayerStatBookComponent, SKILL_ROW_COUNT, SkillBookState, weld_build};
+use super::{PlayerStatBookComponent, SKILL_ROW_COUNT, SkillBookState, WeldBuildId, weld_build};
 
 /// How a welded primary fires: once per cast, as a channel, or as a persistent effect.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,18 +30,24 @@ impl WeldCastKind {
 /// A Weld build's computed payload values and cast kind.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldPrimaryVector {
-    pub build_id: u32,
+    pub build_id: WeldBuildId,
     pub cast_kind: WeldCastKind,
     pub values: Vec<f64>,
 }
 
 #[must_use]
-pub fn weld_primary_cast_mode(build_id: u32) -> WeldCastKind {
+pub fn weld_primary_cast_mode(build_id: WeldBuildId) -> WeldCastKind {
     match build_id {
-        1000..=1002 | 1009 => WeldCastKind::OneShot,
-        1003..=1005 => WeldCastKind::Channel,
-        1006..=1008 => WeldCastKind::Persistent,
-        _ => panic!("weld build {build_id} is not native"),
+        WeldBuildId::BurningBolt
+        | WeldBuildId::FrostMissile
+        | WeldBuildId::BallLightning
+        | WeldBuildId::CrawlingShock => WeldCastKind::OneShot,
+        WeldBuildId::FlameLash | WeldBuildId::BlizzardBeam | WeldBuildId::SteamJet => {
+            WeldCastKind::Channel
+        }
+        WeldBuildId::EtherealBoulder | WeldBuildId::MeteorSwarm | WeldBuildId::Hailstones => {
+            WeldCastKind::Persistent
+        }
     }
 }
 
@@ -66,7 +72,7 @@ const F32_29: f64 = 2.9_f32 as f64;
 #[must_use]
 pub fn weld_primary_vector(
     book: &SkillBookState,
-    build_id: u32,
+    build_id: WeldBuildId,
     weld_effect: f64,
 ) -> WeldPrimaryVector {
     weld_primary_vector_with_stat_book(
@@ -81,14 +87,14 @@ pub fn weld_primary_vector(
 pub fn weld_primary_vector_with_stat_book(
     book: &SkillBookState,
     stat_book: &PlayerStatBookComponent,
-    build_id: u32,
+    build_id: WeldBuildId,
     weld_effect: f64,
 ) -> WeldPrimaryVector {
     assert!(
         weld_effect.is_finite() && weld_effect > 0.0,
         "weld effect must be finite and positive"
     );
-    let build = weld_build(build_id).expect("requested weld build is native");
+    let build = weld_build(build_id);
     let frozen =
         if book.weld_build_id == Some(build_id) { book.weld_component_ranks } else { None };
     let mut ranks = [0; SKILL_ROW_COUNT];
@@ -103,7 +109,7 @@ pub fn weld_primary_vector_with_stat_book(
     }
     let input = WeldInputs { ranks, stat_book, weld_effect };
     let values = match build_id {
-        1000 => {
+        WeldBuildId::BurningBolt => {
             let ether_cost = input.cost(&[8, 10, 9]);
             let fire_cost = input.cost(&[16, 18, 17]);
             let quantity = input.value_or(10, "mQuantity", 1.0).round();
@@ -137,7 +143,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(fragments * 0.75),
             ]
         }
-        1001 => {
+        WeldBuildId::FrostMissile => {
             let ether_cost = input.cost(&[8, 10, 9]);
             let water_cost = input.cost(&[32, 34, 33]);
             let water_damage = input.value(32, "mDamage");
@@ -159,7 +165,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(input.value(34, "mWiden") / 150.0),
             ]
         }
-        1002 => {
+        WeldBuildId::BallLightning => {
             let ether_cost = input.cost(&[8, 10, 9]);
             let air_cost = input.cost(&[24, 25, 26]);
             let air_damage = input.value(24, "mDamage");
@@ -181,7 +187,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(1.0 - input.value(26, "mStunAmount") * F32_09 / 100.0),
             ]
         }
-        1003 => {
+        WeldBuildId::FlameLash => {
             let explode_rank = input.rank(18);
             let arc_rank = input.rank(25);
             let explode_damage = input.value(18, "mDamage");
@@ -219,7 +225,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(input.value(17, "mFragments") * 0.75),
             ]
         }
-        1004 => {
+        WeldBuildId::BlizzardBeam => {
             let water_cost = input.cost(&[32, 34, 33]);
             let air_cost = input.cost(&[24, 25, 26]);
             vec![
@@ -238,7 +244,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(input.value(34, "mWiden") / 250.0),
             ]
         }
-        1005 => {
+        WeldBuildId::SteamJet => {
             let explode_rank = input.rank(18);
             let widen_rank = input.rank(34);
             let explode_damage = input.value(18, "mDamage");
@@ -274,7 +280,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(input.value(17, "mFragments") * 0.75),
             ]
         }
-        1006 => {
+        WeldBuildId::EtherealBoulder => {
             let ether_cost = input.cost(&[8, 10, 9]);
             let earth_cost = input.cost(&[40, 43, 42]);
             vec![
@@ -291,7 +297,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(1.0 + input.value(42, "mSpeedUp") / 100.0),
             ]
         }
-        1007 => {
+        WeldBuildId::MeteorSwarm => {
             let explode_damage = fround(input.value(18, "mDamage") * 0.75);
             let fragments = input.value(17, "mFragments");
             let toughness = fround(input.value(43, "mStrength") / 100.0);
@@ -322,7 +328,7 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(fragments * 0.6),
             ]
         }
-        1008 => {
+        WeldBuildId::Hailstones => {
             let damage = fround(
                 ((3.0 * input.value(32, "mDamage") + input.value(40, "mDamage")) / 20.0 * 1.5)
                     .max(1.0),
@@ -346,7 +352,7 @@ pub fn weld_primary_vector_with_stat_book(
                 widen,
             ]
         }
-        1009 => {
+        WeldBuildId::CrawlingShock => {
             let arcs = input.value(25, "mArcs").round();
             let mana_cost = fround(
                 input.divide_weld(fround(
@@ -366,7 +372,6 @@ pub fn weld_primary_vector_with_stat_book(
                 fround(1.0 + input.value(42, "mSpeedUp") / 100.0),
             ]
         }
-        _ => unreachable!("weld build was checked above"),
     };
     WeldPrimaryVector {
         build_id,

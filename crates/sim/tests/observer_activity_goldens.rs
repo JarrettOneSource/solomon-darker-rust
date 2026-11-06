@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use solomon_sim::observer_activity::{
     ObserverSkillPlayer, derive_observer_skill_events, observer_skill_offers,
 };
-use solomon_sim::profile::{PlayerSkillOffer, PlayerSkillOfferOption};
+use solomon_sim::profile::{PlayerSkillOffer, PlayerSkillOfferOption, WeldBuildId};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +50,9 @@ fn players(snapshot: &Value) -> Vec<Player> {
                     insight: option.insight,
                     skill_id: option.skill_id,
                     target_rank: option.target_rank,
-                    weld_build_id: option.weld_build_id,
+                    weld_build_id: option
+                        .weld_build_id
+                        .map(|id| WeldBuildId::try_from(id).unwrap()),
                 })
                 .collect(),
             sequence: offer.sequence,
