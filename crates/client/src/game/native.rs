@@ -11,7 +11,9 @@ use solomon_protocol::{
     ServerMessage,
 };
 use solomon_sim::economy::HubEconomyResult;
-use solomon_sim::social::{GameChatRejection, SocialSnapshot, append_game_chat_message};
+use solomon_sim::social::{
+    GameChatMessage, GameChatRejection, SocialSnapshot, append_game_chat_message,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum NativePhase {
@@ -34,6 +36,17 @@ pub(super) enum CommandFeedback {
     CollegeDialogue,
     Loadout,
     Social,
+}
+
+/// How `poll_native` continues after one connection event.
+enum NativePollStep {
+    /// Read the next queued event.
+    NextEvent,
+    /// Stop reading this poll's events; its snapshot and receipts are still accepted.
+    StopEvents,
+    /// The welcome was refused and the game disconnected: return at once, without the
+    /// poll's snapshot or receipts.
+    Disconnected,
 }
 
 struct CommandReceipt {
@@ -275,297 +288,29 @@ impl Game {
             if self.native.as_ref().is_none_or(|native| native.connection.is_none()) {
                 break;
             }
-            match event {
+            let step = match event {
                 NetworkEvent::Opened => {
                     if let Some(loading) = &mut self.match_loading {
                         loading.advance(MatchLoadingStage::AuthenticatingSession);
                     }
+                    NativePollStep::NextEvent
                 }
                 NetworkEvent::Failed(reason) => {
-                    if self
-                        .hosted
-                        .as_ref()
-                        .is_some_and(|hosted| hosted.deployment_update.restarting())
-                    {
-                        self.finish_deployment_connection();
-                    } else {
-                        self.native_disconnected(&reason)?;
-                    }
+                    self.handle_connection_failed(&reason)?;
+                    NativePollStep::NextEvent
                 }
                 NetworkEvent::Closed { code, reason } => {
-                    if self
-                        .hosted
-                        .as_ref()
-                        .is_some_and(|hosted| hosted.deployment_update.restarting())
-                    {
-                        self.finish_deployment_connection();
-                        continue;
-                    }
-                    if self.try_hosted_reconnect(code, &reason, now)? {
-                        continue;
-                    }
-                    if self.native.as_ref().is_some_and(|native| {
-                        !matches!(native.phase, NativePhase::Title | NativePhase::Inspecting)
-                    }) {
-                        self.native_disconnected(if reason.is_empty() {
-                            if code == 1000 {
-                                "Disconnected from the game"
-                            } else {
-                                "The game connection closed"
-                            }
-                        } else {
-                            &reason
-                        })?;
-                    }
+                    self.handle_connection_closed(code, &reason, now)?;
+                    NativePollStep::NextEvent
                 }
-                NetworkEvent::Message { message, received_at_ms } => match *message {
-                    ServerMessage::SessionStatus {
-                        version,
-                        can_resume,
-                        selection,
-                        fresh_join_available,
-                    } => {
-                        if version != solomon_protocol::PROTOCOL_VERSION {
-                            return Err("The game host uses an unsupported protocol".into());
-                        }
-                        let native = self.native.as_mut().unwrap();
-                        native.phase = NativePhase::Title;
-                        native.can_resume = can_resume;
-                        native.selection = selection;
-                        native.connection = None;
-                        self.menu.show_title(can_resume)?;
-                        if !can_resume
-                            && fresh_join_available
-                            && !storage::tutorial_declined().unwrap_or(true)
-                        {
-                            self.menu.offer_tutorial()?;
-                        }
-                        set_status("");
-                    }
-                    ServerMessage::Welcome {
-                        version,
-                        credentials,
-                        tick_rate,
-                        snapshot_rate,
-                        frame,
-                        hosted,
-                    } => {
-                        if self
-                            .native
-                            .as_ref()
-                            .is_some_and(|native| native.phase == NativePhase::Recovering)
-                        {
-                            self.poll_hosted_reconnect(crate::platform::monotonic_ms())?;
-                            if self.native.as_ref().is_none_or(|native| native.connection.is_none())
-                            {
-                                break;
-                            }
-                        }
-                        if let Some(loading) = &mut self.match_loading {
-                            loading.advance(MatchLoadingStage::ReceivingHostCheckpoint);
-                        }
-                        if version != solomon_protocol::PROTOCOL_VERSION
-                            || tick_rate != solomon_protocol::GAME_TICK_RATE
-                            || snapshot_rate != solomon_protocol::SNAPSHOT_RATE
-                        {
-                            return Err("The game host uses an unsupported simulation rate".into());
-                        }
-                        if !frame.snapshot.participants.contains_key(&credentials.player_id) {
-                            return Err("The game host did not include your wizard".into());
-                        }
-                        for participant in frame.snapshot.participants.values() {
-                            save_document::validate_participant(participant)?;
-                        }
-                        let observing = match self.accept_observer_welcome(
-                            hosted.as_ref(),
-                            &credentials,
-                            &frame.snapshot,
-                        ) {
-                            Ok(observing) => observing,
-                            Err(reason) => return self.native_disconnected(&reason),
-                        };
-                        let reconnecting = self
-                            .native
-                            .as_ref()
-                            .is_some_and(|native| native.phase == NativePhase::Recovering);
-                        if reconnecting {
-                            let expected =
-                                self.native.as_ref().and_then(|native| native.resume.as_ref());
-                            let original =
-                                self.hosted.as_ref().and_then(|owner| owner.welcome.as_ref());
-                            if expected.is_none_or(|expected| {
-                                expected.player_id != credentials.player_id
-                                    || expected.token != credentials.token
-                            }) || original.zip(hosted.as_ref()).is_none_or(|(before, after)| {
-                                before.session_kind != after.session_kind
-                                    || before.content != after.content
-                                    || before.developer_access != after.developer_access
-                                    || after.observer
-                            }) {
-                                return self.native_disconnected("The reconnect admission changed the retained wizard or content.");
-                            }
-                        }
-                        let keep_resume = !observing;
-                        #[cfg(target_arch = "wasm32")]
-                        let keep_resume = keep_resume && !self.is_editor_test();
-                        if keep_resume {
-                            network::remember_resume(&credentials)?;
-                        }
-                        let native = self.native.as_mut().unwrap();
-                        native.resume = Some(credentials.clone());
-                        if let Some(owner) = &mut self.hosted
-                            && hosted.is_some()
-                            && !reconnecting
-                        {
-                            owner.content_pending = true;
-                        }
-                        if !reconnecting {
-                            native.hosted_welcome = hosted;
-                        }
-                        if !observing {
-                            native.can_resume = true;
-                        }
-                        native
-                            .connection
-                            .as_mut()
-                            .ok_or("The game connection closed during admission")?
-                            .credentials = Some(credentials.clone());
-                        native.connection.as_mut().unwrap().accept_welcome()?;
-                        native.connection.as_mut().unwrap().start_ping(observing)?;
-                        self.accept_native_snapshot(ReceivedNativeSnapshot {
-                            frame: Box::new(frame),
-                            received_at_ms,
-                        })?;
-                    }
-                    ServerMessage::BoneyardLoaded { boneyard } => {
-                        let native = self.native.as_mut().unwrap();
-                        let waiting = native.waiting_boneyard_frame.as_ref().is_some_and(|frame| {
-                            frame
-                                .frame
-                                .snapshot
-                                .boneyard
-                                .as_ref()
-                                .is_some_and(|world| world.run_id == boneyard.run_id)
-                        });
-                        native.loaded_boneyard = Some(*boneyard);
-                        if waiting {
-                            let frame = native.waiting_boneyard_frame.take().unwrap();
-                            self.accept_native_snapshot(frame)?;
-                        }
-                    }
-                    ServerMessage::Snapshot { frame } => {
-                        self.accept_native_snapshot(ReceivedNativeSnapshot {
-                            frame: Box::new(frame),
-                            received_at_ms,
-                        })?
-                    }
-                    ServerMessage::Audio { events, .. } => {
-                        for event in events {
-                            self.audio.apply(event)?;
-                        }
-                    }
-                    ServerMessage::CommandResult {
-                        sequence,
-                        snapshot_sequence,
-                        accepted,
-                        reason,
-                        inventory_result,
-                    } => {
-                        self.native.as_mut().unwrap().receipts.push(CommandReceipt {
-                            sequence,
-                            snapshot_sequence,
-                            accepted,
-                            reason,
-                            inventory_result,
-                        });
-                    }
-                    ServerMessage::SaveCommitted { request_id, .. } => {
-                        if self.native.as_ref().unwrap().leave_request == Some(request_id) {
-                            if let Some(connection) = &self.native.as_ref().unwrap().connection {
-                                connection.send(&ClientMessage::Disconnect)?;
-                            }
-                            self.native_disconnected("")?;
-                        }
-                    }
-                    ServerMessage::Error { code, reason } => {
-                        if matches!(
-                            code,
-                            solomon_protocol::HostErrorCode::CommandRejected
-                                | solomon_protocol::HostErrorCode::RunInProgress
-                        ) && !self.world_loading
-                            && self.session.boneyard.is_none()
-                            && self
-                                .match_loading
-                                .is_some_and(|loading| loading.flow == MatchLoadingFlow::Boneyard)
-                        {
-                            self.match_loading = None;
-                        }
-                        let rejected_identity =
-                            code == solomon_protocol::HostErrorCode::InvalidCredentials;
-                        #[cfg(target_arch = "wasm32")]
-                        let rejected_identity = rejected_identity && !self.is_editor_test();
-                        if rejected_identity && !self.is_hosted_observer() {
-                            let native = self.native.as_mut().unwrap();
-                            if let Some(rejected) = native.resume.take() {
-                                network::forget_rejected_resume(&rejected)?;
-                            }
-                            native.can_resume = false;
-                            native.selection = None;
-                        }
-                        if rejected_identity
-                            || self
-                                .native
-                                .as_ref()
-                                .is_some_and(|native| native.phase == NativePhase::Joining)
-                        {
-                            self.native_disconnected(&reason)?;
-                        } else {
-                            set_status(&reason);
-                        }
-                    }
-                    // The connection measures these on receipt, including while rAF is suspended.
-                    ServerMessage::Pong { .. } => {}
-                    ServerMessage::Social { mut snapshot } => {
-                        // Hosted party state publishes membership independently of accepted chat.
-                        if self.hosted.is_some()
-                            && let Some(previous) = &mut self.native.as_mut().unwrap().social
-                        {
-                            snapshot.chat_messages = std::mem::take(&mut previous.chat_messages);
-                        }
-                        self.native.as_mut().unwrap().social = Some(snapshot);
-                    }
-                    ServerMessage::Chat { message } => {
-                        self.world_overlays.consume_chat(&message, received_at_ms);
-                        if let Some(observer) =
-                            self.hosted.as_mut().and_then(|hosted| hosted.observer.as_mut())
-                        {
-                            append_game_chat_message(&mut observer.chat_messages, message);
-                            self.update_hosted_observer_ui()?;
-                            continue;
-                        }
-                        let social = self
-                            .native
-                            .as_mut()
-                            .unwrap()
-                            .social
-                            .as_mut()
-                            .ok_or("The game host sent chat before its social state")?;
-                        append_game_chat_message(&mut social.chat_messages, message);
-                    }
-                    ServerMessage::ChatRejected { rejection } => {
-                        self.native.as_mut().unwrap().chat_rejections.push(rejection);
-                    }
-                    ServerMessage::Hosted { message } => {
-                        self.native
-                            .as_mut()
-                            .unwrap()
-                            .hosted_messages
-                            .push((message, received_at_ms));
-                    }
-                    ServerMessage::WelcomeChunk { .. } => {
-                        return Err("The game received an unassembled welcome".into());
-                    }
-                },
+                NetworkEvent::Message { message, received_at_ms } => {
+                    self.handle_server_message(*message, received_at_ms)?
+                }
+            };
+            match step {
+                NativePollStep::NextEvent => {}
+                NativePollStep::StopEvents => break,
+                NativePollStep::Disconnected => return Ok(()),
             }
         }
         if let Some(snapshot) = poll.snapshot
@@ -577,6 +322,329 @@ impl Game {
             self.update_hosted_observer_ui()?;
         }
         self.release_native_receipts(now)
+    }
+
+    fn handle_connection_failed(&mut self, reason: &str) -> Result<(), String> {
+        if self.deployment_restarting() {
+            self.finish_deployment_connection();
+        } else {
+            self.native_disconnected(reason)?;
+        }
+        Ok(())
+    }
+
+    fn handle_connection_closed(
+        &mut self,
+        code: u16,
+        reason: &str,
+        now: f64,
+    ) -> Result<(), String> {
+        if self.deployment_restarting() {
+            self.finish_deployment_connection();
+            return Ok(());
+        }
+        if self.try_hosted_reconnect(code, reason, now)? {
+            return Ok(());
+        }
+        if self.native.as_ref().is_some_and(|native| {
+            !matches!(native.phase, NativePhase::Title | NativePhase::Inspecting)
+        }) {
+            self.native_disconnected(if reason.is_empty() {
+                if code == 1000 {
+                    "Disconnected from the game"
+                } else {
+                    "The game connection closed"
+                }
+            } else {
+                reason
+            })?;
+        }
+        Ok(())
+    }
+
+    fn handle_server_message(
+        &mut self,
+        message: crate::network::NativeServerMessage,
+        received_at_ms: f64,
+    ) -> Result<NativePollStep, String> {
+        match message {
+            ServerMessage::SessionStatus {
+                version,
+                can_resume,
+                selection,
+                fresh_join_available,
+            } => {
+                self.handle_session_status(version, can_resume, selection, fresh_join_available)?
+            }
+            ServerMessage::Welcome {
+                version,
+                credentials,
+                tick_rate,
+                snapshot_rate,
+                frame,
+                hosted,
+            } => {
+                return self.handle_welcome(
+                    version,
+                    credentials,
+                    tick_rate,
+                    snapshot_rate,
+                    frame,
+                    hosted,
+                    received_at_ms,
+                );
+            }
+            ServerMessage::BoneyardLoaded { boneyard } => {
+                let native = self.native.as_mut().unwrap();
+                let waiting = native.waiting_boneyard_frame.as_ref().is_some_and(|frame| {
+                    frame
+                        .frame
+                        .snapshot
+                        .boneyard
+                        .as_ref()
+                        .is_some_and(|world| world.run_id == boneyard.run_id)
+                });
+                native.loaded_boneyard = Some(*boneyard);
+                if waiting {
+                    let frame = native.waiting_boneyard_frame.take().unwrap();
+                    self.accept_native_snapshot(frame)?;
+                }
+            }
+            ServerMessage::Snapshot { frame } => {
+                self.accept_native_snapshot(ReceivedNativeSnapshot {
+                    frame: Box::new(frame),
+                    received_at_ms,
+                })?
+            }
+            ServerMessage::Audio { events, .. } => {
+                for event in events {
+                    self.audio.apply(event)?;
+                }
+            }
+            ServerMessage::CommandResult {
+                sequence,
+                snapshot_sequence,
+                accepted,
+                reason,
+                inventory_result,
+            } => {
+                self.native.as_mut().unwrap().receipts.push(CommandReceipt {
+                    sequence,
+                    snapshot_sequence,
+                    accepted,
+                    reason,
+                    inventory_result,
+                });
+            }
+            ServerMessage::SaveCommitted { request_id, .. } => {
+                self.handle_save_committed(request_id)?
+            }
+            ServerMessage::Error { code, reason } => self.handle_host_error(code, reason)?,
+            // The connection measures these on receipt, including while rAF is suspended.
+            ServerMessage::Pong { .. } => {}
+            ServerMessage::Social { snapshot } => self.handle_social(snapshot),
+            ServerMessage::Chat { message } => self.handle_chat(message, received_at_ms)?,
+            ServerMessage::ChatRejected { rejection } => {
+                self.native.as_mut().unwrap().chat_rejections.push(rejection);
+            }
+            ServerMessage::Hosted { message } => {
+                self.native.as_mut().unwrap().hosted_messages.push((message, received_at_ms));
+            }
+            ServerMessage::WelcomeChunk { .. } => {
+                return Err("The game received an unassembled welcome".into());
+            }
+        }
+        Ok(NativePollStep::NextEvent)
+    }
+
+    fn handle_session_status(
+        &mut self,
+        version: u32,
+        can_resume: bool,
+        selection: Option<NewGameSelection>,
+        fresh_join_available: bool,
+    ) -> Result<(), String> {
+        if version != solomon_protocol::PROTOCOL_VERSION {
+            return Err("The game host uses an unsupported protocol".into());
+        }
+        let native = self.native.as_mut().unwrap();
+        native.phase = NativePhase::Title;
+        native.can_resume = can_resume;
+        native.selection = selection;
+        native.connection = None;
+        self.menu.show_title(can_resume)?;
+        if !can_resume && fresh_join_available && !storage::tutorial_declined().unwrap_or(true) {
+            self.menu.offer_tutorial()?;
+        }
+        set_status("");
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)] // The Welcome message's fields and its receipt time.
+    fn handle_welcome(
+        &mut self,
+        version: u32,
+        credentials: ResumeCredentials,
+        tick_rate: u32,
+        snapshot_rate: u32,
+        frame: crate::network::NativeSnapshot,
+        hosted: Option<solomon_protocol::hosted::HostedWelcome>,
+        received_at_ms: f64,
+    ) -> Result<NativePollStep, String> {
+        if self.native.as_ref().is_some_and(|native| native.phase == NativePhase::Recovering) {
+            self.poll_hosted_reconnect(crate::platform::monotonic_ms())?;
+            if self.native.as_ref().is_none_or(|native| native.connection.is_none()) {
+                return Ok(NativePollStep::StopEvents);
+            }
+        }
+        if let Some(loading) = &mut self.match_loading {
+            loading.advance(MatchLoadingStage::ReceivingHostCheckpoint);
+        }
+        if version != solomon_protocol::PROTOCOL_VERSION
+            || tick_rate != solomon_protocol::GAME_TICK_RATE
+            || snapshot_rate != solomon_protocol::SNAPSHOT_RATE
+        {
+            return Err("The game host uses an unsupported simulation rate".into());
+        }
+        if !frame.snapshot.participants.contains_key(&credentials.player_id) {
+            return Err("The game host did not include your wizard".into());
+        }
+        for participant in frame.snapshot.participants.values() {
+            save_document::validate_participant(participant)?;
+        }
+        let observing =
+            match self.accept_observer_welcome(hosted.as_ref(), &credentials, &frame.snapshot) {
+                Ok(observing) => observing,
+                Err(reason) => {
+                    self.native_disconnected(&reason)?;
+                    return Ok(NativePollStep::Disconnected);
+                }
+            };
+        let reconnecting =
+            self.native.as_ref().is_some_and(|native| native.phase == NativePhase::Recovering);
+        if reconnecting {
+            let expected = self.native.as_ref().and_then(|native| native.resume.as_ref());
+            let original = self.hosted.as_ref().and_then(|owner| owner.welcome.as_ref());
+            if expected.is_none_or(|expected| {
+                expected.player_id != credentials.player_id || expected.token != credentials.token
+            }) || original.zip(hosted.as_ref()).is_none_or(|(before, after)| {
+                before.session_kind != after.session_kind
+                    || before.content != after.content
+                    || before.developer_access != after.developer_access
+                    || after.observer
+            }) {
+                self.native_disconnected(
+                    "The reconnect admission changed the retained wizard or content.",
+                )?;
+                return Ok(NativePollStep::Disconnected);
+            }
+        }
+        let keep_resume = !observing;
+        #[cfg(target_arch = "wasm32")]
+        let keep_resume = keep_resume && !self.is_editor_test();
+        if keep_resume {
+            network::remember_resume(&credentials)?;
+        }
+        let native = self.native.as_mut().unwrap();
+        native.resume = Some(credentials.clone());
+        if let Some(owner) = &mut self.hosted
+            && hosted.is_some()
+            && !reconnecting
+        {
+            owner.content_pending = true;
+        }
+        if !reconnecting {
+            native.hosted_welcome = hosted;
+        }
+        if !observing {
+            native.can_resume = true;
+        }
+        native
+            .connection
+            .as_mut()
+            .ok_or("The game connection closed during admission")?
+            .credentials = Some(credentials.clone());
+        native.connection.as_mut().unwrap().accept_welcome()?;
+        native.connection.as_mut().unwrap().start_ping(observing)?;
+        self.accept_native_snapshot(ReceivedNativeSnapshot {
+            frame: Box::new(frame),
+            received_at_ms,
+        })?;
+        Ok(NativePollStep::NextEvent)
+    }
+
+    fn handle_save_committed(&mut self, request_id: u64) -> Result<(), String> {
+        if self.native.as_ref().unwrap().leave_request == Some(request_id) {
+            if let Some(connection) = &self.native.as_ref().unwrap().connection {
+                connection.send(&ClientMessage::Disconnect)?;
+            }
+            self.native_disconnected("")?;
+        }
+        Ok(())
+    }
+
+    fn handle_host_error(
+        &mut self,
+        code: solomon_protocol::HostErrorCode,
+        reason: String,
+    ) -> Result<(), String> {
+        if matches!(
+            code,
+            solomon_protocol::HostErrorCode::CommandRejected
+                | solomon_protocol::HostErrorCode::RunInProgress
+        ) && !self.world_loading
+            && self.session.boneyard.is_none()
+            && self.match_loading.is_some_and(|loading| loading.flow == MatchLoadingFlow::Boneyard)
+        {
+            self.match_loading = None;
+        }
+        let rejected_identity = code == solomon_protocol::HostErrorCode::InvalidCredentials;
+        #[cfg(target_arch = "wasm32")]
+        let rejected_identity = rejected_identity && !self.is_editor_test();
+        if rejected_identity && !self.is_hosted_observer() {
+            let native = self.native.as_mut().unwrap();
+            if let Some(rejected) = native.resume.take() {
+                network::forget_rejected_resume(&rejected)?;
+            }
+            native.can_resume = false;
+            native.selection = None;
+        }
+        if rejected_identity
+            || self.native.as_ref().is_some_and(|native| native.phase == NativePhase::Joining)
+        {
+            self.native_disconnected(&reason)?;
+        } else {
+            set_status(&reason);
+        }
+        Ok(())
+    }
+
+    fn handle_social(&mut self, mut snapshot: SocialSnapshot) {
+        // Hosted party state publishes membership independently of accepted chat.
+        if self.hosted.is_some()
+            && let Some(previous) = &mut self.native.as_mut().unwrap().social
+        {
+            snapshot.chat_messages = std::mem::take(&mut previous.chat_messages);
+        }
+        self.native.as_mut().unwrap().social = Some(snapshot);
+    }
+
+    fn handle_chat(&mut self, message: GameChatMessage, received_at_ms: f64) -> Result<(), String> {
+        self.world_overlays.consume_chat(&message, received_at_ms);
+        if let Some(observer) = self.hosted.as_mut().and_then(|hosted| hosted.observer.as_mut()) {
+            append_game_chat_message(&mut observer.chat_messages, message);
+            self.update_hosted_observer_ui()?;
+            return Ok(());
+        }
+        let social = self
+            .native
+            .as_mut()
+            .unwrap()
+            .social
+            .as_mut()
+            .ok_or("The game host sent chat before its social state")?;
+        append_game_chat_message(&mut social.chat_messages, message);
+        Ok(())
     }
 
     pub(super) fn native_disconnected(&mut self, reason: &str) -> Result<(), String> {
