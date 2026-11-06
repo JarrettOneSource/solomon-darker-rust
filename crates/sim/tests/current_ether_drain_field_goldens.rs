@@ -1,12 +1,12 @@
 //! Complete current EtherDrain constructor/epoch program through the public secondary owner.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
-mod native_bits;
+#[path = "support/exact_bits.rs"]
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod support;
 
-use native_bits::{compare, input, source_value};
+use exact_bits::{compare, input, source_value};
 use serde_json::{Value, json};
 use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;

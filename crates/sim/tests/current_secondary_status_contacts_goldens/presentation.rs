@@ -1,6 +1,6 @@
 //! Electric Burn's shared factory meshes, independent coronas, light lifetime and the
 //! painter rows recorded from the Website client's view.
-use super::{fixture, native_bits, support};
+use super::{exact_bits, fixture, support};
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::lighting::secondary::secondary_provider_light_source;
@@ -80,7 +80,7 @@ fn electric_coronas_body_factory_and_light_plan_match_source() {
                 SecondaryLightDisposition::None=>"none",SecondaryLightDisposition::TransientProvider=>"transient-provider"},
             "painterLane":match secondary_painter_manager_lane(actor.kind) {
                 solomon_sim::painter::WorldManagerLane::Actor=>"actor",solomon_sim::painter::WorldManagerLane::Transient=>"transient"},"light":light});
-        native_bits::compare(
+        exact_bits::compare(
             &actual,
             &row["expected"],
             &format!("{} {} age{}", actor.kind.as_str(), actor.id, actor.age_ticks),
@@ -109,7 +109,7 @@ fn electric_arc_painters_match_actual_source_view_across_quality_and_retirement(
                     "id":format!("secondary:{}:body-band-{index}",actor.id),"sortBias":0,"visible":true,
                     "worldY":actor.position.y+band.painter_y})).collect::<Vec<_>>()}));
         }
-        native_bits::compare(
+        exact_bits::compare(
             &json!({"painters":painters,"primitiveCount":primitive_count}),
             &row["expected"],
             &format!("arc{} age{} quality{}", actor.id, actor.age_ticks, row["enhancedEffects"]),

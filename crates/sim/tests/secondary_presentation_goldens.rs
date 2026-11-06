@@ -1,9 +1,9 @@
 //! Source-shaped draw plans over actual secondary states and boundary snapshots.
 #![cfg(feature = "persistence")]
 
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::enemies::presentation::*;
@@ -53,9 +53,9 @@ fn read_actor(value: &Value) -> SecondaryActorState {
     actor.freeze_ticks = value["freezeTicks"].as_u64().unwrap();
     actor.golem = value["golem"].as_object().map(|_| golem(&value["golem"]));
     actor.golem_death =
-        value["golemDeath"].as_object().map(|_| native_bits::input(&value["golemDeath"]));
+        value["golemDeath"].as_object().map(|_| exact_bits::input(&value["golemDeath"]));
     actor.ether_drain =
-        value["etherDrain"].as_object().map(|_| native_bits::input(&value["etherDrain"]));
+        value["etherDrain"].as_object().map(|_| exact_bits::input(&value["etherDrain"]));
     actor.hit_target_ids =
         value["hitTargetIds"].as_array().unwrap().iter().map(|id| id.as_u64().unwrap()).collect();
     actor.lifetime_ticks = value["lifetimeTicks"].as_u64().unwrap();

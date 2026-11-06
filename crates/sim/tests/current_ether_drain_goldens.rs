@@ -1,9 +1,9 @@
 //! Current EtherDrain pressure, membership and private manager against raw Source f64 bits.
 #![cfg(feature = "persistence")]
 
-#[path = "support/native_bits.rs"]
-mod native_bits;
-use native_bits::{compare, input};
+#[path = "support/exact_bits.rs"]
+mod exact_bits;
+use exact_bits::{compare, input};
 
 use serde::Deserialize;
 use serde_json::{Value, json};

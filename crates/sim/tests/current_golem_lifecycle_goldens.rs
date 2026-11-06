@@ -1,8 +1,8 @@
 //! Golem assembly and destruction retain actual child actors, painter owners and RNG.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod support;
@@ -89,7 +89,7 @@ fn snapshot(state: &SecondarySimulationState, order: WorldPainterOrder, received
             value
         })
         .collect();
-    native_bits::source_value(&json!({
+    exact_bits::source_value(&json!({
         "actors": actors, "deathPlans": death_plans,
         "events": state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),
         "rng": support::rng_snapshot(&state.rng), "nextActorId": state.next_actor_id,
@@ -180,9 +180,9 @@ fn current_golem_assembly_and_death_keep_real_motion_after_the_owner_leaves() {
             if frames.get(frame_index).is_none_or(|frame| frame["tick"].as_u64() != Some(tick)) {
                 continue;
             }
-            native_bits::compare(
+            exact_bits::compare(
                 &snapshot(&state, order, received),
-                &native_bits::source_value(&frames[frame_index]["expected"]),
+                &exact_bits::source_value(&frames[frame_index]["expected"]),
                 &format!("quality{} iron{} tick{tick}", case["enhanced"], case["iron"]),
             );
             frame_index += 1;

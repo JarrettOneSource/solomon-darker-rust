@@ -1,8 +1,8 @@
 //! Stoneskin births, damage interception and expiry use one retained secondary stream.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod support;
@@ -63,7 +63,7 @@ fn snapshot(state: &SecondarySimulationState, order: WorldPainterOrder, received
             "backgroundDraws":plan.background_draws.iter().map(draw_snapshot).collect::<Vec<_>>()})
         })
         .collect();
-    native_bits::source_value(&json!({
+    exact_bits::source_value(&json!({
         "plans":plans,
         "actors": state.actors.iter().map(support::actor_snapshot).collect::<Vec<_>>(),
         "events": state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),
@@ -132,9 +132,9 @@ fn current_stoneskin_retains_cast_and_hit_chips_through_actual_expiry() {
             if frames.get(frame_index).is_none_or(|frame| frame["tick"].as_u64() != Some(tick)) {
                 continue;
             }
-            native_bits::compare(
+            exact_bits::compare(
                 &snapshot(&state, order, received),
-                &native_bits::source_value(&frames[frame_index]["expected"]),
+                &exact_bits::source_value(&frames[frame_index]["expected"]),
                 &format!(
                     "Stoneskin seed{} quality{} physical{} tick{tick}",
                     case["seed"], case["enhanced"], case["physical"]

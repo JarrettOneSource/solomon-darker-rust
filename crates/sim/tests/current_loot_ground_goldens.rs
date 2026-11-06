@@ -1,7 +1,7 @@
 //! Actual loot-store materialization uses its retained carriers at every selection.
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
@@ -139,9 +139,9 @@ fn support_compare(
     case: &Value,
     round: usize,
 ) {
-    native_bits::compare(
-        &native_bits::source_value(&snapshot(store, order)),
-        &native_bits::source_value(expected),
+    exact_bits::compare(
+        &exact_bits::source_value(&snapshot(store, order)),
+        &exact_bits::source_value(expected),
         &format!("{} {} round{round}", case["mode"], case["seed"]),
     );
 }

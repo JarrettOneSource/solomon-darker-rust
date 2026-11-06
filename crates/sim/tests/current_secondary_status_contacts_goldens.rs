@@ -1,8 +1,8 @@
 //! Current modifier submissions preserve hit metadata, draw order and private births.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "current_secondary_status_contacts_goldens/presentation.rs"]
 mod presentation;
 #[path = "support/secondary_state.rs"]
@@ -166,9 +166,9 @@ fn current_source_status_contacts_and_private_electric_births() {
                 "effects":state.target_effects.iter().map(support::effect_snapshot).collect::<Vec<_>>(),
                 "events":state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),
                 "rng":support::rng_snapshot(&state.rng),"nextActorId":state.next_actor_id,"nextEventId":state.next_event_id});
-            native_bits::compare(
-                &native_bits::source_value(&actual),
-                &native_bits::source_value(&frame["expected"]),
+            exact_bits::compare(
+                &exact_bits::source_value(&actual),
+                &exact_bits::source_value(&frame["expected"]),
                 &format!("{} tick{tick}", case["name"]),
             );
         }

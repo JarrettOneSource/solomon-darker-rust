@@ -1,9 +1,9 @@
 //! Knockback area movement runs two real physics passes per target, then commits the enemy
 //! and lantern roots.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
@@ -127,9 +127,9 @@ fn area_movement_two_pass_contacts_commit_real_enemy_and_lantern_roots_per_targe
                 );
                 assert_eq!(json!(contacts), frame["contacts"], "actual area root recipients");
             }
-            native_bits::compare(
-                &native_bits::source_value(&snapshot(&world)),
-                &native_bits::source_value(&frame["expected"]),
+            exact_bits::compare(
+                &exact_bits::source_value(&snapshot(&world)),
+                &exact_bits::source_value(&frame["expected"]),
                 &format!("player{} lantern{} move{index}", case["nearbyPlayer"], case["lantern"]),
             );
         }

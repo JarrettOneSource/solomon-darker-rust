@@ -1,8 +1,8 @@
 //! Source's ordered force receiver over actual Session and ground-loot constructors.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/player_combat.rs"]
 #[allow(dead_code)]
 mod support;
@@ -76,7 +76,7 @@ fn player_pairs_loose_sweeps_and_registration_reuse_follow_the_source_transactio
                 let mut spec = LootDropSpec::new(
                     LootDropKind::Gold,
                     row["id"].as_u64().unwrap(),
-                    native_bits::input(&row["position"]),
+                    exact_bits::input(&row["position"]),
                     LootDropSource::Script,
                 );
                 spec.amount = row["amount"].as_u64();
@@ -98,7 +98,7 @@ fn player_pairs_loose_sweeps_and_registration_reuse_follow_the_source_transactio
                 position: session.participants[id].wizard.position,
             })
             .collect();
-        let contacts: Vec<EtherDrainContact> = native_bits::input(&case["contacts"]);
+        let contacts: Vec<EtherDrainContact> = exact_bits::input(&case["contacts"]);
         let result = session.boneyard.as_mut().unwrap().apply_ether_drain_forces(
             &contacts,
             &bodies,

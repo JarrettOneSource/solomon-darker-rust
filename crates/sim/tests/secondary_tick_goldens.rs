@@ -3,16 +3,16 @@
 
 #[path = "support/secondary_current.rs"]
 mod current;
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod support;
 
 use current::{result_snapshot, state_snapshot};
-use native_bits::source_value;
+use exact_bits::source_value;
 use serde_json::{Value, json};
 use solomon_sim::HubWizard;
 use solomon_sim::belt::{BeltCommand, PlayerBeltComponent};
