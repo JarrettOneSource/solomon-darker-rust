@@ -1,17 +1,17 @@
 //! Restores a save document's continuation as a live session, turning its component rows
 //! into the simulation's owners.
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use solomon_sim::boneyard::world::BoneyardSceneryTargetRetention;
 use solomon_sim::boneyard::{BoneyardSource, BoneyardWorld, LoadedBoneyard};
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::hub::ambient::HubAmbientState;
 use solomon_sim::hub::interaction::HubNpcMarkerEpoch;
 use solomon_sim::hub::npc::{HubCommonTraderClock, HubNpcState};
-use solomon_sim::session::{GameSession, GameSessionOptions};
+use solomon_sim::session::{GameSession, GameSessionOptions, SessionParticipant};
 
 use super::contract::{
-    ParsedSaveDocument, SaveMetadata, SaveWorldKind, integer, only_keys, record,
+    ParsedSaveDocument, SaveMetadata, SaveSummary, SaveWorldKind, integer, only_keys, record,
 };
 use super::value::decode;
 
@@ -33,6 +33,36 @@ pub fn restore(document: &str) -> Result<RestoredGameSave, String> {
     restore_parsed(parsed)
 }
 
+/// The exact fields of a normalized save simulation record.
+const SIMULATION_FIELDS: &[&str] = &[
+    "accumulatorSeconds",
+    "combatRng",
+    "enhancedEffects",
+    "gameRng",
+    "hallOfFameClockStartedAtTick",
+    "levelUpBarrier",
+    "worldManagerOrder",
+    "modEffects",
+    "nextLevelUpBarrierId",
+    "nextModConsumableUseId",
+    "playerEntities",
+    "primarySpells",
+    "run",
+    "screenFlashes",
+    "secondaryAbilities",
+    "tick",
+    "world",
+];
+
+/// What restoring the owner's Hub or Boneyard reads from the save: the owner's player ID, the
+/// tick and schema version the save was written at, and the Boneyard the owner had loaded.
+struct SavedOwner<'a> {
+    player_id: &'a str,
+    tick: u64,
+    version: u64,
+    loaded_boneyard: &'a Value,
+}
+
 fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String> {
     let continuation = parsed.continuation.ok_or("game save has no resumable continuation")?;
     let summary = continuation.summary;
@@ -48,29 +78,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
         parsed.source_schema_version,
     )?;
     let source = record(&normalized, "game save simulation")?;
-    only_keys(
-        source,
-        "game save simulation",
-        &[
-            "accumulatorSeconds",
-            "combatRng",
-            "enhancedEffects",
-            "gameRng",
-            "hallOfFameClockStartedAtTick",
-            "levelUpBarrier",
-            "worldManagerOrder",
-            "modEffects",
-            "nextLevelUpBarrierId",
-            "nextModConsumableUseId",
-            "playerEntities",
-            "primarySpells",
-            "run",
-            "screenFlashes",
-            "secondaryAbilities",
-            "tick",
-            "world",
-        ],
-    )?;
+    only_keys(source, "game save simulation", SIMULATION_FIELDS)?;
     let tick = integer(&source["tick"], "game save simulation tick")?;
     let hall_tick = integer(&source["hallOfFameClockStartedAtTick"], "game save Hall clock")?;
     if hall_tick > tick {
@@ -86,6 +94,63 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
         return Err("game save mod consumable sequence is invalid".into());
     }
     let players = record(&source["playerEntities"], "game save players")?;
+    let mut session = new_owner_session(source, players, &summary)?;
+    session.hall_of_fame_clock_started_at_tick = hall_tick;
+    session.ticks = tick;
+    if session.run.phase != summary.phase {
+        return Err("game save phase summary drifted".into());
+    }
+    let world = record(&source["world"], "game save world")?;
+    check_world_summary(world, &summary, session.run.phase)?;
+    let participant = session.participants.get_mut(&summary.player_id).unwrap();
+    restore_owner_components(participant, players)?;
+    let owner = SavedOwner {
+        player_id: &summary.player_id,
+        tick,
+        version: parsed.source_schema_version,
+        loaded_boneyard: &continuation.loaded_boneyard,
+    };
+    let loaded_boneyard = match summary.world_kind {
+        SaveWorldKind::Hub => {
+            restore_hub_owner(&mut session, &owner, &source["world"])?;
+            None
+        }
+        SaveWorldKind::Boneyard => Some(restore_boneyard_owner(&mut session, &owner, world)?),
+    };
+    session.migrate_participant_starter_appearance(&summary.player_id)?;
+    let participant = session.participants.get_mut(&summary.player_id).unwrap();
+    let player = &mut participant.player;
+    if player.autofill_skill_selections(&mut session.gameplay_rng) {
+        let selected = if player.book.primary_skill_id == 52 {
+            player.book.weld_build_id.expect("normalized Weld book retains its build")
+        } else {
+            player.book.primary_skill_id as u32
+        };
+        participant.wizard.primary_cast.reset_for_selection(selected);
+    }
+    restore_pending_skill_offers(&mut session, parsed.source_schema_version)?;
+    if parsed.source_schema_version < 48 {
+        restore_legacy_death_weapons(&mut session, tick);
+    }
+    crate::save_document::validate_participant(
+        session.participants.get(&summary.player_id).unwrap(),
+    )?;
+    session.checkpoint().validate()?;
+    Ok(RestoredGameSave {
+        session,
+        loaded_boneyard,
+        player_id: summary.player_id,
+        metadata: parsed.metadata,
+    })
+}
+
+/// A new session for the save's owner, built from the owner's single row in each player
+/// component, with the saved random streams, run, spells and level-up barrier.
+fn new_owner_session(
+    source: &Map<String, Value>,
+    players: &Map<String, Value>,
+    summary: &SaveSummary,
+) -> Result<GameSession, String> {
     const COMPONENTS: &[&str] = &[
         "belts",
         "configs",
@@ -133,12 +198,15 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
     session.level_up_barrier = decode(source["levelUpBarrier"].clone())?;
     session.next_level_up_barrier_id =
         integer(&source["nextLevelUpBarrierId"], "game save level-up barrier sequence")?;
-    session.hall_of_fame_clock_started_at_tick = hall_tick;
-    session.ticks = tick;
-    if session.run.phase != summary.phase {
-        return Err("game save phase summary drifted".into());
-    }
-    let world = record(&source["world"], "game save world")?;
+    Ok(session)
+}
+
+/// The saved world's kind and the active-run flag must agree with the save summary.
+fn check_world_summary(
+    world: &Map<String, Value>,
+    summary: &SaveSummary,
+    phase: GameRunPhase,
+) -> Result<(), String> {
     let kind = match summary.world_kind {
         SaveWorldKind::Hub => "hub",
         SaveWorldKind::Boneyard => "boneyard",
@@ -147,12 +215,19 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
         return Err("game save world summary drifted".into());
     }
     if summary.active_run
-        != (summary.world_kind == SaveWorldKind::Boneyard
-            && session.run.phase == GameRunPhase::Active)
+        != (summary.world_kind == SaveWorldKind::Boneyard && phase == GameRunPhase::Active)
     {
         return Err("game save active run summary drifted".into());
     }
-    let participant = session.participants.get_mut(&summary.player_id).unwrap();
+    Ok(())
+}
+
+/// The owner's entity ID, economy, skill book, stats, belt, progression, skill runtime,
+/// lighting and locomotion from its component rows.
+fn restore_owner_components(
+    participant: &mut SessionParticipant,
+    players: &Map<String, Value>,
+) -> Result<(), String> {
     participant.entity_id = integer(&players["entityIds"][0], "game save player entity ID")?;
     participant.player.economy = decode(players["economies"][0].clone())?;
     if !participant.player.economy.inventory_is_valid() {
@@ -179,99 +254,100 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
     locomotion.insert("region".into(), Value::from("courtyard"));
     locomotion.insert("transition".into(), Value::Null);
     participant.wizard = decode(Value::Object(locomotion))?;
-    let loaded_boneyard = match summary.world_kind {
-        SaveWorldKind::Hub => {
-            if !continuation.loaded_boneyard.is_null()
-                && !completed_tutorial_attachment(
-                    &continuation.loaded_boneyard,
-                    &participant.player.economy,
-                    session.run.phase,
-                )
-            {
-                return Err("Hub game save carries a Boneyard".into());
-            }
-            let (hub, legacy_intro) = super::normalize::hub::participant(
-                &source["world"],
-                &summary.player_id,
-                parsed.source_schema_version,
-            )?;
-            if legacy_intro {
-                participant.wizard =
-                    solomon_sim::HubWizard::at(solomon_sim::Vec2::new(972.0, 1044.0));
-            }
-            participant.wizard.region = decode(hub["region"].clone())?;
-            participant.wizard.transition = decode(hub["transition"].clone())?;
-            participant.college_intro = decode(hub["collegeIntro"].clone())?;
-            let seed = session.gameplay_rng.draw_integer(0x4000_0000) as u32;
-            session.npcs =
-                HubNpcState::with_live_student_painters(seed, &mut session.painter_order);
-            session.ambient = HubAmbientState::new();
-            session.hub_trader_animation_seed = seed;
-            session.dowser_clock = HubCommonTraderClock::new(seed ^ 5016);
-            participant.marker_epoch =
-                HubNpcMarkerEpoch::new(seed, tick, &participant.player.economy.npc.help_flags);
-            None
-        }
-        SaveWorldKind::Boneyard => {
-            let loaded = loaded_boneyard(&continuation.loaded_boneyard)?;
-            if world["runId"].as_str() != Some(&loaded.run_id)
-                || session.run.run_id.as_ref() != Some(&loaded.run_id)
-                || session.run.phase != GameRunPhase::Active
-            {
-                return Err("game save Boneyard run ownership is inconsistent".into());
-            }
-            let mut checkpoint = BoneyardWorld::new(loaded.clone()).checkpoint();
-            checkpoint.ticks = tick;
-            checkpoint.death_weapons = decode(world["deathWeapons"].clone())?;
-            checkpoint.next_death_weapon_id =
-                integer(&world["nextDeathWeaponId"], "game save nextDeathWeaponId")?;
-            checkpoint.gate_leaves = decode(world["gateLeaves"].clone())?;
-            checkpoint.arena_transition = decode(world["arenaTransition"].clone())?;
-            checkpoint.encounter = decode(world["encounter"].clone())?;
-            checkpoint.tutorial = decode(world["tutorial"].clone())?;
-            checkpoint.scenery_target_retention = Some(scenery_target_retention(world)?.into());
-            checkpoint.enemies = decode(world["enemies"].clone())?;
-            checkpoint.loot = decode(world["loot"].clone())?;
-            checkpoint.enemy_world_feedback = decode(world["enemyWorldFeedback"].clone())?;
-            checkpoint.enemy_events = decode(world["enemyEvents"].clone())?;
-            checkpoint.loot_events = decode(world["lootEvents"].clone())?;
-            checkpoint.player_ouch_deadline_tick =
-                integer(&world["playerOuchDeadlineTick"], "game save player ouch deadline")?;
-            checkpoint.lantern_position = decode(world["lanternPosition"].clone())?;
-            checkpoint.lantern_light_registration =
-                decode(world["lanternLightRegistration"].clone())?;
-            checkpoint.solomon_painter_registration =
-                decode(world["solomonPainterRegistration"].clone())?;
-            checkpoint.waves = if world["waves"].is_null() {
-                None
-            } else {
-                Some(decode(json!({
-                    "seed": loaded.seed,
-                    "sourceSha256": loaded.source_sha256,
-                    "state": world["waves"],
-                    "activeBursts": world["waves"]["activeBursts"],
-                    "compiledSchedule": world["waves"]["compiledSchedule"],
-                    "openingBursts": world["waves"]["openingBursts"],
-                    "openingReleaseThreshold": world["waves"]["openingReleaseThreshold"],
-                }))?)
-            };
-            participant.score = decode(world["hallOfFameRuns"][&summary.player_id].clone())?;
-            participant.tutorial_profile_economy = decode(world["tutorialProfileEconomy"].clone())?;
-            session.boneyard = Some(BoneyardWorld::restore(loaded.clone(), checkpoint)?);
-            Some(loaded)
-        }
-    };
-    session.migrate_participant_starter_appearance(&summary.player_id)?;
-    let participant = session.participants.get_mut(&summary.player_id).unwrap();
-    let player = &mut participant.player;
-    if player.autofill_skill_selections(&mut session.gameplay_rng) {
-        let selected = if player.book.primary_skill_id == 52 {
-            player.book.weld_build_id.expect("normalized Weld book retains its build")
-        } else {
-            player.book.primary_skill_id as u32
-        };
-        participant.wizard.primary_cast.reset_for_selection(selected);
+    Ok(())
+}
+
+/// Places the owner in the College and rebuilds its NPC and ambient state. One gameplay draw
+/// seeds the NPCs and the owner's NPC markers.
+fn restore_hub_owner(
+    session: &mut GameSession,
+    owner: &SavedOwner,
+    world: &Value,
+) -> Result<(), String> {
+    let participant = session.participants.get_mut(owner.player_id).unwrap();
+    if !owner.loaded_boneyard.is_null()
+        && !completed_tutorial_attachment(
+            owner.loaded_boneyard,
+            &participant.player.economy,
+            session.run.phase,
+        )
+    {
+        return Err("Hub game save carries a Boneyard".into());
     }
+    let (hub, legacy_intro) =
+        super::normalize::hub::participant(world, owner.player_id, owner.version)?;
+    if legacy_intro {
+        participant.wizard = solomon_sim::HubWizard::at(solomon_sim::Vec2::new(972.0, 1044.0));
+    }
+    participant.wizard.region = decode(hub["region"].clone())?;
+    participant.wizard.transition = decode(hub["transition"].clone())?;
+    participant.college_intro = decode(hub["collegeIntro"].clone())?;
+    let seed = session.gameplay_rng.draw_integer(0x4000_0000) as u32;
+    session.npcs = HubNpcState::with_live_student_painters(seed, &mut session.painter_order);
+    session.ambient = HubAmbientState::new();
+    session.hub_trader_animation_seed = seed;
+    session.dowser_clock = HubCommonTraderClock::new(seed ^ 5016);
+    participant.marker_epoch =
+        HubNpcMarkerEpoch::new(seed, owner.tick, &participant.player.economy.npc.help_flags);
+    Ok(())
+}
+
+/// Rebuilds the owner's Boneyard from its saved world record and returns the loaded Boneyard.
+fn restore_boneyard_owner(
+    session: &mut GameSession,
+    owner: &SavedOwner,
+    world: &Map<String, Value>,
+) -> Result<LoadedBoneyard, String> {
+    let loaded = loaded_boneyard(owner.loaded_boneyard)?;
+    if world["runId"].as_str() != Some(&loaded.run_id)
+        || session.run.run_id.as_ref() != Some(&loaded.run_id)
+        || session.run.phase != GameRunPhase::Active
+    {
+        return Err("game save Boneyard run ownership is inconsistent".into());
+    }
+    let mut checkpoint = BoneyardWorld::new(loaded.clone()).checkpoint();
+    checkpoint.ticks = owner.tick;
+    checkpoint.death_weapons = decode(world["deathWeapons"].clone())?;
+    checkpoint.next_death_weapon_id =
+        integer(&world["nextDeathWeaponId"], "game save nextDeathWeaponId")?;
+    checkpoint.gate_leaves = decode(world["gateLeaves"].clone())?;
+    checkpoint.arena_transition = decode(world["arenaTransition"].clone())?;
+    checkpoint.encounter = decode(world["encounter"].clone())?;
+    checkpoint.tutorial = decode(world["tutorial"].clone())?;
+    checkpoint.scenery_target_retention = Some(scenery_target_retention(world)?.into());
+    checkpoint.enemies = decode(world["enemies"].clone())?;
+    checkpoint.loot = decode(world["loot"].clone())?;
+    checkpoint.enemy_world_feedback = decode(world["enemyWorldFeedback"].clone())?;
+    checkpoint.enemy_events = decode(world["enemyEvents"].clone())?;
+    checkpoint.loot_events = decode(world["lootEvents"].clone())?;
+    checkpoint.player_ouch_deadline_tick =
+        integer(&world["playerOuchDeadlineTick"], "game save player ouch deadline")?;
+    checkpoint.lantern_position = decode(world["lanternPosition"].clone())?;
+    checkpoint.lantern_light_registration = decode(world["lanternLightRegistration"].clone())?;
+    checkpoint.solomon_painter_registration = decode(world["solomonPainterRegistration"].clone())?;
+    checkpoint.waves = if world["waves"].is_null() {
+        None
+    } else {
+        Some(decode(json!({
+            "seed": loaded.seed,
+            "sourceSha256": loaded.source_sha256,
+            "state": world["waves"],
+            "activeBursts": world["waves"]["activeBursts"],
+            "compiledSchedule": world["waves"]["compiledSchedule"],
+            "openingBursts": world["waves"]["openingBursts"],
+            "openingReleaseThreshold": world["waves"]["openingReleaseThreshold"],
+        }))?)
+    };
+    let participant = session.participants.get_mut(owner.player_id).unwrap();
+    participant.score = decode(world["hallOfFameRuns"][owner.player_id].clone())?;
+    participant.tutorial_profile_economy = decode(world["tutorialProfileEconomy"].clone())?;
+    session.boneyard = Some(BoneyardWorld::restore(loaded.clone(), checkpoint)?);
+    Ok(loaded)
+}
+
+/// Every pending player of a level-up barrier needs a skill offer. A save before schema 28
+/// with pending levels gets one built from the gameplay stream.
+fn restore_pending_skill_offers(session: &mut GameSession, version: u64) -> Result<(), String> {
     if let Some(barrier) = &session.level_up_barrier {
         for id in &barrier.pending_player_ids {
             let pending = session
@@ -282,7 +358,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
             if player.progression.pending_offer.is_some() {
                 continue;
             }
-            if parsed.source_schema_version >= 28 || player.progression.pending_levels.is_empty() {
+            if version >= 28 || player.progression.pending_levels.is_empty() {
                 return Err("game save level-up barrier pending player has no skill offer".into());
             }
             player.progression.pending_offer =
@@ -295,9 +371,13 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
                 ));
         }
     }
-    if parsed.source_schema_version < 48
-        && let Some(world) = &mut session.boneyard
-    {
+    Ok(())
+}
+
+/// Saves before schema 48 kept no death weapon actors. Rebuild one for each dying or spectating
+/// wizard with a registered death weapon painter.
+fn restore_legacy_death_weapons(session: &mut GameSession, tick: u64) {
+    if let Some(world) = &mut session.boneyard {
         use solomon_sim::combat::PlayerLifeState;
         use solomon_sim::death_animations::DeathWeaponActor;
         use solomon_sim::player_presentation::{
@@ -347,16 +427,6 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
             world.next_death_weapon_id += 1;
         }
     }
-    crate::save_document::validate_participant(
-        session.participants.get(&summary.player_id).unwrap(),
-    )?;
-    session.checkpoint().validate()?;
-    Ok(RestoredGameSave {
-        session,
-        loaded_boneyard,
-        player_id: summary.player_id,
-        metadata: parsed.metadata,
-    })
 }
 
 fn scenery_target_retention(
