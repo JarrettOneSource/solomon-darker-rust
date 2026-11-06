@@ -207,7 +207,9 @@ fn the_row_exporter_streams_a_read_only_database_into_the_checker() {
     let stored = [
         (41, 0, 3, profile.to_string()),
         (41, 1, 7, continuation.to_string()),
-        (42, 1, 2, r#"{"schemaVersion": 52, "profile": "CANARY"#.to_owned()),
+        // Player text is often not ASCII; the row must reach the checker, and its hash the
+        // exporter, as the stored UTF-8 bytes.
+        (42, 1, 2, r#"{"schemaVersion": 52, "profile": "CANARY Zoë 🧙"#.to_owned()),
     ];
     // The Website's table, created and filled by Python's own SQLite module.
     let created = Command::new(python)
@@ -219,7 +221,7 @@ fn the_row_exporter_streams_a_read_only_database_into_the_checker() {
              UserId INTEGER NOT NULL, Slot INTEGER NOT NULL, Revision INTEGER NOT NULL, \
              Document TEXT NOT NULL)')\n\
              db.executemany('INSERT INTO WebGameSaves (UserId, Slot, Revision, Document) \
-             VALUES (?, ?, ?, ?)', json.load(sys.stdin))\n\
+             VALUES (?, ?, ?, ?)', json.load(sys.stdin.buffer))\n\
              db.commit()",
         )
         .arg(&database)
@@ -251,6 +253,7 @@ fn the_row_exporter_streams_a_read_only_database_into_the_checker() {
     let (summary, stderr) = check(exported.stdout);
     assert_eq!(summary["totals"]["ok"], 2);
     assert_eq!(summary["totals"]["parseError"], 1);
+    assert_eq!(summary["errors"][0]["rows"][0]["sha256"], sha256(&stored[2].3));
     assert!(!summary.to_string().contains("CANARY"));
     assert_eq!(stderr, "");
 
