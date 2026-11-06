@@ -32,8 +32,7 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
     await startNewGame(page,{name:process.env.GENERATED_NAME==='1'?null:'Felix'});
     await shortcut(page,'Fomentius');await ui.widget(page,'panel:service');await settle(page);
     await screenshot(page,'service-fomentius-rust.png');
-    const healthOffer=(await ui.readUi(page)).widgets.find(widget=>widget.id.startsWith('panel:shop:')&&widget.label==='Buy Health Potion for 150 gold');
-    assert.ok(healthOffer,'the actual Health Potion shop offer is visible');
+    const healthOffer=await ui.byLabel(page,'Buy Health Potion for 150 gold',{prefix:'panel:shop:',role:'button',first:true});
     await ui.click(page,healthOffer.id);await settle(page);
     await item(page,'Health Potion, quantity 1');await gold(page,'500');
     await ui.click(page,healthOffer.id);await settle(page);
@@ -95,10 +94,11 @@ const rows = snapshot => snapshot.widgets.filter(widget=>widget.id.startsWith('p
       /POTIONS ARE FOR PEASANTS!\nActive\n/);
     await settle(page);
     await screenshot(page,'boast-progress-rust.png');
+    // Escape closes the whole Skills book from its Boast list ("Optional Inventory and
+    // Skills navigation" in docs/DECISIONS.md).
     await page.keyboard.press('Escape');await ui.noWidget(page,'panel:boast-progress');
-    await ui.widget(page,'panel:surface:skills');
-    await page.keyboard.press('Escape');await ui.noWidget(page,'panel:surface:skills');
-    checks.push('Skills exposes the accepted active Boast and Escape returns through its submenu');
+    await ui.noWidget(page,'panel:surface:boasts');await ui.noWidget(page,'panel:surface:skills');
+    checks.push('Skills exposes the accepted active Boast and Escape closes the whole book');
     await ui.assertGpuOnly(page);await ui.settleErrors(page);assert.deepEqual(observed.errors,[]);
     checks.push('all5 native boasts preserve frame/text geometry and accepted dialogue lifecycle');
     receipt.passed=true;
