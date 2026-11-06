@@ -65,16 +65,16 @@ impl Game {
         match SaveStore::open().await {
             Ok(store) => {
                 let stored = store.read().await;
-                self.save_store = Some(store);
+                self.local_save.open(store);
                 match stored {
                     Ok(Some(record)) => {
-                        self.save_revision = record.revision;
+                        self.local_save.set_revision(record.revision);
                         let restored = match save_document::decode(&record.document) {
                             Ok(checkpoint) => self.restore_checkpoint(checkpoint).await,
                             Err(error) => Err(error),
                         };
                         if let Err(error) = restored {
-                            self.save_error = Some(error.clone());
+                            self.local_save.fail(error.clone());
                             Self::show_storage_error(&error);
                         }
                     }
@@ -82,13 +82,13 @@ impl Game {
                         no_saved_game = true;
                     }
                     Err(error) => {
-                        self.save_error = Some(error.clone());
+                        self.local_save.fail(error.clone());
                         Self::show_storage_error(&error);
                     }
                 }
             }
             Err(error) => {
-                self.save_error = Some(error.clone());
+                self.local_save.fail(error.clone());
                 Self::show_storage_error(&error);
             }
         }

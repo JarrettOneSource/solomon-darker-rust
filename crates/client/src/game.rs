@@ -13,11 +13,14 @@ mod desktop;
 pub(crate) mod editor_test;
 mod hosted;
 mod hosted_save;
+mod local_save;
 mod native;
 mod social;
 mod spectator;
 pub(crate) mod tasks;
 mod ui_layers;
+use local_save::LocalSave;
+pub use local_save::PendingSave;
 use native::{CommandFeedback, NativeGame};
 use solomon_protocol::{ClientMessage, GameCommand};
 
@@ -97,8 +100,6 @@ const LOCAL_PLAYER_ID: &str = "local";
 const TICK_MILLISECONDS: f64 = 10.0;
 /// Longest stall the loop catches up on before dropping time (a tab that was in the background).
 const MAX_CATCH_UP_MILLISECONDS: f64 = 250.0;
-/// Request an autosave after thirty seconds of active simulation, the host's autosave interval.
-const AUTOSAVE_TICKS: u64 = 3000;
 
 /// Game-owned metadata from the last submitted UI frame. Input dispatch can advance
 /// the live menu between draws without changing the browser's rendered observation.
@@ -187,27 +188,9 @@ pub struct Game {
     pending_world: Option<LoadedBoneyard>,
     world_loading: bool,
     world_generation: u64,
-    save_store: Option<SaveStore>,
-    save_revision: u64,
-    save_requested: bool,
-    save_in_flight: bool,
-    last_saved_tick: u64,
-    save_error: Option<String>,
+    local_save: LocalSave,
     #[cfg(target_arch = "wasm32")]
     save_listeners: Vec<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>,
-}
-
-/// A save write to run asynchronously: the document, its store and the expected revision.
-pub struct PendingSave {
-    store: SaveStore,
-    revision: u64,
-    document: String,
-}
-
-impl PendingSave {
-    pub async fn write(self) -> Result<u64, String> {
-        self.store.write(self.document, self.revision).await
-    }
 }
 
 struct ActiveBattle {
@@ -382,12 +365,7 @@ impl Game {
                 pending_world: None,
                 world_loading: false,
                 world_generation: 0,
-                save_store: None,
-                save_revision: 0,
-                save_requested: false,
-                save_in_flight: false,
-                last_saved_tick: 0,
-                save_error: None,
+                local_save: LocalSave::default(),
                 #[cfg(target_arch = "wasm32")]
                 save_listeners: Vec::new(),
             };
@@ -1062,7 +1040,7 @@ impl Game {
             self.advance_session_ui(time)?;
         }
         self.refresh_hud();
-        if self.session.ticks.saturating_sub(self.last_saved_tick) >= AUTOSAVE_TICKS {
+        if self.local_save.autosave_due(self.session.ticks) {
             self.request_save();
         }
         self.update_overlays(time)?;
@@ -1122,11 +1100,10 @@ impl Game {
                 self.pending_world = None;
                 self.world_loading = false;
                 self.accumulator = 0.0;
-                if self.save_store.is_some() {
-                    self.save_error = None;
+                if self.local_save.has_store() {
                     set_status("");
                 }
-                self.last_saved_tick = 0;
+                self.local_save.start_new_game();
                 self.request_save();
                 self.panels.hide()?;
                 self.refresh_hud();
@@ -2027,21 +2004,19 @@ impl Game {
         self.local_player_id = local_player_id;
         self.battle = battle;
         self.has_game = true;
-        self.last_saved_tick = self.session.ticks;
+        self.local_save.restored_at(self.session.ticks);
         self.refresh_hud();
         self.update_combat_audio()?;
         Ok(())
     }
 
+    /// Offline games save locally; games on a native authority are saved by the host.
     pub fn request_save(&mut self) {
-        self.save_requested = self.has_game && self.native.is_none();
+        self.local_save.request(self.has_game && self.native.is_none());
     }
 
     pub fn take_save(&mut self) -> Option<PendingSave> {
-        if !self.save_requested || self.save_in_flight || self.save_error.is_some() {
-            return None;
-        }
-        let store = self.save_store.as_ref()?.clone();
+        let store = self.local_save.ready_store()?;
         let checkpoint = self.checkpoint()?;
         let document = match save_document::encode(&checkpoint) {
             Ok(document) => document,
@@ -2050,20 +2025,12 @@ impl Game {
                 return None;
             }
         };
-        self.save_requested = false;
-        self.save_in_flight = true;
-        self.last_saved_tick = self.session.ticks;
-        Some(PendingSave { store, revision: self.save_revision, document })
+        Some(self.local_save.begin(store, document, self.session.ticks))
     }
 
     pub fn save_completed(&mut self, result: Result<u64, String>) {
-        self.save_in_flight = false;
-        match result {
-            Ok(revision) => self.save_revision = revision,
-            Err(error) => {
-                Self::show_storage_error(&error);
-                self.save_error = Some(error);
-            }
+        if let Some(error) = self.local_save.finish(result) {
+            Self::show_storage_error(&error);
         }
     }
 
