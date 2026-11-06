@@ -1,6 +1,7 @@
 //! Draw plans for enemy projectiles and the shared DeathMagic layers. Secondary Dampen reuses
 //! these stock layers; `tests/secondary_presentation_goldens.rs` replays both.
 
+use super::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use crate::float;
 use crate::float::fround;
 use crate::spells::presentation::{SpellAtlas, SpellBlend};
@@ -13,24 +14,6 @@ pub struct EnemyEffectPresentationInput {
     pub rotation_radians: f64,
 }
 
-/// Which enemy projectile art a draw plan renders.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeEnemyProjectileKind {
-    Arrow,
-    Firebolt,
-    GuidedMissile,
-    DemonBomb,
-    PoisonPool,
-}
-/// Which payload variant of the projectile art to draw: normal, fire, poison, cold or none.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NativeEnemyProjectilePayload {
-    Normal,
-    Fire,
-    Poison,
-    Cold,
-    None,
-}
 /// The projectile state a draw plan needs: kind, payload, position, heading, age, lifetime, speed,
 /// and visual phase and scale.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,9 +21,9 @@ pub struct EnemyProjectileVisual {
     pub age_ticks: u64,
     pub heading_degrees: f64,
     pub id: u64,
-    pub kind: NativeEnemyProjectileKind,
+    pub kind: EnemyProjectileKind,
     pub lifetime_ticks: u64,
-    pub payload: NativeEnemyProjectilePayload,
+    pub payload: EnemyProjectilePayload,
     pub position: Vec2,
     pub speed: f64,
     pub vertical_offset: f64,
@@ -116,8 +99,8 @@ pub fn enemy_projectile_plan_at_age(
     let mut layers = Vec::new();
     let mut underlays = Vec::new();
     let mut streak = None;
-    use NativeEnemyProjectileKind as Kind;
-    use NativeEnemyProjectilePayload as Payload;
+    use EnemyProjectileKind as Kind;
+    use EnemyProjectilePayload as Payload;
     match projectile.kind {
         Kind::Arrow => {
             let payload = match projectile.payload {

@@ -10,8 +10,7 @@ use solomon_sim::enemies::boss_spell::BossSpellKind;
 use solomon_sim::enemies::death_presentation::enemy_death_effect_plan_with_input;
 use solomon_sim::enemies::model::{DeathPresentationOwner, EnemyBrain, SpiderPhase};
 use solomon_sim::enemies::presentation::{
-    EnemyEffectPresentationInput, EnemyProjectileVisual, NativeEnemyProjectileKind,
-    NativeEnemyProjectilePayload, enemy_projectile_plan_at_age,
+    EnemyEffectPresentationInput, EnemyProjectileVisual, enemy_projectile_plan_at_age,
 };
 use solomon_sim::enemies::projectile_presentation::{
     enemy_projectile_effect_bypasses_world_tint, enemy_projectile_effect_plan_with_input,
@@ -178,21 +177,9 @@ impl EnemyView {
                     .copied()
                     .unwrap_or(state.heading_deg),
                 id: state.id as u64,
-                kind: match projectile.kind() {
-                    EnemyProjectileKind::Arrow => NativeEnemyProjectileKind::Arrow,
-                    EnemyProjectileKind::DemonBomb => NativeEnemyProjectileKind::DemonBomb,
-                    EnemyProjectileKind::Firebolt => NativeEnemyProjectileKind::Firebolt,
-                    EnemyProjectileKind::GuidedMissile => NativeEnemyProjectileKind::GuidedMissile,
-                    EnemyProjectileKind::PoisonPool => NativeEnemyProjectileKind::PoisonPool,
-                },
+                kind: projectile.kind(),
                 lifetime_ticks: state.lifetime_ticks,
-                payload: match state.payload {
-                    EnemyProjectilePayload::Cold => NativeEnemyProjectilePayload::Cold,
-                    EnemyProjectilePayload::Fire => NativeEnemyProjectilePayload::Fire,
-                    EnemyProjectilePayload::None => NativeEnemyProjectilePayload::None,
-                    EnemyProjectilePayload::Normal => NativeEnemyProjectilePayload::Normal,
-                    EnemyProjectilePayload::Poison => NativeEnemyProjectilePayload::Poison,
-                },
+                payload: state.payload,
                 position: state.position,
                 speed: state.speed,
                 vertical_offset: state.vertical_offset,

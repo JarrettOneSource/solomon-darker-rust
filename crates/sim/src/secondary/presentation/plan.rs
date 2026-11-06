@@ -13,9 +13,9 @@ use super::weather::{
 };
 use super::*;
 use crate::enemies::presentation::{
-    EnemyProjectileVisual, NativeEnemyProjectileKind, NativeEnemyProjectilePayload,
-    death_magic_layers, enemy_projectile_plan,
+    EnemyProjectileVisual, death_magic_layers, enemy_projectile_plan,
 };
+use crate::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use crate::float;
 use crate::float::{fround, hypot};
 use crate::secondary::SecondaryActorKind as Kind;
@@ -738,15 +738,15 @@ fn dampened_projectile_draws(
                 heading_degrees: actor.rotation_radians * 180.0 / std::f64::consts::PI,
                 id: actor.target_id.map_or(actor.id, |id| id as u64),
                 kind: if actor.variant == 0 {
-                    NativeEnemyProjectileKind::Firebolt
+                    EnemyProjectileKind::Firebolt
                 } else {
-                    NativeEnemyProjectileKind::GuidedMissile
+                    EnemyProjectileKind::GuidedMissile
                 },
                 lifetime_ticks: 400,
                 payload: match actor.variant {
-                    1 => NativeEnemyProjectilePayload::Poison,
-                    2 => NativeEnemyProjectilePayload::Cold,
-                    _ => NativeEnemyProjectilePayload::Fire,
+                    1 => EnemyProjectilePayload::Poison,
+                    2 => EnemyProjectilePayload::Cold,
+                    _ => EnemyProjectilePayload::Fire,
                 },
                 position: Vec2::ZERO,
                 speed: hypot(actor.velocity.x, actor.velocity.y),
