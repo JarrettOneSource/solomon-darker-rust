@@ -59,7 +59,7 @@ impl GameSession {
     ) -> BTreeMap<String, GameSessionInput> {
         let mut admitted = BTreeMap::new();
         for id in &self.participant_order {
-            let participant = &self.participants.get(id).expect("participant exists");
+            let participant = &self.participants[id];
             let mut input = inputs.get(id).copied().unwrap_or_default();
             if participant.player.progression.pending_offer.is_some()
                 || !participant.player.combat.can_accept_input()
@@ -97,7 +97,7 @@ impl GameSession {
         id: &str,
         mut input: GameSessionInput,
     ) -> GameSessionInput {
-        let player = &self.participants.get(id).expect("participant exists").player;
+        let player = &self.participants[id].player;
         let category =
             input.quickbar.and_then(|slot| player.belt.entries.get(slot)).and_then(|entry| {
                 match entry {
@@ -268,7 +268,12 @@ impl GameSession {
                     && previous != participant.player.book.primary_skill_id
                 {
                     let selected = if skill_id == 52 {
-                        participant.player.book.weld_build_id.expect("selected Weld has a build")
+                        participant
+                            .player
+                            .book
+                            .weld_build_id
+                            .expect("selected Weld has a build")
+                            .id()
                     } else {
                         skill_id as u32
                     };

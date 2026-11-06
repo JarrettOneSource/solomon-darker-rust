@@ -13,6 +13,7 @@ use solomon_sim::ml_bot::world_state::MlBotPolicyCommittedAction;
 use solomon_sim::ml_bot::{
     MlBotPolicyControllerKind, MlBotPolicyFrame, MlBotPolicyObservationContext, MlBotPolicyObserver,
 };
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::session::{GameSessionInput, GameSessionTickContext};
 
 #[path = "../../sim/tests/support/mod.rs"]
@@ -240,7 +241,8 @@ fn source_legal_masks_and_all_action_heads_preserve_the_interpreted_intent() {
             player.book.primary_skill_id = id as usize;
         }
         if patch.get("weld").is_some() {
-            player.book.weld_build_id = patch["weld"].as_u64().map(|id| id as u32);
+            player.book.weld_build_id =
+                patch["weld"].as_u64().map(|id| WeldBuildId::try_from(id as u32).unwrap());
         }
         if patch["continuing"] == true {
             frame.player.block_a[6] = 1.0;

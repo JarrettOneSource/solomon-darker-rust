@@ -106,7 +106,7 @@ impl PreparedModHost {
         // effects and pickups use the same sample even if an attack kills a player.
         let mut players = Vec::new();
         for id in &game.participant_order {
-            let participant = &game.participants.get(id).expect("participant exists");
+            let participant = &game.participants[id];
             if participant.player.combat.life_state == PlayerLifeState::Alive {
                 players.push(ModActorPlayer {
                     id: id.clone(),

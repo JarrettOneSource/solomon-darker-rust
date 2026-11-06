@@ -1,4 +1,5 @@
 use serde_json::{Value, json};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::earth_debris::WeldMeteorDebrisSeed;
 use solomon_sim::spells::weld::*;
 use solomon_sim::{Rng, Vec2};
@@ -29,7 +30,7 @@ fn random(rng: &Rng) -> Value {
 
 fn common_row(common: &WeldActorBase) -> Value {
     json!({
-        "ageTicks":common.owner.age_ticks,"birthTick":common.birth_tick,"buildId":common.build_id,
+        "ageTicks":common.owner.age_ticks,"birthTick":common.birth_tick,"buildId":common.build_id.id(),
         "direction":point(common.direction),"id":common.owner.id,"origin":point(common.origin),
         "ownerId":common.owner.owner_id,"vector":common.vector,"worldKey":common.owner.world_key,
         "lightRegistration":common.owner.light_registration.map(|registration| json!({
@@ -125,7 +126,7 @@ fn compare_steam_actor(actual: &Value, expected: &Value, path: &str, weak: bool)
 
 fn steam_birth<'a>(input: &Value, values: &'a [f64]) -> WeldActorBirth<'a> {
     WeldActorBirth {
-        build_id: 1005,
+        build_id: WeldBuildId::SteamJet,
         direction: vector(&input["direction"]),
         id: input["id"].as_u64().unwrap(),
         origin: vector(&input["origin"]),
@@ -265,7 +266,7 @@ fn meteor_marker_fall_impact_pulses_and_retirement_match_the_native_program() {
             .map(|value| value.as_f64().unwrap())
             .collect();
         let birth = WeldActorBirth {
-            build_id: 1007,
+            build_id: WeldBuildId::MeteorSwarm,
             direction: vector(&input["direction"]),
             id: input["id"].as_u64().unwrap(),
             origin: vector(&input["origin"]),

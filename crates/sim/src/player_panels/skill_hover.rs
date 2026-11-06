@@ -134,7 +134,7 @@ pub fn skill_picker_detail_lines(option: &PlayerSkillOfferOption) -> Vec<SkillHo
     let mut lines =
         skill_book_tooltip_lines(option.skill_id, option.target_rank, option.target_rank);
     if let Some(build_id) = option.weld_build_id {
-        let build = weld_build(build_id).expect("offered native weld build");
+        let build = weld_build(build_id);
         for line in &mut lines {
             match line.kind {
                 SkillHoverLineKind::Title => {

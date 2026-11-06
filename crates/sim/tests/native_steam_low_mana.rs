@@ -1,6 +1,7 @@
 //! Instruction-derived contract: retail 0x00543266 grants normal Steam contacts
 //! independently of the low-mana byte.
 
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::weld::*;
 use solomon_sim::{Rng, Vec2};
 
@@ -9,7 +10,7 @@ fn particle(seed: i64, weak: bool) -> (WeldSteamActorState, Rng) {
     let actor = spawn_weld_steam_actor(
         SpawnWeldSteamInput {
             birth: WeldActorBirth {
-                build_id: 1005,
+                build_id: WeldBuildId::SteamJet,
                 direction: Vec2::new(1.0, 0.0),
                 id: 1,
                 origin: Vec2::ZERO,
@@ -125,13 +126,13 @@ fn steam_cast_rate_scales_funded_damage_and_debit_but_not_weak_strength() {
                     damage_roll_count: 1.0,
                     mana_cost: 20.0,
                     rank: 1,
-                    skill_id: 1005,
+                    skill_id: WeldBuildId::SteamJet.id(),
                 },
-                build_id: 1005,
+                build_id: WeldBuildId::SteamJet,
                 cast_kind: WeldCastKind::Channel,
                 damage_factor: boost,
                 vector: WeldPrimaryVector {
-                    build_id: 1005,
+                    build_id: WeldBuildId::SteamJet,
                     cast_kind: WeldCastKind::Channel,
                     values: vec![400.0, 20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 },

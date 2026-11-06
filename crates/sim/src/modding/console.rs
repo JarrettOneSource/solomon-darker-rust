@@ -13,6 +13,7 @@ use crate::combat::PlayerLifeState;
 use crate::enemies::EnemyToken;
 use crate::enemies::model::EnemyLifeState;
 use crate::game_run::GameRunPhase;
+use crate::profile::WeldBuildId;
 use crate::session::GameSession;
 
 use super::{LuaObject, LuaValue};
@@ -134,7 +135,7 @@ pub enum WebLuaCommand {
         skill_id: u32,
     },
     GrantWeld {
-        build_id: u32,
+        build_id: WeldBuildId,
         player_id: String,
     },
     RestoreHealth {
@@ -201,7 +202,7 @@ pub fn create_web_lua_frame_state(
 ) -> WebLuaFrameState {
     let mut players = Vec::new();
     for id in &game.participant_order {
-        let participant = &game.participants.get(id).expect("participant exists");
+        let participant = &game.participants[id];
         let player = &participant.player;
         let life = match player.combat.life_state {
             PlayerLifeState::Alive => "alive",

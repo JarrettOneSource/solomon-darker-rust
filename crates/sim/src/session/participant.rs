@@ -37,7 +37,7 @@ pub struct SessionParticipant {
 impl SessionParticipant {
     pub(super) fn selected_primary_id(&self) -> u32 {
         if self.player.book.primary_skill_id == 52 {
-            self.player.book.weld_build_id.expect("selected Weld has its build")
+            self.player.book.weld_build_id.expect("selected Weld has its build").id()
         } else {
             self.player.book.primary_skill_id as u32
         }

@@ -16,6 +16,7 @@ use solomon_sim::enemies::model::EnemyBrain;
 use solomon_sim::enemies::puppet_hits::{EnemyPuppetHit, EnemyPuppetHitKind};
 use solomon_sim::float::fround;
 use solomon_sim::game_run::GameRunPhase;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::session::GameSession;
 
 use super::PresentationClocks;
@@ -30,7 +31,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
         .participant_order
         .iter()
         .map(|id| {
-            let participant = &session.participants.get(id).expect("participant exists");
+            let participant = &session.participants[id];
             WorldLightPlayer {
                 id,
                 position: participant.wizard.position,
@@ -78,7 +79,7 @@ pub(super) fn capture_enemies(session: &GameSession) -> Option<EnemyPresentation
                 position: participant.wizard.position,
                 primary_tint: solomon_sim::profile::primary::primary_spell_tint(
                     participant.player.book.primary_skill_id,
-                    participant.player.book.weld_build_id,
+                    participant.player.book.weld_build_id.map(WeldBuildId::id),
                 ),
             }),
             pike_target_position,

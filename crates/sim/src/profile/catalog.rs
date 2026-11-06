@@ -1,7 +1,7 @@
 //! Stock skill definitions, Weld builds and skill acquisition rules.
 //! Values are extracted without rounding; profile-goldens.json pins every row.
 
-use super::{SkillDefinition, SkillProperty, SkillRule, SkillValue, WeldBuild};
+use super::{SkillDefinition, SkillProperty, SkillRule, SkillValue, WeldBuild, WeldBuildId};
 
 pub const SKILL_CATALOG: [SkillDefinition; 83] = [
     SkillDefinition {
@@ -2178,7 +2178,7 @@ pub const SKILL_CATALOG: [SkillDefinition; 83] = [
 
 pub const WELD_BUILDS: [WeldBuild; 10] = [
     WeldBuild {
-        id: 1000,
+        id: WeldBuildId::BurningBolt,
         color_roots: [0, 1],
         component_skill_ids: [8, 16, 10, 18, 9, 17],
         primary_skill_ids: [8, 16],
@@ -2187,7 +2187,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Burning Bolt",
     },
     WeldBuild {
-        id: 1001,
+        id: WeldBuildId::FrostMissile,
         color_roots: [0, 3],
         component_skill_ids: [8, 32, 10, 34, 9, 33],
         primary_skill_ids: [8, 32],
@@ -2196,7 +2196,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Frost Missile",
     },
     WeldBuild {
-        id: 1002,
+        id: WeldBuildId::BallLightning,
         color_roots: [0, 2],
         component_skill_ids: [8, 24, 10, 25, 9, 26],
         primary_skill_ids: [8, 24],
@@ -2205,7 +2205,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Ball Lightning",
     },
     WeldBuild {
-        id: 1003,
+        id: WeldBuildId::FlameLash,
         color_roots: [2, 1],
         component_skill_ids: [16, 24, 18, 25, 17, 26],
         primary_skill_ids: [16, 24],
@@ -2214,7 +2214,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Flame Lash",
     },
     WeldBuild {
-        id: 1004,
+        id: WeldBuildId::BlizzardBeam,
         color_roots: [2, 3],
         component_skill_ids: [32, 24, 34, 25, 33, 26],
         primary_skill_ids: [32, 24],
@@ -2223,7 +2223,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Blizzard Beam",
     },
     WeldBuild {
-        id: 1005,
+        id: WeldBuildId::SteamJet,
         color_roots: [3, 1],
         component_skill_ids: [16, 32, 18, 34, 17, 33],
         primary_skill_ids: [16, 32],
@@ -2232,7 +2232,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Steam Jet",
     },
     WeldBuild {
-        id: 1006,
+        id: WeldBuildId::EtherealBoulder,
         color_roots: [0, 4],
         component_skill_ids: [8, 40, 10, 43, 9, 42],
         primary_skill_ids: [8, 40],
@@ -2241,7 +2241,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Ethereal Boulder",
     },
     WeldBuild {
-        id: 1007,
+        id: WeldBuildId::MeteorSwarm,
         color_roots: [4, 1],
         component_skill_ids: [16, 40, 18, 43, 17, 42],
         primary_skill_ids: [16, 40],
@@ -2250,7 +2250,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Meteor Swarm",
     },
     WeldBuild {
-        id: 1008,
+        id: WeldBuildId::Hailstones,
         color_roots: [4, 3],
         component_skill_ids: [32, 40, 34, 43, 33, 42],
         primary_skill_ids: [32, 40],
@@ -2259,7 +2259,7 @@ pub const WELD_BUILDS: [WeldBuild; 10] = [
         synthetic_name: "Hailstones",
     },
     WeldBuild {
-        id: 1009,
+        id: WeldBuildId::CrawlingShock,
         color_roots: [4, 2],
         component_skill_ids: [24, 40, 25, 43, 26, 42],
         primary_skill_ids: [24, 40],

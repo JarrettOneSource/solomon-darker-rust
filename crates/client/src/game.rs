@@ -13,13 +13,18 @@ mod desktop;
 pub(crate) mod editor_test;
 mod hosted;
 mod hosted_save;
+mod local_save;
 mod native;
 mod social;
 mod spectator;
 pub(crate) mod tasks;
 mod ui_layers;
+mod world_load;
+use local_save::LocalSave;
+pub use local_save::PendingSave;
 use native::{CommandFeedback, NativeGame};
 use solomon_protocol::{ClientMessage, GameCommand};
+use world_load::WorldLoad;
 
 use crate::battle::{BattleFrame, BattlePlayer, BattleScene, BattleViews};
 use crate::college_intro::CollegeIntroOverlay;
@@ -97,8 +102,6 @@ const LOCAL_PLAYER_ID: &str = "local";
 const TICK_MILLISECONDS: f64 = 10.0;
 /// Longest stall the loop catches up on before dropping time (a tab that was in the background).
 const MAX_CATCH_UP_MILLISECONDS: f64 = 250.0;
-/// Request an autosave after thirty seconds of active simulation, the host's autosave interval.
-const AUTOSAVE_TICKS: u64 = 3000;
 
 /// Game-owned metadata from the last submitted UI frame. Input dispatch can advance
 /// the live menu between draws without changing the browser's rendered observation.
@@ -184,30 +187,10 @@ pub struct Game {
     input_belt_press_count: u64,
     accumulator: f64,
     last_time: Option<f64>,
-    pending_world: Option<LoadedBoneyard>,
-    world_loading: bool,
-    world_generation: u64,
-    save_store: Option<SaveStore>,
-    save_revision: u64,
-    save_requested: bool,
-    save_in_flight: bool,
-    last_saved_tick: u64,
-    save_error: Option<String>,
+    world_load: WorldLoad,
+    local_save: LocalSave,
     #[cfg(target_arch = "wasm32")]
     save_listeners: Vec<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::Event)>>,
-}
-
-/// A save write to run asynchronously: the document, its store and the expected revision.
-pub struct PendingSave {
-    store: SaveStore,
-    revision: u64,
-    document: String,
-}
-
-impl PendingSave {
-    pub async fn write(self) -> Result<u64, String> {
-        self.store.write(self.document, self.revision).await
-    }
 }
 
 struct ActiveBattle {
@@ -379,15 +362,8 @@ impl Game {
                 hud_state: HudState::new_game(),
                 accumulator: 0.0,
                 last_time: None,
-                pending_world: None,
-                world_loading: false,
-                world_generation: 0,
-                save_store: None,
-                save_revision: 0,
-                save_requested: false,
-                save_in_flight: false,
-                last_saved_tick: 0,
-                save_error: None,
+                world_load: WorldLoad::default(),
+                local_save: LocalSave::default(),
                 #[cfg(target_arch = "wasm32")]
                 save_listeners: Vec::new(),
             };
@@ -500,7 +476,7 @@ impl Game {
                 },
                 navigation,
             });
-            self.world_loading = false;
+            self.world_load.finish();
             self.apply_native_frame(frame, Some(loaded))?;
             // An observer loads the world without claiming
             // participant readiness or changing that participant's pause barrier.
@@ -515,7 +491,7 @@ impl Game {
             scene: BattleScene { scenery, lights, weather, compact_masks, compact_frame_count: 0 },
             navigation,
         });
-        self.world_loading = false;
+        self.world_load.finish();
         self.accumulator = 0.0;
         self.menu.hide()?;
         self.request_save();
@@ -524,15 +500,15 @@ impl Game {
     }
 
     pub fn take_world_load(&mut self) -> Option<(u64, LoadedBoneyard)> {
-        self.pending_world.take().map(|world| (self.world_generation, world))
+        self.world_load.take_queued()
     }
 
     pub fn world_load_current(&self, generation: u64) -> bool {
-        self.world_generation == generation
+        self.world_load.is_current(generation)
     }
 
     pub fn world_load_failed(&mut self, error: &str) {
-        self.world_loading = false;
+        self.world_load.finish();
         self.match_loading = None;
         set_status(error);
     }
@@ -757,12 +733,7 @@ impl Game {
             }
         }
         if self.has_game {
-            let player = &self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .player;
+            let player = &self.session.participants[&self.local_player_id].player;
             let derived = player.derived_stats();
             let offensive = derived.offensive_factors(&player.skill_runtime);
             let concentrations = [
@@ -798,20 +769,8 @@ impl Game {
                     concentrations: &concentrations,
                     mind_chug_active: player.progression.mind_chug_ticks_remaining > 0,
                     perk_removal_enabled: self.session.boneyard.is_none(),
-                    kills: self
-                        .session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .score
-                        .monsters_killed,
-                    awesomeness: self
-                        .session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .score
-                        .awesomeness,
+                    kills: self.session.participants[&self.local_player_id].score.monsters_killed,
+                    awesomeness: self.session.participants[&self.local_player_id].score.awesomeness,
                 },
                 time,
                 self.surface.logical_width(),
@@ -869,7 +828,7 @@ impl Game {
             || self.menu.is_blocking()
             || self.panels.is_open()
             || self.skill_selection_active()
-            || self.world_loading
+            || self.world_load.is_loading()
             || self.match_loading.is_some()
             || !self.has_game;
         for slot in self.input.take_belt_unassignments() {
@@ -916,7 +875,7 @@ impl Game {
                 quickbar: input.quickbar,
                 viewport: self.scene_view().1.logical_size,
             },
-            self.native_gameplay_held() || self.world_loading || !self.has_game,
+            self.native_gameplay_held() || self.world_load.is_loading() || !self.has_game,
         )?;
         self.update_spectator_camera(self.input.take_spectator_camera_advances());
         self.input_aim = self.project_input_aim(input.aim);
@@ -924,13 +883,7 @@ impl Game {
         for slot in &input.belt_pressed {
             // Held skills execute during the fixed tick; item activation is a press edge.
             if !matches!(
-                self.session
-                    .participants
-                    .get(&self.local_player_id)
-                    .expect("participant exists")
-                    .player
-                    .belt
-                    .entries[*slot],
+                self.session.participants[&self.local_player_id].player.belt.entries[*slot],
                 Some(NativeBeltEntry::Skill { .. })
             ) {
                 self.activate_belt_slot(*slot, None, time)?;
@@ -964,18 +917,8 @@ impl Game {
                 GameplayAction::Interact if self.session.boneyard.is_none() => {
                     if !self.open_hub_player(None)
                         && let Some(interaction) = nearest_hub_interaction(
-                            self.session
-                                .participants
-                                .get(&self.local_player_id)
-                                .expect("participant exists")
-                                .wizard
-                                .region,
-                            self.session
-                                .participants
-                                .get(&self.local_player_id)
-                                .expect("participant exists")
-                                .wizard
-                                .position,
+                            self.session.participants[&self.local_player_id].wizard.region,
+                            self.session.participants[&self.local_player_id].wizard.position,
                             self.interaction_availability(),
                         )
                     {
@@ -1062,7 +1005,7 @@ impl Game {
             self.advance_session_ui(time)?;
         }
         self.refresh_hud();
-        if self.session.ticks.saturating_sub(self.last_saved_tick) >= AUTOSAVE_TICKS {
+        if self.local_save.autosave_due(self.session.ticks) {
             self.request_save();
         }
         self.update_overlays(time)?;
@@ -1118,15 +1061,12 @@ impl Game {
                 self.reset_world_views()?;
                 self.has_game = true;
                 self.session.arm_college_intro(&self.local_player_id);
-                self.world_generation += 1;
-                self.pending_world = None;
-                self.world_loading = false;
+                self.world_load.cancel();
                 self.accumulator = 0.0;
-                if self.save_store.is_some() {
-                    self.save_error = None;
+                if self.local_save.has_store() {
                     set_status("");
                 }
-                self.last_saved_tick = 0;
+                self.local_save.start_new_game();
                 self.request_save();
                 self.panels.hide()?;
                 self.refresh_hud();
@@ -1209,14 +1149,7 @@ impl Game {
         self.skill_picker.is_open()
             || self
                 .has_game
-                .then(|| {
-                    self.session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .player
-                        .as_ref()
-                })
+                .then(|| self.session.participants[&self.local_player_id].player.as_ref())
                 .is_some_and(|player| player.progression.pending_offer.is_some())
     }
 
@@ -1224,7 +1157,7 @@ impl Game {
         // Gameplay pause applies only in a Boneyard. In the Hub, panels seal the local
         // input, while the College's students, NPCs and onboarding keep ticking.
         !self.has_game
-            || self.world_loading
+            || self.world_load.is_loading()
             || self.menu.covers_world()
             || self.skill_selection_active()
             || (self.session.boneyard.is_some()
@@ -1255,7 +1188,7 @@ impl Game {
             && !self.social.input_active()
             && !self.menu.is_blocking()
             && !self.menu.settings_open()
-            && !self.world_loading
+            && !self.world_load.is_loading()
             && self.match_loading.is_none()
             && !self.skill_selection_active()
             && self.session.level_up_barrier.is_none()
@@ -1298,18 +1231,8 @@ impl Game {
         let Some(entry) = solomon_sim::hall_of_fame::completed_hall_of_fame_entry(
             &world.loaded.run_id,
             self.session.run.phase,
-            &self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .score,
-            &self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .player,
+            &self.session.participants[&self.local_player_id].score,
+            &self.session.participants[&self.local_player_id].player,
             world.waves.as_ref().map_or(0, |waves| waves.state.wave_ordinal),
             crate::platform::iso_now(),
         ) else {
@@ -1347,7 +1270,7 @@ impl Game {
         if self.native.is_some() {
             return self.native_start_run(tutorial);
         }
-        if self.world_loading {
+        if self.world_load.is_loading() {
             return Ok(());
         }
         let mut seed = [0; 16];
@@ -1357,9 +1280,7 @@ impl Game {
         } else {
             solomon_assets::boneyard::load_boneyard(seed)
         }?;
-        self.world_generation += 1;
-        self.pending_world = Some(loaded);
-        self.world_loading = true;
+        self.world_load.start(loaded);
         self.begin_match_loading(MatchLoadingFlow::Boneyard, MatchLoadingStage::MaterializingWorld);
         set_status("Loading Boneyard…");
         Ok(())
@@ -1369,11 +1290,7 @@ impl Game {
         // Only the host may start a Boneyard. A follower's ignored request
         // must never create a loading screen that no accepted world can complete.
         self.session.can_enter_boneyard()
-            && !self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
+            && !self.session.participants[&self.local_player_id]
                 .player
                 .economy
                 .college_intro_pending
@@ -1398,7 +1315,7 @@ impl Game {
     fn update_match_loading(&mut self, now: f64) -> Result<(), String> {
         if let Some(loading) = &mut self.match_loading {
             let admitted = self.has_game && self.native.as_ref().is_none_or(NativeGame::is_playing);
-            let prepared = !self.world_loading
+            let prepared = !self.world_load.is_loading()
                 && !self.menu.is_create_pending()
                 && self
                     .hosted
@@ -1424,15 +1341,11 @@ impl Game {
     }
 
     fn college_loadout_pending(&self) -> bool {
-        self.session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .wizard
-            .transition
-            .is_some_and(|transition| {
+        self.session.participants[&self.local_player_id].wizard.transition.is_some_and(
+            |transition| {
                 transition.phase == solomon_sim::hub::regions::HubTransitionPhase::CollegeLoadout
-            })
+            },
+        )
     }
 
     fn advance_session_ui(&mut self, now: f64) -> Result<(), String> {
@@ -1443,26 +1356,12 @@ impl Game {
         if self.session.run.phase == GameRunPhase::Loadout || self.college_loadout_pending() {
             if !self.menu.is_blocking() {
                 self.menu.show_loadout(
-                    &self
-                        .session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .player
-                        .selection
-                        .name,
+                    &self.session.participants[&self.local_player_id].player.selection.name,
                 )?;
             }
-        } else if self
-            .session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .college_intro
-            .is_some_and(|intro| {
-                intro.phase == solomon_sim::hub::college_intro::CollegeIntroPhase::ArchDialogue
-            })
-            && !self.panels.is_open()
+        } else if self.session.participants[&self.local_player_id].college_intro.is_some_and(
+            |intro| intro.phase == solomon_sim::hub::college_intro::CollegeIntroPhase::ArchDialogue,
+        ) && !self.panels.is_open()
         {
             self.open_hub_dialogue(HubInteractionId::ArchChancellor, now)?;
         }
@@ -1471,7 +1370,7 @@ impl Game {
 
     fn observe_skill_book_feedback(&mut self, now: f64) -> Result<(), String> {
         if !self.has_game
-            || self.world_loading
+            || self.world_load.is_loading()
             || self.is_hosted_observer()
             || matches!(self.session.run.phase, GameRunPhase::Loadout | GameRunPhase::GameOver)
         {
@@ -1513,7 +1412,7 @@ impl Game {
             .iter()
             .zip(&world_keys)
             .map(|(id, world_key)| {
-                let participant = &session.participants.get(id).expect("participant exists");
+                let participant = &session.participants[id];
                 CombatAudioPlayer {
                     id,
                     world_key,
@@ -1547,13 +1446,7 @@ impl Game {
             camera.origin.y + viewport.logical_size.y / (2.0 * camera.scale),
         );
         let width = viewport.logical_size.x / camera.scale;
-        let alternate = session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .player
-            .combat
-            .life_state
+        let alternate = session.participants[&self.local_player_id].player.combat.life_state
             != solomon_sim::combat::PlayerLifeState::Alive;
         let point_gain = |point| {
             solomon_sim::region_feedback::region_point_gain(point, center, width, alternate)
@@ -1591,11 +1484,7 @@ impl Game {
         let college_admission = self.has_game
             && !self.menu.covers_world()
             && self.session.boneyard.is_none()
-            && self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
+            && self.session.participants[&self.local_player_id]
                 .player
                 .economy
                 .college_intro_pending;
@@ -1631,24 +1520,14 @@ impl Game {
         self.hud.set_action_enabled(HudAction::Pause, self.can_pause())?;
         self.hud.set_action_enabled(HudAction::Map, self.can_start_boneyard())?;
         self.hud.set_quickbar_player(
-            self.has_game.then(|| {
-                self.session
-                    .participants
-                    .get(&self.local_player_id)
-                    .expect("participant exists")
-                    .player
-                    .as_ref()
-            }),
+            self.has_game.then(|| self.session.participants[&self.local_player_id].player.as_ref()),
             self.session.secondary.players.get(&self.local_player_id),
             &self.menu.settings().controls,
             self.session.boneyard.is_none(),
         )?;
         self.hud.update(&self.hud_state, width, height)?;
         self.college_overlay.update(
-            self.session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
+            self.session.participants[&self.local_player_id]
                 .college_intro
                 .as_ref()
                 .filter(|_| !self.menu.covers_world()),
@@ -1678,12 +1557,7 @@ impl Game {
             self.session.boneyard.as_ref().filter(|_| !self.menu.covers_world()).map(|world| {
                 TutorialFrame {
                     world,
-                    player: &self
-                        .session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .player,
+                    player: &self.session.participants[&self.local_player_id].player,
                     wizard: self.session.wizard(&self.local_player_id).expect("local participant"),
                     camera: &camera,
                     settings: self.menu.settings(),
@@ -1726,14 +1600,7 @@ impl Game {
         // A restored offer waits behind Continue; it must not cover the title screen.
         let player = self
             .has_game
-            .then(|| {
-                self.session
-                    .participants
-                    .get(&self.local_player_id)
-                    .expect("participant exists")
-                    .player
-                    .as_ref()
-            })
+            .then(|| self.session.participants[&self.local_player_id].player.as_ref())
             .filter(|_| !self.menu.covers_world());
         self.skill_picker.update(
             player.and_then(|player| player.progression.pending_offer.as_ref()),
@@ -2027,21 +1894,19 @@ impl Game {
         self.local_player_id = local_player_id;
         self.battle = battle;
         self.has_game = true;
-        self.last_saved_tick = self.session.ticks;
+        self.local_save.restored_at(self.session.ticks);
         self.refresh_hud();
         self.update_combat_audio()?;
         Ok(())
     }
 
+    /// Offline games save locally; games on a native authority are saved by the host.
     pub fn request_save(&mut self) {
-        self.save_requested = self.has_game && self.native.is_none();
+        self.local_save.request(self.has_game && self.native.is_none());
     }
 
     pub fn take_save(&mut self) -> Option<PendingSave> {
-        if !self.save_requested || self.save_in_flight || self.save_error.is_some() {
-            return None;
-        }
-        let store = self.save_store.as_ref()?.clone();
+        let store = self.local_save.ready_store()?;
         let checkpoint = self.checkpoint()?;
         let document = match save_document::encode(&checkpoint) {
             Ok(document) => document,
@@ -2050,20 +1915,12 @@ impl Game {
                 return None;
             }
         };
-        self.save_requested = false;
-        self.save_in_flight = true;
-        self.last_saved_tick = self.session.ticks;
-        Some(PendingSave { store, revision: self.save_revision, document })
+        Some(self.local_save.begin(store, document, self.session.ticks))
     }
 
     pub fn save_completed(&mut self, result: Result<u64, String>) {
-        self.save_in_flight = false;
-        match result {
-            Ok(revision) => self.save_revision = revision,
-            Err(error) => {
-                Self::show_storage_error(&error);
-                self.save_error = Some(error);
-            }
+        if let Some(error) = self.local_save.finish(result) {
+            Self::show_storage_error(&error);
         }
     }
 
@@ -2084,12 +1941,7 @@ impl Game {
         {
             return Ok(());
         }
-        let player = &self
-            .session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .player;
+        let player = &self.session.participants[&self.local_player_id].player;
         let Some(entry) = player.belt.entries.get(slot).copied().flatten() else {
             return Ok(());
         };
@@ -2152,15 +2004,7 @@ impl Game {
             self.menu.settings().camera_fov_percent,
         );
         let world_size = session.boneyard.as_ref().map_or_else(
-            || {
-                session
-                    .participants
-                    .get(&self.local_player_id)
-                    .expect("participant exists")
-                    .wizard
-                    .region
-                    .size()
-            },
+            || session.participants[&self.local_player_id].wizard.region.size(),
             |run| Vec2::new(run.loaded.scene.bounds.width, run.loaded.scene.bounds.height),
         );
         let viewport = solomon_sim::viewport::bounded_game_viewport(size, world_size, zoom);
@@ -2168,18 +2012,8 @@ impl Game {
         let origin = session.boneyard.as_ref().map_or_else(
             || {
                 hub_region_camera_origin_for_view(
-                    session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .wizard
-                        .region,
-                    session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .wizard
-                        .position,
+                    session.participants[&self.local_player_id].wizard.region,
+                    session.participants[&self.local_player_id].wizard.position,
                     viewport.logical_size,
                     scale,
                 )
@@ -2240,15 +2074,8 @@ impl Game {
             || self.menu.is_blocking()
             || self.skill_selection_active()
             || self.native_gameplay_held()
-            || self.world_loading
-            || self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .wizard
-                .transition
-                .is_some()
+            || self.world_load.is_loading()
+            || self.session.participants[&self.local_player_id].wizard.transition.is_some()
         {
             return Ok(());
         }
@@ -2263,12 +2090,7 @@ impl Game {
         }
         let availability = self.interaction_availability();
         let Some(interaction) = hub_interaction_at_point(
-            self.session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .wizard
-                .region,
+            self.session.participants[&self.local_player_id].wizard.region,
             point,
             availability,
         ) else {
@@ -2276,18 +2098,8 @@ impl Game {
         };
         if hub_interaction_within_range(
             interaction,
-            self.session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .wizard
-                .region,
-            self.session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .wizard
-                .position,
+            self.session.participants[&self.local_player_id].wizard.region,
+            self.session.participants[&self.local_player_id].wizard.position,
             availability,
         ) {
             self.open_hub_dialogue(interaction, now)?;
@@ -2313,14 +2125,7 @@ impl Game {
                 .map(|skorcha| skorcha.variant),
             story_office: self
                 .has_game
-                .then(|| {
-                    self.session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .player
-                        .as_ref()
-                })
+                .then(|| self.session.participants[&self.local_player_id].player.as_ref())
                 .is_some_and(|player| player.economy.college_intro_pending),
         }
     }
@@ -2329,21 +2134,9 @@ impl Game {
         if !self.has_game {
             return Ok(());
         }
-        let player = &self
-            .session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .player;
+        let player = &self.session.participants[&self.local_player_id].player;
         if self.session.boneyard.is_some()
-            || self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .wizard
-                .transition
-                .is_some()
+            || self.session.participants[&self.local_player_id].wizard.transition.is_some()
         {
             return Ok(());
         }
@@ -2362,15 +2155,9 @@ impl Game {
             random_index,
         };
         if interaction == HubInteractionId::ArchChancellor
-            && self
-                .session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .college_intro
-                .is_some_and(|intro| {
-                    intro.phase == solomon_sim::hub::college_intro::CollegeIntroPhase::ArchDialogue
-                })
+            && self.session.participants[&self.local_player_id].college_intro.is_some_and(|intro| {
+                intro.phase == solomon_sim::hub::college_intro::CollegeIntroPhase::ArchDialogue
+            })
         {
             self.panels.show_college_intro_dialogue(context, &player.economy.npc, now)
         } else {
@@ -2384,12 +2171,7 @@ impl Game {
             self.menu.set_mobile_editor_secondary(None);
             return;
         }
-        let player = &self
-            .session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .player;
+        let player = &self.session.participants[&self.local_player_id].player;
         let secondary = self.session.secondary.players.get(&self.local_player_id);
         self.menu.set_mobile_editor_player(Some(player), self.session.boneyard.is_none());
         self.menu.set_mobile_editor_secondary(secondary);
@@ -2648,8 +2430,7 @@ impl Game {
             self.clear_world_frame();
             return Ok(());
         }
-        let player =
-            &session.participants.get(&self.local_player_id).expect("participant exists").player;
+        let player = &session.participants[&self.local_player_id].player;
         prepare_local_wizard(
             &mut self.renderer,
             &mut self.wizard_view,
@@ -2715,13 +2496,7 @@ impl Game {
         // Drawing the world needed `self` mutably, so borrow the displayed session again;
         // the world draws leave it unchanged.
         let session = DisplayedSession::of(self.native.as_ref(), &self.session).session;
-        if let Some(transition) = session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .wizard
-            .transition
-        {
+        if let Some(transition) = session.participants[&self.local_player_id].wizard.transition {
             self.renderer.draw_solid(
                 [0.0, 0.0, viewport.x as f32, viewport.y as f32],
                 [0.0, 0.0, 0.0, transition.alpha as f32],
@@ -2824,7 +2599,7 @@ impl Game {
         let camera_focus = self.boneyard_camera_focus();
         // Keep one level-up view, the one driven by this client's picker.
         self.level_up.retain(|id, _| id == &self.local_player_id);
-        let local = &session.participants.get(&self.local_player_id).expect("participant exists");
+        let local = &session.participants[&self.local_player_id];
         let level_up = self.level_up.entry(self.local_player_id.clone()).or_default().sample(
             &world.loaded.run_id,
             &local.player,
@@ -2896,8 +2671,7 @@ impl Game {
     ) -> Result<(), String> {
         let DisplayedSession { session, presentation_tick, clocks, .. } =
             DisplayedSession::of(self.native.as_ref(), &self.session);
-        let player =
-            &session.participants.get(&self.local_player_id).expect("participant exists").player;
+        let player = &session.participants[&self.local_player_id].player;
         let host = self.native.as_ref().and_then(NativeGame::host_snapshot);
         let overlay_players = world_overlay_players(session, host, &self.local_player_id);
         let WorldCamera { camera, viewport, camera_center, screen_feedback } = view;
@@ -2906,12 +2680,7 @@ impl Game {
             camera_center,
             base_camera.scale,
             viewport,
-            session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .wizard
-                .position,
+            session.participants[&self.local_player_id].wizard.position,
             if self.menu.settings().zoom_effects { screen_feedback.camera_magnitude } else { 0.0 },
         );
         let displacement = if self.menu.settings().zoom_effects {
@@ -2952,14 +2721,7 @@ impl Game {
             teacher_view: &self.teacher_view,
             npc_view: &self.npc_view,
         };
-        if session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .wizard
-            .region
-            .is_private()
-        {
+        if session.participants[&self.local_player_id].wizard.region.is_private() {
             draw_private_room(
                 &mut self.renderer,
                 &self.rooms,
@@ -3114,12 +2876,7 @@ fn prepare_local_wizard(
             .boneyard
             .as_ref()
             .and_then(|world| world.enemies.webbed_players.get(local_player_id).copied()),
-        overlay_effect_phase: session
-            .participants
-            .get(local_player_id)
-            .expect("participant exists")
-            .lighting
-            .overlay_effect_phase,
+        overlay_effect_phase: session.participants[local_player_id].lighting.overlay_effect_phase,
         // Active Boneyard actions are sampled per participant by BattleViews.
         staff_action_pose: None,
         complex_lighting: menu.settings().complex_lighting,
@@ -3139,13 +2896,12 @@ fn world_overlay_players<'a>(
     host: Option<&'a solomon_protocol::HostSnapshot>,
     local_player_id: &str,
 ) -> Vec<WorldOverlayPlayer<'a>> {
-    let local_region =
-        session.participants.get(local_player_id).expect("participant exists").wizard.region;
+    let local_region = session.participants[local_player_id].wizard.region;
     session
         .participant_order
         .iter()
         .filter_map(|id| {
-            let participant = &session.participants.get(id).expect("participant exists");
+            let participant = &session.participants[id];
             if session.boneyard.is_none() && participant.wizard.region != local_region {
                 return None;
             }
@@ -3177,7 +2933,7 @@ fn battle_players<'a>(
         .participant_order
         .iter()
         .map(|id| {
-            let participant = &session.participants.get(id).expect("participant exists");
+            let participant = &session.participants[id];
             let lighting = &participant.lighting;
             BattlePlayer {
                 id,
@@ -3212,15 +2968,9 @@ fn hub_region_players<'a>(
     session
         .participant_order
         .iter()
-        .map(|id| session.participants.get(id).expect("participant exists"))
+        .map(|id| &session.participants[id])
         .filter(|participant| {
-            participant.wizard.region
-                == session
-                    .participants
-                    .get(local_player_id)
-                    .expect("participant exists")
-                    .wizard
-                    .region
+            participant.wizard.region == session.participants[local_player_id].wizard.region
         })
         .collect()
 }
@@ -3272,11 +3022,7 @@ fn draw_private_room(
         renderer,
         camera,
         &PrivateRoomFrame {
-            local_wizard: &session
-                .participants
-                .get(local_player_id)
-                .expect("participant exists")
-                .wizard,
+            local_wizard: &session.participants[local_player_id].wizard,
             player_painters,
             tick: session.ticks,
             dowser_frame: session.dowser_clock.frame(),
@@ -3331,16 +3077,7 @@ fn draw_courtyard(
     let npc_painters = npc_view.painters(&session.npcs);
     spell_view.prepare(
         &session.spells,
-        &format!(
-            "hub:{}",
-            session
-                .participants
-                .get(local_player_id)
-                .expect("participant exists")
-                .wizard
-                .region
-                .id()
-        ),
+        &format!("hub:{}", session.participants[local_player_id].wizard.region.id()),
         session.ticks,
         &|_| 1.0,
         &[],
@@ -3400,7 +3137,7 @@ fn draw_courtyard(
         renderer,
         camera,
         &session.ambient,
-        session.participants.get(local_player_id).expect("participant exists").wizard.position.y,
+        session.participants[local_player_id].wizard.position.y,
         &ActorPainters { layers: &actors, owner_overlays: &overlays, live_views: &live_views },
         |renderer, pass| match pass {
             CourtyardPass::Actor(index) => {
@@ -3468,12 +3205,12 @@ fn draw_courtyard_actor(
             npc_view.draw_courtyard_marker(
                 renderer,
                 camera,
-                session
-                    .participants
-                    .get(local_player_id)
-                    .expect("participant exists")
-                    .marker_epoch
-                    .frame(HubInteractionId::Teacher, session.ticks, marker_availability, None),
+                session.participants[local_player_id].marker_epoch.frame(
+                    HubInteractionId::Teacher,
+                    session.ticks,
+                    marker_availability,
+                    None,
+                ),
             );
         }
     } else if index < spell_start {
@@ -3483,12 +3220,12 @@ fn draw_courtyard_actor(
             npc_view.draw_courtyard_marker(
                 renderer,
                 camera,
-                session
-                    .participants
-                    .get(local_player_id)
-                    .expect("participant exists")
-                    .marker_epoch
-                    .frame(id, session.ticks, marker_availability, None),
+                session.participants[local_player_id].marker_epoch.frame(
+                    id,
+                    session.ticks,
+                    marker_availability,
+                    None,
+                ),
             );
         }
     } else {

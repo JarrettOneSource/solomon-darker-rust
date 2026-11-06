@@ -592,7 +592,7 @@ impl Game {
             code,
             solomon_protocol::HostErrorCode::CommandRejected
                 | solomon_protocol::HostErrorCode::RunInProgress
-        ) && !self.world_loading
+        ) && !self.world_load.is_loading()
             && self.session.boneyard.is_none()
             && self.match_loading.is_some_and(|loading| loading.flow == MatchLoadingFlow::Boneyard)
         {
@@ -688,9 +688,7 @@ impl Game {
         native.presentation.reset();
         native.display = None;
         native.leave_request = None;
-        self.world_generation += 1;
-        self.pending_world = None;
-        self.world_loading = false;
+        self.world_load.cancel();
         self.panels.reset()?;
         if observing {
             self.menu.show_dark_cloud()?;
@@ -970,9 +968,7 @@ impl Game {
                     let native = self.native.as_mut().unwrap();
                     native.waiting_boneyard_frame = Some(received);
                     if native.pending_snapshot.take().is_some() {
-                        self.world_generation += 1;
-                        self.pending_world = None;
-                        self.world_loading = false;
+                        self.world_load.cancel();
                     }
                     return Ok(());
                 };
@@ -982,9 +978,7 @@ impl Game {
                 )?;
                 let loaded = loaded.clone();
                 self.reset_native_world_ui()?;
-                self.pending_world = Some(loaded);
-                self.world_generation += 1;
-                self.world_loading = true;
+                self.world_load.start(loaded);
                 self.begin_match_loading(
                     MatchLoadingFlow::Boneyard,
                     MatchLoadingStage::MaterializingWorld,
@@ -994,11 +988,9 @@ impl Game {
             self.native.as_mut().unwrap().pending_snapshot = Some(received);
             return Ok(());
         }
-        if incoming_run.is_none() && (self.battle.is_some() || self.world_loading) {
+        if incoming_run.is_none() && (self.battle.is_some() || self.world_load.is_loading()) {
             self.reset_native_world_ui()?;
-            self.world_generation += 1;
-            self.pending_world = None;
-            self.world_loading = false;
+            self.world_load.cancel();
             self.native.as_mut().unwrap().pending_snapshot = None;
             self.reset_world_views()?;
         }
@@ -1068,15 +1060,8 @@ impl Game {
         if joining || reattached {
             native.phase = NativePhase::Playing;
         }
-        native.selection = Some(
-            self.session
-                .participants
-                .get(&self.local_player_id)
-                .expect("participant exists")
-                .player
-                .selection
-                .clone(),
-        );
+        native.selection =
+            Some(self.session.participants[&self.local_player_id].player.selection.clone());
         native.presentation.push(
             &self.session,
             received.received_at_ms,
@@ -1093,13 +1078,7 @@ impl Game {
             frame.host,
             self.session.level_up_barrier.is_some(),
         )?;
-        let intro_active = self
-            .session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .college_intro
-            .is_some();
+        let intro_active = self.session.participants[&self.local_player_id].college_intro.is_some();
         if !intro_active {
             native.college_ready = false;
         }
@@ -1175,14 +1154,7 @@ impl Game {
             match feedback {
                 CommandFeedback::CollegeIntro if receipt.accepted => {
                     native.college_ready = false;
-                    if self
-                        .session
-                        .participants
-                        .get(&self.local_player_id)
-                        .expect("participant exists")
-                        .college_intro
-                        .is_some()
-                    {
+                    if self.session.participants[&self.local_player_id].college_intro.is_some() {
                         native
                             .connection
                             .as_ref()
@@ -1262,7 +1234,7 @@ impl Game {
         let social_open = self.social.input_active();
         let cheats_open = self.cheats.is_open();
         let native = self.native.as_mut().unwrap();
-        if native.phase != NativePhase::Playing || self.world_loading {
+        if native.phase != NativePhase::Playing || self.world_load.is_loading() {
             return Ok(());
         }
         let connection = native.connection.as_mut().ok_or("The game connection closed")?;
@@ -1313,12 +1285,7 @@ impl Game {
             connection.send(&ClientMessage::ResumeReady { sequence: grace.sequence })?;
             native.resume_ready_snapshot = Some(connection.snapshot_sequence);
         }
-        let player = &self
-            .session
-            .participants
-            .get(&self.local_player_id)
-            .expect("participant exists")
-            .player;
+        let player = &self.session.participants[&self.local_player_id].player;
         let held = connection.host.pause.is_some()
             || connection.host.resume_grace.is_some()
             || connection.host.loading_run_id.is_some()

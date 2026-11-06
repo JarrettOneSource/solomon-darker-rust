@@ -8,8 +8,8 @@ use super::*;
 use crate::float::fround;
 use crate::hub::HubWizard;
 use crate::painter::WorldPainterOrder;
-use crate::profile::WizardElement;
 use crate::profile::primary::PrimarySkillProfile;
+use crate::profile::{WeldBuildId, WizardElement};
 use crate::spells::model::{PrimarySpellTickResult, PrimarySpellTransient, SpellState};
 use crate::spells::projectiles::emitter;
 use crate::spells::simulation::{
@@ -46,17 +46,20 @@ impl SpellState {
             vector: &profile.vector.values,
             world_key: context.world_key,
         };
-        if matches!(profile.build_id, 1003..=1005) {
-            let flame_camera = if profile.build_id == 1003 {
+        if matches!(
+            profile.build_id,
+            WeldBuildId::FlameLash | WeldBuildId::BlizzardBeam | WeldBuildId::SteamJet
+        ) {
+            let flame_camera = if profile.build_id == WeldBuildId::FlameLash {
                 draw_flame_camera_displacement(rng, underpowered)
             } else {
                 None
             };
-            let lightning = (profile.build_id == 1003)
+            let lightning = (profile.build_id == WeldBuildId::FlameLash)
                 .then(|| air_geometry(wizard, origin, direction, context));
             let mut endpoint = lightning.as_ref().map(|geometry| geometry.0);
             let mut terrain_contact = false;
-            if profile.build_id == 1004 {
+            if profile.build_id == WeldBuildId::BlizzardBeam {
                 let view_endpoint = (context.range_endpoint)(origin, direction, 100.0);
                 let obstruction = (context.obstruction)(
                     wizard.position,
@@ -67,8 +70,11 @@ impl SpellState {
                 endpoint = Some(obstruction.unwrap_or(view_endpoint));
                 terrain_contact = obstruction.is_some();
             }
-            let steam_cast_factor =
-                if profile.build_id == 1005 { authority.cast_progress_factor } else { 1.0 };
+            let steam_cast_factor = if profile.build_id == WeldBuildId::SteamJet {
+                authority.cast_progress_factor
+            } else {
+                1.0
+            };
             let mut emission = channel_emission(
                 self.next_id,
                 authority.primary_skill,
@@ -103,10 +109,10 @@ impl SpellState {
             emission.terrain_contact = terrain_contact;
             let channel_damage = emission.damage;
             result.channel_emissions.push(emission);
-            if profile.build_id == 1003 {
+            if profile.build_id == WeldBuildId::FlameLash {
                 // Receiver damage and terminal dispatch precede the factory birth.
                 self.next_id += 1;
-            } else if profile.build_id == 1005 {
+            } else if profile.build_id == WeldBuildId::SteamJet {
                 let obstruction = |start, end| {
                     (context.obstruction)(start, end, None, PRIMARY_CAST_TERRAIN_EXCLUSION_MASK)
                 };
@@ -158,9 +164,17 @@ impl SpellState {
                 wizard.primary_cast.target_id = geometry.2;
             }
         } else {
-            assert!(matches!(profile.build_id, 1006..=1008), "persistent Weld build");
+            assert!(
+                matches!(
+                    profile.build_id,
+                    WeldBuildId::EtherealBoulder
+                        | WeldBuildId::MeteorSwarm
+                        | WeldBuildId::Hailstones
+                ),
+                "persistent Weld build"
+            );
             let mut meteor_program = None;
-            if profile.build_id == 1007 {
+            if profile.build_id == WeldBuildId::MeteorSwarm {
                 let center = weld_meteor_target_point(wizard.position, direction);
                 let marker =
                     spawn_weld_meteor_marker(WeldActorBirth { origin: center, ..birth }, rng);
@@ -206,7 +220,10 @@ impl SpellState {
                     WeldActorBirth { id: self.next_id, ..birth },
                     Some(order),
                 );
-                if matches!(profile.build_id, 1006 | 1008) {
+                if matches!(
+                    profile.build_id,
+                    WeldBuildId::EtherealBoulder | WeldBuildId::Hailstones
+                ) {
                     wizard.primary_cast.last_weld_playback_rate =
                         Some(fround(1.5 - rng.draw_scaled_float(0.5_f32 as f64, false)));
                 }
@@ -262,7 +279,7 @@ impl SpellState {
                 wizard.primary_cast.channel_active = false;
                 wizard.primary_cast.target_id = None;
             }
-            if profile.build_id == 1007
+            if profile.build_id == WeldBuildId::MeteorSwarm
                 && selected_age.is_some_and(|age| {
                     age.is_multiple_of(weld_meteor_cadence_ticks(
                         authority.cast_progress_factor,

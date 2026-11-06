@@ -3,6 +3,7 @@
 use super::model::{WeldActorBase, WeldActorBirth};
 use crate::float::{fround, hypot};
 use crate::heading::heading_degrees_from_vector;
+use crate::profile::WeldBuildId;
 use crate::spells::fire::FireExplosionState;
 use crate::spells::model::FireExplosionPresentation;
 use crate::spells::targeting::direction_from_heading;
@@ -231,7 +232,7 @@ pub fn create_weld_steam_detonation(
                 }
                 velocity.y = fround(velocity.y * 0.8_f32 as f64);
                 let birth = WeldActorBirth {
-                    build_id: 1005,
+                    build_id: WeldBuildId::SteamJet,
                     direction,
                     id: input.first_fragment_id + fragments.len() as u64,
                     origin: input.origin,

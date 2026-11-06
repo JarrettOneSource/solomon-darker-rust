@@ -1,4 +1,5 @@
 use serde_json::Value;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::profile::primary::{
     PrimarySkillProfile, PrimarySkillProfileBase, WeldPrimarySkillProfile,
 };
@@ -6,7 +7,7 @@ use solomon_sim::profile::weld::{WeldCastKind, WeldPrimaryVector};
 
 pub fn profile(value: &Value) -> PrimarySkillProfile {
     let number = |key: &str| value[key].as_f64().unwrap();
-    let build_id = value["buildId"].as_u64().unwrap() as u32;
+    let build_id = WeldBuildId::try_from(value["buildId"].as_u64().unwrap() as u32).unwrap();
     let cast_kind = match value["castKind"].as_str().unwrap() {
         "channel" => WeldCastKind::Channel,
         "persistent" => WeldCastKind::Persistent,

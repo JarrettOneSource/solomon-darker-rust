@@ -53,7 +53,7 @@ impl SessionEtherDrainSnapshot {
             }
         }
         for id in &session.participant_order {
-            let participant = &session.participants.get(id).expect("participant exists");
+            let participant = &session.participants[id];
             if participant.player.combat.life_state == PlayerLifeState::Spectating
                 || participant.player.combat.corpse_consumed
             {

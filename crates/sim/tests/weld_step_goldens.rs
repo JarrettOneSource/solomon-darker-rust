@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 use solomon_sim::hub::HubWizard;
 use solomon_sim::painter::WorldPainterOrder;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::casting::PlayerWeaponKind;
 use solomon_sim::spells::model::SpellState;
 use solomon_sim::spells::targeting::{
@@ -167,7 +168,7 @@ fn all_ten_weld_casts_preserve_native_mana_clocks_queues_and_world_epochs() {
 // mana, animation, held growth, damage pools and scene teardown epochs.
 fn qualify_boulder_motion(frame: &mut Value, terrain_after_release: bool) {
     for actor in frame["spells"]["transients"].as_array_mut().unwrap() {
-        if actor["build"] != 1006 {
+        if actor["build"] != WeldBuildId::EtherealBoulder.id() {
             continue;
         }
         if actor["kind"] != "weld-persistent" {

@@ -3,6 +3,7 @@
 //! acquisition5F28A0 and movement/contact-before-guidance621450.
 use solomon_sim::float::fround;
 use solomon_sim::painter::WorldPainterOrder;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::targeting::{
     PrimarySpellQueryLane, PrimarySpellTarget, PrimarySpellTargetKind,
 };
@@ -30,7 +31,7 @@ fn target(id: &str, x: f64, y: f64, order: usize) -> PrimarySpellTarget {
 fn birth(quantity: u32, smart: f64) -> WeldPersistentActorState {
     create_weld_persistent_actor(
         WeldActorBirth {
-            build_id: 1006,
+            build_id: WeldBuildId::EtherealBoulder,
             direction: Vec2::new(1.0, 0.0),
             id: 100,
             origin: Vec2::ZERO,

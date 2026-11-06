@@ -175,7 +175,7 @@ impl Game {
             self.editor_test = Some(EditorTestPhase::Starting);
         } else if phase == EditorTestPhase::Starting
             && self.session.boneyard.is_some()
-            && !self.world_loading
+            && !self.world_load.is_loading()
         {
             self.editor_test = Some(EditorTestPhase::Playing);
             post(json!({"type":"solomon-editor-test-state","state":"playing"}))?;
@@ -192,9 +192,7 @@ impl Game {
         self.native = Some(NativeGame::idle());
         self.editor_test = Some(EditorTestPhase::Disposed);
         self.has_game = false;
-        self.pending_world = None;
-        self.world_generation += 1;
-        self.world_loading = false;
+        self.world_load.cancel();
         self.match_loading = None;
         self.audio.stop_effects()?;
         self.audio.set_music_paused(true)?;

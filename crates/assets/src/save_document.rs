@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 use solomon_sim::boneyard::{BoneyardWorld, LoadedBoneyard};
 use solomon_sim::heading::HEADING_COUNT;
-use solomon_sim::profile::{SKILL_ROW_COUNT, weld_build};
+use solomon_sim::profile::SKILL_ROW_COUNT;
 use solomon_sim::session::{GameCheckpoint, SessionParticipant};
 
 // Schema 2 replaces the single local player and world-owned wizard with ordered
@@ -177,7 +177,6 @@ pub fn validate_participant(participant: &SessionParticipant) -> Result<(), Stri
         || book.element_root >= 8
         || book.discipline_root >= 8
         || book.learned_skill_order.iter().any(|id| *id >= SKILL_ROW_COUNT)
-        || book.weld_build_id.is_some_and(|id| weld_build(id).is_none())
         || (book.primary_skill_id == 52 && book.weld_build_id.is_none())
     {
         return Err("The saved skill book contains an invalid skill".into());
@@ -343,6 +342,12 @@ mod tests {
             *broken.pointer_mut(pointer).unwrap() = invalid;
             assert!(decode(&broken.to_string()).is_err(), "accepted {pointer}");
         }
+        let mut unknown_weld = value.clone();
+        *unknown_weld
+            .pointer_mut("/checkpoint/participants/ally/player/book/weld_build_id")
+            .unwrap() = serde_json::json!(1010);
+        let error = decode(&unknown_weld.to_string()).unwrap_err();
+        assert!(error.contains("unknown Weld build ID 1010"), "{error}");
         let legacy = r#"{"schema_version":1,"checkpoint":{"player":{}}}"#;
         assert_eq!(decode(legacy).unwrap_err(), "Save format 1 is not supported by this build");
         let mut nonfinite = checkpoint;
@@ -358,7 +363,7 @@ mod tests {
         let mut session = fresh_session();
         let held = create_weld_persistent_actor(
             WeldActorBirth {
-                build_id: 1006,
+                build_id: solomon_sim::profile::WeldBuildId::EtherealBoulder,
                 direction: Vec2::new(1.0, 0.0),
                 id: 1,
                 origin: Vec2::new(120.0, 200.0),

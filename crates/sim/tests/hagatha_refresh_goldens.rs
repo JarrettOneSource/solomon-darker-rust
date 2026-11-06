@@ -5,7 +5,7 @@ mod support;
 use serde_json::{Value, json};
 use solomon_sim::Rng;
 use solomon_sim::player::PlayerState;
-use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{NewGameSelection, WeldBuildId, WizardDiscipline, WizardElement};
 
 #[path = "support/player_snapshot.rs"]
 mod player_snapshot;
@@ -22,7 +22,7 @@ fn snapshot(player: &PlayerState, rng: &Rng, granted: Option<usize>) -> Value {
             "learnedSkillOrder": book.learned_skill_order,
             "permanentRanks": &book.permanent_ranks[..],
             "primarySkillId": book.primary_skill_id,
-            "weldBuildId": book.weld_build_id,
+            "weldBuildId": book.weld_build_id.map(WeldBuildId::id),
             "weldComponentRanks": book.weld_component_ranks,
         },
         "belt": player.belt.entries.map(|entry| entry.map(|entry| match entry {

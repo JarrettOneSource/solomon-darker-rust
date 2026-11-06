@@ -7,7 +7,7 @@ use solomon_sim::boneyard::{
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::modding::{LuaValue, identity::GameContentManifest};
-use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{NewGameSelection, WeldBuildId, WizardDiscipline, WizardElement};
 use solomon_sim::session::{GameSession, GameSessionInput, GameSessionOptions};
 use std::collections::BTreeMap;
 use std::fs;
@@ -123,14 +123,8 @@ fn source_run_archive_living_retention_lifecycle_and_performance_windows_are_exa
                 let recorded = snapshot(&base, &operation["state"]);
                 state.ticks = recorded.checkpoint.ticks;
                 for id in &state.participant_order {
-                    state.participants.get_mut(id).unwrap().player.combat.life_state = recorded
-                        .checkpoint
-                        .participants
-                        .get(id)
-                        .expect("participant exists")
-                        .player
-                        .combat
-                        .life_state;
+                    state.participants.get_mut(id).unwrap().player.combat.life_state =
+                        recorded.checkpoint.participants[id].player.combat.life_state;
                 }
                 recorder.checkpoint(&state, &loaded(operation["run"].as_str().unwrap()));
             }
@@ -232,7 +226,7 @@ fn boulder_archive() -> Value {
     let mut document: Value = serde_json::from_slice(&bytes).unwrap();
     let held = create_weld_persistent_actor(
         WeldActorBirth {
-            build_id: 1006,
+            build_id: WeldBuildId::EtherealBoulder,
             direction: Vec2::new(1.0, 0.0),
             id: 41,
             origin: Vec2::new(120.0, 200.0),

@@ -79,7 +79,7 @@ pub fn skill_picker_panel(count: usize) -> HudRect {
 pub fn skill_picker_card(option: &PlayerSkillOfferOption) -> SkillPickerCard {
     let skill = &SKILL_CATALOG[option.skill_id];
     let weld = if option.skill_id == SPELL_WELDING_SKILL_ID {
-        Some(weld_build(option.weld_build_id.expect("offered weld build")).expect("native weld"))
+        Some(weld_build(option.weld_build_id.expect("offered weld build")))
     } else {
         assert!(option.weld_build_id.is_none(), "ordinary choice has no weld build");
         None

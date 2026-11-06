@@ -34,6 +34,7 @@ use solomon_sim::painter::overlays::PainterOwnerOverlay;
 use solomon_sim::player::PlayerState;
 use solomon_sim::player_presentation::LevelUpPresentationFrame;
 use solomon_sim::presentation::{native_puppet_hit_tint, player_material_tint};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::screen_feedback::{present_secondary_screen_overlay, secondary_world_shake};
 use solomon_sim::secondary::presentation::{SecondaryAtlas, SecondaryBlend, SecondarySpriteDraw};
 use solomon_sim::secondary::{
@@ -589,7 +590,7 @@ impl BattleViews {
                 position: player.wizard.position,
                 primary_tint: solomon_sim::profile::primary::primary_spell_tint(
                     player.player.book.primary_skill_id,
-                    player.player.book.weld_build_id,
+                    player.player.book.weld_build_id.map(WeldBuildId::id),
                 ),
             })
             .collect();

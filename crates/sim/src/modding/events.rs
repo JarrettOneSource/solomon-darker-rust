@@ -94,7 +94,7 @@ impl GameSimulationEventSnapshot {
     pub fn capture(state: &GameSession) -> Self {
         let mut players = Vec::with_capacity(state.participant_order.len());
         for id in &state.participant_order {
-            let player = &state.participants.get(id).expect("participant exists").player;
+            let player = &state.participants[id].player;
             players.push(PlayerEventSnapshot {
                 id: id.clone(),
                 gold: player.economy.gold,

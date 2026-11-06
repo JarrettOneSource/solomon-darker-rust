@@ -3,6 +3,7 @@
 //! updates the real enemy before the next query.
 
 use super::*;
+use crate::profile::WeldBuildId;
 
 impl ContactWork<'_, '_> {
     pub(super) fn resolve_weld_persistent_contacts(&mut self) {
@@ -267,7 +268,7 @@ impl ContactWork<'_, '_> {
             if meteor.impact_due {
                 let effects = self.detonate_weld_fire(
                     WeldActorBirth {
-                        build_id: 1007,
+                        build_id: WeldBuildId::MeteorSwarm,
                         direction: meteor.common.direction,
                         id: self.next_id,
                         origin: meteor.position,

@@ -29,7 +29,7 @@ impl GameSession {
             if !cohort.iter().any(|participant| participant == id) {
                 continue;
             }
-            let player = &self.participants.get(id).expect("participant exists").player;
+            let player = &self.participants[id].player;
             let amount = boneyard_enemy_experience_award(
                 reward.experience,
                 cohort.len() as u32,

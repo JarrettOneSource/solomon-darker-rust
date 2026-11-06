@@ -92,6 +92,8 @@
   An enemy's private stream selects a candidate category; constructing the candidate
   advances the shared stream.
 - **Weld**: a combination of two elemental primary spells.
+- **Weld build**: one of the ten authored Welds, such as Flame Lash, identified by the
+  original game's build ID 1000–1009 (`WeldBuildId`).
 - **Belt**: three banks of eight slots for skills and items.
 - **Tutorial stage**: one of twenty progression states in the authored Tutorial.
 - **Narration**: timed Tutorial voice cues; playback does not advance simulation time.

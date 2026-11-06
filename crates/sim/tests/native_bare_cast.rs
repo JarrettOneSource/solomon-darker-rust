@@ -6,7 +6,7 @@ use solomon_sim::float::fround;
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::profile::offensive::OffensiveSpellFactors;
 use solomon_sim::profile::primary::{PrimarySkillProfile, primary_skill_profile};
-use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
+use solomon_sim::profile::{SkillBookState, WeldBuildId, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::{SecondaryCastAction, step_secondary_cast_action};
 use solomon_sim::spells::casting::{PlayerPrimaryCastState, PlayerWeaponKind};
 use solomon_sim::spells::hand_cast::HandCast1;
@@ -14,7 +14,7 @@ use solomon_sim::spells::model::SpellState;
 use solomon_sim::spells::{PrimarySpellCastAuthority, PrimarySpellInput, PrimarySpellWorldContext};
 use solomon_sim::{HubWizard, Rng, Vec2};
 
-fn profile(element: WizardElement, weld: Option<u32>) -> PrimarySkillProfile {
+fn profile(element: WizardElement, weld: Option<WeldBuildId>) -> PrimarySkillProfile {
     let mut book = SkillBookState::new(element, WizardDiscipline::Arcane);
     if let Some(build) = weld {
         book.grant_weld_build(build);
@@ -124,11 +124,11 @@ fn born_bare_rates_marker_and_terminal_tick_follow_the_retail_program() {
     for (element, weld, multiplier) in [
         (WizardElement::Ether, None, 1.0),
         (WizardElement::Fire, None, 0.75),
-        (WizardElement::Ether, Some(1000), 0.87_f32 as f64),
-        (WizardElement::Ether, Some(1001), 1.0),
-        (WizardElement::Ether, Some(1002), 1.3_f32 as f64),
+        (WizardElement::Ether, Some(WeldBuildId::BurningBolt), 0.87_f32 as f64),
+        (WizardElement::Ether, Some(WeldBuildId::FrostMissile), 1.0),
+        (WizardElement::Ether, Some(WeldBuildId::BallLightning), 1.3_f32 as f64),
         // grant_weld_build retains native rank-zero Earth Speed Up=50.
-        (WizardElement::Ether, Some(1009), 1.5),
+        (WizardElement::Ether, Some(WeldBuildId::CrawlingShock), 1.5),
     ] {
         let profile = profile(element, weld);
         let rate = fround(fround(0.095_f32 as f64 * 1.5) * multiplier);

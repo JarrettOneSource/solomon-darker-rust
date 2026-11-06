@@ -2,6 +2,7 @@
 
 use crate::Vec2;
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use crate::profile::WeldBuildId;
 use crate::spells::model::PrimarySpellTransientBase;
 
 /// What every Weld world actor shares: its transient identity, birth tick, build,
@@ -13,7 +14,7 @@ pub struct WeldActorBase {
     /// Reuse its owner so ticking, painter enrollment and contact IDs stay shared.
     pub owner: PrimarySpellTransientBase,
     pub birth_tick: u64,
-    pub build_id: u32,
+    pub build_id: WeldBuildId,
     pub direction: Vec2,
     pub origin: Vec2,
     pub vector: Vec<f64>,
@@ -23,7 +24,7 @@ pub struct WeldActorBase {
 /// manager registrations exist; a plain effect has no logical light provider.
 #[derive(Clone, Copy)]
 pub struct WeldActorBirth<'a> {
-    pub build_id: u32,
+    pub build_id: WeldBuildId,
     pub direction: Vec2,
     pub id: u64,
     pub origin: Vec2,

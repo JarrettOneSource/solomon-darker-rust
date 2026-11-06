@@ -2,6 +2,7 @@
 //! Harden enums. No wrapper tags are written to disk: each live actor has one flat `kind`.
 
 use serde_json::{Value, json};
+use solomon_sim::profile::WeldBuildId;
 
 pub(super) fn route(name: &str, value: &Value) -> Option<&'static str> {
     let kind = value["kind"].as_str()?;
@@ -35,12 +36,15 @@ pub(super) fn route(name: &str, value: &Value) -> Option<&'static str> {
             kind if kind.starts_with("weld-hail-") => Some("HailChild"),
             _ => None,
         },
-        "WeldPersistentActorState" => match value["buildId"].as_u64() {
-            Some(1006) => Some("EtherealBoulder"),
-            Some(1007) => Some("MeteorField"),
-            Some(1008) => Some("Hailstones"),
-            _ => None,
-        },
+        "WeldPersistentActorState" => {
+            let build = value["buildId"].as_u64().and_then(|id| u32::try_from(id).ok())?;
+            match WeldBuildId::try_from(build) {
+                Ok(WeldBuildId::EtherealBoulder) => Some("EtherealBoulder"),
+                Ok(WeldBuildId::MeteorSwarm) => Some("MeteorField"),
+                Ok(WeldBuildId::Hailstones) => Some("Hailstones"),
+                _ => None,
+            }
+        }
         "WeldHailChildActorState" => match kind {
             "weld-hail-flash" => Some("Flash"),
             "weld-hail-knockback" => Some("Knockback"),

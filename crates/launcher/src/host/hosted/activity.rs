@@ -349,7 +349,7 @@ pub(super) fn project_game_activity(state: &GameSession) -> GameActivitySnapshot
             .participant_order
             .iter()
             .map(|id| {
-                let participant = &state.participants.get(id).expect("participant exists");
+                let participant = &state.participants[id];
                 let player = &participant.player;
                 GameActivityPlayer {
                     current_health: player.combat.current_health,

@@ -27,7 +27,7 @@ pub(super) fn project_players(
     // newer snapshot is dropped at the endpoint; the Boneyard keeps them.
     output.participant_order.clear();
     for id in &older.participant_order {
-        let first = older.participants.get(id).expect("participant exists");
+        let first = &older.participants[id];
         let second = newer.participants.get(id);
         if older.boneyard.is_none() && blend >= 1.0 && second.is_none() {
             continue;

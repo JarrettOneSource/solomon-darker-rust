@@ -100,7 +100,9 @@ mod tests {
         match value {
             Value::Object(fields) => {
                 if fields.get("kind") == Some(&serde_json::json!("weld-persistent"))
-                    && fields.get("buildId") == Some(&serde_json::json!(1006))
+                    && fields.get("buildId").is_some_and(|build| {
+                        *build == solomon_sim::profile::WeldBuildId::EtherealBoulder.id()
+                    })
                 {
                     for key in [
                         "lifetimeTicksRemaining",
@@ -257,13 +259,7 @@ mod tests {
                 case["accepted"].as_bool().unwrap(),
                 "{command}"
             );
-            let economy = &restored
-                .session
-                .participants
-                .get(owner)
-                .expect("participant exists")
-                .player
-                .economy;
+            let economy = &restored.session.participants[owner].player.economy;
             super::support::assert_website_json(
                 &encode(&economy.action_feedback).unwrap(),
                 &case["feedback"],
@@ -404,11 +400,7 @@ mod tests {
                 "combatRng",
                 &[],
             );
-            let player = &restored
-                .session
-                .participants
-                .get(&restored.player_id)
-                .expect("participant exists");
+            let player = &restored.session.participants[&restored.player_id];
             super::support::assert_website_json(
                 &encode(&player.player.economy).unwrap(),
                 &expected["playerEntities"]["economies"][0],

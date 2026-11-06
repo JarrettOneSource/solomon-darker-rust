@@ -41,7 +41,7 @@ fn actor_row(actor: &PrimarySpellTransient, birth: &FlamePresentationBirth) -> V
     let recipe = serde_json::to_value(&birth.recipe).unwrap();
     let root = &recipe["painterRegistration"];
     let mut row = json!({"ageTicks":common.owner.age_ticks,"birthTick":common.birth_tick,
-        "buildId":common.build_id,"direction":{"x":common.direction.x,"y":common.direction.y},
+        "buildId":common.build_id.id(),"direction":{"x":common.direction.x,"y":common.direction.y},
         "id":common.owner.id,"ownerId":common.owner.owner_id,"vector":common.vector,
         "worldKey":common.owner.world_key,"origin":{"x":common.origin.x,"y":common.origin.y},
         "painterRegistrations":[root],"lightRegistration":if common.owner.light_registration.is_some(){root.clone()}else{Value::Null}});

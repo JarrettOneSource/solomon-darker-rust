@@ -5,6 +5,7 @@ use super::model::{WeldActorBase, WeldActorBirth};
 use super::persistent::WeldHailstonesState;
 use crate::float;
 use crate::float::{atan2, fround};
+use crate::profile::WeldBuildId;
 use crate::{Rng, Vec2};
 
 pub const WELD_HAIL_TARGET_RADIUS_FACTOR: f64 = 1.5;
@@ -328,7 +329,7 @@ pub fn step_weld_hail_child(actor: &mut WeldHailChildActorState, rng: &mut Rng) 
 
 fn hail_actor_base(actor: &WeldHailstonesState, id: u64, tick: u64) -> WeldActorBase {
     WeldActorBirth {
-        build_id: 1008,
+        build_id: WeldBuildId::Hailstones,
         direction: actor.common.direction,
         id,
         origin: actor.common.origin,

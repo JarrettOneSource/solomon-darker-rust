@@ -12,6 +12,7 @@ use solomon_sim::enemies::EnemyToken;
 use solomon_sim::enemies::model::EnemyLighting;
 use solomon_sim::enemies::projectiles::{EnemyProjectileKind, EnemyProjectilePayload};
 use solomon_sim::painter::WorldManagerLane;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState};
 
 fn point(value: &Value) -> Vec2 {
@@ -167,7 +168,7 @@ fn enemy_projectile_secondary_and_weld_providers_replay_source_values() {
         let value = &row["owner"];
         let actual = match row["kind"].as_str().unwrap() {
             "projectile" => Some(weld_projectile_light_source(
-                value["buildId"].as_u64().unwrap() as u32,
+                WeldBuildId::try_from(value["buildId"].as_u64().unwrap() as u32).unwrap(),
                 value["id"].as_u64().unwrap() as usize,
                 point(&value["position"]),
                 row["frame"].as_u64().unwrap(),

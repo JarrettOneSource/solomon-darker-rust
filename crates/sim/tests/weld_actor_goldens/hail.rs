@@ -2,6 +2,7 @@ use super::{common_row, point, random, vector, website_rows, weld_visual_rows};
 use serde_json::{Value, json};
 use solomon_sim::Rng;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::model::PrimarySpellProjectilePhase;
 use solomon_sim::spells::weld::*;
 
@@ -13,7 +14,7 @@ fn hail_actor(value: &Value) -> WeldHailstonesState {
     let values: Vec<f64> =
         value["vector"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
     let birth = WeldActorBirth {
-        build_id: 1008,
+        build_id: WeldBuildId::Hailstones,
         direction: vector(&value["direction"]),
         id: value["id"].as_u64().unwrap(),
         origin: vector(&value["origin"]),

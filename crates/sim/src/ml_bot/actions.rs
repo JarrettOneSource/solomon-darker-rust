@@ -4,6 +4,7 @@ use crate::Vec2;
 use crate::economy::HubInventoryAction;
 use crate::float::hypot;
 use crate::heading::heading_vector;
+use crate::profile::WeldBuildId;
 use crate::profile::primary::{PrimaryCastMode, primary_cast_mode};
 use crate::profile::weld::{WeldCastKind, weld_primary_cast_mode};
 use crate::session::{GameSession, GameSessionInput};
@@ -23,7 +24,7 @@ pub struct MlBotPolicyActionContext {
     position: Vec2,
     heading_index: usize,
     primary_skill_id: usize,
-    weld_build_id: Option<u32>,
+    weld_build_id: Option<WeldBuildId>,
     accepts_input: bool,
 }
 
@@ -74,7 +75,15 @@ impl MlBotPolicyActionContext {
         }
         let primary_free = [16, 40].contains(&self.primary_skill_id)
             || self.primary_skill_id == 52
-                && self.weld_build_id.is_some_and(|id| [1006, 1007, 1008, 1009].contains(&id));
+                && matches!(
+                    self.weld_build_id,
+                    Some(
+                        WeldBuildId::EtherealBoulder
+                            | WeldBuildId::MeteorSwarm
+                            | WeldBuildId::Hailstones
+                            | WeldBuildId::CrawlingShock
+                    )
+                );
         let continuing_primary = frame.player.block_a[6] == 1.0 && self.primary_continuous()?;
         let mut ability_by_target = Vec::with_capacity(9);
         for (target_action, target_legal) in target.iter().enumerate() {

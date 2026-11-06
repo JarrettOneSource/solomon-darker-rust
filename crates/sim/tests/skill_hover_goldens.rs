@@ -4,7 +4,7 @@ use solomon_sim::player_panels::skill_hover::{
     SkillHoverLine, SkillHoverLineKind, measure_skill_exact_text, skill_book_tooltip_lines,
     skill_exact_text_runs, skill_hover_box_layout, skill_picker_detail_lines,
 };
-use solomon_sim::profile::PlayerSkillOfferOption;
+use solomon_sim::profile::{PlayerSkillOfferOption, WeldBuildId};
 
 #[test]
 fn native_skill_hover_lines_wraps_and_picker_details_match_current_website() {
@@ -24,7 +24,9 @@ fn native_skill_hover_lines_wraps_and_picker_details_match_current_website() {
             skill_id: option["skillId"].as_u64().unwrap() as usize,
             target_rank: option["targetRank"].as_u64().unwrap() as u32,
             insight: option["insight"].as_bool().unwrap(),
-            weld_build_id: option["weldBuildId"].as_u64().map(|id| id as u32),
+            weld_build_id: option["weldBuildId"]
+                .as_u64()
+                .map(|id| WeldBuildId::try_from(id as u32).unwrap()),
         });
         assert_eq!(lines_json(&actual), case["expected"], "picker {option}");
     }

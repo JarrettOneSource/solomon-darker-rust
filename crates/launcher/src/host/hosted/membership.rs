@@ -226,14 +226,7 @@ impl HostedGameHost {
                 participant.player.combat.life_state == PlayerLifeState::Alive
             }) && !state.participant_order.iter().any(|other| {
                 other != &id
-                    && state
-                        .participants
-                        .get(other)
-                        .expect("participant exists")
-                        .player
-                        .combat
-                        .life_state
-                        == PlayerLifeState::Alive
+                    && state.participants[other].player.combat.life_state == PlayerLifeState::Alive
             })
         });
         let slot = self

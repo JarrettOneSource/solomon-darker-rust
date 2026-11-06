@@ -12,7 +12,8 @@ use super::offensive::{
 };
 use super::weld::{WeldCastKind, WeldPrimaryVector, weld_primary_vector_with_stat_book};
 use super::{
-    PlayerStatBookComponent, SKILL_CATALOG, SPELL_WELDING_SKILL_ID, SkillBookState, weld_build,
+    PlayerStatBookComponent, SKILL_CATALOG, SPELL_WELDING_SKILL_ID, SkillBookState, WeldBuildId,
+    weld_build,
 };
 
 pub const PRIMARY_EARTH_INITIAL_CHARGE: f64 = 0.18_f32 as f64;
@@ -31,7 +32,8 @@ pub const SKILL_ROOT_COLORS: [[f64; 3]; 8] = [
 ];
 
 /// The selected spell's color, which Spider's captured wizard outline uses independent of
-/// clothing dye. Each byte narrows its channel to float32, then truncates.
+/// clothing dye. Each byte narrows its channel to float32, then truncates. The Weld color
+/// table has fifteen rows, five beyond the ten builds, so it is indexed by the build number.
 #[must_use]
 pub fn primary_spell_tint(skill_id: usize, weld_build_id: Option<u32>) -> u32 {
     const WELD_COLORS: [[f64; 3]; 15] = [
@@ -160,7 +162,7 @@ pub struct EarthPrimarySkillProfile {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeldPrimarySkillProfile {
     pub common: PrimarySkillProfileBase,
-    pub build_id: u32,
+    pub build_id: WeldBuildId,
     pub cast_kind: WeldCastKind,
     pub damage_factor: f64,
     pub vector: WeldPrimaryVector,
@@ -367,9 +369,19 @@ fn weld_profile(
     let vector = weld_primary_vector_with_stat_book(book, stat_book, build_id, weld_effect);
     let rank = book.effective_ranks[SPELL_WELDING_SKILL_ID];
     assert!(rank > 0, "Spell Welding must be learned");
-    let maximum_index = if matches!(build_id, 1000 | 1001 | 1002 | 1007) { 1 } else { 0 };
+    let maximum_index = match build_id {
+        WeldBuildId::BurningBolt
+        | WeldBuildId::FrostMissile
+        | WeldBuildId::BallLightning
+        | WeldBuildId::MeteorSwarm => 1,
+        _ => 0,
+    };
     let mana_index =
-        if vector.cast_kind == WeldCastKind::OneShot && build_id != 1009 { 2 } else { 1 };
+        if vector.cast_kind == WeldCastKind::OneShot && build_id != WeldBuildId::CrawlingShock {
+            2
+        } else {
+            1
+        };
     WeldPrimarySkillProfile {
         common: PrimarySkillProfileBase {
             damage_minimum: resolve_skill_damage_value(
@@ -389,7 +401,7 @@ fn weld_profile(
                 factors,
             ),
             rank,
-            skill_id: build_id,
+            skill_id: build_id.id(),
         },
         build_id,
         cast_kind: vector.cast_kind,
@@ -428,7 +440,7 @@ pub struct PrimarySpellDescriptor {
 #[must_use]
 pub fn primary_spell_descriptor(
     selected_primary_skill_id: usize,
-    weld_build_id: Option<u32>,
+    weld_build_id: Option<WeldBuildId>,
 ) -> PrimarySpellDescriptor {
     use PrimarySpellDamageUnit::{Bolt, Boulder, Impact, Rock, Second};
     use PrimarySpellManaUnit::Cast;
@@ -445,17 +457,19 @@ pub fn primary_spell_descriptor(
         40 => (SKILL_CATALOG[40].name, true, Boulder, PrimarySpellManaUnit::Second),
         SPELL_WELDING_SKILL_ID => {
             let id = weld_build_id.expect("selected Spell Welding has a native build");
-            let build = weld_build(id).expect("selected weld build is native");
             let (damage_range, damage_unit, mana_unit) = match id {
-                1000..=1002 => (true, Bolt, Cast),
-                1003..=1005 => (false, Second, PrimarySpellManaUnit::Second),
-                1006 => (true, Boulder, PrimarySpellManaUnit::Second),
-                1007 => (true, Impact, PrimarySpellManaUnit::Second),
-                1008 => (false, Rock, PrimarySpellManaUnit::Second),
-                1009 => (false, Bolt, Cast),
-                _ => unreachable!("weld build was checked above"),
+                WeldBuildId::BurningBolt
+                | WeldBuildId::FrostMissile
+                | WeldBuildId::BallLightning => (true, Bolt, Cast),
+                WeldBuildId::FlameLash | WeldBuildId::BlizzardBeam | WeldBuildId::SteamJet => {
+                    (false, Second, PrimarySpellManaUnit::Second)
+                }
+                WeldBuildId::EtherealBoulder => (true, Boulder, PrimarySpellManaUnit::Second),
+                WeldBuildId::MeteorSwarm => (true, Impact, PrimarySpellManaUnit::Second),
+                WeldBuildId::Hailstones => (false, Rock, PrimarySpellManaUnit::Second),
+                WeldBuildId::CrawlingShock => (false, Bolt, Cast),
             };
-            (build.synthetic_name, damage_range, damage_unit, mana_unit)
+            (weld_build(id).synthetic_name, damage_range, damage_unit, mana_unit)
         }
         _ => panic!("skill {selected_primary_skill_id} is not a native selected primary"),
     };
@@ -491,7 +505,7 @@ pub fn primary_spell_summary_with_stat_book(
         PrimarySkillProfile::Earth(_) => {
             boulder_display_minimum(damage_value(stat_book, 40, common.rank, false), 40, factors)
         }
-        PrimarySkillProfile::Weld(weld) if weld.build_id == 1006 => {
+        PrimarySkillProfile::Weld(weld) if weld.build_id == WeldBuildId::EtherealBoulder => {
             boulder_display_minimum(weld.vector.values[0], SPELL_WELDING_SKILL_ID, factors)
         }
         _ => common.damage_minimum,

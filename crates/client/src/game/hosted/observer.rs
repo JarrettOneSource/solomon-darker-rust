@@ -105,7 +105,7 @@ impl Game {
             return Ok(());
         };
         let Some(world) = &self.session.boneyard else { return Ok(()) };
-        if self.world_loading || !self.has_game {
+        if self.world_load.is_loading() || !self.has_game {
             return Ok(());
         }
         self.observer_ui.update(ObserverViewSnapshot {
@@ -161,7 +161,7 @@ impl Game {
             self.surface.logical_height(),
             self.menu.settings().ui_scale_percent,
         )?;
-        if !self.has_game || self.world_loading {
+        if !self.has_game || self.world_load.is_loading() {
             self.hud.set_visible(false);
             return Ok(());
         }

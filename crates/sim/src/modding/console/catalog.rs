@@ -7,7 +7,7 @@ use crate::economy::{
     create_skill_book_inventory_item,
 };
 use crate::enemies::EnemyToken;
-use crate::profile::{SKILL_CATALOG, WELD_BUILDS};
+use crate::profile::{SKILL_CATALOG, WELD_BUILDS, WeldBuildId};
 
 /// A stock enemy that Lua can spawn: its key and enemy token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,7 +58,7 @@ pub struct WebLuaDeveloperSkillDescriptor {
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct WebLuaDeveloperWeldDescriptor {
     pub component_skill_ids: [usize; 6],
-    pub id: u32,
+    pub id: WeldBuildId,
     pub name: &'static str,
 }
 
@@ -125,10 +125,6 @@ pub fn web_lua_developer_welds() -> Vec<WebLuaDeveloperWeldDescriptor> {
 #[must_use]
 pub fn web_lua_developer_skill(id: u32) -> Option<WebLuaDeveloperSkillDescriptor> {
     web_lua_developer_skills().into_iter().find(|skill| skill.id == id as usize)
-}
-#[must_use]
-pub fn web_lua_developer_weld(id: u32) -> Option<WebLuaDeveloperWeldDescriptor> {
-    web_lua_developer_welds().into_iter().find(|weld| weld.id == id)
 }
 #[must_use]
 pub fn web_lua_developer_item_exists(key: &str) -> bool {

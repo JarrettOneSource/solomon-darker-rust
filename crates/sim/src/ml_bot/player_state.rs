@@ -1,7 +1,7 @@
 //! The bot's player observation: vitals, cast occupancy and real belt slots.
 
 use crate::profile::primary::{PrimarySkillProfile, primary_skill_profile_with_stat_book};
-use crate::profile::{MAX_PLAYER_LEVEL, WELD_BUILDS};
+use crate::profile::{MAX_PLAYER_LEVEL, weld_build};
 use crate::secondary::{
     SECONDARY_GLOBAL_COOLDOWN_TICKS, SecondaryAbilityId, SecondaryPlayerState,
     secondary_ability_mana_cost_with_stat_book,
@@ -137,9 +137,7 @@ pub fn observe_ml_bot_policy_player_state(
     let mut block_b = vec![0.0; 11];
     let primary_id = player.book.primary_skill_id;
     if primary_id == 52 {
-        if let Some(weld) =
-            WELD_BUILDS.iter().find(|weld| Some(weld.id) == player.book.weld_build_id)
-        {
+        if let Some(weld) = player.book.weld_build_id.map(weld_build) {
             for id in weld.primary_skill_ids {
                 block_b[element_index(id).expect("a native Weld contains elemental primaries")] =
                     1.0;
@@ -154,7 +152,7 @@ pub fn observe_ml_bot_policy_player_state(
         player
             .book
             .weld_build_id
-            .map_or(0.0, |id| ((f64::from(id) - 1000.0) / 10.0).clamp(-1.0, 1.0))
+            .map_or(0.0, |id| ((f64::from(id.id()) - 1000.0) / 10.0).clamp(-1.0, 1.0))
     } else {
         match primary_id {
             8 => 0.0,

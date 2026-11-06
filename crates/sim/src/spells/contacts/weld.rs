@@ -2,6 +2,7 @@
 //! (detonations, debris and actors) that the Weld contacts share.
 
 use super::*;
+use crate::profile::WeldBuildId;
 use crate::secondary::SecondaryElectricBurnEffectState;
 
 impl ContactWork<'_, '_> {
@@ -50,7 +51,10 @@ impl ContactWork<'_, '_> {
         rows: &[TargetRow],
     ) {
         let common = &spell.common;
-        let magic_missile = matches!(spell.build_id, 1000..=1002);
+        let magic_missile = matches!(
+            spell.build_id,
+            WeldBuildId::BurningBolt | WeldBuildId::FrostMissile | WeldBuildId::BallLightning
+        );
         let mut targets =
             if magic_missile { self.context.primary_scenery_targets.to_vec() } else { Vec::new() };
         targets.extend(rows.iter().map(|row| row.target.clone()));
@@ -61,7 +65,7 @@ impl ContactWork<'_, '_> {
                 0x2
             },
             position: common.position,
-            query_radius: if spell.build_id == 1009 { 15.0 } else { 6.0 },
+            query_radius: if spell.build_id == WeldBuildId::CrawlingShock { 15.0 } else { 6.0 },
             targets: &targets,
         });
         let Some(target) = target else { return };
@@ -71,13 +75,14 @@ impl ContactWork<'_, '_> {
             self.finish_weld_projectile_contact(spell);
             return;
         };
-        if spell.build_id == 1001 && spell.vector[6] == 0.0 {
+        if spell.build_id == WeldBuildId::FrostMissile && spell.vector[6] == 0.0 {
             self.queue_frost_missile_cold(row);
         }
-        let electric = matches!(spell.build_id, 1002 | 1009);
+        let electric =
+            matches!(spell.build_id, WeldBuildId::BallLightning | WeldBuildId::CrawlingShock);
         if electric {
-            let ticks = if spell.build_id == 1002 { 100 } else { 50 };
-            let (arcs, stun) = if spell.build_id == 1002 {
+            let ticks = if spell.build_id == WeldBuildId::BallLightning { 100 } else { 50 };
+            let (arcs, stun) = if spell.build_id == WeldBuildId::BallLightning {
                 (spell.vector[5], spell.vector[6])
             } else {
                 (spell.vector[2], spell.vector[3])
@@ -109,7 +114,7 @@ impl ContactWork<'_, '_> {
             &common.owner_id,
             true,
             false,
-            spell.build_id == 1002,
+            spell.build_id == WeldBuildId::BallLightning,
         );
         if !damaged.accepted {
             return;
@@ -123,7 +128,7 @@ impl ContactWork<'_, '_> {
             damaged.killed,
         );
         self.resolve_frost_missile_area_contact(spell);
-        if spell.build_id == 1009 && spell.contacts_remaining > 1 {
+        if spell.build_id == WeldBuildId::CrawlingShock && spell.contacts_remaining > 1 {
             let mut retained = spell.clone();
             retained.contacts_remaining -= 1;
             self.updated_projectiles.insert(common.id, PrimarySpellProjectile::Weld(retained));
@@ -137,7 +142,7 @@ impl ContactWork<'_, '_> {
     /// Widen owns Frost Missile's radial cold; Chill Wind occupies a different
     /// vector cell and never selects this lane. Terrain contact uses the same body.
     pub(super) fn resolve_frost_missile_area_contact(&mut self, spell: &WeldProjectileState) {
-        if spell.build_id != 1001
+        if spell.build_id != WeldBuildId::FrostMissile
             || spell.vector[6] <= 0.0
             || spell.common.damage <= 0.0
             || spell.common.world_key != self.context.world_key
@@ -179,7 +184,7 @@ impl ContactWork<'_, '_> {
     }
 
     fn finish_weld_projectile_contact(&mut self, spell: &WeldProjectileState) {
-        if spell.build_id == 1000 {
+        if spell.build_id == WeldBuildId::BurningBolt {
             let effects = self.detonate_weld_fire(
                 WeldActorBirth {
                     build_id: spell.build_id,
@@ -261,7 +266,7 @@ impl ContactWork<'_, '_> {
         }
         let actor = create_weld_boulder_debris_actor(
             WeldActorBirth {
-                build_id: 1006,
+                build_id: WeldBuildId::EtherealBoulder,
                 direction: boulder.common.direction,
                 id,
                 origin: boulder.common.origin,

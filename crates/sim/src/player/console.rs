@@ -2,6 +2,7 @@
 //! acquisition offer seeds, refreshes derived stats and rebuilds any pending skill offer.
 
 use super::*;
+use crate::profile::WeldBuildId;
 
 impl PlayerState {
     pub fn grant_skill_ranks(&mut self, skill_id: usize, ranks: u32, rng: &mut Rng) {
@@ -17,7 +18,7 @@ impl PlayerState {
         self.refresh_console_skill_offer(rng);
     }
 
-    pub fn grant_weld_build(&mut self, build_id: u32, rng: &mut Rng) {
+    pub fn grant_weld_build(&mut self, build_id: WeldBuildId, rng: &mut Rng) {
         let previous = self.book.clone();
         self.book.grant_weld_build(build_id);
         let mut acquired = 0;

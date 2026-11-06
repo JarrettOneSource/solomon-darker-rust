@@ -228,7 +228,7 @@ impl GameSession {
         if slot >= crate::belt::PLAYER_BELT_SLOT_COUNT || !self.can_edit_books(id) {
             return Ok(rejected(HubEconomyRejection::ServiceUnavailable));
         }
-        let participant = &self.participants.get(id).expect("participant exists");
+        let participant = &self.participants[id];
         let economy = &participant.player.economy;
         let Some(entry) = participant.player.belt.entries[slot] else {
             return Ok(rejected(HubEconomyRejection::IneligibleItem));
@@ -421,7 +421,7 @@ mod tests {
                 result.transaction.reason
             );
             assert!(result.consumed_stock_potion);
-            let player = &state.participants.get("owner").expect("participant exists").player;
+            let player = &state.participants["owner"].player;
             assert!(player.combat.current_health > 1.0);
             assert_eq!(player.belt.entries[slot], Some(NativeBeltEntry::HealthPotion));
             assert_eq!(

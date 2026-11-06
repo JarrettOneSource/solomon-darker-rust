@@ -4,6 +4,7 @@
 use super::*;
 use crate::Rng;
 use crate::painter::{WorldManagerLane, WorldPainterOrder};
+use crate::profile::WeldBuildId;
 use crate::profile::primary::SpentEmber;
 use crate::spells::effects::{PrimarySpellFireDetonation, fire_explosion};
 use crate::spells::fire::{FireProjectilePayload, create_fire_detonation};
@@ -17,8 +18,8 @@ pub fn create_primary_spell_weld_fire_detonation(
     order: &mut WorldPainterOrder,
 ) -> PrimarySpellFireDetonation {
     let offset = match birth.build_id {
-        1000 | 1007 => 5,
-        1003 => 4,
+        WeldBuildId::BurningBolt | WeldBuildId::MeteorSwarm => 5,
+        WeldBuildId::FlameLash => 4,
         _ => panic!("Weld build has no authored Fire payload"),
     };
     let value = |index| birth.vector.get(index).copied().unwrap_or(0.0);

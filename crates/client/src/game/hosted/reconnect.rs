@@ -63,12 +63,10 @@ impl Game {
         }
         self.social.cancel_player_card_request();
         let credentials = self.native.as_mut().unwrap().begin_reconnect()?;
-        if self.world_loading {
+        if self.world_load.is_loading() {
             // Its pending frame belonged to the retired transport. A fresh Welcome
             // will queue the actual run again; stale async preparation must not apply.
-            self.world_generation += 1;
-            self.pending_world = None;
-            self.world_loading = false;
+            self.world_load.cancel();
         }
         if let Some(episode) = &mut hosted.reconnect {
             episode.cancel();

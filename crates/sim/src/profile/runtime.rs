@@ -191,7 +191,7 @@ impl PlayerSkillRuntimeState {
                 book.learned_skill_order.push(id);
             }
         }
-        if let Some(build) = book.weld_build_id.and_then(weld_build)
+        if let Some(build) = book.weld_build_id.map(weld_build)
             && (book.weld_component_ranks.is_none() || economy.owned_perk_selectors.contains(&13))
         {
             let component_ranks = build.component_skill_ids.map(|id| ranks[id]);

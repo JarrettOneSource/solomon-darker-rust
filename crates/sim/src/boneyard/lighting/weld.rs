@@ -3,18 +3,19 @@
 
 use crate::Vec2;
 use crate::float::fround;
+use crate::profile::WeldBuildId;
 
 use super::{BoneyardLightSource, missile_light_source, presentation_random};
 
 #[must_use]
 pub fn weld_projectile_light_source(
-    build_id: u32,
+    build_id: WeldBuildId,
     id: usize,
     position: Vec2,
     frame: u64,
     multiple_shadows: bool,
 ) -> BoneyardLightSource {
-    if build_id != 1009 {
+    if build_id != WeldBuildId::CrawlingShock {
         return missile_light_source(id as u32, position, frame, multiple_shadows);
     }
     BoneyardLightSource::new(

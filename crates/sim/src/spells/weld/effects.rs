@@ -16,6 +16,7 @@ use super::persistent::{
 use super::steam::{WeldSteamActorState, step_weld_steam_actor};
 use crate::float::{cos, fround, sin};
 use crate::painter::{PainterRegistration, WorldManagerLane, WorldPainterOrder};
+use crate::profile::WeldBuildId;
 use crate::spells::earth_debris::{
     WeldBoulderDebrisParticleState, WeldMeteorDebrisSeed, create_weld_boulder_debris_particle,
     create_weld_ethereal_boulder_breakup_debris_program, step_weld_boulder_debris_particle,
@@ -53,7 +54,7 @@ pub struct WeldChannelInput<'a> {
 
 #[must_use]
 pub fn create_weld_channel_actor(input: WeldChannelInput<'_>) -> WeldChannelActorState {
-    let flame_visual = if input.birth.build_id == 1003 {
+    let flame_visual = if input.birth.build_id == WeldBuildId::FlameLash {
         Some(input.flame_visual.unwrap_or_default())
     } else {
         None
@@ -189,7 +190,7 @@ pub fn create_weld_ground_spark_fade_program(
     projectile: &super::WeldProjectileState,
     rng: &mut Rng,
 ) -> Vec<WeldGroundSparkFadeSeed> {
-    if projectile.build_id != 1009 {
+    if projectile.build_id != WeldBuildId::CrawlingShock {
         return Vec::new();
     }
     let age = projectile.ground_spark_age_ticks.expect("GroundSpark owns native age");
@@ -276,20 +277,23 @@ pub fn create_primary_spell_weld_impact(
     let mut variant = None;
     let mut rotation = None;
     match birth.build_id {
-        1001 => pitch = Some(1.5),
-        1002 => {
+        WeldBuildId::FrostMissile => pitch = Some(1.5),
+        WeldBuildId::BallLightning => {
             pitch = Some(1.5);
             variant = Some(0);
             rotation = Some(rng.draw_scaled_float(360.0, false));
         }
-        1009 => {
+        WeldBuildId::CrawlingShock => {
             pitch = Some(fround(1.0 + rng.draw_scaled_float(0.1_f32 as f64, false)));
             variant = Some(rng.draw_integer(3) as u32);
             rotation = Some(rng.draw_scaled_float(360.0, false));
         }
         _ => {}
     }
-    let owns_fade = matches!(birth.build_id, 1001 | 1002 | 1009);
+    let owns_fade = matches!(
+        birth.build_id,
+        WeldBuildId::FrostMissile | WeldBuildId::BallLightning | WeldBuildId::CrawlingShock
+    );
     WeldImpactActorState {
         common: birth.actor(),
         alpha: if owns_fade { 2.0 } else { 0.0 },
@@ -360,7 +364,7 @@ pub fn create_weld_meteor_flash(
     tick: u64,
 ) -> WeldMeteorFlashActorState {
     let birth = WeldActorBirth {
-        build_id: 1007,
+        build_id: WeldBuildId::MeteorSwarm,
         direction: actor.common.direction,
         id,
         origin: actor.position,
@@ -485,7 +489,7 @@ pub fn step_weld_world_actor(
         }
         WeldWorldActor::HailRockFade(actor) => step_visible_age(&mut actor.common, 400),
         WeldWorldActor::FrostFade(actor) => {
-            let lifetime = if actor.common.build_id == 1004 { 3 } else { 20 };
+            let lifetime = if actor.common.build_id == WeldBuildId::BlizzardBeam { 3 } else { 20 };
             step_visible_age(&mut actor.common, lifetime)
         }
         WeldWorldActor::GroundSparkFade(actor) => {
@@ -524,7 +528,7 @@ pub fn create_primary_spell_weld_boulder_terminal(
     painters: &mut WorldPainterOrder,
 ) -> Vec<WeldWorldActor> {
     let birth = WeldActorBirth {
-        build_id: 1006,
+        build_id: WeldBuildId::EtherealBoulder,
         direction: actor.common.direction,
         id: first_id,
         origin: actor.common.origin,

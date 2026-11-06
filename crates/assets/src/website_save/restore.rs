@@ -122,7 +122,7 @@ fn restore_parsed(parsed: ParsedSaveDocument) -> Result<RestoredGameSave, String
     let player = &mut participant.player;
     if player.autofill_skill_selections(&mut session.gameplay_rng) {
         let selected = if player.book.primary_skill_id == 52 {
-            player.book.weld_build_id.expect("normalized Weld book retains its build")
+            player.book.weld_build_id.expect("normalized Weld book retains its build").id()
         } else {
             player.book.primary_skill_id as u32
         };
@@ -384,7 +384,7 @@ fn restore_legacy_death_weapons(session: &mut GameSession, tick: u64) {
             PlayerDeathWeaponTrigger, legacy_player_death_weapon_motion,
         };
         for id in &session.participant_order {
-            let participant = &session.participants.get(id).expect("participant exists");
+            let participant = &session.participants[id];
             let combat = &participant.player.combat;
             let Some(registration) = participant.lighting.death_weapon_painter_registration else {
                 continue;

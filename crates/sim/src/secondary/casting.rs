@@ -993,8 +993,7 @@ fn magic_trap_selector(authority: &SecondaryPlayerAuthority<'_>, rng: &mut Rng) 
     let ids = [8, 16, 24, 32, 40];
     let primary = if authority.skill_book.primary_skill_id == 52 {
         let build =
-            weld_build(authority.skill_book.weld_build_id.expect("selected Weld has its build"))
-                .expect("selected Weld build exists");
+            weld_build(authority.skill_book.weld_build_id.expect("selected Weld has its build"));
         build.primary_skill_ids[rng.draw_integer(2) as usize]
     } else {
         authority.skill_book.primary_skill_id

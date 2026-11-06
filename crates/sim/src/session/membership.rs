@@ -209,9 +209,7 @@ impl GameSession {
             }
         }
         for id in &source.participant_order {
-            self.import_hub_participant(
-                source.participants.get(id).expect("participant exists").clone(),
-            )?;
+            self.import_hub_participant(source.participants[id].clone())?;
         }
         Ok(())
     }
@@ -358,10 +356,7 @@ impl GameSession {
     }
 
     fn refresh_rejoin_barrier(&mut self, id: &str, milestone: Option<&SharedPlayerLevelMilestone>) {
-        let (barrier, next_id) = self.project_rejoin_barrier(
-            self.participants.get(id).expect("participant exists"),
-            milestone,
-        );
+        let (barrier, next_id) = self.project_rejoin_barrier(&self.participants[id], milestone);
         self.level_up_barrier = barrier;
         self.next_level_up_barrier_id = next_id;
     }
@@ -382,7 +377,7 @@ impl GameSession {
                 let player = if *id == &participant.id {
                     &participant.player
                 } else {
-                    &self.participants.get(*id).expect("participant exists").player
+                    &self.participants[*id].player
                 };
                 player.progression.pending_offer.is_some()
                     || !player.progression.pending_levels.is_empty()
@@ -428,7 +423,7 @@ pub struct SessionPartition {
 
 fn selected_primary_id(player: &PlayerState) -> u32 {
     if player.book.primary_skill_id == 52 {
-        player.book.weld_build_id.expect("selected Weld has a build")
+        player.book.weld_build_id.expect("selected Weld has a build").id()
     } else {
         player.book.primary_skill_id as u32
     }

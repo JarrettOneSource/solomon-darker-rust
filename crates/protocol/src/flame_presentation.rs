@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use solomon_sim::Vec2;
 use solomon_sim::painter::PainterRegistration;
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::model::{PrimarySpellTransient, SpellState};
 use solomon_sim::spells::weld::{
     FlameChannelVisual, FlameFadeVisual, WeldActorBirth, WeldChannelActorState,
@@ -186,7 +187,7 @@ pub fn flame_presentation_birth(
 ) -> Result<Option<FlamePresentationBirth>, String> {
     let PrimarySpellTransient::Weld(actor) = actor else { return Ok(None) };
     let recipe = match actor {
-        WeldWorldActor::Channel(channel) if channel.common.build_id == 1003 => {
+        WeldWorldActor::Channel(channel) if channel.common.build_id == WeldBuildId::FlameLash => {
             let Some(FlameChannelVisual::Birth(_)) = &channel.flame_visual else {
                 return Ok(None);
             };
@@ -256,7 +257,7 @@ pub fn materialize_flame_presentation(
         return None;
     }
     let common = WeldActorBirth {
-        build_id: 1003,
+        build_id: WeldBuildId::FlameLash,
         direction: Vec2::new(0.0, -1.0),
         id: birth.id,
         origin: Vec2::ZERO,

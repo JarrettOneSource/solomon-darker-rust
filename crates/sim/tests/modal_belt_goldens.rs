@@ -143,7 +143,7 @@ fn initial(case: &Value) -> GameSession {
 }
 
 fn snapshot(session: &GameSession) -> Value {
-    let participant = &session.participants.get("caster").expect("participant exists");
+    let participant = &session.participants["caster"];
     let flashes = &session.screen_flashes;
     let writes: Vec<_> = flashes.writes.iter().map(|row| json!({ "order":row.order,
         "tick":row.tick,"worldKey":row.world_key,"position":secondary_rows::point_snapshot(row.position),

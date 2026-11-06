@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::audio::AudioCue;
 use crate::float::fround;
-use crate::profile::WizardElement;
+use crate::profile::{WeldBuildId, WizardElement};
 use crate::secondary::SecondaryActorKind;
 use crate::spells::earth::{earth_boulder_rock_hit_pitch, earth_boulder_stone_break_pitch};
 use crate::spells::fire::fire_impact_pitch;
@@ -320,22 +320,22 @@ impl CombatAudioCursor {
             }
             let volume = distance_gain(listener.position, impact.position);
             match impact.common.build_id {
-                1006 => {
+                WeldBuildId::EtherealBoulder => {
                     if let Some(charge) = impact.boulder_terminal_charge {
                         earth_impact(output, charge, volume);
                     }
                 }
-                1001 => {
+                WeldBuildId::FrostMissile => {
                     if let Some(pitch) = impact.impact_sound_pitch {
                         play(output, AudioCue::IceStart, pitch, volume);
                     }
                 }
-                1002 => {
+                WeldBuildId::BallLightning => {
                     if let Some(pitch) = impact.impact_sound_pitch {
                         play(output, AudioCue::ThrowLightning1, pitch, volume);
                     }
                 }
-                1009 => {
+                WeldBuildId::CrawlingShock => {
                     if let (Some(pitch), Some(variant)) =
                         (impact.impact_sound_pitch, impact.impact_sound_variant)
                     {

@@ -1384,7 +1384,7 @@ fn students_actor_contacts_and_trader_clocks_replay_the_website() {
 fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
     use serde_json::{Value, json};
     use solomon_sim::profile::{
-        SKILL_CATALOG, SkillBookState, SkillValue, WizardDiscipline, WizardElement,
+        SKILL_CATALOG, SkillBookState, SkillValue, WeldBuildId, WizardDiscipline, WizardElement,
     };
 
     fn snapshot(book: &SkillBookState) -> Value {
@@ -1396,7 +1396,7 @@ fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
             "learnedSkillOrder": book.learned_skill_order,
             "permanentRanks": &book.permanent_ranks[..],
             "primarySkillId": book.primary_skill_id,
-            "weldBuildId": book.weld_build_id,
+            "weldBuildId": book.weld_build_id.map(WeldBuildId::id),
             "weldComponentRanks": book.weld_component_ranks,
         })
     }
@@ -1454,7 +1454,8 @@ fn skillbook_acquisition_and_every_authored_stat_row_replay_the_website() {
     }
     for case in fixture["welds"].as_array().unwrap() {
         let mut book = SkillBookState::new(WizardElement::Ether, WizardDiscipline::Arcane);
-        book.grant_weld_build(case["build"]["id"].as_u64().unwrap() as u32);
+        let build = case["build"]["id"].as_u64().unwrap() as u32;
+        book.grant_weld_build(WeldBuildId::try_from(build).unwrap());
         assert_eq!(snapshot(&book), case["learned"]);
     }
 }

@@ -47,7 +47,7 @@ impl GameSession {
 
         let mut owners = Vec::with_capacity(self.participants.len());
         for id in &self.participant_order {
-            let participant = &self.participants.get(id).expect("participant exists");
+            let participant = &self.participants[id];
             let player = &participant.player;
             let runtime = &player.skill_runtime;
             let factors = player.derived_stats().offensive_factors(runtime);
@@ -99,7 +99,7 @@ impl GameSession {
             .participant_order
             .iter()
             .map(|id| {
-                let participant = &self.participants.get(id).expect("participant exists");
+                let participant = &self.participants[id];
                 WorldLightPlayer {
                     id,
                     position: participant.wizard.position,
@@ -140,7 +140,7 @@ impl GameSession {
         // These small rows are input values; existing actors remain in one queue.
         let mut samples = Vec::with_capacity(self.participants.len());
         for id in &self.participant_order {
-            let participant = &self.participants.get(id).expect("participant exists");
+            let participant = &self.participants[id];
             let player = &participant.player;
             let derived = player.derived_stats();
             samples.push(PrimaryPlayerSample {
@@ -344,7 +344,7 @@ impl GameSession {
             .iter()
             .map(|id| BoneyardPrimaryContactPlayer {
                 owner_id: id,
-                player: &self.participants.get(id).expect("participant exists").player,
+                player: &self.participants[id].player,
                 viewport: inputs[id].viewport,
             })
             .collect();

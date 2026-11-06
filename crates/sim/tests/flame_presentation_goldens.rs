@@ -2,6 +2,7 @@
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
 use solomon_sim::painter::{PainterRegistration, WorldManagerLane};
+use solomon_sim::profile::WeldBuildId;
 use solomon_sim::spells::weld::*;
 
 #[path = "support/website_rows.rs"]
@@ -27,7 +28,7 @@ fn common(state: &Value) -> WeldActorBase {
     let vector: Vec<_> =
         state["vector"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
     WeldActorBirth {
-        build_id: 1003,
+        build_id: WeldBuildId::FlameLash,
         direction: point(&state["direction"]),
         id: state["id"].as_u64().unwrap(),
         origin: point(&state["origin"]),
