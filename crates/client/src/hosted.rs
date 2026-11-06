@@ -40,14 +40,32 @@ impl WebsiteMount {
 
     #[cfg(target_arch = "wasm32")]
     pub fn configured(window: &Window) -> Result<Option<Self>, String> {
-        let document = window.document().ok_or("The game has no document")?;
-        let Some(configuration) = document
-            .query_selector("meta[name='solomon-website-mount']")
-            .map_err(|_| "Could not read the Website configuration")?
-        else {
-            return Ok(None);
-        };
-        Self::new(&configuration.get_attribute("content").unwrap_or_default()).map(Some)
+        deployment_meta(window, "solomon-website-mount")?.map(|mount| Self::new(&mount)).transpose()
+    }
+
+    /// The scope of the player's own game data in browser storage: the deployment's
+    /// storage namespace if it names one, otherwise the Website mount. A namespace lets
+    /// the game move to another URL path without orphaning its saves or reading those of
+    /// the client that used the new path before. It must name a path: an empty namespace
+    /// would share the unsuffixed keys that another game on this origin uses.
+    pub fn storage_scope(namespace: Option<&str>, mount: Option<&str>) -> Result<Self, String> {
+        match namespace {
+            Some(namespace) if namespace.trim_end_matches('/').is_empty() => {
+                Err("The game's storage namespace must name a path such as /game-rust".into())
+            }
+            Some(namespace) => {
+                Self::new(namespace).map_err(|_| "The game has an invalid storage namespace".into())
+            }
+            None => mount.map(Self::new).transpose().map(Option::unwrap_or_default),
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn configured_storage(window: &Window) -> Result<Self, String> {
+        Self::storage_scope(
+            deployment_meta(window, "solomon-storage-namespace")?.as_deref(),
+            deployment_meta(window, "solomon-website-mount")?.as_deref(),
+        )
     }
 
     #[must_use]
@@ -713,9 +731,36 @@ fn decode_response<T: DeserializeOwned>(status: u16, text: &str) -> Result<T, Ap
     })
 }
 
+/// The content of one deployment `<meta>` tag, or `None` when the page has none.
+#[cfg(target_arch = "wasm32")]
+fn deployment_meta(window: &Window, name: &str) -> Result<Option<String>, String> {
+    let document = window.document().ok_or("The game has no document")?;
+    let meta = document
+        .query_selector(&format!("meta[name='{name}']"))
+        .map_err(|_| "Could not read the Website configuration")?;
+    Ok(meta.map(|meta| meta.get_attribute("content").unwrap_or_default()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_storage_namespace_outlives_the_mount() {
+        let key = |namespace, mount| {
+            WebsiteMount::storage_scope(namespace, mount).map(|scope| scope.storage_key("saves"))
+        };
+        // Moving the game to /game keeps the data it wrote at /game-rust.
+        assert_eq!(key(Some("/game-rust"), Some("")).unwrap(), "saves:/game-rust");
+        assert_eq!(key(Some("/game-rust"), Some("/game-rust")).unwrap(), "saves:/game-rust");
+        // Without a namespace the mount decides, as before.
+        assert_eq!(key(None, Some("/game-stg")).unwrap(), "saves:/game-stg");
+        assert_eq!(key(None, Some("")).unwrap(), "saves");
+        assert_eq!(key(None, None).unwrap(), "saves");
+        for invalid in ["", "/", "game-rust", "/../game", "//other.example"] {
+            assert!(key(Some(invalid), Some("/game-rust")).is_err(), "accepted {invalid:?}");
+        }
+    }
 
     #[test]
     fn staging_api_and_saved_identity_use_the_deployment_mount() {
