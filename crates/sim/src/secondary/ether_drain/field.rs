@@ -262,7 +262,7 @@ fn fallback_targets<W: SecondaryWorld>(
         .map(|target| EtherDrainTarget {
             activation_delay_ticks: 0,
             force_factor: ether_drain_enemy_force_factor(&target.family),
-            native_flags: target.native_flags.unwrap_or(2),
+            actor_flags: target.actor_flags.unwrap_or(2),
             position: target.position,
             reference: EtherDrainTargetRef::Enemy {
                 id: target.id as u64,

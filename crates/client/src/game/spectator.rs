@@ -1,7 +1,7 @@
 //! Ordinary spectator display selection. Hosted observers retain their explicit
 //! participant selection; this owner never changes Game's local player identity.
 
-use solomon_sim::belt::{NativeBeltEntry, PLAYER_BELT_SLOT_COUNT};
+use solomon_sim::belt::{BeltEntry, PLAYER_BELT_SLOT_COUNT};
 use solomon_sim::boneyard::spectator::*;
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::enemies::model::{EnemyBrain, SpiderPhase};
@@ -76,9 +76,10 @@ impl Game {
             && session.run.phase == GameRunPhase::Active
             && session.run.run_id.is_some()
             && player.combat.life_state == PlayerLifeState::Spectating;
-        let item_slots: [bool; PLAYER_BELT_SLOT_COUNT] = player.belt.entries.map(|entry| {
-            entry.is_some_and(|entry| !matches!(entry, NativeBeltEntry::Skill { .. }))
-        });
+        let item_slots: [bool; PLAYER_BELT_SLOT_COUNT] = player
+            .belt
+            .entries
+            .map(|entry| entry.is_some_and(|entry| !matches!(entry, BeltEntry::Skill { .. })));
         self.input.set_spectator_camera(active, item_slots);
     }
 

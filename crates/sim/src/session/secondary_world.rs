@@ -187,7 +187,7 @@ impl SecondaryWorld for SessionSecondaryWorld<'_> {
             })
             .collect();
         projectiles.sort_by_key(|projectile| {
-            (projectile.state().native_registration_order, projectile.state().id)
+            (projectile.state().registration_order, projectile.state().id)
         });
         for projectile in projectiles {
             let row = projectile.state();

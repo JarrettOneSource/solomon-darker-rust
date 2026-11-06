@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::economy::NativeHubNpcState;
+use solomon_sim::economy::HubNpcProgress;
 use solomon_sim::hub::interaction::*;
 use solomon_sim::hub::regions::HubRegion;
 use std::collections::BTreeSet;
@@ -86,7 +86,7 @@ fn college_dialogue_geometry_markers_and_every_stock_selector_replay_the_website
     for case in fixture["dialogues"].as_array().unwrap() {
         let interaction = id(&case["id"]);
         let story = case["storyOffice"].as_bool().unwrap();
-        let npc = NativeHubNpcState::default();
+        let npc = HubNpcProgress::default();
         let consumed = BTreeSet::new();
         let choices: Vec<_> = hub_npc_chat_choices(interaction, story, &consumed)
             .into_iter()
@@ -178,9 +178,9 @@ fn college_dialogue_geometry_markers_and_every_stock_selector_replay_the_website
             "books" => HubNpcListSelector::Books,
             _ => HubNpcListSelector::TeacherSpells,
         };
-        let npc = NativeHubNpcState {
+        let npc = HubNpcProgress {
             librarian_lace_read: case["read"].as_bool().unwrap(),
-            ..NativeHubNpcState::default()
+            ..HubNpcProgress::default()
         };
         assert_eq!(hub_npc_selector_title(selector), case["title"].as_str().unwrap());
         let rows: Vec<_> = hub_npc_selector_rows(
@@ -215,7 +215,7 @@ fn college_dialogue_geometry_markers_and_every_stock_selector_replay_the_website
         use solomon_sim::economy::HubInventoryAction;
         let action = match hub_npc_selector_action(selector, id) {
             HubInventoryAction::SelectBoast { boast_id } => {
-                json!({"type":"select-boast","boastId":boast_id.native_id().unwrap()})
+                json!({"type":"select-boast","boastId":boast_id.stock_id().unwrap()})
             }
             HubInventoryAction::ReadLibrarianBook { book_id } => {
                 json!({"type":"read-librarian-book","bookId":book_id})

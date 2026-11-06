@@ -264,7 +264,7 @@ pub fn state_snapshot(state: &SecondarySimulationState) -> Value {
  "nextActorId":state.next_actor_id,"nextEventId":state.next_event_id,"players":players,"rng":rng_snapshot(&state.rng),"targetEffects":effects})
 }
 struct OpenWorld;
-impl NativeGolemWorld for OpenWorld {
+impl GolemTerrain for OpenWorld {
     fn resolve_movement(&mut self, requested: Vec2) -> Vec2 {
         requested
     }
@@ -328,7 +328,7 @@ pub fn target(value: &Value) -> SecondaryTarget {
         family: value["family"].as_str().unwrap().to_owned(),
         id: value["id"].as_u64().unwrap() as usize,
         light_registration: registration(&value["lightRegistration"]),
-        native_flags: value["nativeFlags"].as_u64().map(|flags| flags as u32),
+        actor_flags: value["nativeFlags"].as_u64().map(|flags| flags as u32),
         registration_order: value["registrationOrder"].as_u64().map(|order| order as usize),
         position: point(&value["position"]),
         radius: value["radius"].as_f64().unwrap(),

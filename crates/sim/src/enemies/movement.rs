@@ -93,7 +93,7 @@ pub fn move_toward_target(
             })
         });
         let illuminated =
-            context.native_visibility.is_none_or(|sample| sample(actor.position).admitted);
+            context.enemy_visibility.is_none_or(|sample| sample(actor.position).admitted);
         let clock = enemy_movement_clock(
             actor.id,
             context.tick,

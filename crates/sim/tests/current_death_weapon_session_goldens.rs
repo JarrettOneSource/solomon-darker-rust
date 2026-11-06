@@ -1,9 +1,9 @@
 //! A dropped weapon is an independent world animation, including GameOver and
 //! the original owner's removal. Its motion consumes the actual secondary RNG.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
@@ -60,7 +60,7 @@ fn weapon(actor: &DeathWeaponActor) -> Value {
         PlayerWeaponKind::Wand => "wand",
     });
     value["painter_registration"] =
-        native_bits::source_value(&registration(actor.painter_registration));
+        exact_bits::source_value(&registration(actor.painter_registration));
     value
 }
 
@@ -81,7 +81,7 @@ fn snapshot(state: &GameSession) -> Value {
         solomon_sim::game_run::GameRunPhase::GameOver => "game-over",
         solomon_sim::game_run::GameRunPhase::Loadout => "loadout",
     });
-    native_bits::source_value(&json!({"tick":state.ticks,"run":run,"players":players,
+    exact_bits::source_value(&json!({"tick":state.ticks,"run":run,"players":players,
         "weapons":state.boneyard.as_ref().map_or(Vec::new(),|world|world.death_weapons.iter().map(weapon).collect()),
         "nextWeaponId":state.boneyard.as_ref().map(|world|world.next_death_weapon_id),
         "order":{"nextRegistrationOrdinal":{"actor":state.painter_order.next_actor_ordinal,
@@ -140,9 +140,9 @@ fn current_death_weapons_keep_their_actual_shared_rng_lifetime_after_owner_remov
             if frames.get(frame_index).is_none_or(|frame| frame["tick"].as_u64() != Some(tick)) {
                 continue;
             }
-            native_bits::compare(
+            exact_bits::compare(
                 &snapshot(&state),
-                &native_bits::source_value(&frames[frame_index]["expected"]),
+                &exact_bits::source_value(&frames[frame_index]["expected"]),
                 &format!("{} tick{tick}", spec["name"]),
             );
             frame_index += 1;

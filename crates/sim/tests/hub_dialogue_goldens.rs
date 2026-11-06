@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
-use solomon_sim::economy::NativeHubNpcState;
+use solomon_sim::economy::HubNpcProgress;
 use solomon_sim::hub::interaction::{
     HubInteractionId, HubNpcChatChoice, HubNpcChatContent, HubNpcChatNext, consume_hub_npc_speech,
     create_hub_npc_chat_content, hub_dialogue_record, hub_npc_chat_choices, hub_npc_question,
@@ -22,7 +22,7 @@ fn current_dialogue_one_shot_history_emphasis_and_accelerated_scroll_match_websi
     for family in fixture["families"].as_array().unwrap() {
         let id = HubInteractionId::from_id(family["id"].as_str().unwrap()).unwrap();
         let story = family["storyOffice"].as_bool().unwrap();
-        let npc = NativeHubNpcState::default();
+        let npc = HubNpcProgress::default();
         let mut consumed = BTreeSet::new();
         let initial = create_hub_npc_chat_content(id, &npc, 1, None, story, &consumed);
         assert_eq!(

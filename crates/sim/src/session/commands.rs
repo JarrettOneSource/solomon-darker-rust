@@ -3,7 +3,7 @@
 //! Browser and native host share these admission checks and world side effects.
 
 use super::*;
-use crate::belt::{BeltCommand, NativeBeltEntry, belt_entry_item, belt_equipment_slots};
+use crate::belt::{BeltCommand, BeltEntry, belt_entry_item, belt_equipment_slots};
 use crate::boneyard::loot::BoneyardGoodieInteraction;
 use crate::economy::{
     EquipmentSlot, HubEconomyRejection, HubEconomyResult, HubInventoryAction, find_inventory_item,
@@ -233,7 +233,7 @@ impl GameSession {
         let Some(entry) = participant.player.belt.entries[slot] else {
             return Ok(rejected(HubEconomyRejection::IneligibleItem));
         };
-        if let NativeBeltEntry::Skill { skill_id } = entry {
+        if let BeltEntry::Skill { skill_id } = entry {
             if participant.player.book.effective_ranks.get(skill_id).copied().unwrap_or(0) < 1 {
                 return Ok(rejected(HubEconomyRejection::IneligibleItem));
             }
@@ -423,7 +423,7 @@ mod tests {
             assert!(result.consumed_stock_potion);
             let player = &state.participants["owner"].player;
             assert!(player.combat.current_health > 1.0);
-            assert_eq!(player.belt.entries[slot], Some(NativeBeltEntry::HealthPotion));
+            assert_eq!(player.belt.entries[slot], Some(BeltEntry::HealthPotion));
             assert_eq!(
                 state.activate_belt_slot("owner", 24, None).transaction.reason,
                 Some(HubEconomyRejection::ServiceUnavailable)

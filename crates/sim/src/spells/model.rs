@@ -367,7 +367,8 @@ pub struct PrimarySpellFirePatch {
     pub draw_alpha: f64,
     pub fade_alpha: f64,
     pub life: f64,
-    pub native_type: FirePatchType,
+    #[cfg_attr(feature = "persistence", serde(rename = "native_type"))]
+    pub patch_type: FirePatchType,
     pub position: Vec2,
     pub horizontal_sign: f64,
     pub scale: f64,

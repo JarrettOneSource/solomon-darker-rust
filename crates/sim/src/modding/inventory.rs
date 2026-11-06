@@ -232,7 +232,7 @@ pub fn mod_item_inventory_identity_is_valid(item: &HubInventoryItem) -> bool {
         && item.recipe_index.is_none()
         && item.generated_level.is_none()
         && item.selector.is_none()
-        && item.native_effects.is_none()
+        && item.effects.is_none()
         && content.stack_maximum == 1
         && mod_wearable_content_is_valid(wearable, content.icon_trim_image_path.as_deref())
         && if wearable.slot == ModWearableSlot::Staff {

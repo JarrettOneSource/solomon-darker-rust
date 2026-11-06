@@ -438,13 +438,15 @@ impl Default for ModSpellEffectCheckpoint {
     }
 }
 
-/// Whether a mod spell effect target is a mod enemy or a stock enemy.
+/// Whether a mod spell effect target is a mod enemy or a stock enemy. Mods, saves and hit
+/// keys spell a stock enemy `native-enemy`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "persistence", serde(rename_all = "kebab-case"))]
 pub enum ModSpellEffectTargetKind {
     ModEnemy,
-    NativeEnemy,
+    #[cfg_attr(feature = "persistence", serde(rename = "native-enemy"))]
+    StockEnemy,
 }
 
 impl ModSpellEffectTargetKind {
@@ -452,7 +454,7 @@ impl ModSpellEffectTargetKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ModEnemy => "mod-enemy",
-            Self::NativeEnemy => "native-enemy",
+            Self::StockEnemy => "native-enemy",
         }
     }
 }

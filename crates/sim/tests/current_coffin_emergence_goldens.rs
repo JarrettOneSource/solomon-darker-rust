@@ -1,8 +1,8 @@
 //! Current Coffin activation allocates twenty retained BoulderBits from native steering RNG.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod secondary;
@@ -32,7 +32,7 @@ fn native_coffin_factories_and_all_retained_bounces_share_the_source_motion_prog
         let mut rng = Rng::new(case["seed"].as_i64().unwrap());
         let mut particles = create_coffin_emergence(
             &mut rng,
-            native_bits::input(&case["position"]),
+            exact_bits::input(&case["position"]),
             case["scale"].as_f64().unwrap(),
             case["radius"].as_f64().unwrap(),
             case["enhanced"].as_bool().unwrap(),
@@ -55,13 +55,13 @@ fn native_coffin_factories_and_all_retained_bounces_share_the_source_motion_prog
             if frames.get(frame_index).is_none_or(|frame| frame["tick"].as_u64() != Some(tick)) {
                 continue;
             }
-            let actual = native_bits::source_value(&json!({
+            let actual = exact_bits::source_value(&json!({
                 "particles": particles,
                 "rng": secondary::rng_snapshot(&rng),
             }));
-            native_bits::compare(
+            exact_bits::compare(
                 &actual,
-                &native_bits::source_value(&frames[frame_index]["expected"]),
+                &exact_bits::source_value(&frames[frame_index]["expected"]),
                 &format!("factory{case_index} tick{tick}"),
             );
             frame_index += 1;
@@ -97,7 +97,7 @@ fn effect_snapshot(effect: &EnemyDeathEffect) -> Value {
     value["presentation_owner"] = json!(effect.presentation_owner.id());
     value["painter_registration"] =
         effect.painter_registration.map_or(Value::Null, |registration| {
-            native_bits::source_value(&secondary::registration_snapshot(registration))
+            exact_bits::source_value(&secondary::registration_snapshot(registration))
         });
     if effect.painter_sort_bias.is_none() {
         value.as_object_mut().unwrap().remove("painter_sort_bias");
@@ -142,7 +142,7 @@ fn actual_coffin_hidden_to_rising_birth_keeps_particle_rng_and_shared_registrati
                     arena_scalars: EnemyArenaScalars::default(),
                     dialogue_busy: false,
                     roll_loot_seed: None,
-                    native_visibility: None,
+                    enemy_visibility: None,
                     projected_point_visible: None,
                     view_bounds: None,
                     puppet_targets: &[],
@@ -166,7 +166,7 @@ fn actual_coffin_hidden_to_rising_birth_keeps_particle_rng_and_shared_registrati
                 CoffinPhase::Open => "open",
                 CoffinPhase::Death => "death",
             };
-            let actual = native_bits::source_value(&json!({
+            let actual = exact_bits::source_value(&json!({
                 "phase": phase, "phaseTick": brain.phase_tick,
                 "phaseTicksRemaining": brain.phase_ticks_remaining,
                 "effects": world.death_effects.iter().map(effect_snapshot).collect::<Vec<_>>(),
@@ -176,9 +176,9 @@ fn actual_coffin_hidden_to_rising_birth_keeps_particle_rng_and_shared_registrati
                     "actor": order.next_actor_ordinal, "transient": order.next_transient_ordinal,
                 }},
             }));
-            native_bits::compare(
+            exact_bits::compare(
                 &actual,
-                &native_bits::source_value(&frames[index]["expected"]),
+                &exact_bits::source_value(&frames[index]["expected"]),
                 &format!("quality{} tick{tick}", case["enhanced"]),
             );
             index += 1;

@@ -1,14 +1,14 @@
 //! Real secondary casts keep their source auxiliary actors and input eligibility.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod support;
 
 use serde_json::{Value, json};
-use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
+use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::presentation::{
     SecondaryBlend, SecondarySpriteDraw, secondary_presentation_plan,
@@ -53,7 +53,7 @@ fn snapshot(state: &SecondarySimulationState, order: WorldPainterOrder) -> Value
         let plan=secondary_presentation_plan(actor,actor.age_ticks as f64,1.0);
         json!({"id":actor.id,"root":plan.root,"draws":plan.draws.iter().map(draw_snapshot).collect::<Vec<_>>()})
     }).collect();
-    native_bits::source_value(&json!({
+    exact_bits::source_value(&json!({
         "plans":plans,
         "actors":state.actors.iter().map(support::actor_snapshot).collect::<Vec<_>>(),
         "events":state.events.iter().map(support::event_snapshot).collect::<Vec<_>>(),
@@ -83,7 +83,7 @@ fn current_planewalker_auxiliaries_and_living_input_blocks_replay_source() {
         let book = support::read_book(&declared["skillBook"]);
         let mut belt = PlayerBeltComponent::new(&book);
         belt.entries[0] =
-            Some(NativeBeltEntry::Skill { skill_id: case["skillId"].as_u64().unwrap() as usize });
+            Some(BeltEntry::Skill { skill_id: case["skillId"].as_u64().unwrap() as usize });
         let wizard = HubWizard::at(Vec2::ZERO);
         let mut state = SecondarySimulationState::new(91);
         let mut order = WorldPainterOrder::default();
@@ -103,9 +103,9 @@ fn current_planewalker_auxiliaries_and_living_input_blocks_replay_source() {
             if frames.get(frame_index).is_none_or(|frame| frame["tick"].as_u64() != Some(tick)) {
                 continue;
             }
-            native_bits::compare(
+            exact_bits::compare(
                 &snapshot(&state, order),
-                &native_bits::source_value(&frames[frame_index]["expected"]),
+                &exact_bits::source_value(&frames[frame_index]["expected"]),
                 &format!(
                     "skill{} quality{} {} tick{tick}",
                     case["skillId"], case["enhanced"], case["mode"]

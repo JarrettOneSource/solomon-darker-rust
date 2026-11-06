@@ -162,17 +162,17 @@ fn frame_read(
                     lua.create_string(&enemy.token).map_err(|error| bounded_error(&error))?,
                 ))
                 .ok_or_else(|| format!("unknown stock enemy: {}", enemy.token))?;
-                let native_id = descriptor.token.type_id();
+                let type_id = descriptor.token.type_id();
                 actors.push(json_value(json!({
                     "dead": enemy.life_state != "alive",
-                    "enemy_type": native_id,
+                    "enemy_type": type_id,
                     "hp": enemy.health,
                     "id": enemy.id,
                     "kind": "enemy",
                     "life_state": enemy.life_state,
                     "max_hp": enemy.maximum_health,
                     "network_actor_id": enemy.id,
-                    "object_type_id": native_id,
+                    "object_type_id": type_id,
                     "position": enemy.position,
                     "token": enemy.token,
                     "tracked_enemy": true,

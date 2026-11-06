@@ -820,7 +820,7 @@ fn hall_text_alpha(
             HallTextAlign::Right => width,
         };
     let position = stage.at(x, anchor.position.y);
-    crate::gpu_ui::native_text(
+    crate::gpu_ui::paint_stock_text(
         frame,
         ui.painter(),
         &UiTextSpec {

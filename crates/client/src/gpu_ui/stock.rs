@@ -473,7 +473,11 @@ pub fn message_frame_scaled(
     )
 }
 
-pub fn native_text(frame: &UiFrame<'_>, painter: &Painter, spec: &UiTextSpec<'_>) -> UiTextLayout {
+pub fn paint_stock_text(
+    frame: &UiFrame<'_>,
+    painter: &Painter,
+    spec: &UiTextSpec<'_>,
+) -> UiTextLayout {
     let layout = layout_ui_text(spec);
     paint_text_layout(frame, painter, &layout);
     layout

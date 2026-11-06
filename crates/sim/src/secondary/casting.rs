@@ -3,7 +3,7 @@
 
 use super::context::*;
 use super::dampened::create_dampened_spell;
-use super::golem::{GolemBirthStats, NativeGolemWorld, SecondaryGolemState};
+use super::golem::{GolemBirthStats, GolemTerrain, SecondaryGolemState};
 use super::leviathan::*;
 use super::program::*;
 use super::{
@@ -58,7 +58,7 @@ pub(crate) struct GolemWorld<'a, W> {
     pub world_key: &'a str,
     pub origin: Vec2,
 }
-impl<W: SecondaryWorld> NativeGolemWorld for GolemWorld<'_, W> {
+impl<W: SecondaryWorld> GolemTerrain for GolemWorld<'_, W> {
     fn resolve_movement(&mut self, requested: Vec2) -> Vec2 {
         self.world.golem_movement(self.owner, self.world_key, self.origin, requested, 30.0)
     }

@@ -7,8 +7,8 @@ mod shadow;
 mod tree;
 
 pub use fence::{
-    BrokenFenceHalf, NativeFenceGrate, SceneryFencePost, boneyard_fence_posts, broken_fence_halves,
-    native_fence_grate,
+    BrokenFenceHalf, IntactFenceGrate, SceneryFencePost, boneyard_fence_posts, broken_fence_halves,
+    intact_fence_grate,
 };
 
 use super::gate::closed_gate_roots;

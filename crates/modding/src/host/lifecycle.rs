@@ -121,7 +121,7 @@ impl PreparedModHost {
                 if actor.life_state == EnemyLifeState::Alive {
                     native_targets.push(ModSpellEffectTarget {
                         id: actor.id as u64,
-                        kind: ModSpellEffectTargetKind::NativeEnemy,
+                        kind: ModSpellEffectTargetKind::StockEnemy,
                         x: actor.position.x,
                         y: actor.position.y,
                     });

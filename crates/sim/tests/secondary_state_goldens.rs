@@ -4,9 +4,9 @@
 
 #[path = "support/secondary_current.rs"]
 mod current;
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/secondary_state.rs"]
 #[allow(dead_code)]
 mod status_support;
@@ -21,7 +21,7 @@ use solomon_sim::secondary::*;
 #[path = "support/secondary.rs"]
 mod support;
 use current::state_snapshot;
-use native_bits::source_value;
+use exact_bits::source_value;
 use support::*;
 
 #[test]

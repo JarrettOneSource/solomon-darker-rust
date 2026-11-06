@@ -1,7 +1,7 @@
 #[cfg(feature = "persistence")]
 #[test]
 fn source_native_and_mod_boast_selectors() {
-    use solomon_sim::economy::{BoastSelection, BoastState, HubInventoryAction, NativeHubNpcState};
+    use solomon_sim::economy::{BoastSelection, BoastState, HubInventoryAction, HubNpcProgress};
     use solomon_sim::hub::interaction::{
         HubNpcChatContent, HubNpcChatNext, HubNpcListSelector, HubNpcSelectorId,
         HubNpcSelectorPresentation, hub_boast_failure_text, hub_boast_instruction,
@@ -27,9 +27,9 @@ fn source_native_and_mod_boast_selectors() {
             _ => unreachable!(),
         };
         let mods = metadata(&case["metadata"]);
-        let npc = NativeHubNpcState {
+        let npc = HubNpcProgress {
             librarian_lace_read: case["read"].as_bool().unwrap(),
-            ..NativeHubNpcState::default()
+            ..HubNpcProgress::default()
         };
         let advanced: [bool; 8] = serde_json::from_value(case["advancedUnlocks"].clone()).unwrap();
         let expected: Vec<HubNpcSelectorPresentation> =

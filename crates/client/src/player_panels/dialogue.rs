@@ -7,7 +7,7 @@ use super::{
     PlayerPanels, Target,
 };
 use solomon_sim::audio::{AudioCue, AudioEvent};
-use solomon_sim::economy::{HubInventoryAction, NativeHubNpcState};
+use solomon_sim::economy::{HubInventoryAction, HubNpcProgress};
 use solomon_sim::hub::interaction::{
     HubNpcChatChoice, HubNpcChatContent, HubNpcChatNext, HubNpcListSelector, HubNpcSelectorId,
     consume_hub_npc_speech, create_hub_npc_chat_content, hub_npc_chat_choices, hub_npc_question,
@@ -39,7 +39,7 @@ impl PlayerPanels {
     pub fn show_dialogue(
         &mut self,
         context: HubDialogueContext,
-        npc: &NativeHubNpcState,
+        npc: &HubNpcProgress,
         now: f64,
     ) -> Result<(), String> {
         let content = create_hub_npc_chat_content(
@@ -79,7 +79,7 @@ impl PlayerPanels {
     pub fn show_college_intro_dialogue(
         &mut self,
         context: HubDialogueContext,
-        npc: &NativeHubNpcState,
+        npc: &HubNpcProgress,
         now: f64,
     ) -> Result<(), String> {
         self.show_dialogue(context, npc, now)?;

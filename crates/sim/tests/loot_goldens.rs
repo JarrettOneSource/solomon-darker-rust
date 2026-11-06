@@ -132,7 +132,7 @@ fn item_snapshot(item: &HubInventoryItem) -> Value {
     if let Some(selector) = item.selector {
         result["nativeSelector"] = json!(selector);
     }
-    if let Some(effects) = &item.native_effects {
+    if let Some(effects) = &item.effects {
         result["nativeEffects"] = effects_snapshot(effects);
     }
     result

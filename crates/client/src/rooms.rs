@@ -103,7 +103,7 @@ impl PrivateRoomScenes {
         frame: &PrivateRoomFrame<'_>,
         draw_wizard: impl FnMut(&mut Renderer, usize),
     ) {
-        let room = &self.rooms[usize::from(frame.local_wizard.region.native_id()) - 1];
+        let room = &self.rooms[usize::from(frame.local_wizard.region.index()) - 1];
         room.draw(renderer, camera, frame, draw_wizard);
     }
 }

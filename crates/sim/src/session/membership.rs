@@ -484,7 +484,7 @@ fn migrate_starter_equipment_appearance(player: &mut PlayerState) {
             && item.mod_item_content.is_none()
             && item.mod_affixes.is_none()
             && item.name == name
-            && item.native_effects.is_none()
+            && item.effects.is_none()
             && item.selector.is_none()
             && item.subtype.is_none()
             && item.type_id == type_id

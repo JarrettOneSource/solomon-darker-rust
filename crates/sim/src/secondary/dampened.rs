@@ -16,7 +16,7 @@ pub struct DampenedSpellState {
 /// One smoke puff a dampened spell leaves each step: sprite entry, rotation, scale, tint
 /// and fade.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeDampenedSmoke {
+pub struct DampenedSmokePuff {
     pub alpha_loss: f64,
     pub entry: i32,
     pub rotation_degrees: f64,
@@ -42,7 +42,7 @@ pub fn step_dampened_spell(
     state: &mut DampenedSpellState,
     variant: i32,
     rng: &mut Rng,
-) -> NativeDampenedSmoke {
+) -> DampenedSmokePuff {
     state.position = Vec2::new(
         fround(state.position.x + state.velocity.x),
         fround(state.position.y + state.velocity.y),
@@ -74,7 +74,7 @@ pub fn step_dampened_spell(
             0x4080ff
         };
     }
-    NativeDampenedSmoke {
+    DampenedSmokePuff {
         alpha_loss,
         entry,
         rotation_degrees: rotation,

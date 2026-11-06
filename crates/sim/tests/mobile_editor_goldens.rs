@@ -1,6 +1,6 @@
 use serde_json::Value;
 use solomon_sim::Vec2;
-use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
+use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::mobile_ui::*;
 
 fn number(value: &Value) -> f64 {
@@ -204,11 +204,11 @@ fn editor_edges_snap_priorities_and_all_eight_resize_anchors_match_source() {
         let mut belt = PlayerBeltComponent::from_entries(&[None; 8]).expect("legacy editor belt");
         for (index, entry) in case["entries"].as_array().unwrap().iter().enumerate() {
             belt.entries[index] = match entry["kind"].as_str() {
-                Some("health-potion") => Some(NativeBeltEntry::HealthPotion),
-                Some("mana-potion") => Some(NativeBeltEntry::ManaPotion),
-                Some("skill") => Some(NativeBeltEntry::Skill {
-                    skill_id: entry["skillId"].as_u64().unwrap() as usize,
-                }),
+                Some("health-potion") => Some(BeltEntry::HealthPotion),
+                Some("mana-potion") => Some(BeltEntry::ManaPotion),
+                Some("skill") => {
+                    Some(BeltEntry::Skill { skill_id: entry["skillId"].as_u64().unwrap() as usize })
+                }
                 None => None,
                 _ => panic!("unknown fixture belt entry {entry}"),
             };

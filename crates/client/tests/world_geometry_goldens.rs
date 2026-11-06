@@ -192,7 +192,7 @@ fn actual_world_births_use_reachable_native_policy_placement_and_current_world_l
         assert_eq!(native_bounds, decode_bounds(&case["nativeViewBounds"].to_string()).unwrap());
         for record in case["visibilityQueries"].as_array().unwrap() {
             let position = point(&record["position"]);
-            let visibility = geometry.native_visibility(position);
+            let visibility = geometry.enemy_visibility(position);
             assert_eq!(visibility.admitted, record["native"]["admitted"].as_bool().unwrap());
             assert_eq!(visibility.intensity, record["native"]["intensity"].as_f64().unwrap());
             assert_eq!(

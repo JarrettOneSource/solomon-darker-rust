@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use solomon_sim::Vec2;
-use solomon_sim::belt::{NativeBeltEntry, PLAYER_BELT_SLOT_COUNT};
+use solomon_sim::belt::{BeltEntry, PLAYER_BELT_SLOT_COUNT};
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::game_run::GameRunPhase;
 use solomon_sim::loot::{LootDropKind, OrbKind};
@@ -232,7 +232,7 @@ pub fn mod_player_control_observation(
     });
     let mut abilities = Vec::new();
     for (slot, entry) in profile.belt.entries.iter().enumerate() {
-        let Some(NativeBeltEntry::Skill { skill_id }) = entry else {
+        let Some(BeltEntry::Skill { skill_id }) = entry else {
             continue;
         };
         let skill_id = *skill_id;

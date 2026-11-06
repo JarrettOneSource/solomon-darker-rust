@@ -54,7 +54,7 @@ fn item_value(item: &HubInventoryItem) -> Value {
         ("iconTints", item.icon_tints.map(|value| json!(value))),
         ("inventorySlot", item.inventory_slot.map(|value| json!(value))),
         ("nativeSelector", item.selector.map(|value| json!(value))),
-        ("nativeEffects", item.native_effects.as_ref().map(|value| json!(value))),
+        ("nativeEffects", item.effects.as_ref().map(|value| json!(value))),
         ("modContent", item.mod_content.as_ref().map(|value| json!(value))),
         ("modItemContent", item.mod_item_content.as_ref().map(|value| json!(value))),
         ("modAffixes", item.mod_affixes.as_ref().map(|value| json!(value))),
@@ -173,7 +173,7 @@ fn authored_item_factories_stacks_clothing_reforge_and_reconciliation_match_sour
         };
         let mut item = mod_item_inventory_item(&definition, 1).unwrap();
         item.quantity = value["quantity"].as_u64().unwrap() as u32;
-        item.native_effects =
+        item.effects =
             value.get("nativeEffects").map(|value| serde_json::from_value(value.clone()).unwrap());
         assert_eq!(
             mod_item_inventory_identity_is_valid(&item),

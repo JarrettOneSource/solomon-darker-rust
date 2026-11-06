@@ -197,7 +197,7 @@ fn stock_compositor_records_transforms_and_passes_match_the_website() {
                     draw_alpha: 1.0,
                     fade_alpha: 0.7,
                     life: 1.5,
-                    native_type: FirePatchType::Fire,
+                    patch_type: FirePatchType::Fire,
                     position: origin,
                     horizontal_sign: -1.0,
                     scale: 0.8,

@@ -122,7 +122,7 @@ impl<'a> BoneyardEnemyGeometry<'a> {
     /// position lies within a light's circular reach; the radial light scalar then sets its
     /// intensity.
     #[must_use]
-    pub fn native_visibility(&self, position: Vec2) -> EnemyVisibility {
+    pub fn enemy_visibility(&self, position: Vec2) -> EnemyVisibility {
         let onscreen = self.views.iter().any(|view| {
             position.x - 32.0 < view.x + view.width
                 && position.x + 32.0 > view.x

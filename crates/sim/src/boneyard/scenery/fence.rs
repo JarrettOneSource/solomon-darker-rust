@@ -137,14 +137,14 @@ pub fn broken_fence_halves(
 /// The quad of an intact grate fence, inset 12 units from each end and 52 units tall, with
 /// its length and horizontal texture span.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct NativeFenceGrate {
+pub struct IntactFenceGrate {
     pub corners: [Vec2; 4],
     pub length: f64,
     pub u_span: f64,
 }
 
 #[must_use]
-pub fn native_fence_grate(points: &[Vec2]) -> Option<NativeFenceGrate> {
+pub fn intact_fence_grate(points: &[Vec2]) -> Option<IntactFenceGrate> {
     let (&start, &end) = (points.first()?, points.get(1)?);
     let dx = end.x - start.x;
     let dy = end.y - start.y;
@@ -155,7 +155,7 @@ pub fn native_fence_grate(points: &[Vec2]) -> Option<NativeFenceGrate> {
     let bottom_start = Vec2::new(start.x + dx / length * 12.0, start.y + dy / length * 12.0);
     let bottom_end = Vec2::new(end.x - dx / length * 12.0, end.y - dy / length * 12.0);
     let length = hypot(bottom_end.x - bottom_start.x, bottom_end.y - bottom_start.y);
-    Some(NativeFenceGrate {
+    Some(IntactFenceGrate {
         corners: [
             Vec2::new(bottom_start.x, bottom_start.y - 52.0),
             Vec2::new(bottom_end.x, bottom_end.y - 52.0),

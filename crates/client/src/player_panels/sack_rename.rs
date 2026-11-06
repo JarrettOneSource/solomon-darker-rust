@@ -2,7 +2,7 @@
 //! UTF-16 admission contract. Rejection keeps the exact draft available.
 use super::chrome::{PanelCanvas, rect};
 use super::{PlayerPanel, PlayerPanelAction, PlayerPanelSnapshot, PlayerPanels, Target};
-use crate::gpu_ui::{UiFrame, native_text};
+use crate::gpu_ui::{UiFrame, paint_stock_text};
 use solomon_sim::economy::{
     HubInventoryAction, HubInventoryItem, INVENTORY_SACK_NAME_MAX_LENGTH,
     normalize_inventory_sack_name,
@@ -191,7 +191,7 @@ impl PlayerPanels {
                         layout.limit_baseline,
                     ),
                 ] {
-                    native_text(
+                    paint_stock_text(
                         frame,
                         ui.painter(),
                         &UiTextSpec {
@@ -210,7 +210,7 @@ impl PlayerPanels {
                 let mut field = layout.field;
                 field.x += 20.0 + label_size.width;
                 field.width -= 30.0 + label_size.width;
-                native_text(
+                paint_stock_text(
                     frame,
                     ui.painter(),
                     &UiTextSpec {

@@ -1,7 +1,7 @@
 //! Actual secondary receiver admission and deferred newborn publication against Source.
-#[path = "../../sim/tests/support/native_bits.rs"]
+#[path = "../../sim/tests/support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::enemies::config::EnemyArenaScalars;
@@ -208,6 +208,6 @@ fn secondary_terminal_dispatch_precedes_next_hit_and_publishes_after_primary_pas
         let expected = &case["expected"];
         let expected = json!({"actors":expected["actors"],"rng":expected["rng"],"enemyRng":expected["enemyRng"],
             "nextSpellId":expected["nextSpellId"],"transients":expected["transients"],"painter":expected["painter"]});
-        native_bits::compare(&actual, &expected, case["name"].as_str().unwrap());
+        exact_bits::compare(&actual, &expected, case["name"].as_str().unwrap());
     }
 }

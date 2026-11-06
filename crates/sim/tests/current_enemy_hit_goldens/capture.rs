@@ -96,7 +96,7 @@ fn current_captures_suppress_family_death_children_and_effects_but_retain_reward
                 arena_scalars: EnemyArenaScalars::default(),
                 dialogue_busy: false,
                 roll_loot_seed: None,
-                native_visibility: None,
+                enemy_visibility: None,
                 projected_point_visible: None,
                 view_bounds: None,
                 puppet_targets: &[],

@@ -108,7 +108,7 @@ impl SocialUi {
                 if header.clicked() {
                     action = Some("party".to_owned());
                 }
-                gpu::native_text(
+                gpu::paint_stock_text(
                     frame,
                     ui.painter(),
                     &UiTextSpec {
@@ -180,7 +180,7 @@ impl SocialUi {
                     Color32::WHITE,
                 )?;
                 if !error.is_empty() {
-                    gpu::native_text(
+                    gpu::paint_stock_text(
                         frame,
                         ui.painter(),
                         &UiTextSpec {
@@ -215,7 +215,7 @@ impl SocialUi {
                     let limit = if tags.is_empty() { 188.0 } else { tags_left - 32.0 };
                     let font = party_menu_name_font(&name);
                     let fitted = fit_party_menu_text(&name, font, limit, 0.65);
-                    gpu::native_text(
+                    gpu::paint_stock_text(
                         frame,
                         ui.painter(),
                         &UiTextSpec {
@@ -228,7 +228,7 @@ impl SocialUi {
                     );
                     let mut tag_x = tags_left;
                     for (label, tint) in tags {
-                        gpu::native_text(
+                        gpu::paint_stock_text(
                             frame,
                             ui.painter(),
                             &UiTextSpec {

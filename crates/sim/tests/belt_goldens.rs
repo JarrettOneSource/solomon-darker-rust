@@ -7,10 +7,10 @@ use solomon_sim::profile::{SkillBookState, WizardDiscipline, WizardElement};
 
 fn belt_snapshot(belt: &PlayerBeltComponent) -> Value {
     json!(belt.entries.map(|entry| entry.map(|entry| match entry {
-        NativeBeltEntry::Skill { skill_id } => json!({"kind":"skill","skillId":skill_id}),
-        NativeBeltEntry::HealthPotion => json!({"kind":"health-potion"}),
-        NativeBeltEntry::ManaPotion => json!({"kind":"mana-potion"}),
-        NativeBeltEntry::Item { item_id, type_id } =>
+        BeltEntry::Skill { skill_id } => json!({"kind":"skill","skillId":skill_id}),
+        BeltEntry::HealthPotion => json!({"kind":"health-potion"}),
+        BeltEntry::ManaPotion => json!({"kind":"mana-potion"}),
+        BeltEntry::Item { item_id, type_id } =>
             json!({"kind":"item","itemId":item_id,"nativeTypeId":type_id}),
     })))
 }

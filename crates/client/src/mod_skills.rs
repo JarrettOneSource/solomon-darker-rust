@@ -15,7 +15,7 @@ pub struct ModSkillsSnapshot<'a> {
     /// Learned mod skills show only while the stock Skills panel is open.
     pub skills_open: bool,
     /// The pending stock skill offer's sequence; mod choices appear only beside such an offer.
-    pub native_offer_sequence: Option<u64>,
+    pub stock_offer_sequence: Option<u64>,
     pub assets: &'a [GameModAsset],
     pub images: Option<&'a ModPresentationAssets>,
 }
@@ -24,7 +24,7 @@ pub struct ModSkillsSnapshot<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ModSkillAction {
     QuickbarBind { content_id: String, slot: f64, clear: bool },
-    SkillChoose { content_id: String, mod_offer_sequence: f64, native_offer_sequence: u64 },
+    SkillChoose { content_id: String, mod_offer_sequence: f64, stock_offer_sequence: u64 },
 }
 
 #[derive(Clone, PartialEq)]
@@ -108,7 +108,7 @@ impl ModSkillsUi {
             }
         }
         let mut choice_rows = Vec::new();
-        if let Some(native_offer_sequence) = snapshot.native_offer_sequence
+        if let Some(stock_offer_sequence) = snapshot.stock_offer_sequence
             && let Some(offer) = project_mod_skill_picker(snapshot.runtime, snapshot.player_id)
         {
             for skill in offer.skills {
@@ -123,7 +123,7 @@ impl ModSkillsUi {
                 row.action = Some(ModSkillAction::SkillChoose {
                     content_id: skill.content_id.to_owned(),
                     mod_offer_sequence: offer.sequence,
-                    native_offer_sequence,
+                    stock_offer_sequence,
                 });
                 choice_rows.push(row);
             }

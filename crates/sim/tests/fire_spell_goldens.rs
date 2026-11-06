@@ -31,7 +31,7 @@ fn spent_ember(value: SpentEmber) -> Value {
 }
 
 fn patch_row(patch: &PrimarySpellFirePatch) -> Value {
-    let native_type = match patch.native_type {
+    let patch_type = match patch.patch_type {
         FirePatchType::Fire => "fire",
         FirePatchType::GoodGuy => "goodguy",
         FirePatchType::Moving => "moving",
@@ -44,7 +44,7 @@ fn patch_row(patch: &PrimarySpellFirePatch) -> Value {
         "atlasPhaseStep": patch.atlas_phase_step, "burnDamage": patch.burn_damage,
         "damage": patch.damage, "drawAlpha": patch.draw_alpha, "fadeAlpha": patch.fade_alpha,
         "id": patch.common.id, "kind": "fire-patch", "life": patch.life,
-        "nativeType": native_type, "ownerId": patch.common.owner_id,
+        "nativeType": patch_type, "ownerId": patch.common.owner_id,
         "painterRegistrations": registrations, "position": point(patch.position),
         "scale": patch.scale, "horizontalSign": patch.horizontal_sign,
         "supplementalContact": patch.supplemental_contact, "velocity": point(patch.velocity),
@@ -174,7 +174,7 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
         serde_json::from_str(include_str!("fixtures/website/fire-spell-goldens.json")).unwrap();
     for case in fixture["patches"].as_array().unwrap() {
         let moving = case["nativeType"] == "moving";
-        let native_type = match case["nativeType"].as_str().unwrap() {
+        let patch_type = match case["nativeType"].as_str().unwrap() {
             "fire" => FirePatchType::Fire,
             "goodguy" => FirePatchType::GoodGuy,
             _ => FirePatchType::Moving,
@@ -189,7 +189,7 @@ fn fire_native_lifecycles_and_random_streams_replay_the_website() {
                 fade_alpha: None,
                 id: 1,
                 life: moving.then_some(0.03),
-                native_type,
+                patch_type,
                 owner_id: "owner".into(),
                 painter_registration: None,
                 position: Vec2::new(123.1, -456.2),

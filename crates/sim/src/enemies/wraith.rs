@@ -46,7 +46,7 @@ pub fn step_wraith(
     let EnemyBrain::Wraith(mut brain) = actor.brain.clone() else {
         panic!("Wraith brain required");
     };
-    let admitted = context.native_visibility.is_none_or(|visible| visible(actor.position).admitted);
+    let admitted = context.enemy_visibility.is_none_or(|visible| visible(actor.position).admitted);
     step_wraith_flight_clock(&mut brain, admitted);
     let clear_recipient = brain.collision_recipient;
     brain.collision_recipient = false;
@@ -287,7 +287,7 @@ pub fn spawn_wraith_wisp(
         return;
     };
     if actor.life_state != EnemyLifeState::Alive
-        || context.native_visibility.is_some_and(|visible| !visible(actor.position).admitted)
+        || context.enemy_visibility.is_some_and(|visible| !visible(actor.position).admitted)
     {
         return;
     }

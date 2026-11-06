@@ -7,7 +7,7 @@ use egui::{Color32, FontId, Id, Pos2, Rect, Response, Sense, Stroke, Ui, Vec2, v
 use super::model::Model;
 use super::{
     EditorDescriptor, EditorFont, EditorRules, FontRunOptions, TextSelection,
-    font_run_with_options, native_name_geometry,
+    font_run_with_options, wizard_name_geometry,
 };
 use crate::gpu_ui::UiFrame;
 
@@ -91,8 +91,8 @@ impl<'a> NativeTextEdit<'a> {
         self.font = EditorFont::Browser(font);
         self
     }
-    pub fn native_name(mut self, origin: Pos2, scale: f32) -> Self {
-        self.font = EditorFont::NativeName { origin, scale, field: Rect::NOTHING };
+    pub fn wizard_name_font(mut self, origin: Pos2, scale: f32) -> Self {
+        self.font = EditorFont::WizardName { origin, scale, field: Rect::NOTHING };
         self
     }
     pub fn color(mut self, color: Color32) -> Self {
@@ -239,7 +239,7 @@ impl<'a> NativeTextEdit<'a> {
         }
         let content = rect.shrink2(self.margin);
         let mut font = self.font.clone();
-        if let EditorFont::NativeName { field, .. } = &mut font {
+        if let EditorFont::WizardName { field, .. } = &mut font {
             *field = content;
         }
         let result = self.paint_and_register(frame, &child, &response, &mut state, content, font);
@@ -278,8 +278,8 @@ impl<'a> NativeTextEdit<'a> {
                 )?;
                 (run.geometry.clone(), Some(run))
             }
-            EditorFont::NativeName { origin, scale, .. } => {
-                (native_name_geometry(self.text, *origin, *scale, content), None)
+            EditorFont::WizardName { origin, scale, .. } => {
+                (wizard_name_geometry(self.text, *origin, *scale, content), None)
             }
         };
         let has_focus = response.has_focus() && response.enabled();
@@ -367,7 +367,7 @@ impl<'a> NativeTextEdit<'a> {
                     };
                     hint.paint(frame, &painter, content.min + vec2(hint_x, vertical), 1.0)?;
                 }
-            } else if let EditorFont::NativeName { origin, scale, .. } = &font {
+            } else if let EditorFont::WizardName { origin, scale, .. } = &font {
                 paint_native_name(frame, &painter, self.text, *origin, *scale);
             }
             if has_focus {

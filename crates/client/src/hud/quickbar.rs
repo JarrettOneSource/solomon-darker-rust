@@ -2,7 +2,7 @@
 //! and active flags. Mana formulas stay in the simulation.
 
 use solomon_sim::belt::{
-    BELT_SLOT_COUNT, BeltPotionKind, NativeBeltEntry, belt_entry_item, belt_potion_projection,
+    BELT_SLOT_COUNT, BeltEntry, BeltPotionKind, belt_entry_item, belt_potion_projection,
 };
 use solomon_sim::hud::quickbar::{
     SkillQuickbarCooldownPresentation, skill_quickbar_cooldown_presentation,
@@ -63,7 +63,7 @@ impl Hud {
                     format!("key {binding_label}")
                 };
                 let skill_id = match entry {
-                    Some(NativeBeltEntry::Skill { skill_id }) => Some(*skill_id),
+                    Some(BeltEntry::Skill { skill_id }) => Some(*skill_id),
                     _ => None,
                 };
                 let category = skill_id.and_then(skill_category);
@@ -112,11 +112,11 @@ impl Hud {
                         })
                 });
                 let potion = match entry {
-                    Some(NativeBeltEntry::HealthPotion) => Some(belt_potion_projection(
+                    Some(BeltEntry::HealthPotion) => Some(belt_potion_projection(
                         &player.economy.backpack,
                         BeltPotionKind::Health,
                     )),
-                    Some(NativeBeltEntry::ManaPotion) => {
+                    Some(BeltEntry::ManaPotion) => {
                         Some(belt_potion_projection(&player.economy.backpack, BeltPotionKind::Mana))
                     }
                     _ => None,
@@ -124,18 +124,18 @@ impl Hud {
                 let item = entry.and_then(|entry| belt_entry_item(entry, &player.economy));
                 let entry_kind = match entry {
                     None => "empty",
-                    Some(NativeBeltEntry::Skill { .. }) => "skill",
-                    Some(NativeBeltEntry::HealthPotion) => "health-potion",
-                    Some(NativeBeltEntry::ManaPotion) => "mana-potion",
-                    Some(NativeBeltEntry::Item { .. }) => "item",
+                    Some(BeltEntry::Skill { .. }) => "skill",
+                    Some(BeltEntry::HealthPotion) => "health-potion",
+                    Some(BeltEntry::ManaPotion) => "mana-potion",
+                    Some(BeltEntry::Item { .. }) => "item",
                 };
                 let mut label = if entry.is_none() {
                     format!("Empty belt slot {}, {input}", slot + 1)
                 } else {
                     let name = match entry {
-                        Some(NativeBeltEntry::Skill { skill_id }) => SKILL_CATALOG[*skill_id].name,
-                        Some(NativeBeltEntry::HealthPotion) => "Health Potion",
-                        Some(NativeBeltEntry::ManaPotion) => "Mana Potion",
+                        Some(BeltEntry::Skill { skill_id }) => SKILL_CATALOG[*skill_id].name,
+                        Some(BeltEntry::HealthPotion) => "Health Potion",
+                        Some(BeltEntry::ManaPotion) => "Mana Potion",
                         _ => item.map_or("Unavailable item", |item| &item.name),
                     };
                     format!("{name}, {input}")

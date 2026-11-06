@@ -1464,10 +1464,10 @@ fn skill_view_action(
             }
             (ModAction::QuickbarBind, content_id, arguments)
         }
-        ModSkillAction::SkillChoose { content_id, mod_offer_sequence, native_offer_sequence } => {
+        ModSkillAction::SkillChoose { content_id, mod_offer_sequence, stock_offer_sequence } => {
             let arguments = [
                 ("mod_offer_sequence".into(), LuaValue::Number(mod_offer_sequence)),
-                ("native_offer_sequence".into(), LuaValue::Number(native_offer_sequence as f64)),
+                ("native_offer_sequence".into(), LuaValue::Number(stock_offer_sequence as f64)),
             ]
             .into_iter()
             .collect();

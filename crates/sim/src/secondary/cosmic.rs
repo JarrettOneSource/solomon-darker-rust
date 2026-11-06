@@ -265,7 +265,7 @@ fn appendage<W: SecondaryWorld>(
                     LEVIATHAN_TARGET_RANGE,
                 ));
                 targets.retain(|target| {
-                    target.native_flags.unwrap_or(2) & 2 != 0
+                    target.actor_flags.unwrap_or(2) & 2 != 0
                         && leviathan_inside_target_lane(origin, heading, target.position)
                         && !engine.world.line_obstruction(&actor.world_key, origin, target.position)
                 });

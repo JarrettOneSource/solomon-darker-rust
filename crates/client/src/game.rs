@@ -45,7 +45,7 @@ use solomon_sim::Vec2;
 use solomon_sim::appearance::StarterEquipmentAppearance;
 use solomon_sim::audio::MusicScene;
 use solomon_sim::audio::combat::{CombatAudioCursor, CombatAudioFrame, CombatAudioPlayer};
-use solomon_sim::belt::{BeltPotionKind, NativeBeltEntry, belt_potion_projection};
+use solomon_sim::belt::{BeltEntry, BeltPotionKind, belt_potion_projection};
 use solomon_sim::boneyard::BONEYARD_CAMERA_SCALE;
 use solomon_sim::boneyard::LoadedBoneyard;
 use solomon_sim::boneyard::lighting::BoneyardLightIndex;
@@ -393,7 +393,7 @@ impl Game {
             wizard.gait_degrees,
             wizard.walk_cycle_primary,
             self.session.ticks as f64,
-            f64::from(wizard.region.native_id()),
+            f64::from(wizard.region.index()),
             wizard.transition.map_or(-1.0, |transition| match transition.phase {
                 solomon_sim::hub::regions::HubTransitionPhase::CollegeIntro => 0.0,
                 solomon_sim::hub::regions::HubTransitionPhase::CollegeLoadout => 1.0,
@@ -884,7 +884,7 @@ impl Game {
             // Held skills execute during the fixed tick; item activation is a press edge.
             if !matches!(
                 self.session.participants[&self.local_player_id].player.belt.entries[*slot],
-                Some(NativeBeltEntry::Skill { .. })
+                Some(BeltEntry::Skill { .. })
             ) {
                 self.activate_belt_slot(*slot, None, time)?;
             }
@@ -1945,7 +1945,7 @@ impl Game {
         let Some(entry) = player.belt.entries.get(slot).copied().flatten() else {
             return Ok(());
         };
-        let action = if matches!(entry, NativeBeltEntry::Skill { .. }) {
+        let action = if matches!(entry, BeltEntry::Skill { .. }) {
             None
         } else {
             let Some(item) = solomon_sim::belt::belt_entry_item(entry, &player.economy) else {
@@ -2201,7 +2201,7 @@ impl Game {
             .enumerate()
         {
             hud.belt[slot] = match entry {
-                Some(NativeBeltEntry::Skill { skill_id }) => Some(HudBeltEntry::Skill {
+                Some(BeltEntry::Skill { skill_id }) => Some(HudBeltEntry::Skill {
                     record: player.book.skill_icon_record(*skill_id),
                     unavailable: self.session.boneyard.is_none()
                         || !player.combat.can_cast()
@@ -2210,15 +2210,15 @@ impl Game {
                                 || state.cooldown_ticks_by_skill[*skill_id] > 0.0
                         }),
                 }),
-                Some(NativeBeltEntry::HealthPotion) => Some(HudBeltEntry::HealthPotion {
+                Some(BeltEntry::HealthPotion) => Some(HudBeltEntry::HealthPotion {
                     count: belt_potion_projection(&player.economy.backpack, BeltPotionKind::Health)
                         .count as u32,
                 }),
-                Some(NativeBeltEntry::ManaPotion) => Some(HudBeltEntry::ManaPotion {
+                Some(BeltEntry::ManaPotion) => Some(HudBeltEntry::ManaPotion {
                     count: belt_potion_projection(&player.economy.backpack, BeltPotionKind::Mana)
                         .count as u32,
                 }),
-                Some(entry @ NativeBeltEntry::Item { .. }) => {
+                Some(entry @ BeltEntry::Item { .. }) => {
                     solomon_sim::belt::belt_entry_item(*entry, &player.economy).map(|item| {
                         HudBeltEntry::Item {
                             icon: HudItemIcon::from_item(item, player.selection.element),

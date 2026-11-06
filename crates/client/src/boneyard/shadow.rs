@@ -11,10 +11,10 @@ use solomon_sim::boneyard::shadows::shadow_records;
 
 use super::*;
 
-/// A scenery shadow's image and its native glyph geometry.
+/// A scenery shadow's image and its glyph geometry.
 pub(super) struct SceneryShadowGlyph {
     pub image: String,
-    pub geometry: NativeSceneryShadowGlyph,
+    pub geometry: SceneryGlyphGeometry,
 }
 
 /// A scenery layer's shadow quads with complex shadows off and on.

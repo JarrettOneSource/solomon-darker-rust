@@ -5,7 +5,7 @@ use crate::spells::staff::PlayerStaffTransient;
 
 use super::*;
 use crate::Vec2;
-use crate::belt::NativeBeltEntry;
+use crate::belt::BeltEntry;
 use crate::boneyard::navigation::NavigationSet;
 use crate::boneyard::tutorial::{TutorialSurfaceAction, tutorial_hud_access};
 use crate::boneyard::world::{
@@ -101,7 +101,7 @@ impl GameSession {
         let category =
             input.quickbar.and_then(|slot| player.belt.entries.get(slot)).and_then(|entry| {
                 match entry {
-                    Some(NativeBeltEntry::Skill { skill_id }) => skill_category(*skill_id),
+                    Some(BeltEntry::Skill { skill_id }) => skill_category(*skill_id),
                     _ => None,
                 }
             });
@@ -255,8 +255,7 @@ impl GameSession {
             return;
         };
         let participant = self.participants.get_mut(id).unwrap();
-        let Some(Some(NativeBeltEntry::Skill { skill_id })) =
-            participant.player.belt.entries.get(slot)
+        let Some(Some(BeltEntry::Skill { skill_id })) = participant.player.belt.entries.get(slot)
         else {
             return;
         };

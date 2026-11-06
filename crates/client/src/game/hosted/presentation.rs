@@ -165,7 +165,7 @@ impl Game {
             runtime: hosted.runtime.as_ref(),
             player_id: &self.local_player_id,
             skills_open: self.panels.panel() == Some(PlayerPanel::Skills),
-            native_offer_sequence: self.session.participants[&self.local_player_id]
+            stock_offer_sequence: self.session.participants[&self.local_player_id]
                 .player
                 .progression
                 .pending_offer

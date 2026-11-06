@@ -22,7 +22,7 @@ use solomon_sim::boneyard::presentation::{
     BoneyardPainterEntry, BoneyardPainterProxy, TreeOcclusion, boneyard_painter_order, gate_art,
 };
 use solomon_sim::boneyard::scenery::{
-    NativeSceneryShadowGlyph, SceneryShadowQuad, TreeOcclusionPresentation, tree_secondary_position,
+    SceneryGlyphGeometry, SceneryShadowQuad, TreeOcclusionPresentation, tree_secondary_position,
 };
 use solomon_sim::boneyard::shadows::{
     ShadowCaster, ShadowEdge, ShadowProgram, shadow_edges, shadow_line,

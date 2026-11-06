@@ -66,7 +66,7 @@ pub fn create_portable_game_profile_from_web_save(
     } else {
         NativeGameBoastState {
             failed: player.economy.npc.boast.failed,
-            selected: selected_boast.and_then(BoastSelection::native_id),
+            selected: selected_boast.and_then(BoastSelection::stock_id),
             succeeded: player.economy.npc.boast.succeeded,
         }
     };

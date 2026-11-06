@@ -230,7 +230,7 @@ impl PlayerState {
         let magical_equipment = match action {
             HubInventoryAction::Equip { item_id, .. } => {
                 find_inventory_item(&self.economy.backpack, *item_id).is_some_and(|item| {
-                    item.native_effects.as_ref().map_or_else(
+                    item.effects.as_ref().map_or_else(
                         || {
                             item.recipe_index
                                 .is_some_and(|index| !equipment_recipe_effects(index).is_empty())

@@ -1,6 +1,6 @@
 //! Native earned skill selection. The accepted offer sequence and simulation
 //! command admission remain canonical; transitions retain their displayed offer.
-use crate::gpu_ui::{StockAtlas, UiFrame, native_text};
+use crate::gpu_ui::{StockAtlas, UiFrame, paint_stock_text};
 use crate::player_panels::chrome::{color, rect};
 use solomon_sim::audio::{AudioCue, AudioEvent, AudioOptions};
 use solomon_sim::float;
@@ -513,7 +513,7 @@ impl SkillPicker {
         let level_y = if self.compact { 112.0 } else { 262.5 };
         for degrees in (0..360).step_by(45) {
             let angle = degrees as f64 * std::f64::consts::PI / 180.0;
-            native_text(
+            paint_stock_text(
                 frame,
                 p,
                 &TextSpec {
@@ -528,7 +528,7 @@ impl SkillPicker {
                 },
             );
         }
-        native_text(
+        paint_stock_text(
             frame,
             p,
             &TextSpec {
@@ -852,7 +852,7 @@ fn paint_card_text(
     ] {
         let line_height = (font == Font::Medium).then_some(17.0);
         if !insight {
-            native_text(
+            paint_stock_text(
                 frame,
                 p,
                 &TextSpec {
@@ -863,7 +863,7 @@ fn paint_card_text(
                 },
             );
         }
-        native_text(
+        paint_stock_text(
             frame,
             p,
             &TextSpec {
@@ -874,7 +874,7 @@ fn paint_card_text(
             },
         );
     }
-    native_text(
+    paint_stock_text(
         frame,
         p,
         &TextSpec {
@@ -890,7 +890,7 @@ fn paint_card_text(
         },
     );
     if insight {
-        native_text(
+        paint_stock_text(
             frame,
             p,
             &TextSpec {

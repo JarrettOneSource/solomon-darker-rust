@@ -55,7 +55,7 @@ fn current_enemy_quality_preserves_actual_births_rng_and_painter_order() {
             arena_scalars: EnemyArenaScalars::default(),
             dialogue_busy: false,
             roll_loot_seed: None,
-            native_visibility: None,
+            enemy_visibility: None,
             projected_point_visible: None,
             view_bounds: None,
             puppet_targets: &[],

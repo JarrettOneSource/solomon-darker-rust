@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::program::*;
 use super::*;
 use crate::Vec2;
-use crate::belt::NativeBeltEntry;
+use crate::belt::BeltEntry;
 use crate::float::{atan2, fround};
 use crate::painter::WorldPainterOrder;
 use crate::profile::offensive::resolve_skill_damage_value;
@@ -57,7 +57,7 @@ impl<W: SecondaryWorld> StepEngine<'_, '_, '_, W> {
             by_id.insert(id.clone(), target);
             query_targets.push(PrimarySpellTarget {
                 active: true,
-                actor_flags: target.native_flags.unwrap_or(2),
+                actor_flags: target.actor_flags.unwrap_or(2),
                 attachment: target.position,
                 body_radius: target.radius,
                 cell_binding_order: order,
@@ -497,8 +497,7 @@ fn step_players<W: SecondaryWorld>(engine: &mut StepEngine<'_, '_, '_, W>) {
         }
         let slot = authority.input.quickbar;
         if let Some(slot) = slot.filter(|slot| Some(*slot) != player.held_slot)
-            && let Some(Some(NativeBeltEntry::Skill { skill_id })) =
-                authority.belt.entries.get(slot)
+            && let Some(Some(BeltEntry::Skill { skill_id })) = authority.belt.entries.get(slot)
             && let Some(ability) = SecondaryAbilityId::from_skill_id(*skill_id)
         {
             let result = super::casting::cast_ability(

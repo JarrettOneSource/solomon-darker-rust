@@ -120,7 +120,7 @@ fn fade_line_json(state: &FadeLineState) -> Value {
 }
 pub(super) fn silk_actor_json(actor: &EnemySilkActor) -> Value {
     json!({"id":actor.id,"ownerActorId":actor.owner_actor_id,"spawnTick":actor.spawn_tick,"state":silk_state_json(&actor.state),
-        "nativeRegistrationOrder":actor.native_registration_order,"nativeCellBindingOrder":actor.native_cell_binding_order,"painterRegistration":painter_registration_json(actor.painter_registration)})
+        "nativeRegistrationOrder":actor.registration_order,"nativeCellBindingOrder":actor.cell_binding_order,"painterRegistration":painter_registration_json(actor.painter_registration)})
 }
 fn webbed_json(state: Option<WebbedState>) -> Value {
     state.map_or(Value::Null,|state|json!({"severity":state.severity,"strength":state.strength,"cocoonHealth":state.cocoon_health,"hitPulse":state.hit_pulse}))
@@ -256,8 +256,8 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
             owner_actor_id: 1,
             spawn_tick: 0,
             state: silk_state(&case["initial"]),
-            native_registration_order: 50,
-            native_cell_binding_order: 50,
+            registration_order: 50,
+            cell_binding_order: 50,
             painter_registration: solomon_sim::painter::PainterRegistration {
                 manager_lane: solomon_sim::painter::WorldManagerLane::Actor,
                 registration_ordinal: 17,

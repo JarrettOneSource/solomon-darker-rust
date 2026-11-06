@@ -1,8 +1,8 @@
 //! Current Staff/Golem native area recurrence and ownership of the shared RNG.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 
 use serde_json::{Value, json};
 use solomon_sim::spells::model::PrimarySpellTransientBase;
@@ -59,9 +59,9 @@ fn current_staff_area_uses_native_proposals_and_removes_missing_rows_before_expi
                 "displacements":stepped.displacements.iter().map(|row|json!({"targetId":row.target_id,"delta":row.delta})).collect::<Vec<_>>(),
                 "headingPerturbations":stepped.heading_perturbations.iter().map(|row|json!({"targetId":row.target_id,"headingDegrees":row.heading_degrees})).collect::<Vec<_>>(),"rng":rng(&random)});
             let expected = frame["expected"].clone();
-            native_bits::compare(
-                &native_bits::source_value(&actual),
-                &native_bits::source_value(&expected),
+            exact_bits::compare(
+                &exact_bits::source_value(&actual),
+                &exact_bits::source_value(&expected),
                 &format!("budget{} tick{}", case["budget"], index + 1),
             );
             if let Some(next) = stepped.actor {
@@ -140,9 +140,9 @@ fn shared_area_queries_observe_each_move_and_visit_new_collision_recipients_once
                 "headingPerturbations":step.heading_perturbations.iter().map(|row|json!({"targetId":row.target_id,"headingDegrees":row.heading_degrees})).collect::<Vec<_>>(),
                 "remainingDistance":step.remaining_distance,"rng":rng(&random),"targetIds":step.target_ids,"terminal":step.terminal,
                 "moves":world.moves,"positions":world.positions});
-            native_bits::compare(
-                &native_bits::source_value(&actual),
-                &native_bits::source_value(&frame["expected"]),
+            exact_bits::compare(
+                &exact_bits::source_value(&actual),
+                &exact_bits::source_value(&frame["expected"]),
                 &format!("{} budget{} tick{}", case["mode"], case["budget"], index + 1),
             );
             remaining_distance = step.remaining_distance;

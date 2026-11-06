@@ -80,16 +80,11 @@ impl ser::Serializer for SourceSerializer {
                 _ => unreachable!("other enemy families carry their payload"),
             });
         }
-        Ok(
-            if matches!(
-                name,
-                "NativeBeltEntry" | "SpentEmber" | "SpiderCommand" | "SkillBookOutcome"
-            ) {
-                serde_json::json!({"kind": tag})
-            } else {
-                Value::String(tag)
-            },
-        )
+        Ok(if matches!(name, "BeltEntry" | "SpentEmber" | "SpiderCommand" | "SkillBookOutcome") {
+            serde_json::json!({"kind": tag})
+        } else {
+            Value::String(tag)
+        })
     }
 
     fn serialize_newtype_variant<T: Serialize + ?Sized>(

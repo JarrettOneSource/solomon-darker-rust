@@ -1,8 +1,8 @@
 //! Retained modifiers and real rescue waves follow current Source identity and cell order.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod support;
@@ -102,9 +102,9 @@ fn modifiers_end_at_actor_destruction_and_world_identity_changes() {
                 &mut World { retained: frame["retained"].clone(), targets: Vec::new() },
                 None,
             );
-            native_bits::compare(
-                &native_bits::source_value(&snapshot(&state)),
-                &native_bits::source_value(&frame["expected"]),
+            exact_bits::compare(
+                &exact_bits::source_value(&snapshot(&state)),
+                &exact_bits::source_value(&frame["expected"]),
                 &format!("{} tick{tick}", case["kind"]),
             );
         }
@@ -160,9 +160,9 @@ fn rescue_wave_contacts_follow_native_cells_and_registration_order() {
             actual["hitTargetIds"] = json!(state.actors[0].hit_target_ids);
             actual["damagedTargetIds"] =
                 json!(result.damage.iter().map(|contact| contact.target_id).collect::<Vec<_>>());
-            native_bits::compare(
-                &native_bits::source_value(&actual),
-                &native_bits::source_value(&frames[frame_index]["expected"]),
+            exact_bits::compare(
+                &exact_bits::source_value(&actual),
+                &exact_bits::source_value(&frames[frame_index]["expected"]),
                 &format!("{} tick{tick}", case["orderMode"]),
             );
             frame_index += 1;

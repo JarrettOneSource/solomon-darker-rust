@@ -70,14 +70,14 @@ impl EnemyGeometry for ProjectileFixtureGeometry<'_> {
 }
 
 pub(super) fn fire_patch_json(patch: &PrimarySpellFirePatch) -> Value {
-    let native_type = match patch.native_type {
+    let patch_type = match patch.patch_type {
         FirePatchType::Fire => "fire",
         FirePatchType::GoodGuy => "goodguy",
         FirePatchType::Moving => "moving",
     };
     json!({"ageTicks":patch.common.age_ticks,"atlasPhase":patch.atlas_phase,"atlasPhaseStep":patch.atlas_phase_step,
         "burnDamage":patch.burn_damage,"damage":patch.damage,"drawAlpha":patch.draw_alpha,"fadeAlpha":patch.fade_alpha,
-        "id":patch.common.id,"kind":"fire-patch","life":patch.life,"nativeType":native_type,"ownerId":patch.common.owner_id,
+        "id":patch.common.id,"kind":"fire-patch","life":patch.life,"nativeType":patch_type,"ownerId":patch.common.owner_id,
         "painterRegistrations":patch.common.painter_registrations.iter().copied().map(painter_registration_json).collect::<Vec<_>>(),
         "position":point_json(patch.position),"scale":patch.scale,"horizontalSign":patch.horizontal_sign,
         "supplementalContact":patch.supplemental_contact,"velocity":point_json(patch.velocity),"velocityMultiplier":point_json(patch.velocity_multiplier),
@@ -335,7 +335,7 @@ fn projectile_world_queries_contacts_hazards_and_retirement_match_the_website() 
                     arena_scalars: EnemyArenaScalars::default(),
                     dialogue_busy: false,
                     roll_loot_seed: None,
-                    native_visibility: None,
+                    enemy_visibility: None,
                     projected_point_visible: None,
                     view_bounds: None,
                     puppet_targets: &[],

@@ -157,7 +157,7 @@ impl EnemyWorld {
                 super::projectile_hazards::spawn_burning_skeleton_fire(self, &actor, tick, order);
                 super::wraith::spawn_wraith_wisp(self, &actor, &actor_context, order);
                 if primary_cell_changed(before, actor.position) {
-                    actor.native_cell_binding_order = self.next_cell_binding_order;
+                    actor.cell_binding_order = self.next_cell_binding_order;
                     self.next_cell_binding_order += 1;
                 }
                 actor.config = authored_config;
@@ -181,7 +181,7 @@ impl EnemyWorld {
             if maggot_positions.iter().any(|(id, position)| {
                 *id == actor.id && primary_cell_changed(*position, actor.position)
             }) {
-                actor.native_cell_binding_order = self.next_cell_binding_order;
+                actor.cell_binding_order = self.next_cell_binding_order;
                 self.next_cell_binding_order += 1;
             }
         }
@@ -198,7 +198,7 @@ impl EnemyWorld {
             if projectile_positions.iter().any(|(id, position)| {
                 *id == state.id && primary_cell_changed(*position, state.position)
             }) {
-                state.native_cell_binding_order = self.next_cell_binding_order;
+                state.cell_binding_order = self.next_cell_binding_order;
                 self.next_cell_binding_order += 1;
             }
         }

@@ -179,7 +179,7 @@ fn setup(
                 target: effect["target"].as_u64().unwrap() as u32,
             });
         }
-        economy.equipment.hat.as_mut().unwrap().native_effects = Some(configured);
+        economy.equipment.hat.as_mut().unwrap().effects = Some(configured);
     }
     economy.owned_perk_selectors =
         value["owned"].as_array().unwrap().iter().map(|id| id.as_u64().unwrap() as u32).collect();
@@ -475,7 +475,7 @@ fn temporary_skills_retain_visible_order_across_provider_and_permanent_changes()
                         "robe" => economy.equipment.robe.as_mut().unwrap(),
                         other => panic!("unknown Source slot {other}"),
                     };
-                    item.native_effects = Some(effects);
+                    item.effects = Some(effects);
                 }
                 "primary" => book.select_primary(action["skillId"].as_u64().unwrap() as usize),
                 "grant" => book.grant_ranks(action["skillId"].as_u64().unwrap() as usize, 1),

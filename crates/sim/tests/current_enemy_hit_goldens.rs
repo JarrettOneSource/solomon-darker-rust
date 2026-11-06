@@ -157,7 +157,7 @@ fn current_hit_reaction_and_visible_feedback_have_independent_lifetimes() {
                         arena_scalars: EnemyArenaScalars::default(),
                         dialogue_busy: false,
                         roll_loot_seed: None,
-                        native_visibility: None,
+                        enemy_visibility: None,
                         projected_point_visible: None,
                         view_bounds: None,
                         puppet_targets: &[],

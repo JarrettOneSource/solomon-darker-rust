@@ -484,7 +484,7 @@ fn hub_regions_doorways_and_scripted_walks_replay_the_website_kernels() {
     let regions: Vec<HubRegion> = goldens.regions.iter().map(|record| region(&record.id)).collect();
     assert_eq!(regions, HubRegion::ALL, "region order");
     for (record, region) in goldens.regions.iter().zip(regions.iter().copied()) {
-        assert_eq!(region.native_id(), record.native_id, "{} native id", record.id);
+        assert_eq!(region.index(), record.native_id, "{} native id", record.id);
         assert_eq!(region.size(), vec2(record.size), "{} size", record.id);
         assert_eq!(hub_incoming_fade_rate(region), record.incoming_fade_rate, "{} fade", record.id);
         if region == HubRegion::Courtyard {
@@ -1011,7 +1011,7 @@ fn private_rooms_collision_presentation_and_doorway_lifecycles_match_the_website
                 wizard.gait_degrees,
                 wizard.walk_cycle_primary,
                 f64::from(rng),
-                f64::from(wizard.region.native_id()),
+                f64::from(wizard.region.index()),
                 phase,
                 alpha,
                 speed,
@@ -1525,7 +1525,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             name: value["name"].as_str().unwrap().to_owned(),
             subtype: value["nativeSubtype"].as_u64().map(|value| value as u32),
             selector: value["nativeSelector"].as_u64().map(|value| value as u32),
-            native_effects: value["nativeEffects"].as_array().map(|values| {
+            effects: value["nativeEffects"].as_array().map(|values| {
                 values
                     .iter()
                     .map(|effect| EquipmentEffect {
@@ -1554,7 +1554,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             "recipeIndex":item.recipe_index, "generatedLevel":item.generated_level,
             "iconRecords":item.icon_records, "iconTints":item.icon_tints,
             "nativeSelector":item.selector,
-            "nativeEffects":item.native_effects.as_ref().map(|effects| effects.iter().map(|effect| json!({
+            "nativeEffects":item.effects.as_ref().map(|effects| effects.iter().map(|effect| json!({
                 "kind":effect.kind,"magnitude":effect.magnitude,"operator":effect.operator,"target":effect.target,
             })).collect::<Vec<_>>()),
             "rarity":item.rarity.map(|rarity| match rarity { ItemRarity::Epic => "Epic", ItemRarity::Rare => "Rare" }),
@@ -1672,7 +1672,7 @@ fn stock_inventory_and_every_college_service_replay_the_website() {
             "firstMixedSelectors":state.first_mixed_selectors,"hagathaBundleSelectors":state.hagatha_bundle_selectors,
             "nextItemId":state.next_item_id,"nextOfferId":state.next_offer_id,
             "npc":{"boast":{"failed":state.npc.boast.failed,"failureSequence":state.npc.boast.failure_sequence,
-                "selected":state.npc.boast.selected_native(),"succeeded":state.npc.boast.succeeded},
+                "selected":state.npc.boast.selected_stock(),"succeeded":state.npc.boast.succeeded},
                 "helpFlags":state.npc.help_flags,"librarianLaceRead":state.npc.librarian_lace_read},
             "ownedPerkSelectors":state.owned_perk_selectors,"revision":state.revision,
             "rng":{"indexA":state.rng.index_a,"indexB":state.rng.index_b,"words":&state.rng.words[..]},

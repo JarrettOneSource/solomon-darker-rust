@@ -27,7 +27,7 @@ pub fn step_demon_skull(
     let EnemyBrain::DemonSkull(brain) = &mut actor.brain else {
         panic!("DemonSkull brain required")
     };
-    let admitted = context.native_visibility.is_none_or(|visible| visible(actor.position).admitted);
+    let admitted = context.enemy_visibility.is_none_or(|visible| visible(actor.position).admitted);
     prepare_demon_skull_tick(brain, admitted);
     let effect = context.ability_effect(actor.id);
     let disrupted = effect.disrupted_ticks > 0;

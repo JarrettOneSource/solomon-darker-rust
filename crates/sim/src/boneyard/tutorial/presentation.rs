@@ -189,8 +189,7 @@ pub fn tutorial_amulet_item() -> HubInventoryItem {
     item.equipment_type = Some(EquipmentType::Amulet);
     item.selector = Some(0);
     item.icon_tints = Some([Some(0xff_ffff), Some(0xff_ffff)]);
-    item.native_effects =
-        Some(vec![EquipmentEffect { kind: 2, magnitude: 10.0, operator: 2, target: 0 }]);
+    item.effects = Some(vec![EquipmentEffect { kind: 2, magnitude: 10.0, operator: 2, target: 0 }]);
     item
 }
 
@@ -214,5 +213,5 @@ pub fn tutorial_amulet_identity_matches(item: &HubInventoryItem) -> bool {
         && item.generated_level.is_none()
         && item.icon_records == identity.icon_records
         && item.icon_tints == identity.icon_tints
-        && item.native_effects == identity.native_effects
+        && item.effects == identity.effects
 }

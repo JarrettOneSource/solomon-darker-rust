@@ -1107,7 +1107,7 @@ impl SettingsView {
             game_binding_label(self.settings.controls.code(action))
         };
         let position = plate.center() + Vec2::new(0.0, 4.0);
-        crate::gpu_ui::native_text(
+        crate::gpu_ui::paint_stock_text(
             &paint,
             ui.painter(),
             &UiTextSpec {

@@ -80,7 +80,7 @@ fn create_enemy_fire_patch(
             fade_alpha: None,
             id: state.id as u64,
             life: Some(life),
-            native_type: FirePatchType::Fire,
+            patch_type: FirePatchType::Fire,
             owner_id: format!("enemy:{}", state.owner_actor_id),
             painter_registration: Some(state.painter_registration),
             position: state.position,

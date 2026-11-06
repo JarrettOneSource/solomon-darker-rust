@@ -1,14 +1,14 @@
 //! Complete current EtherDrain constructor/epoch program through the public secondary owner.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
-mod native_bits;
+#[path = "support/exact_bits.rs"]
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod support;
 
-use native_bits::{compare, input, source_value};
+use exact_bits::{compare, input, source_value};
 use serde_json::{Value, json};
-use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
+use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::ether_drain::*;
 use solomon_sim::secondary::*;
@@ -91,7 +91,7 @@ fn current_field_children_private_manager_captures_and_shared_birth_order_match_
         let declared = &case["player"];
         let book = support::read_book(&declared["skillBook"]);
         let mut belt = PlayerBeltComponent::new(&book);
-        belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 74 });
+        belt.entries[0] = Some(BeltEntry::Skill { skill_id: 74 });
         let wizard = HubWizard::at(Vec2::ZERO);
         let mut state = SecondarySimulationState::new(91);
         let mut order = WorldPainterOrder::default();

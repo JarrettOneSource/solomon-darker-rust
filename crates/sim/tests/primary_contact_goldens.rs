@@ -807,8 +807,8 @@ fn replay_contacts(fixture: &str) {
                 owner_actor_id: 1,
                 spawn_tick: 10,
                 state,
-                native_registration_order: 60,
-                native_cell_binding_order: 60,
+                registration_order: 60,
+                cell_binding_order: 60,
                 painter_registration: order.register(WorldManagerLane::Actor),
             });
         }
@@ -891,7 +891,7 @@ fn replay_contacts(fixture: &str) {
                     point(actor.position),
                     actor.shield_health,
                     actor.lethal_magic_damage,
-                    actor.native_cell_binding_order,
+                    actor.cell_binding_order,
                     actor.blizzard_push_accumulator,
                     actor.blizzard_push_last_tick,
                     actor.hurricane_contact_cooldown

@@ -9,7 +9,7 @@ mod support;
 use std::collections::BTreeMap;
 
 use serde_json::Value;
-use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
+use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::secondary::golem::GolemIncomingDamage;
 use solomon_sim::secondary::{SecondaryActorKind, SecondarySimulationState, SecondaryTickContext};
 use solomon_sim::social::{AllyGolemProjection, AllyHudRow, derive_golem_ally_hud_rows};
@@ -59,7 +59,7 @@ fn resummoning_with_or_without_the_set_preserves_the_survivors_health_and_hud_id
     let declared = &case["authority"];
     let book = support::read_book(&declared["skillBook"]);
     let mut belt = PlayerBeltComponent::new(&book);
-    belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 45 });
+    belt.entries[0] = Some(BeltEntry::Skill { skill_id: 45 });
     let wizard = HubWizard::at(Vec2::ZERO);
     let mut world = support::World { case, targets: Vec::new() };
     let mut step = |state: &mut SecondarySimulationState, tick, slot, maximum_golem| {

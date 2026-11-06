@@ -5,7 +5,7 @@ use super::MobileUiEditor;
 use crate::gpu_ui::{StockAtlas, UiFrame};
 use egui::{Color32, FontFamily, FontId, Painter, Pos2, Rect, Stroke, pos2, vec2};
 use solomon_sim::belt::{
-    BELT_SLOT_COUNT, BeltPotionKind, NativeBeltEntry, belt_entry_item, belt_potion_projection,
+    BELT_SLOT_COUNT, BeltEntry, BeltPotionKind, belt_entry_item, belt_potion_projection,
 };
 use solomon_sim::economy::{EquipmentType, HubInventoryItem};
 use solomon_sim::hud::quickbar::{SkillQuickbarCooldownPresentation, skill_quickbar_icon_alpha};
@@ -63,7 +63,7 @@ impl MobileEditorPlayerPreview {
                 continue;
             }
             slots[slot] = match *entry {
-                Some(NativeBeltEntry::Skill { skill_id }) => {
+                Some(BeltEntry::Skill { skill_id }) => {
                     let ability = SecondaryAbilityId::from_skill_id(skill_id);
                     let unavailable = ability.is_some_and(|ability| {
                         in_hub
@@ -87,8 +87,8 @@ impl MobileEditorPlayerPreview {
                         Some(BeltIcon::Item(item_icon(item, u64::from(item.quantity), player)))
                     } else {
                         match entry {
-                            NativeBeltEntry::HealthPotion => Some(BeltIcon::Potion { mana: false }),
-                            NativeBeltEntry::ManaPotion => Some(BeltIcon::Potion { mana: true }),
+                            BeltEntry::HealthPotion => Some(BeltIcon::Potion { mana: false }),
+                            BeltEntry::ManaPotion => Some(BeltIcon::Potion { mana: true }),
                             _ => None,
                         }
                     }
@@ -544,13 +544,13 @@ mod tests {
         );
         assert_eq!(player.belt.entries.len(), 24);
         player.belt.entries.fill(None);
-        player.belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 8 });
-        player.belt.entries[3] = Some(NativeBeltEntry::HealthPotion);
+        player.belt.entries[0] = Some(BeltEntry::Skill { skill_id: 8 });
+        player.belt.entries[3] = Some(BeltEntry::HealthPotion);
         let before = MobileEditorPlayerPreview::from_player(&player, true);
         assert!(matches!(before.slots[0], Some(BeltIcon::Skill { id: 8, .. })));
         assert_eq!(before.aliases[3], Some("Health"));
         for entry in &mut player.belt.entries[BELT_SLOT_COUNT..] {
-            *entry = Some(NativeBeltEntry::ManaPotion);
+            *entry = Some(BeltEntry::ManaPotion);
         }
         assert_eq!(MobileEditorPlayerPreview::from_player(&player, true), before);
     }

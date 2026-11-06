@@ -1,8 +1,8 @@
 //! Actual shared Session ticks retain Source field forces, captures and private RNG.
 #![cfg(feature = "persistence")]
-#[path = "support/native_bits.rs"]
+#[path = "support/exact_bits.rs"]
 #[allow(dead_code)]
-mod native_bits;
+mod exact_bits;
 #[path = "support/secondary.rs"]
 #[allow(dead_code)]
 mod secondary;
@@ -124,7 +124,7 @@ fn snapshot(state: &GameSession) -> Value {
             "registration": actor.painter_registration.registration_ordinal})
         })
         .collect();
-    native_bits::source_value(&json!({
+    exact_bits::source_value(&json!({
         "tick": state.ticks, "players": players, "actors": actors,
         "events": state.secondary.events.iter().map(secondary::event_snapshot).collect::<Vec<_>>(),
         "nextActorId": state.secondary.next_actor_id, "nextEventId": state.secondary.next_event_id,
@@ -178,7 +178,7 @@ fn current_session_field_uses_actual_bodies_loot_capture_and_shared_random_strea
                 let mut spec = LootDropSpec::new(
                     LootDropKind::Gold,
                     row["id"].as_u64().unwrap(),
-                    native_bits::input(&row["position"]),
+                    exact_bits::input(&row["position"]),
                     LootDropSource::Script,
                 );
                 spec.amount = row["amount"].as_u64();
@@ -193,7 +193,7 @@ fn current_session_field_uses_actual_bodies_loot_capture_and_shared_random_strea
             .map(|row| {
                 let mut intent = EnemySpawnIntent::new(
                     EnemyToken::from_id(row["enemyToken"].as_str().unwrap()).unwrap(),
-                    native_bits::input(&row["position"]),
+                    exact_bits::input(&row["position"]),
                     row["id"].as_u64().unwrap() as usize,
                     row["spawnTick"].as_u64().unwrap(),
                     row["waveOrdinal"].as_u64().unwrap(),
@@ -245,9 +245,9 @@ fn current_session_field_uses_actual_bodies_loot_capture_and_shared_random_strea
                     );
                     expected["order"]["nextRegistrationOrdinal"]["transient"] = json!(2);
                 }
-                native_bits::compare(
+                exact_bits::compare(
                     &snapshot(&state),
-                    &native_bits::source_value(&expected),
+                    &exact_bits::source_value(&expected),
                     &format!("quality{} tick{tick}", case["enhancedEffects"]),
                 );
                 frame_index += 1;

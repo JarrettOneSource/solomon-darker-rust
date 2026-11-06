@@ -196,7 +196,7 @@ impl SpellState {
                 fade_alpha: None,
                 id: self.next_id,
                 life: None,
-                native_type: FirePatchType::Fire,
+                patch_type: FirePatchType::Fire,
                 owner_id: owner_id.into(),
                 painter_registration: Some(order.register(WorldManagerLane::Actor)),
                 position,

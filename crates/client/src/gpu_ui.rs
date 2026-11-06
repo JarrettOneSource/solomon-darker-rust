@@ -46,7 +46,9 @@ pub use geometry::{clip_polygon_ellipse, css_bezier};
 pub use input::{canvas_point, key_from_browser};
 pub use painter::clip_scissor;
 pub use solomon_graphics::TextureSampling;
-pub use stock::{StockAtlas, message_frame, message_frame_scaled, native_text, paint_text_layout};
+pub use stock::{
+    StockAtlas, message_frame, message_frame_scaled, paint_stock_text, paint_text_layout,
+};
 
 pub fn cooldown_sector_points(remaining: f64, capacity: f64) -> Vec<Pos2> {
     solomon_sim::hud::quickbar::native_cooldown_sector_points(remaining, capacity)

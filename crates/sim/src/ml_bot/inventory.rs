@@ -198,7 +198,7 @@ fn observe_equipment(equipment: &HubEquipmentState, ranks: &[u32; SKILL_ROW_COUN
         );
         let (hash_a, hash_b) = identity_hashes(&identity);
         let effects = item
-            .native_effects
+            .effects
             .as_deref()
             .unwrap_or_else(|| item.recipe_index.map_or(&[][..], equipment_recipe_effects));
         let resolution = resolve_equipment_effects(
