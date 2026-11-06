@@ -108,7 +108,9 @@ impl<'de> de::Deserializer<'de> for SourceValue {
             raw = serde_json::json!({"kind":"arrow", "state":raw, "velocity":raw["velocity"]});
         }
         let (tag, payload) = match raw {
-            Value::Number(number) if matches!(name, "TutorialStage" | "BoneyardGoodiePhase") => {
+            Value::Number(number)
+                if matches!(name, "TutorialStage" | "BoneyardGoodiePhase" | "BonusKind") =>
+            {
                 let index = number
                     .as_u64()
                     .and_then(|index| usize::try_from(index).ok())

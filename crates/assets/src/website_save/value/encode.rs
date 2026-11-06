@@ -69,7 +69,7 @@ impl ser::Serializer for SourceSerializer {
         index: u32,
         variant: &'static str,
     ) -> Result<Value, Self::Error> {
-        if matches!(name, "TutorialStage" | "BoneyardGoodiePhase") {
+        if matches!(name, "TutorialStage" | "BoneyardGoodiePhase" | "BonusKind") {
             return Ok(Value::from(index));
         }
         let tag = source_variant(name, variant);

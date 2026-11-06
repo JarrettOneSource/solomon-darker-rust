@@ -21,6 +21,17 @@ game checkout or a reference server.
 Run `python3 scripts/verify-client-assets.py` before packaging. Asset updates are
 reviewed source changes; builds must not download or silently regenerate them.
 
+## Website save reward identifiers
+
+Website-format saves represent Bonus rewards with numeric IDs: 0 is a skill
+choice, 1 is a skill rank and 2 is quadruple damage. The asset codec reads and
+writes those IDs for every `BonusKind` field. Earlier Rust variant and kebab
+names remain accepted on input and export as the same numeric IDs. Negative,
+out-of-range and fractional IDs are rejected. Native checkpoint enum encoding
+and the reward rules remain unchanged. Public codec regressions use synthetic
+loot stores and cover all three rewards across source schemas 50, 51 and 52;
+private player saves remain outside the repository.
+
 ## Recording provenance
 
 Some regression fixtures were captured through the retired PixiJS implementation.
