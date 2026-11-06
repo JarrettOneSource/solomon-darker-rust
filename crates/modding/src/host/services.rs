@@ -28,7 +28,7 @@ impl PreparedModHost {
         player_id: &str,
         content_id: &str,
         mod_offer_sequence: u64,
-        native_offer_sequence: u64,
+        stock_offer_sequence: u64,
         game: &mut GameSession,
     ) -> Result<(), String> {
         self.require_open()?;
@@ -38,7 +38,7 @@ impl PreparedModHost {
             self.runtime.skills.choose(player_id, content_id, mod_offer_sequence)?;
             if !game.replace_skill_with_mod_with_extensions(
                 player_id,
-                native_offer_sequence,
+                stock_offer_sequence,
                 Some(&self.runtime),
             ) {
                 return Err("native skill offer is stale".into());
