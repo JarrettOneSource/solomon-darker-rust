@@ -244,12 +244,14 @@ impl EnemyView {
         };
         let width = f64::from(record.width);
         let height = f64::from(record.height);
+        let sine = float::sin(rotation);
+        let cosine = float::cos(rotation);
         let positions = [(0.0, 0.0), (width, 0.0), (width, height), (0.0, height)].map(|(x, y)| {
             let x = (x - anchor_x) * scale_x;
             let y = (y - anchor_y) * scale_y;
             let local = Vec2::new(
-                (offset.x + x * float::cos(rotation) - y * float::sin(rotation)) * group.scale,
-                (offset.y + x * float::sin(rotation) + y * float::cos(rotation)) * group.scale,
+                (offset.x + x * cosine - y * sine) * group.scale,
+                (offset.y + x * sine + y * cosine) * group.scale,
             );
             project(camera, group.position, local)
         });
