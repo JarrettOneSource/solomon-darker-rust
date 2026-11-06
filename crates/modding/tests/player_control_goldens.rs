@@ -8,7 +8,7 @@ use solomon_modding::intents::ModIntentExecutionContext;
 use solomon_modding::player_control::{
     ModPlayerControl, select_mod_player_skill, uses_player_control_rule,
 };
-use solomon_sim::belt::NativeBeltEntry;
+use solomon_sim::belt::BeltEntry;
 use solomon_sim::boneyard::{BoneyardSource, LoadedBoneyard};
 use solomon_sim::modding::runtime::ModIntent;
 use solomon_sim::modding::{LuaObject, LuaValue};
@@ -93,7 +93,7 @@ fn lua_controllers_accept_observed_abilities_in_every_belt_bank() {
     let belt = &mut game.participants.get_mut("local").unwrap().player.belt;
     belt.entries.fill(None);
     for slot in [0, 7, 8, 15, 16, 23] {
-        belt.entries[slot] = Some(NativeBeltEntry::Skill { skill_id: 21 });
+        belt.entries[slot] = Some(BeltEntry::Skill { skill_id: 21 });
     }
     let mut controller = ModPlayerControl::default();
     let observation = serde_json::to_value(controller.observe(&game, "local").unwrap()).unwrap();

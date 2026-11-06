@@ -425,13 +425,14 @@ fn binding_state(root: &NativeChunkNode) -> Result<BindingState<'_>, String> {
     Ok(BindingState { node, integer_offset, values })
 }
 
-struct BeltEntry {
+/// One retail BeltButton slot: its byte span in the payload and its type code.
+struct BeltButtonSpan {
     start: usize,
     end: usize,
     kind: i32,
 }
 
-fn belt(root: &NativeChunkNode) -> Result<(Vec<BeltEntry>, Vec<Option<i32>>), String> {
+fn belt(root: &NativeChunkNode) -> Result<(Vec<BeltButtonSpan>, Vec<Option<i32>>), String> {
     let mut reader = PayloadReader::new(&root.payload, "native BeltButton state");
     let mut entries = Vec::with_capacity(8);
     let mut quickbar = Vec::with_capacity(8);
@@ -446,7 +447,7 @@ fn belt(root: &NativeChunkNode) -> Result<(Vec<BeltEntry>, Vec<Option<i32>>), St
         if kind == 7015 && !(8..=79).contains(&id) {
             return Err(format!("native BeltButton slot {slot} has invalid skill {id}"));
         }
-        entries.push(BeltEntry { start, end, kind });
+        entries.push(BeltButtonSpan { start, end, kind });
         quickbar.push(if kind == 7015 { Some(id) } else { None });
     }
     reader.finish()?;

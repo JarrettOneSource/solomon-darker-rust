@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use solomon_sim::Vec2;
-use solomon_sim::belt::NativeBeltEntry;
+use solomon_sim::belt::BeltEntry;
 use solomon_sim::boneyard::arena::{ArenaPhase, ArenaTransition};
 use solomon_sim::boneyard::collision::can_place_boneyard_body;
 use solomon_sim::boneyard::navigation::NavigationSet;
@@ -60,7 +60,7 @@ fn arena_session(north: bool, phase: ArenaPhase, skill: SecondaryAbilityId) -> G
     let skill = skill as usize;
     participant.player.book.permanent_ranks[skill] = 1;
     participant.player.book.effective_ranks[skill] = 1;
-    participant.player.belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: skill });
+    participant.player.belt.entries[0] = Some(BeltEntry::Skill { skill_id: skill });
     participant.player.combat.current_mana = 1000.0;
     participant.player.combat.maximum_mana = 1000.0;
     game

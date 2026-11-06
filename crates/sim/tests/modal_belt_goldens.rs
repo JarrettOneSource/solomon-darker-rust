@@ -10,7 +10,7 @@ mod support;
 
 use serde_json::{Value, json};
 use solomon_sim::Vec2;
-use solomon_sim::belt::NativeBeltEntry;
+use solomon_sim::belt::BeltEntry;
 use solomon_sim::boneyard::{
     BoneyardBounds, BoneyardScene, BoneyardSource, BoneyardSpawn, LoadedBoneyard,
 };
@@ -96,7 +96,7 @@ fn initial(case: &Value) -> GameSession {
     );
     player.belt.entries.fill(None);
     let slot = spec["slot"].as_u64().unwrap_or(0).min(23) as usize;
-    player.belt.entries[slot] = Some(NativeBeltEntry::Skill { skill_id: skill });
+    player.belt.entries[slot] = Some(BeltEntry::Skill { skill_id: skill });
     player.combat.current_mana = spec["mana"].as_f64().unwrap_or(10000.0);
     player.combat.maximum_mana = 10000.0;
     player.combat.current_health = 1000.0;

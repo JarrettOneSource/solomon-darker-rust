@@ -611,7 +611,7 @@ impl PlayerPanels {
         snapshot: &PlayerPanelSnapshot<'_>,
     ) -> Result<(), String> {
         use solomon_sim::belt::{
-            BeltPotionKind, NativeBeltEntry, belt_entry_item, belt_potion_projection,
+            BeltEntry, BeltPotionKind, belt_entry_item, belt_potion_projection,
         };
         let hud = solomon_sim::hud::hud_control_layout(1600.0, 900.0, Some(1.0));
         for (record, r, action, label) in [
@@ -641,7 +641,7 @@ impl PlayerPanels {
             let [x, y] = [r.x + r.width / 2.0, r.y + r.height / 2.0];
             c.art(&self.ui, 2, [x, y], [1.0, 1.0], 0.0, 0xffffff)?;
             let entry = snapshot.belt.entries[slot];
-            if let Some(NativeBeltEntry::Skill { skill_id }) = entry {
+            if let Some(BeltEntry::Skill { skill_id }) = entry {
                 c.art(
                     &self.skills,
                     snapshot.book.skill_icon_record(skill_id),
@@ -653,11 +653,11 @@ impl PlayerPanels {
             } else if let Some(entry) = entry {
                 let item = belt_entry_item(entry, snapshot.economy);
                 let quantity = match entry {
-                    NativeBeltEntry::HealthPotion => {
+                    BeltEntry::HealthPotion => {
                         belt_potion_projection(&snapshot.economy.backpack, BeltPotionKind::Health)
                             .count
                     }
-                    NativeBeltEntry::ManaPotion => {
+                    BeltEntry::ManaPotion => {
                         belt_potion_projection(&snapshot.economy.backpack, BeltPotionKind::Mana)
                             .count
                     }

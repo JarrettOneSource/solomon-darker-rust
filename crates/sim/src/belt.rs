@@ -18,7 +18,7 @@ pub const BELT_ITEM_TYPE_IDS: [u32; 10] =
 /// What a Belt slot holds: a skill, the health or mana potion alias, or one owned item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
-pub enum NativeBeltEntry {
+pub enum BeltEntry {
     Skill {
         skill_id: usize,
     },
@@ -47,7 +47,7 @@ pub struct PlayerBeltComponent {
         feature = "persistence",
         serde(deserialize_with = "deserialize_player_belt_entries")
     )]
-    pub entries: [Option<NativeBeltEntry>; PLAYER_BELT_SLOT_COUNT],
+    pub entries: [Option<BeltEntry>; PLAYER_BELT_SLOT_COUNT],
 }
 
 impl PlayerBeltComponent {
@@ -62,16 +62,16 @@ impl PlayerBeltComponent {
             .copied()
             .expect("a fresh native belt has one learned secondary skill");
         let mut entries = [None; PLAYER_BELT_SLOT_COUNT];
-        entries[0] = Some(NativeBeltEntry::Skill { skill_id });
-        entries[HEALTH_BELT_SLOT] = Some(NativeBeltEntry::HealthPotion);
-        entries[MANA_BELT_SLOT] = Some(NativeBeltEntry::ManaPotion);
+        entries[0] = Some(BeltEntry::Skill { skill_id });
+        entries[HEALTH_BELT_SLOT] = Some(BeltEntry::HealthPotion);
+        entries[MANA_BELT_SLOT] = Some(BeltEntry::ManaPotion);
         Self { entries }
     }
 
     /// Retain current banks and pad an eight-slot legacy belt with empty banks.
     /// The accepted component always has three banks, including after old-save restore.
     #[must_use]
-    pub fn from_entries(source: &[Option<NativeBeltEntry>]) -> Option<Self> {
+    pub fn from_entries(source: &[Option<BeltEntry>]) -> Option<Self> {
         if source.len() != BELT_SLOT_COUNT && source.len() != PLAYER_BELT_SLOT_COUNT {
             return None;
         }
@@ -88,9 +88,9 @@ impl PlayerBeltComponent {
             return None;
         }
         let mut entries =
-            quickbar.map(|skill_id| skill_id.map(|skill_id| NativeBeltEntry::Skill { skill_id }));
-        entries[HEALTH_BELT_SLOT].get_or_insert(NativeBeltEntry::HealthPotion);
-        entries[MANA_BELT_SLOT].get_or_insert(NativeBeltEntry::ManaPotion);
+            quickbar.map(|skill_id| skill_id.map(|skill_id| BeltEntry::Skill { skill_id }));
+        entries[HEALTH_BELT_SLOT].get_or_insert(BeltEntry::HealthPotion);
+        entries[MANA_BELT_SLOT].get_or_insert(BeltEntry::ManaPotion);
         Self::from_entries(&entries)
     }
 
@@ -107,7 +107,7 @@ impl PlayerBeltComponent {
                 }) {
                     return false;
                 }
-                (slot, skill_id.map(|skill_id| NativeBeltEntry::Skill { skill_id }))
+                (slot, skill_id.map(|skill_id| BeltEntry::Skill { skill_id }))
             }
             BeltCommand::BindItem { item_id, slot } => {
                 let Some(item) = belt_owned_item(economy, item_id) else {
@@ -117,9 +117,9 @@ impl PlayerBeltComponent {
                     return false;
                 }
                 let entry = match (item.type_id, item.subtype) {
-                    (7001, Some(0)) => NativeBeltEntry::HealthPotion,
-                    (7001, Some(1)) => NativeBeltEntry::ManaPotion,
-                    _ => NativeBeltEntry::Item { item_id: item.id, type_id: item.type_id },
+                    (7001, Some(0)) => BeltEntry::HealthPotion,
+                    (7001, Some(1)) => BeltEntry::ManaPotion,
+                    _ => BeltEntry::Item { item_id: item.id, type_id: item.type_id },
                 };
                 (slot, Some(entry))
             }
@@ -142,7 +142,7 @@ impl PlayerBeltComponent {
             let Some(slot) = self.entries.iter_mut().find(|entry| entry.is_none()) else {
                 return;
             };
-            *slot = Some(NativeBeltEntry::Skill { skill_id: *skill_id });
+            *slot = Some(BeltEntry::Skill { skill_id: *skill_id });
         }
     }
 
@@ -151,16 +151,15 @@ impl PlayerBeltComponent {
     pub fn refresh(&mut self, book: &SkillBookState, economy: &HubEconomyState) {
         for entry in &mut self.entries {
             let retained = match *entry {
-                None | Some(NativeBeltEntry::HealthPotion | NativeBeltEntry::ManaPotion) => true,
-                Some(NativeBeltEntry::Skill { skill_id }) => {
+                None | Some(BeltEntry::HealthPotion | BeltEntry::ManaPotion) => true,
+                Some(BeltEntry::Skill { skill_id }) => {
                     is_belt_skill(skill_id)
                         && book.effective_ranks.get(skill_id).is_some_and(|rank| *rank > 0)
                 }
-                Some(NativeBeltEntry::Item { item_id, type_id }) => {
-                    belt_owned_item(economy, item_id).is_some_and(|item| {
+                Some(BeltEntry::Item { item_id, type_id }) => belt_owned_item(economy, item_id)
+                    .is_some_and(|item| {
                         item.type_id == type_id && inventory_item_can_bind_to_belt(item)
-                    })
-                }
+                    }),
             };
             if !retained {
                 *entry = None;
@@ -173,7 +172,7 @@ impl PlayerBeltComponent {
         // Retail export and the fixed eight-action bot consume only the original bank.
         let mut projection = [None; BELT_SLOT_COUNT];
         for (slot, entry) in self.entries[..BELT_SLOT_COUNT].iter().enumerate() {
-            if let Some(NativeBeltEntry::Skill { skill_id }) = entry {
+            if let Some(BeltEntry::Skill { skill_id }) = entry {
                 projection[slot] = Some(*skill_id);
             }
         }
@@ -184,13 +183,13 @@ impl PlayerBeltComponent {
 #[cfg(feature = "persistence")]
 fn deserialize_player_belt_entries<'de, D>(
     deserializer: D,
-) -> Result<[Option<NativeBeltEntry>; PLAYER_BELT_SLOT_COUNT], D::Error>
+) -> Result<[Option<BeltEntry>; PLAYER_BELT_SLOT_COUNT], D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     use serde::Deserialize;
 
-    let entries = Vec::<Option<NativeBeltEntry>>::deserialize(deserializer)?;
+    let entries = Vec::<Option<BeltEntry>>::deserialize(deserializer)?;
     let Some(belt) = PlayerBeltComponent::from_entries(&entries) else {
         return Err(serde::de::Error::custom(
             "player belt requires eight legacy slots or three eight-slot hotbars",
@@ -247,19 +246,16 @@ pub fn belt_owned_item(economy: &HubEconomyState, item_id: u64) -> Option<&HubIn
 }
 
 #[must_use]
-pub fn belt_entry_item(
-    entry: NativeBeltEntry,
-    economy: &HubEconomyState,
-) -> Option<&HubInventoryItem> {
+pub fn belt_entry_item(entry: BeltEntry, economy: &HubEconomyState) -> Option<&HubInventoryItem> {
     match entry {
-        NativeBeltEntry::Skill { .. } => None,
-        NativeBeltEntry::HealthPotion => {
+        BeltEntry::Skill { .. } => None,
+        BeltEntry::HealthPotion => {
             belt_potion_projection(&economy.backpack, BeltPotionKind::Health).item
         }
-        NativeBeltEntry::ManaPotion => {
+        BeltEntry::ManaPotion => {
             belt_potion_projection(&economy.backpack, BeltPotionKind::Mana).item
         }
-        NativeBeltEntry::Item { item_id, .. } => belt_owned_item(economy, item_id),
+        BeltEntry::Item { item_id, .. } => belt_owned_item(economy, item_id),
     }
 }
 
@@ -324,14 +320,14 @@ mod tests {
                 .accepted
         );
         belt.refresh(&book, &economy);
-        assert_eq!(belt.entries[HEALTH_BELT_SLOT], Some(NativeBeltEntry::HealthPotion));
+        assert_eq!(belt.entries[HEALTH_BELT_SLOT], Some(BeltEntry::HealthPotion));
         assert_eq!(belt_potion_projection(&economy.backpack, BeltPotionKind::Health).count, 0);
     }
 
     #[cfg(feature = "persistence")]
     #[test]
     fn legacy_belts_restore_into_three_banks_without_losing_the_original_entries() {
-        let legacy = [Some(NativeBeltEntry::Skill { skill_id: 11 }); BELT_SLOT_COUNT];
+        let legacy = [Some(BeltEntry::Skill { skill_id: 11 }); BELT_SLOT_COUNT];
         let saved = serde_json::json!({ "entries": legacy });
         let restored: PlayerBeltComponent = serde_json::from_value(saved).unwrap();
         assert_eq!(&restored.entries[..BELT_SLOT_COUNT], &legacy);
@@ -340,7 +336,7 @@ mod tests {
             serde_json::to_value(restored).unwrap()["entries"].as_array().unwrap().len(),
             PLAYER_BELT_SLOT_COUNT,
         );
-        let malformed = serde_json::json!({ "entries": vec![None::<NativeBeltEntry>; 9] });
+        let malformed = serde_json::json!({ "entries": vec![None::<BeltEntry>; 9] });
         assert!(serde_json::from_value::<PlayerBeltComponent>(malformed).is_err());
     }
 }

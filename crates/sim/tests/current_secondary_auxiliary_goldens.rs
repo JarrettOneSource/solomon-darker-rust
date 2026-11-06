@@ -8,7 +8,7 @@ mod native_bits;
 mod support;
 
 use serde_json::{Value, json};
-use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
+use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::presentation::{
     SecondaryBlend, SecondarySpriteDraw, secondary_presentation_plan,
@@ -83,7 +83,7 @@ fn current_planewalker_auxiliaries_and_living_input_blocks_replay_source() {
         let book = support::read_book(&declared["skillBook"]);
         let mut belt = PlayerBeltComponent::new(&book);
         belt.entries[0] =
-            Some(NativeBeltEntry::Skill { skill_id: case["skillId"].as_u64().unwrap() as usize });
+            Some(BeltEntry::Skill { skill_id: case["skillId"].as_u64().unwrap() as usize });
         let wizard = HubWizard::at(Vec2::ZERO);
         let mut state = SecondarySimulationState::new(91);
         let mut order = WorldPainterOrder::default();

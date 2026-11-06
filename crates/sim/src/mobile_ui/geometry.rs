@@ -3,7 +3,7 @@
 //! anchor. These values are presentation transforms, never gameplay coordinates.
 
 use crate::Vec2;
-use crate::belt::{NativeBeltEntry, PlayerBeltComponent};
+use crate::belt::{BeltEntry, PlayerBeltComponent};
 use crate::float::hypot;
 
 use super::{
@@ -158,10 +158,10 @@ pub struct MobileUiSnapResult {
 pub fn mobile_ui_belt_element_id(belt: &PlayerBeltComponent, slot: usize) -> MobileUiElementId {
     assert!(slot < 8, "the mobile belt has eight slots");
     let entry = belt.entries[slot];
-    if matches!(entry, Some(NativeBeltEntry::HealthPotion | NativeBeltEntry::ManaPotion))
+    if matches!(entry, Some(BeltEntry::HealthPotion | BeltEntry::ManaPotion))
         && belt.entries.iter().position(|candidate| *candidate == entry) == Some(slot)
     {
-        return if entry == Some(NativeBeltEntry::HealthPotion) {
+        return if entry == Some(BeltEntry::HealthPotion) {
             MobileUiElementId::HealthPotion
         } else {
             MobileUiElementId::ManaPotion

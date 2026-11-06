@@ -8,7 +8,7 @@ mod native_bits;
 mod support;
 
 use serde_json::{Value, json};
-use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
+use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::presentation::{
     SecondaryBlend, SecondaryQueueFamily, SecondarySpriteDraw, secondary_presentation_plan,
@@ -95,7 +95,7 @@ fn current_stoneskin_retains_cast_and_hit_chips_through_actual_expiry() {
         let declared = &case["player"];
         let book = support::read_book(&declared["skillBook"]);
         let mut belt = PlayerBeltComponent::new(&book);
-        belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id: 46 });
+        belt.entries[0] = Some(BeltEntry::Skill { skill_id: 46 });
         let wizard = HubWizard::at(Vec2::ZERO);
         let mut state = SecondarySimulationState::new(case["seed"].as_i64().unwrap());
         let mut order = WorldPainterOrder::default();

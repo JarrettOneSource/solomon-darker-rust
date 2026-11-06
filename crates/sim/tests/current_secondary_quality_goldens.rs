@@ -5,7 +5,7 @@ mod exact;
 #[allow(dead_code)]
 mod support;
 use serde_json::{Value, json};
-use solomon_sim::belt::{NativeBeltEntry, PlayerBeltComponent};
+use solomon_sim::belt::{BeltEntry, PlayerBeltComponent};
 use solomon_sim::painter::WorldPainterOrder;
 use solomon_sim::secondary::{SecondarySimulationState, SecondaryTickContext};
 use solomon_sim::{HubWizard, Vec2};
@@ -22,7 +22,7 @@ fn active_secondary_births_follow_current_global_quality_and_retained_owner_fall
         let book = support::read_book(&declared["skillBook"]);
         let mut belt = PlayerBeltComponent::new(&book);
         let skill_id = case["skillId"].as_u64().unwrap() as usize;
-        belt.entries[0] = Some(NativeBeltEntry::Skill { skill_id });
+        belt.entries[0] = Some(BeltEntry::Skill { skill_id });
         let wizard = HubWizard::at(Vec2::ZERO);
         // Source's omitted scenery callback returns an empty collection.
         let empty = json!({"scenery":[]});
