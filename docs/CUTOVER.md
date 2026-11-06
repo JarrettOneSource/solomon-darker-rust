@@ -147,24 +147,6 @@ These must be finished before Rust moves to `/game`.
 | 20 | Simple Rust rules | Done | [Coding standards](CODING-STANDARDS.md#simple-rust). |
 | 31 | Longest functions | Done | The 25 longest, most branched functions are split into named steps, each parent now reading like a table of contents: `cast_ability` calls one function per secondary spell, browser input registers one listener group per input kind, and the battle, world, chat, card, party and menu painters draw one region per helper. Final checkpoints and sampled presentation frames are unchanged. Split further functions when you change them rather than in one pass. |
 
-### Desktop
-
-| # | Item | Status | Notes |
-| --- | --- | --- | --- |
-| 21 | Code signing and notarization | Blocked | Needs an Apple Developer ID and a Windows signing certificate from the owner. Release notes currently say the builds are unsigned. |
-| 22 | Update path | Not started | An update check, or distribution through itch.io or Steam. |
-| 23 | Protocol version handshake | Not started | Old desktop builds should fail clearly against a newer host. |
-| 24 | Accounts and cloud saves on desktop | Not started | Owner decision. Desktop currently plays offline and points players to the web app for cloud features. |
-
-### Tooling and repository
-
-| # | Item | Status | Notes |
-| --- | --- | --- | --- |
-| 25 | Mod CLI in Rust | Not started | `tools/sdmod/cli.mjs` is about 730 lines of Node wrapping the `solomon-sdmod` binary. Make the binary the command-line tool. |
-| 26 | `cargo xtask` | Not started | Replace the Python and shell packaging and verification scripts so contributors need only Rust and Trunk. Node stays for Playwright browser tests. |
-| 27 | Repository size | Not started | The Git pack is about 614 MiB, mostly PNG; the Boneyard art removed in item 3 accounts for about 424 MB of it. Removing files from main does not shrink history; rewriting it is a separate owner decision. |
-| 28 | Local spell journey | Not started | No repository journey casts primary spells locally: `electric-burn.cjs` and the other combat journeys need the hosted staging fixtures. Against the native host, `solomon-entrance.cjs` walks a wizard into Solomon, which starts combat, so a local journey can cast every school. Weld builds need a supported local grant, because Create does not offer them and the developer Console runs only on hosted servers. |
-
 ## Cutover checklist
 
 Awaiting the owner's review. Rust moves to `/game` only when all of these hold and
