@@ -215,6 +215,10 @@ pub(super) fn normalize(value: &Value, version: u64, tick: u64) -> Result<Value,
                 &format!("game save player {index} hit feedback"),
             )?,
         );
+        if version <= 6 {
+            // The death age arrived during schema 6; a death that begins later starts at zero.
+            progression.entry("deathAgeTicks").or_insert(json!(0));
+        }
         if version < 31 {
             progression.insert("poisonBeforeCold".into(), json!(false));
         }
