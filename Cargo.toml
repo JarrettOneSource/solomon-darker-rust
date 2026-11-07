@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/sim", "crates/assets", "crates/graphics", "crates/loader", "crates/client", "crates/launcher", "crates/protocol", "crates/modding", "crates/save-tools", "crates/desktop", "crates/storage"]
+members = ["crates/sim", "crates/assets", "crates/graphics", "crates/loader", "crates/client", "crates/launcher", "crates/protocol", "crates/modding", "crates/save-tools", "crates/desktop", "crates/storage", "crates/content-sweep"]
 exclude = ["vendor/egui"]
 
 [patch.crates-io]

@@ -68,6 +68,7 @@ audio owner, input controller, and persistence path.
 | Account import/export | `solomon-save-tools` and website Account UI | Portability tests, browser File ABI, and mounted Account integration |
 | Native authority and durable save receipts | `solomon-launcher` | Transport, host command, persistence, and socket integration tests |
 | Hosted accounts, content, and party directory | Website services plus Rust supervisor adapters | API/signature fixtures and mounted browser journeys |
+| Published mods and Boneyards | Website content service, then Rust content admission | Fixture packages and `solomon-content-sweep` against the published listing |
 | Score, Memorial, and run publishing | Native publishers plus website APIs | Signed publication and archive/storage tests |
 | Editor Test/Return | Website editor and disposable Rust authority | Handoff, cancellation, authored-scene, and return checks |
 | Website artifact | Packaging scripts and website artifact adapter | Complete manifest/hash validation and installed identity checks |

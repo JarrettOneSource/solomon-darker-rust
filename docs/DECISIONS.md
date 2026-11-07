@@ -565,6 +565,24 @@ The rule lives in the simulation, so standalone, hosted and desktop authorities
 agree. `a_wizard_joining_after_the_arena_locks_enters_inside_it` covers both
 entrance sides and every arena phase.
 
+## PixiJS retires at the swap
+
+When Rust moves to `/game`, the PixiJS client is no longer served: there is no
+`/game-legacy`. A second playable copy would let players advance a save the Rust
+game never sees. Its source stays in the Website repository until the owner
+confirms the result, and reverting the swap restores it. Decided by the owner on
+2026-11-06.
+
+Saves carry over with nothing for a player to import or choose. The Rust game keeps
+its own data under the `/game-rust` storage namespace and cloud slot 1. The
+Website's deployment harness, which owns PixiJS's storage, settles each player's
+PixiJS save against the Rust one once at the swap: cloud slots on the server,
+guest IndexedDB before the Rust page loads. Both copies descend from the
+parallel-launch fork and count revisions from it, so the copy written more often
+since then is the one the player kept playing. A tie keeps PixiJS's, the save most
+players have, and the other copy is kept as a backup. Preferences follow where
+Rust has none, Hall of Fame runs combine and playtime adds up.
+
 ## Navigation and painter registration
 
 Pike constraints pass through the active Boneyard's player-placement callback.

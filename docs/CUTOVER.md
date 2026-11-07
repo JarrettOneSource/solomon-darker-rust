@@ -112,13 +112,13 @@ These must be finished before Rust moves to `/game`.
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
 | 1 | PixiJS critical-fix-only policy | Done | Recorded above and in the device wiki for future campaigns. |
-| 2 | Cutover checklist (what "passes QC" means) | Not started | See [Cutover checklist](#cutover-checklist). Needs owner review before use. |
+| 2 | Cutover checklist (what "passes QC" means) | In progress | The [checklist](#cutover-checklist) now names the evidence for each check. It needs the owner's review, and the swap waits for the owner's explicit approval. |
 | 3 | Boneyard art without PixiJS | Done | The Rust client draws every Boneyard itself: it loads `catalog.json`, the retail ground, road, river, rise and fence-grate textures, and the DeadHawg glyphs, which are crops of the retail atlas. The 4,886 PNGs (424 MB) and 13 manifests that `tools/export-boneyard-art.mjs` baked through the Website's painter were never read, and still showed the editor's placement shadows. They and the tool are removed; a build without them passes the Boneyard, Tutorial and Hub journeys and requests nothing from the removed paths. The shape tables in `catalog.json` still come from `tools/export-boneyard-catalog.mjs` (item 10). |
 | 4 | Move PixiJS players' saves | Not started | Cloud saves use the shared save document that `solomon-assets::website_save` reads; test real production documents. Browser-local PixiJS saves need a one-time import. |
 | 5 | Browser storage keys independent of the URL | In progress | The game's own browser data is suffixed with the Website mount, so Rust's guest saves live in `solomon-dark-game-saves:/game-rust` while PixiJS owns the unsuffixed names. Rust now reads a deployment-supplied `solomon-storage-namespace` tag first and falls back to the mount, and rejects an empty namespace, which would share PixiJS's keys ([Website integration](../README.md#website-integration)). Remaining: the Website's remount writes `/game-rust` for the Rust companion, and keeps writing it after Rust moves to `/game`, so no data moves at the swap. Staging keeps its own `/game-stg`. |
 | 6 | Mount-independent build | Done | Every URL in the browser build is relative, so one build serves at `/game`, `/game-rust` or `/game-stg` ([decision](DECISIONS.md#mount-independent-browser-build)). `web/Trunk.toml` sets Trunk's `public_url` to `./`; the post-build hook rejects any other base and loads `./solomon-boot-<hash>.mjs`. The hosted `editor-test/index.html` uses `<base href="../">`, and `editor-test-boot.mjs` resolves `data-game-boot` against that base, like a `src`. Pages need their trailing-slash URL (`/game/`), which the Website already redirects to. `--mount` and `--website-mount` only set the `solomon-game-mount` and `solomon-website-mount` metadata. One build passes `smoke` and `boneyard` at both `/game/` and `/game-rust/` with every request inside the mount, and the Website's artifact check admits it at both. The Website's `remountGameArtifact` still replaces `/game/` with `/game-rust/` in HTML and modules. That changes nothing in a relative artifact, so it can go once the Website pins one; its metadata rewrite and guest-save migration stay. |
-| 7 | Community content in Rust | Not started | Published boneyards and mods load, and the Website editor's test-play uses Rust. |
-| 8 | Swap plan | Not started | Rust to `/game`, PixiJS to `/game-legacy` with a banner for a few weeks, `/game-rust` redirects to `/game`. Needs Website and Caddy changes. |
+| 7 | Community content in Rust | Done | `solomon-content-sweep` ([how to run it](../README.md#published-community-content)) runs published packages through hosted admission, Lua compilation, College preparation and play in each of their Boneyards. On 2026-11-06 production listed one public mod and no published Boneyards. The Website has no anonymous package download, so the sweep used that mod's package rebuilt from the Website's Git history and its public content store; the rebuild matches both published digests. The mod, Invincibility Potion 0.4.0 (`canary.lua.invincibility_potion`), fails Lua compilation: its potion sets `stacking`, which the Website removed from the potion schema on 2026-08-28, the day after this version was published, and the Website's current compiler rejects it too. The owner accepted that result because modding is unfinished. A player who enables a mod that fails admission is told only that a private session is unavailable, and the mod stays enabled. The Website editor's test-play uses Rust from [Website PR 16](https://github.com/JarrettOneSource/solomon-dark-website/pull/16). |
+| 8 | Swap plan | In progress | The owner decided on 2026-11-06 that PixiJS retires at the swap: there is no `/game-legacy`, and its source stays in the Website repository until the owner confirms the result. Players' PixiJS saves carry over with nothing to import or choose ([decision](DECISIONS.md#pixijs-retires-at-the-swap)). The swap is Website draft PR 17. It moves the companion mount to `/game` in `frontend/tools/companion-game.json` and turns on save adoption; the Caddy block moves from `/game-rust` to `/game`, and `/game-rust` links 308-redirect there; both API processes use the Rust save namespace; and the root site is built for the Rust game. Rollback is reverting that PR: PixiJS's own saves are never modified. It merges only on the owner's word. |
 | 9 | README play link | Done | It pointed at `/game/` (PixiJS); it now points at `/game-rust/` until the swap. |
 | 29 | Rejoin during a level-up | Done | A wizard who rejoins with a level-up pending stays staged outside the world until it chooses. The client kept its loading screen up while its own wizard was staged, so the picker never appeared and the run stayed on "Waiting for the coven..." (PR13's head too). The loading screen and the "Waiting on players" overlay now ignore the player's own staging. |
 | 30 | Rejoin placement | Done | A wizard who joined or rejoined after the arena began to lock appeared at the spawn point in the entrance strip, outside the combat bounds, so the camera left it at the screen's edge. It now enters just inside the arena in the spawn point's column ([decision](DECISIONS.md#where-a-rejoining-wizard-enters)); before the lock nothing changes. |
@@ -147,40 +147,33 @@ These must be finished before Rust moves to `/game`.
 | 20 | Simple Rust rules | Done | [Coding standards](CODING-STANDARDS.md#simple-rust). |
 | 31 | Longest functions | Done | The 25 longest, most branched functions are split into named steps, each parent now reading like a table of contents: `cast_ability` calls one function per secondary spell, browser input registers one listener group per input kind, and the battle, world, chat, card, party and menu painters draw one region per helper. Final checkpoints and sampled presentation frames are unchanged. Split further functions when you change them rather than in one pass. |
 
-### Desktop
-
-| # | Item | Status | Notes |
-| --- | --- | --- | --- |
-| 21 | Code signing and notarization | Blocked | Needs an Apple Developer ID and a Windows signing certificate from the owner. Release notes currently say the builds are unsigned. |
-| 22 | Update path | Not started | An update check, or distribution through itch.io or Steam. |
-| 23 | Protocol version handshake | Not started | Old desktop builds should fail clearly against a newer host. |
-| 24 | Accounts and cloud saves on desktop | Not started | Owner decision. Desktop currently plays offline and points players to the web app for cloud features. |
-
-### Tooling and repository
-
-| # | Item | Status | Notes |
-| --- | --- | --- | --- |
-| 25 | Mod CLI in Rust | Not started | `tools/sdmod/cli.mjs` is about 730 lines of Node wrapping the `solomon-sdmod` binary. Make the binary the command-line tool. |
-| 26 | `cargo xtask` | Not started | Replace the Python and shell packaging and verification scripts so contributors need only Rust and Trunk. Node stays for Playwright browser tests. |
-| 27 | Repository size | Not started | The Git pack is about 614 MiB, mostly PNG; the Boneyard art removed in item 3 accounts for about 424 MB of it. Removing files from main does not shrink history; rewriting it is a separate owner decision. |
-| 28 | Local spell journey | Not started | No repository journey casts primary spells locally: `electric-burn.cjs` and the other combat journeys need the hosted staging fixtures. Against the native host, `solomon-entrance.cjs` walks a wizard into Solomon, which starts combat, so a local journey can cast every school. Weld builds need a supported local grant, because Create does not offer them and the developer Console runs only on hosted servers. |
-
 ## Cutover checklist
 
-Draft. Rust moves to `/game` only when all of these hold:
+Awaiting the owner's review. Rust moves to `/game` only when all of these hold and
+the owner approves the swap:
 
 - Every item in [Before the cutover](#before-the-cutover) is done.
 - Feature parity with PixiJS for everything players use: each mode, menu, spell,
   item, enemy, boss, boneyard and multiplayer flow, with differences resolved in
   favor of retail.
-- Real production saves load, play and save again, from both cloud and browser
-  storage.
-- Published community boneyards and mods load; the editor's test-play uses Rust.
+- Real production saves load and play: the cloud-save checker
+  (`solomon-save-check`, README "Checking stored cloud saves") reports no Rust load
+  failure for the saves the PixiJS client could load, in either slot. Guest saves
+  carry over by the same adoption rule.
+- Published community boneyards and mods load (item 7's content sweep), and the
+  Website editor's test-play uses Rust.
 - Supported browsers pass the browser journeys; the desktop packages pass their
-  platform journeys.
+  platform journeys in CI.
 - Performance is at least as good as PixiJS on the workloads in
   [Performance](PERFORMANCE.md).
-- A public period on `/game-rust` ends with no open serious Rust-only bugs.
+- A public period on `/game-rust`, running current main, ends with no open serious
+  Rust-only bugs.
+- The swap PR's post-merge checks pass:
+  - Continue at `/game/` as a guest and signed in;
+  - an old `/game-rust/` link redirects;
+  - root editor test-play;
+  - the Account page's save export;
+  - `/game-stg` unchanged.
 
 ## Evidence
 

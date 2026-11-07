@@ -159,6 +159,7 @@ stay on the Website mount, because the Website's own pages there share them.
 | `crates/protocol` | Messages between the client and host |
 | `crates/launcher` | Native host, asset server, and durable saves |
 | `crates/modding` | Mod validation and authoring tools |
+| `crates/content-sweep` | Checks that published mods and Boneyards load |
 | `crates/save-tools` | Save import, export, and validation |
 | `web` | Browser entry point and game assets |
 | `crates/desktop` | Native window, session lifetime, encrypted peers, and updates |
@@ -235,6 +236,46 @@ The helper reads this repository's tracked scenes and navigation meshes. Set
 `SOLOMON_NAVIGATION_BINARY` when using a build outside `target/debug/examples`.
 It supplies route predictions to the test driver; only ordinary keyboard events
 reach the game.
+
+### Published community content
+
+`solomon-content-sweep` checks that the mods and Boneyards published on the Website load
+in the Rust game. For each mod package it builds the session content the Website provisions
+for a player who enabled that mod, then runs it through the hosted authority: content
+admission, Lua definition compilation, the private College's asset, content catalog and Lua
+runtime preparation, and ten seconds of play in every Boneyard the mod offers. A Lua mod
+plays the stock Random Boneyard, and each Boneyard a package provides is played too. Each
+tick runs the mods' controls, actors and rules in the private College's order.
+
+```sh
+cargo run -p solomon-content-sweep -- --assets web --packages PACKAGES
+cargo run -p solomon-content-sweep -- --assets web --packages PACKAGES \
+  --api https://solomondarker.com/game-rust/
+```
+
+`--packages` is searched recursively for `.zip` and `.sdmod` files; the Website stores each
+published version as `uploads/mods/SLUG/VERSION.zip`. With `--api`, the sweep reads the
+Website's public mod listing with anonymous `GET` requests, one at a time and `--delay-ms`
+apart (500 by default). It sweeps the version each listed mod loads, its newest version with
+a package, matched to a file by the published package SHA-256 and checked against the
+published content digest. The Website offers no anonymous package download, so a listed mod
+without a local package is reported as unavailable, and local packages that no listed mod
+loads are reported as ignored. Unlisted and private mods are not in the listing. `--assets`
+names the client directory the host serves, which holds `assets/navigation` for the stock
+Boneyards, and `--ticks` sets the ticks played in each Boneyard (100 a second, 1,000 by
+default).
+
+The JSON summary on stdout counts `ok`, `failed` and `unavailable` items by kind: `boneyard`
+for what the Boneyard editor publishes and `mod` for everything else. Each item lists its
+package id, slug, version, package SHA-256 and content digest. A failure adds the stage that
+failed (`package`, `identity`, `admission`, `definitions`, `preparation`, `boneyard` or
+`session`) and the game's error; a mod rule that fails while playing is a failure. The
+summary contains no package contents. The exit status is 0 when everything loaded, 1 when an
+item failed or was unavailable, and 2 when the sweep could not run.
+`crates/content-sweep/tests/fixture_packages.rs` builds packages from this repository's mod
+fixtures and runs both modes, the listing against a local server. The sweep does not
+exercise the client's presentation of a mod: decoding its images and audio, or compiling a
+Boneyard's scenery view.
 
 ## Documentation
 
