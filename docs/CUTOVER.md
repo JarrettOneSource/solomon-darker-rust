@@ -9,7 +9,9 @@ history holds how they got there.
 
 Solomon Darker has two maintained clients today. The PixiJS client, which lives in
 the Website repository, serves `/game`. This Rust client serves `/game-rust`.
-Players are still active on PixiJS, so both stay online until Rust is ready.
+Players are still active on PixiJS. The owner's current instruction (2026-11-07)
+keeps PixiJS at `/game` and Rust at `/game-rust` and requires fixes in both clients.
+The swap is deferred; its draft must remain unmerged during this work.
 
 When Rust passes the quality checks in [the cutover checklist](#cutover-checklist),
 it moves to `/game` and PixiJS retires. Until then Rust stays at `/game-rust`.
@@ -58,10 +60,11 @@ Three outcomes are common:
   length rules), comments that cite TypeScript files and functions, and tools that
   need a Website checkout.
 
-**PixiJS gets critical fixes only.** Crashes, save loss and exploits are fixed in
-both clients. Everything else is fixed in Rust only. Work already scoped by an
-active report campaign finishes under that campaign's plan; new work follows this
-rule.
+**Fix both maintained clients.** The owner superseded the critical-fix-only
+PixiJS policy on 2026-11-07. Trace reported behavior in both clients and correct
+each affected owner. When a defect is specific to one implementation, verify
+that the other client already satisfies the contract; no duplicate change is
+needed. Keep PixiJS at `/game` and Rust at `/game-rust`.
 
 **Storage follows performance evidence.** Entity storage moved to `bevy_ecs` in
 October 2026 to gain structure and, it was hoped, speed. The measurements in
