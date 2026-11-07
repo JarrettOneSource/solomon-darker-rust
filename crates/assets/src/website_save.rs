@@ -423,6 +423,59 @@ mod tests {
         }
     }
 
+    /// Website saves write `insight` only on a level-up option Creativity marked, and
+    /// schema-3 saves predate the death age. The game continues them and saves them again.
+    #[test]
+    fn website_saves_restore_without_the_fields_they_omit() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../sim/tests/fixtures/website/save-omitted-field-goldens.json"
+        ))
+        .unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let name = case["name"].as_str().unwrap();
+            let document = case["document"].as_str().unwrap();
+            let saved: Value = serde_json::from_str(document).unwrap();
+            let progression = &saved.get("continuation").unwrap_or(&saved)["simulation"]["playerEntities"]
+                ["progressions"][0];
+            let restored =
+                super::restore(document).unwrap_or_else(|error| panic!("{name}: {error}"));
+            let player = &restored.session.participants[&restored.player_id].player;
+            if progression.get("deathAgeTicks").is_none() {
+                assert_eq!(player.combat.death_age_ticks, 0, "{name}");
+            }
+            if let Some(offer) = progression["pendingOffer"].as_object() {
+                let options: Vec<_> = offer["options"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|option| {
+                        (option["skillId"].as_u64().unwrap() as usize, option["insight"] == true)
+                    })
+                    .collect();
+                let restored_offer = player.progression.pending_offer.as_ref().unwrap();
+                let restored_options: Vec<_> = restored_offer
+                    .options
+                    .iter()
+                    .map(|option| (option.skill_id, option.insight))
+                    .collect();
+                assert_eq!(restored_options, options, "{name}");
+            }
+            let rewritten = super::create(super::CreateSaveOptions {
+                state: &restored.session,
+                player_id: &restored.player_id,
+                loaded_boneyard: restored.loaded_boneyard.as_ref(),
+                metadata: &restored.metadata,
+                party_rejoin_token: None,
+            })
+            .unwrap_or_else(|error| panic!("{name} encode: {error}"));
+            let again = super::restore(&rewritten)
+                .unwrap_or_else(|error| panic!("{name} restore of the rewrite: {error}"));
+            let again = &again.session.participants[&again.player_id].player;
+            assert_eq!(again.progression.pending_offer, player.progression.pending_offer, "{name}");
+            assert_eq!(again.combat, player.combat, "{name}");
+        }
+    }
+
     #[test]
     fn website_save_envelopes_preserve_legacy_summaries_and_rejections() {
         let fixture: Value = serde_json::from_str(include_str!(

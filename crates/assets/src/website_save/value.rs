@@ -368,6 +368,12 @@ fn adapt_struct(name: &str, mut value: Value) -> Result<Value, serde_json::Error
                 }
             }
         }
+        "PlayerSkillOfferOption" => {
+            // The document writes `insight` only on an option Creativity marked.
+            if let Some(fields) = value.as_object_mut() {
+                fields.entry("insight").or_insert(Value::Bool(false));
+            }
+        }
         "SecondaryCastAction" => {
             if let Some(pose) = value.get("handPose").cloned() {
                 let done = value.get("handDone").cloned().unwrap_or(Value::Bool(false));
