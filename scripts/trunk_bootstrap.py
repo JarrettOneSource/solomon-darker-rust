@@ -1,4 +1,8 @@
-"""Canonical external loader-first initialization for every Trunk distribution."""
+"""Canonical external loader-first initialization for every Trunk distribution.
+
+Every URL the game document writes is relative to its base, the client root `./` that
+Trunk sets from web/Trunk.toml's public_url. The same files therefore serve at the site
+root or below any mount, such as /game, /game-rust or /game-stg."""
 
 import hashlib
 import json
@@ -6,6 +10,8 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
+CLIENT_ROOT = "./"
+BASE = re.compile(r'<base\b[^>]*?\bhref=([\'"])(?P<href>[^\'"]*)\1[^>]*>')
 BOOT_SCRIPT = re.compile(r'<script type="module" src="([^"]*solomon-boot-[0-9a-f]{16}\.mjs)"></script>')
 RESOURCE_NAMES = {
     "loaderModule": r"solomon-loader-[0-9a-f]+\.js",
@@ -19,10 +25,9 @@ def bootstrap_name(bootstrap: str) -> str:
     return "solomon-boot-" + hashlib.sha256(bootstrap.encode()).hexdigest()[:16] + ".mjs"
 
 
-def mount_prefix(mount: str) -> str:
-    if not re.fullmatch(r"/(?:[a-z0-9_-]+/)*[a-z0-9_-]*", mount):
-        raise ValueError("the game public URL must be an absolute local mount path")
-    return mount.rstrip("/") + "/"
+def boot_script(name: str) -> str:
+    """The game document's only script: the external initializer under the client root."""
+    return f'<script type="module" src="{CLIENT_ROOT}{name}"></script>'
 
 
 def render_bootstrap(resources: dict[str, str]) -> str:
@@ -67,8 +72,7 @@ def hash_worker_outputs(dist: Path) -> None:
         module.unlink()
 
 
-def validate_trunk_bootstrap(bootstrap: str, mount: str) -> None:
-    mount_prefix(mount)
+def validate_trunk_bootstrap(bootstrap: str) -> None:
     match = re.search(r"^const resources = (\{[^\n]+\});$", bootstrap, re.MULTILINE)
     if match is None:
         raise ValueError("expected the canonical Rust loader bootstrap")
@@ -80,17 +84,16 @@ def validate_trunk_bootstrap(bootstrap: str, mount: str) -> None:
         raise ValueError("the game initializer differs from the canonical loader bootstrap")
 
 
-def prepare_trunk_bootstrap(dist: Path, mount: str) -> tuple[str, str, str]:
-    prefix = mount_prefix(mount)
+def prepare_trunk_bootstrap(dist: Path) -> tuple[str, str, str]:
     index = dist / "index.html"
     document = index.read_text(encoding="utf-8")
     if '<meta name="solomon-bootstrap" content="gpu-loader-v1"' not in document:
         raise ValueError("expected the GPU loader document")
     if re.search(r'<script\b[^>]*>\s*[^<\s]', document):
         raise ValueError("the game document must not contain inline JavaScript")
-    bases=re.findall(r'<base\b[^>]*href=[\'"]([^\'"]+)[\'"][^>]*>',document)
-    if bases != [prefix] and not (prefix == "/" and not bases):
-        raise ValueError(f"the game document must use the {prefix} public URL")
+    if [base["href"] for base in BASE.finditer(document)] != [CLIENT_ROOT]:
+        raise ValueError(f'the game document needs one <base href="{CLIENT_ROOT}">, '
+                         "Trunk's public_url, so that it serves below any mount")
     hash_worker_outputs(dist)
     resources = {}
     files = [path.name for path in dist.iterdir() if path.is_file()]
@@ -109,15 +112,15 @@ def prepare_trunk_bootstrap(dist: Path, mount: str) -> tuple[str, str, str]:
         raise ValueError("the game document has an unowned script")
     if document.count("</body>") != 1:
         raise ValueError("expected one game document body")
-    tag=f'<script type="module" src="{prefix}{name}"></script>'
+    tag = boot_script(name)
     if scripts:
-        previous=dist / Path(scripts[0][1]).name
-        existing=previous.read_text(encoding="utf-8")
-        validate_trunk_bootstrap(existing,mount)
-        if bootstrap_name(existing)!=previous.name or existing!=bootstrap or scripts[0][1]!=prefix+name:
+        previous = dist / Path(scripts[0][1]).name
+        existing = previous.read_text(encoding="utf-8")
+        validate_trunk_bootstrap(existing)
+        if bootstrap_name(existing) != previous.name or existing != bootstrap or scripts[0][0] != tag:
             raise ValueError("the existing initializer does not match this distribution")
     else:
-        document=document.replace("</body>",tag+"\n</body>")
+        document = document.replace("</body>", tag + "\n</body>")
     (dist / name).write_bytes(bootstrap.encode("utf-8"))
     index.write_text(document, encoding="utf-8")
     return document, name, bootstrap

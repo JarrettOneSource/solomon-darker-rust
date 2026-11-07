@@ -436,6 +436,24 @@ that publication. A later healthy sequence with the same target game revision
 can complete recovery. Idle website-only refresh uses its own publication path;
 an active game still observes the save and transport-retirement barrier.
 
+## Mount-independent browser build
+
+One browser build serves at `/game`, `/game-rust` or a staging mount. A build that
+wrote its mount into the document base and initializer path would need its HTML and
+JavaScript rewritten for every other mount, including Rust's move to `/game`.
+
+Every URL the build writes is therefore relative to its page. The base is `./`,
+or `../` in `editor-test/`; modules, WASM and assets resolve from it or from
+`import.meta.url`. The post-build hook rejects a document whose base names a mount.
+The cost is that a page must load at its directory URL with the trailing slash: at
+`/game` without it, `./` would name the site root. The Website, like most static
+servers, redirects a directory URL to that form.
+
+The mounts are deployment settings rather than build inputs. `solomon-game-mount`
+records where the artifact is served, and `solomon-website-mount` selects the
+Website API, socket and storage prefix. Serving an artifact at another mount
+changes only those two values.
+
 ## Retained hosted authority after transport interruption
 
 An unexpected `1001`/`1006` after a playable hosted Welcome is a transport failure,
@@ -714,7 +732,7 @@ millisecond digits; the simulation itself does not read wall-clock time.
 
 Native packages contain the Rust executable, tracked game assets, licenses and
 build metadata. Desktop compiles the shared client directly. The separately
-packaged browser artifact keeps its mounted WASM initializer and content policy.
+packaged browser artifact keeps its external WASM initializer and content policy.
 
 A package records its release repository and immutable revision. Release archives
 are inspected and exercised through the [packaged journey](RELEASE.md#qualification)

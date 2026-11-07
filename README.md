@@ -70,7 +70,8 @@ cd web
 trunk build --release
 ```
 
-The output is in `web/dist/`.
+The output is in `web/dist/`. Its URLs are relative, so it can be served from the
+site root or below any path.
 
 ### Desktop packaging
 
@@ -127,8 +128,16 @@ The directory and its `.tar.gz` include the host, client, editor entry, save-too
 module, and a manifest of file hashes.
 
 The consumer verifies complete payload membership and hashes before installation.
-Mounts are build inputs: rebuilding with `/game-stg` for both prefixes creates a
-staging artifact. `--profile debug` selects an unoptimized development build.
+`--profile debug` selects an unoptimized development build.
+
+Every URL in the client is relative to its page, so the same files serve at any
+mount, such as `/game`, `/game-rust` or `/game-stg`. Serve each page at its
+directory URL with the trailing slash (`/game/`, `/game/editor-test/`). The mounts
+are deployment settings in the pages' metadata: `--mount` records where the game is
+served (`solomon-game-mount`), and `--website-mount` sets the prefix of the Website
+API, game socket and browser storage (`solomon-website-mount`). A staging artifact
+uses `/game-stg` for both. Serving an artifact at another mount changes only that
+metadata.
 
 The player's own browser data (saves, settings, Hall of Fame, playtime, layout) is
 stored under keys suffixed with the Website mount, so `/game-rust` and `/game-stg`

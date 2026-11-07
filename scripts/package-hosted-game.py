@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a verified native host and mounted WASM client for the Website deployment."""
+"""Build a verified native host and WASM client for the Website deployment."""
 
 import argparse
 import hashlib
@@ -49,7 +49,7 @@ def digest(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='new artifact directory')
-    parser.add_argument('--mount', default='/game', help='game artifact URL prefix')
+    parser.add_argument('--mount', default='/game', help='URL prefix recorded as the game mount')
     parser.add_argument('--website-mount', default='', help='Website API and storage URL prefix')
     parser.add_argument('--profile', choices=('debug', 'release'), default='release')
     parser.add_argument('--target', help='native Rust target; default is the installed host')
@@ -80,8 +80,7 @@ def main():
         run(['cargo', 'build', '-p', 'solomon-launcher', '--bin', 'solomon-darker', *release, *native_flags])
         built_native = target / args.target if args.target else target
         shutil.copy2(built_native / args.profile / executable, native)
-        run(['trunk', 'build', '--config', 'web/Trunk.toml', *release,
-             '--public-url', args.mount + '/', '--dist', str(client)])
+        run(['trunk', 'build', '--config', 'web/Trunk.toml', *release, '--dist', str(client)])
         run([sys.executable, 'scripts/prepare-hosted-client.py', str(client),
              '--mount', args.mount, '--website-mount', args.website_mount, '--revision', revision])
         run(['cargo', 'build', '-p', 'solomon-save-tools', '--target', 'wasm32-unknown-unknown', *release])
