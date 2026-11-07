@@ -154,7 +154,10 @@ For each client frame:
 5. Draw world geometry, actors, lights, and UI from their owning models.
 6. Drain accepted audio events and retire unused GPU resources.
 
-`crates/client/src/game.rs` composes the running game. The native event loop in
+`crates/client/src/game.rs` composes the running game: its fields, loading, the
+frame loop and saves. Its other parts live in `crates/client/src/game/`, one file
+each for world drawing, aim and Hub interaction, overlays, UI actions, sound,
+settings, and the hosted and native sessions. The native event loop in
 `crates/desktop/src/app.rs` owns windows and session retirement;
 `crates/client/src/bootstrap.rs` owns browser callbacks and embedding.
 Target-selected platform modules provide input, text, clipboard, files, storage,
