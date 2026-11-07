@@ -238,18 +238,27 @@ impl Change {
     fn between(previous: &Value, next: &Value) -> Option<Self> {
         Some(match (previous, next) {
             (Value::Object(previous), Value::Object(next)) => {
-                let mut changes: BTreeMap<_, _> = previous
-                    .keys()
-                    .filter(|key| !next.contains_key(*key))
-                    .map(|key| (key.clone(), Self::Remove))
-                    .collect();
-                for (key, value) in next {
-                    let change = previous.get(key).map_or_else(
-                        || Some(Self::Replace([value.clone()])),
-                        |previous| Self::between(previous, value),
-                    );
-                    if let Some(change) = change {
-                        changes.insert(key.clone(), change);
+                let mut changes = BTreeMap::new();
+                if previous.len() == next.len() && previous.keys().eq(next.keys()) {
+                    // Session records keep their field set. Walk matching fields together
+                    // instead of searching the same object for every value on every frame.
+                    for ((_, previous), (key, value)) in previous.iter().zip(next) {
+                        if let Some(change) = Self::between(previous, value) {
+                            changes.insert(key.clone(), change);
+                        }
+                    }
+                } else {
+                    for key in previous.keys().filter(|key| !next.contains_key(*key)) {
+                        changes.insert(key.clone(), Self::Remove);
+                    }
+                    for (key, value) in next {
+                        let change = previous.get(key).map_or_else(
+                            || Some(Self::Replace([value.clone()])),
+                            |previous| Self::between(previous, value),
+                        );
+                        if let Some(change) = change {
+                            changes.insert(key.clone(), change);
+                        }
                     }
                 }
                 if changes.is_empty() {

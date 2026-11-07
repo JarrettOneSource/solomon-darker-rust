@@ -411,6 +411,9 @@ matching peers. Lossless field/array changes use the existing JSON, zlib, and
 base64 codecs. The decoder bounds reconstructed size through incremental exact
 accounting; it does not reserialize the whole document to measure it. A direct
 serde visitor avoids recursively cloning untagged intermediate values.
+Objects with matching field names walk paired values directly; object shape
+changes retain the insertion/removal path. This avoids repeated map searches
+without changing delta contents or exact numeric comparisons.
 Reconnect starts with a full publication. ACKs, controls, Flame history, and large
 Welcome/save transfers retain their separate sequencing contracts.
 
