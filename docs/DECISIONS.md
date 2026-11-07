@@ -567,6 +567,11 @@ entrance sides and every arena phase.
 
 ## PixiJS retires at the swap
 
+The swap is deferred under the owner's November 7 instruction: keep PixiJS at
+`/game`, Rust at `/game-rust`, and apply fixes to both maintained clients. The
+preparation and future swap rules below stay available for a separately requested
+cutover; they do not authorize retiring PixiJS during paired fix work.
+
 When Rust moves to `/game`, the PixiJS client is no longer served: there is no
 `/game-legacy`. A second playable copy would let players advance a save the Rust
 game never sees. Its source stays in the Website repository until the owner
