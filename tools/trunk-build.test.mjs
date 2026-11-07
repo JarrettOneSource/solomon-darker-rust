@@ -101,6 +101,7 @@ test('shared externalization preserves the separate Website mount and editor ent
   assert.match(document, /<base href="\/game-stg\/">/);
   assert.match(document, /name="solomon-website-mount" content=""/);
   assert.match(document, /name="solomon-game-mount" content="\/game-stg"/);
+  assert.equal(document.includes('solomon-storage-namespace'), false, 'no namespace unless one is asked for');
   assert.equal(document.includes('<script type="module">'), false);
   const editor = await readFile(join(root, 'editor-test/index.html'), 'utf8');
   assert.match(editor, /name="solomon-editor-test"/);
@@ -109,4 +110,20 @@ test('shared externalization preserves the separate Website mount and editor ent
     await readFile(join(repositoryRoot, 'web/editor-test-boot.mjs'), 'utf8'));
   assert.deepEqual(JSON.parse(await readFile(join(root, 'deployment.json'), 'utf8')), {revision});
   assert.equal(await readFile(join(root, 'index.html'), 'utf8'), document);
+});
+
+test('a storage namespace is written only when given, and must name a path', async context => {
+  const python = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
+  const prepare = (root, namespace) => execFileSync(python,
+    [join(repositoryRoot, 'scripts/prepare-hosted-client.py'), root, '--mount', '/game',
+      '--website-mount', '/game', '--storage-namespace', namespace, '--revision', '1'.repeat(40)],
+    {env: {...process.env, PYTHONDONTWRITEBYTECODE: '1'}, stdio: 'pipe'});
+  const root = await distribution(context, trunkDocument('/game'));
+  prepare(root, '/game-rust');
+  assert.match(await readFile(join(root, 'index.html'), 'utf8'),
+    /name="solomon-storage-namespace" content="\/game-rust"/);
+  for (const invalid of ['', '/', 'game-rust', '/game-rust/']) {
+    const fresh = await distribution(context, trunkDocument('/game'));
+    assert.throws(() => prepare(fresh, invalid), undefined, `accepted ${JSON.stringify(invalid)}`);
+  }
 });

@@ -4153,6 +4153,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solomon-content-sweep"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "flate2",
+ "serde",
+ "serde_json",
+ "solomon-launcher",
+ "solomon-modding",
+ "solomon-sim",
+ "ureq",
+]
+
+[[package]]
 name = "solomon-desktop"
 version = "0.1.0"
 dependencies = [

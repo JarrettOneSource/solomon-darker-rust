@@ -211,7 +211,7 @@ fn local_storage() -> Result<web_sys::Storage, String> {
 
 pub fn scoped_key(key: &str) -> Result<String, String> {
     let window = web_sys::window().ok_or("No browser window")?;
-    Ok(crate::hosted::WebsiteMount::configured(&window)?.unwrap_or_default().storage_key(key))
+    Ok(crate::hosted::WebsiteMount::configured_storage(&window)?.storage_key(key))
 }
 
 fn describe(error: JsValue) -> String {
