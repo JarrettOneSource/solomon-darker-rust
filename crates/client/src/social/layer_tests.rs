@@ -1,4 +1,4 @@
-//! Source HUD z10 / Social z60 stays fixed across book and HUD lifetimes.
+//! HUD and Party stay below books; social overlays retain their higher layers.
 
 use egui::{Context, Event, Id, LayerId, Modifiers, Order, Pos2, Rect, Sense, pos2, vec2};
 
@@ -9,13 +9,18 @@ struct Journey {
     book: bool,
     party_clicks: usize,
     inventory_clicks: usize,
+    owned_charm_clicks: usize,
 }
 
 fn pass(ctx: &Context, journey: &mut Journey, ordered: bool, events: Vec<Event>) {
     let viewport = Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0));
     let hud = LayerId::new(Order::Middle, Id::unique("game-hud"));
+    let book_layer = LayerId::new(Order::Foreground, Id::unique("player-panels"));
     if ordered {
-        let layers = std::iter::once(hud).chain(SocialUi::fixed_layers()).collect::<Vec<_>>();
+        let layers = [hud, SocialUi::party_layer(), book_layer]
+            .into_iter()
+            .chain(SocialUi::fixed_layers())
+            .collect::<Vec<_>>();
         ctx.set_fixed_layer_order(&layers);
     }
     let book = journey.book;
@@ -41,17 +46,25 @@ fn pass(ctx: &Context, journey: &mut Journey, ordered: bool, events: Vec<Event>)
                     }
                 });
             } else {
-                egui::Area::new(Id::unique("player-panels"))
-                    .order(Order::Foreground)
-                    .fixed_pos(Pos2::ZERO)
-                    .show(ctx, |ui| {
+                egui::Area::new(book_layer.id).order(book_layer.order).fixed_pos(Pos2::ZERO).show(
+                    ctx,
+                    |ui| {
                         ui.set_min_size(viewport.size());
+                        let owned_charm = ui.interact(
+                            Rect::from_min_size(pos2(164.2, 169.2), vec2(57.6, 57.6)),
+                            Id::unique("panel:owned-perk:0"),
+                            Sense::click(),
+                        );
+                        if owned_charm.clicked() {
+                            journey.owned_charm_clicks += 1;
+                        }
                         if ui.input_mut(|input| {
                             input.consume_key(Modifiers::NONE, egui::Key::Escape)
                         }) {
                             journey.book = false;
                         }
-                    });
+                    },
+                );
             }
             let layer = SocialUi::party_layer();
             egui::Area::new(layer.id)
@@ -97,7 +110,7 @@ fn click(ctx: &Context, journey: &mut Journey, ordered: bool, pos: Pos2) {
 }
 
 #[test]
-fn reappearing_hud_keeps_party_clickable_after_inventory_closes() {
+fn books_receive_charm_clicks_and_party_recovers_after_close() {
     for ordered in [false, true] {
         let ctx = Context::default();
         let mut journey = Journey::default();
@@ -109,6 +122,11 @@ fn reappearing_hud_keeps_party_clickable_after_inventory_closes() {
         click(&ctx, &mut journey, ordered, pos2(370.0, 25.0));
         assert_eq!(journey.inventory_clicks, 1);
         assert!(journey.book);
+        pass(&ctx, &mut journey, ordered, Vec::new());
+        pass(&ctx, &mut journey, ordered, Vec::new());
+        click(&ctx, &mut journey, ordered, pos2(193.0, 198.0));
+        assert_eq!(journey.owned_charm_clicks, 1, "Hagatha's first owned charm receives the click");
+        assert_eq!(journey.party_clicks, 1, "the covered Party chip cannot steal the charm click");
         pass(
             &ctx,
             &mut journey,

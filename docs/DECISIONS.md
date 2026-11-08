@@ -284,6 +284,12 @@ The patch therefore supplies fixed ordering and passive container backgrounds
 while retaining real child controls. These capabilities prevent reappearing panels
 from changing input priority merely because an Area was raised.
 
+The College Party chip belongs above the gameplay HUD and below the book and
+service panels. Registering it with the higher social overlays covered Hagatha's
+first owned charm and intercepted its Remove action. Only that chip moves below
+books; chat, Party menus, invitations and Player Cards keep their overlay order.
+Website's Party chip likewise sits below its opaque Inventory/service surface.
+
 The patch retains upstream metadata and licenses. Egui upgrades must review
 [the patch contract](../vendor/egui/SOLOMON-PATCH.md) and its focused regressions.
 

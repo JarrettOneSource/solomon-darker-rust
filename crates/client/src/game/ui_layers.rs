@@ -23,6 +23,7 @@ impl Game {
             self.college_overlay.layer_id(),
             ModWorldOverlays::effect_layer(),
         ];
+        layers.push(SocialUi::party_layer()); // 25, below opaque Inventory and services.
         layers.extend(self.panels.layer_ids()); // Complete book subtree at 30.
         layers.extend([
             self.mod_minimap.layer_id(), // 36
@@ -52,7 +53,7 @@ impl Game {
             layers.extend(overlay);
         }
         layers.push(SharedGameplayUi::pause_layer()); // 55
-        layers.extend(SocialUi::fixed_layers()); // Complete Social subtree at 60.
+        layers.extend(SocialUi::fixed_layers()); // Social overlays at 60.
         let fullscreen_above_guidance = self.fullscreen.above_orientation_guidance()?;
         if !fullscreen_above_guidance {
             layers.extend(FullscreenControl::fixed_layers()); // 70

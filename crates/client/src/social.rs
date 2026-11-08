@@ -274,11 +274,10 @@ impl SocialUi {
         Ok(())
     }
 
-    /// Every social layer in drawing order, from the party panel up to the College
-    /// invitation. The two chat layers are the same chat surface, closed and open.
-    pub fn fixed_layers() -> [egui::LayerId; 9] {
+    /// Social overlays above books. The Party chip belongs with the HUD below books;
+    /// the two chat layers are the same chat surface, closed and open.
+    pub fn fixed_layers() -> [egui::LayerId; 8] {
         [
-            Self::party_layer(),
             Self::allies_layer(),
             Self::dialog_layer(),
             Self::card_layer(),
