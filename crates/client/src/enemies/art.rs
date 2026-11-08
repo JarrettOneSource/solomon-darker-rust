@@ -244,8 +244,7 @@ impl EnemyView {
         };
         let width = f64::from(record.width);
         let height = f64::from(record.height);
-        let sine = float::sin(rotation);
-        let cosine = float::cos(rotation);
+        let (sine, cosine) = float::sin_cos(rotation);
         let positions = [(0.0, 0.0), (width, 0.0), (width, height), (0.0, height)].map(|(x, y)| {
             let x = (x - anchor_x) * scale_x;
             let y = (y - anchor_y) * scale_y;

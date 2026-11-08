@@ -73,6 +73,27 @@ pub fn cos(value: f64) -> f64 {
     }
 }
 
+/// The canonical scalar results, sharing their identical argument reduction.
+#[must_use]
+pub fn sin_cos(value: f64) -> (f64, f64) {
+    let high = magnitude_high(value);
+    if high <= 0x3fe9_21fb {
+        return (kernel_sin(value, 0.0, false), kernel_cos(value, 0.0));
+    }
+    if !value.is_finite() {
+        return (f64::NAN, f64::NAN);
+    }
+    let (quadrant, [head, tail]) = reduce_pio2(value);
+    let sine = kernel_sin(head, tail, true);
+    let cosine = kernel_cos(head, tail);
+    match quadrant & 3 {
+        0 => (sine, cosine),
+        1 => (cosine, -sine),
+        2 => (-sine, -cosine),
+        _ => (-cosine, sine),
+    }
+}
+
 fn magnitude_high(value: f64) -> u32 {
     ((value.to_bits() >> 32) as u32) & 0x7fff_ffff
 }

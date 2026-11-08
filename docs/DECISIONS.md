@@ -221,8 +221,9 @@ randomness have separate owners. Changing their consumption order changes play.
 
 `float::hypot` scales its operands before compensated summation. Replacing it with
 `sqrt(x*x + y*y)` changes both rounding and overflow behavior. The trigonometric
-owner also retains argument reduction for very large inputs. `sin_cos` returns
-the two canonical scalar results rather than using a platform combined operation.
+owner also retains argument reduction for very large inputs. `sin_cos` shares
+that reduction while returning the two canonical scalar results, rather than using
+a platform combined operation.
 Recorded equal-input last-bit differences in sine and power are sufficient to
 change saved positions and effect lifetimes after repeated steps.
 

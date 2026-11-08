@@ -8,13 +8,7 @@ mod sincos;
 
 pub use atan::atan2;
 pub use pow::pow;
-pub use sincos::{cos, sin};
-
-/// The scalar `sin` and `cos` of one operand, rather than a combined platform routine.
-#[must_use]
-pub fn sin_cos(value: f64) -> (f64, f64) {
-    (sin(value), cos(value))
-}
+pub use sincos::{cos, sin, sin_cos};
 
 /// Narrows a double to the nearest `f32` and widens it back.
 ///
