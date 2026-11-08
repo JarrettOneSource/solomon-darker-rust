@@ -475,6 +475,14 @@ shorter than an unclaimed ticket's 120-second lifetime. A large valid Welcome an
 actual renderer readiness must fit it on M2. HTTP redelivery, another reservation
 and partial transfer progress never extend it.
 
+Caddy 2.11.7's reload cleanup can write a raw Close control inside an unfinished
+text frame. Private byte captures confirm the resulting invalid UTF-8 payload.
+The browser error callback waits for the actual Close event; eligible
+`1001`/`1006` losses keep their original diagnostic and use this same bounded
+recovery. Protocol validation remains at the receiver. The upstream
+[stream cleanup and Close writer](https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddyhttp/reverseproxy/streaming.go)
+owns this proxy boundary.
+
 `hosted/reconnect.rs` owns retained membership, neutral input, peer-generation
 binding and final cleanup. It keeps accepted state, action/transient history,
 RNG, party/VM/bot owners and monotonic save sequence without a second simulation.
