@@ -958,6 +958,7 @@ impl Game {
                 self.accumulator = 0.0;
                 break;
             }
+            self.advance_local_scenery();
             if let Some(world) = &self.session.boneyard {
                 self.battle_views.consume_events(&world.enemies.events);
                 self.world_screen_feedback

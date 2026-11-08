@@ -26,6 +26,44 @@ use solomon_sim::spells::presentation::SpellDrawQueue;
 use super::{Game, NativeGame, spectator};
 
 impl Game {
+    /// Local simulation delivers every tick here, including ticks between draws.
+    /// Tree scans must observe those poses rather than treating them as missing history.
+    pub(super) fn advance_local_scenery(&mut self) {
+        if self.session.boneyard.is_none() || self.battle.is_none() {
+            return;
+        }
+        let (camera, layout) = self.scene_view();
+        let focus = self.boneyard_camera_focus();
+        let world = self.session.boneyard.as_ref().unwrap();
+        let poses = crate::presentation::scenery_actor_poses(
+            world,
+            self.session.participant_order.iter().map(|id| {
+                solomon_sim::boneyard::scenery::TreePlayerPose {
+                    id: id.clone(),
+                    position: self.session.participants[id].wizard.position,
+                }
+            }),
+            None,
+        );
+        self.battle.as_mut().unwrap().scene.scenery.advance_to(&crate::boneyard::TreeFrameSource {
+            run_id: &world.loaded.run_id,
+            local_player_id: &self.local_player_id,
+            focus_player_id: focus.player_id.as_deref(),
+            display_tick: self.session.ticks as f64,
+            actor_poses: &poses,
+            camera_bounds: solomon_sim::boneyard::BoneyardBounds::new(
+                camera.origin.x,
+                camera.origin.y,
+                layout.logical_size.x / camera.scale,
+                layout.logical_size.y / camera.scale,
+            ),
+            camera_limits: world.camera_bounds(),
+            viewport: layout.logical_size,
+            zoom: camera.scale,
+            timeline: None,
+        });
+    }
+
     pub(super) fn render_world(&mut self) -> Result<(), String> {
         let displayed = DisplayedSession::of(self.native.as_ref(), &self.session);
         let DisplayedSession { display, session, presentation_tick, clocks } = displayed;

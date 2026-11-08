@@ -247,6 +247,13 @@ Accepted session state owns commands, audio, checkpoints, and saves.
 Boneyard frames interpolate without extrapolation; College prediction is limited
 to one snapshot interval of local movement.
 
+The standalone local authority feeds Tree occlusion after every advanced session
+tick, using that tick's actual actor roots and camera. The 25-tick scans must not
+depend on which 100 Hz ticks happen to be painted by a slower display. Drawing
+the same tick again does not advance the fade. Transported clients retain their
+delivered pose history; genuinely unavailable history still preserves the prior
+scan target rather than inventing an actor position.
+
 College prediction resolves the region's permanent fixed bodies, the Office
 polisher during pending admission, and Skorcha's latest accepted position/presence
 through the same actor solver as authority. Ordinary movement retains scenery
