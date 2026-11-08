@@ -1,4 +1,4 @@
-//! Resummoning a Golem retires the oldest one and births a fresh one at full health.
+//! Resummoning retires the lowest-health Golem (oldest ID breaks ties) and births a full-health one.
 //! The visible HUD row change must not be mistaken for healing the surviving Golem.
 #![cfg(feature = "persistence")]
 
