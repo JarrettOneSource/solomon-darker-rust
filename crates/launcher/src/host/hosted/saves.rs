@@ -25,7 +25,7 @@ impl HostedGameHost {
         &self,
         id: &str,
         target_revision: Option<&str>,
-    ) -> Result<String, String> {
+    ) -> Result<(String, Option<String>), String> {
         let player = self.player(id).ok_or("The saved player has no admitted identity")?;
         let mut metadata = player.save_metadata.clone();
         metadata.mod_state = self.prepared_mod_save_state(id)?;
@@ -49,7 +49,8 @@ impl HostedGameHost {
             }
         };
         if matches!(state.run.phase, GameRunPhase::GameOver | GameRunPhase::Loadout) {
-            return website_save::create_profile(&state, id, &metadata);
+            return website_save::create_profile(&state, id, &metadata)
+                .map(|document| (document, None));
         }
         let loaded = self
             .worlds
@@ -67,7 +68,7 @@ impl HostedGameHost {
             state.run.run_id.as_ref() == Some(&lineage.run_id)
                 && self.party_id_for_player(id) == Some(&lineage.party_id)
         }) else {
-            return Ok(unsigned);
+            return Ok((unsigned, None));
         };
         let party = self
             .worlds
@@ -92,7 +93,8 @@ impl HostedGameHost {
             target_revision: Some(target_revision.unwrap_or(&self.recovery_revision).into()),
         };
         let token = create_party_recovery_claim(&self.recovery_secret, &claim, &unsigned)?;
-        website_save::create(options(Some(&token)))
+        let document = website_save::create(options(Some(&token)))?;
+        Ok((document, Some(token)))
     }
 
     pub(in crate::host) fn publish_player_save(
@@ -119,7 +121,7 @@ impl HostedGameHost {
         }) {
             return Ok(0);
         }
-        let save = match self.owner_save(id, request.target_revision) {
+        let (save, rejoin_token) = match self.owner_save(id, request.target_revision) {
             Ok(save) => save,
             Err(reason) => {
                 // A failed checkpoint is logged and reports sequence 0; it is not fatal to the
@@ -135,14 +137,12 @@ impl HostedGameHost {
         player.last_save_sequence += 1;
         let sequence = player.last_save_sequence;
         player.last_save_document = Some(save.clone());
-        let saved = website_save::parse(&save)?;
-        if let Some(token) = saved
-            .continuation
-            .as_ref()
-            .and_then(|continuation| continuation.summary.party_rejoin_token.as_ref())
+        // Creation already returned the token written into this document. Re-reading
+        // the entire continuation here would repeat save validation on the tick owner.
+        if let Some(token) = rejoin_token
             && let Some(slot) = self.rejoin_slots.iter_mut().find(|slot| slot.player_id == id)
         {
-            slot.token = Some(token.clone());
+            slot.token = Some(token);
         }
         let reason =
             if terminal { SaveCheckpointReason::GameOver } else { SaveCheckpointReason::Progress };

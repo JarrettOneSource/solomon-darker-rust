@@ -148,6 +148,12 @@ they do not measure total machine CPU or GPU execution time.
 Application bytes include compact-update zlib/base64 but exclude WebSocket framing,
 TLS, and transport compression.
 
+Save publication carries the generated recovery token alongside its document.
+The publisher does not decode the complete new continuation just to retrieve that
+token. Save construction, claim signing and verification of incoming saves keep
+their existing validation. This removes one full parse per published checkpoint;
+it does not establish a cure for intermittent host scheduling or delivery holds.
+
 ## Native kernel and codec measurements
 
 These are optimized ARM native timings, not WebAssembly or frame-rate measurements.
