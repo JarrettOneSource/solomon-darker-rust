@@ -413,8 +413,10 @@ fn pending_inbound_precedes_the_next_snapshot(message: solomon_protocol::ClientM
     peer.replace_snapshot(obsolete).unwrap();
     peer.replace_snapshot(last).unwrap();
     release.send(()).unwrap();
-    let boundaries: Vec<_> =
-        (0..3).map(|_| observed.recv_timeout(Duration::from_secs(3)).unwrap()).collect();
+    let mut boundaries = Vec::with_capacity(3);
+    for _ in 0..3 {
+        boundaries.push(observed.recv_timeout(Duration::from_secs(3)).unwrap());
+    }
 
     let mut reader = solomon_protocol::snapshot::SnapshotReader::default();
     let Message::Text(first_packet) = next_message(&mut client) else { panic!("first snapshot") };
