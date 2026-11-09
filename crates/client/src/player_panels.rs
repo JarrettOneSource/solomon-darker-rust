@@ -1357,7 +1357,8 @@ impl PlayerPanels {
             return Ok(());
         }
         self.update_viewport(width, height)?;
-        let elapsed_ticks = ((now - self.opened_at) / 10.0).floor().max(0.0);
+        let elapsed_ticks =
+            ((self.closing_at.unwrap_or(now) - self.opened_at) / 10.0).floor().max(0.0);
         let mut progress = if matches!(self.panel, Some(PlayerPanel::SkillSelector(_))) {
             1.0
         } else {
@@ -1366,7 +1367,8 @@ impl PlayerPanels {
             (elapsed_ticks * reveal_per_tick).min(1.0)
         };
         if let Some(closing_at) = self.closing_at {
-            progress = (1.0 - ((now - closing_at) / 10.0).floor().max(0.0) * 0.025).max(0.0);
+            // Inventory 0x00551BFA and Skills 0x00656831 reverse their current reveal.
+            progress = (progress - ((now - closing_at) / 10.0).floor().max(0.0) * 0.025).max(0.0);
             if progress == 0.0 {
                 if let Some(panel) = self.replace_with.take() {
                     self.show(panel, now)?;

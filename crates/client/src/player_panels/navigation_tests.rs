@@ -420,6 +420,131 @@ const STOCK_PANEL_IMAGES: [&str; 6] = [
     "assets/stock/Fonts.png",
 ];
 
+fn rename_paint(panels: &mut PlayerPanels) -> Option<(String, Vec<u8>)> {
+    let images = [
+        STOCK_PANEL_IMAGES.as_slice(),
+        &[
+            "assets/stock/menu/main-menu-button.png",
+            "assets/stock/menu/main-menu-button-hover.png",
+            "assets/stock/menu/main-menu-button-corner.png",
+            "assets/stock/menu/main-menu-button-rail.png",
+        ],
+    ]
+    .concat();
+    let frame = crate::gpu_ui::record_frame(&egui::Context::default(), &images, |frame| {
+        panels.paint(frame).unwrap();
+    });
+    let button = frame.widgets.get("panel:rename-sack")?;
+    // Include the stock corner/rail overhang as well as the label. The actual
+    // recorded quads carry the opacity sent to the GPU; self.alpha is not evidence.
+    let bounds = button.paint_bounds.rect().expand(8.0);
+    let alphas: Vec<_> = frame
+        .shapes
+        .iter()
+        .filter_map(|shape| match &shape.shape {
+            egui::Shape::Mesh(mesh)
+                if bounds.contains_rect(mesh.calc_bounds())
+                    && shape.clip_rect.intersects(mesh.calc_bounds()) =>
+            {
+                Some(mesh.vertices.iter().map(|vertex| vertex.color.a()))
+            }
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    // Ten non-space letters plus the background, two corners and rail.
+    assert!(alphas.len() >= 14 * 4, "complete Rename button and label must be painted");
+    Some((button.label.clone(), alphas))
+}
+
+#[test]
+fn rename_sack_paint_fades_from_its_visible_opacity_when_inventory_closes() {
+    let fixture = Fixture::new();
+    // Inventory reveals 0.025 per 10 ms. Interrupting its first 100 ms must
+    // fade the visible quarter-opacity surface, without flashing to full brightness.
+    for (close_at, before, samples, closed_at) in [
+        (100.0, 64_u8, vec![(100.0, 64_u8), (150.0, 32_u8)], 200.0),
+        (
+            500.0,
+            255_u8,
+            vec![(500.0, 255_u8), (600.0, 191_u8), (700.0, 128_u8), (800.0, 64_u8)],
+            900.0,
+        ),
+    ] {
+        let mut panels = panels();
+        panels.show(PlayerPanel::Inventory, 0.0).unwrap();
+        update(&mut panels, &fixture, close_at, Some(PanelEvent::Activate(Target::Item(100))));
+        assert!(
+            rename_paint(&mut panels).unwrap().1.iter().all(|alpha| alpha.abs_diff(before) <= 1)
+        );
+        update(&mut panels, &fixture, close_at, Some(key("Escape", false)));
+        for (now, expected) in samples {
+            update(&mut panels, &fixture, now, None);
+            let (_, alphas) =
+                rename_paint(&mut panels).expect("closing Inventory still owns Rename");
+            assert!(
+                alphas.iter().all(|alpha| alpha.abs_diff(expected) <= 1),
+                "close at {close_at} ms, frame {now} ms: expected alpha {expected}, got {alphas:?}"
+            );
+        }
+        update(&mut panels, &fixture, closed_at, None);
+        assert!(rename_paint(&mut panels).is_none(), "Rename retires with Inventory");
+        assert_eq!(panels.panel(), None);
+        assert!(panels.take_actions().contains(&PlayerPanelAction::Close));
+    }
+}
+
+#[test]
+fn interrupted_books_retire_at_zero_while_skill_selectors_close_immediately() {
+    let fixture = Fixture::new();
+    for panel in [PlayerPanel::Inventory, PlayerPanel::Skills] {
+        let mut panels = panels();
+        panels.show(panel, 0.0).unwrap();
+        update(&mut panels, &fixture, 100.0, Some(key("Escape", false)));
+        update(&mut panels, &fixture, 199.0, None);
+        assert_eq!(panels.panel(), Some(panel), "the final nonzero tick still owns the book");
+        update(&mut panels, &fixture, 200.0, None);
+        assert_eq!(panels.panel(), None, "the interrupted book retires at zero");
+        assert!(panels.take_actions().contains(&PlayerPanelAction::Close));
+    }
+    for selector in [
+        HudSkillSelectorTarget::Primary,
+        HudSkillSelectorTarget::ConcentrationA,
+        HudSkillSelectorTarget::ConcentrationB,
+    ] {
+        let mut panels = panels();
+        panels.show(PlayerPanel::SkillSelector(selector), 0.0).unwrap();
+        update(&mut panels, &fixture, 100.0, Some(key("Escape", false)));
+        assert_eq!(panels.panel(), None, "{selector:?} has no book fade");
+        assert!(panels.take_actions().contains(&PlayerPanelAction::Close));
+    }
+}
+
+#[test]
+fn rename_sack_paint_retires_during_page_motion_and_uses_the_settled_owner() {
+    let mut fixture = Fixture::new();
+    fixture.economy.backpack[0].name = "Outer".into();
+    fixture.economy.backpack[0].contents.as_mut().unwrap()[0].name = "Inner".into();
+    for panel in [PlayerPanel::Inventory, PlayerPanel::Service(HubTraderId::Luthacus)] {
+        let mut panels = panels();
+        panels.show(panel, 0.0).unwrap();
+        for (id, now, name) in [(100, 500.0, "Outer"), (101, 1000.0, "Inner")] {
+            update(&mut panels, &fixture, now, Some(PanelEvent::Activate(Target::Item(id))));
+            assert_eq!(rename_paint(&mut panels).unwrap().0, format!("Rename {name}"));
+            update(&mut panels, &fixture, now + 10.0, Some(PanelEvent::Activate(Target::Item(id))));
+            assert!(rename_paint(&mut panels).is_none(), "old page command retires at entry");
+            update(&mut panels, &fixture, now + 200.0, None);
+            assert!(rename_paint(&mut panels).is_none(), "no Rename during page motion");
+            update(&mut panels, &fixture, now + 380.0, None);
+            assert_eq!(rename_paint(&mut panels).unwrap().0, format!("Rename {name}"));
+        }
+        update(&mut panels, &fixture, 1500.0, Some(key("KeyI", false)));
+        assert!(rename_paint(&mut panels).is_none(), "child command retires on return");
+        update(&mut panels, &fixture, 1870.0, None);
+        assert_eq!(rename_paint(&mut panels).unwrap().0, "Rename Outer");
+    }
+}
+
 #[test]
 fn controller_scope_is_the_layer_holding_the_dialogue_controls() {
     // Controller focus and A only search the scope's layer, so a dialogue that claims
