@@ -814,16 +814,18 @@ impl Renderer {
     }
 
     /// Draws into a diffuse capture: the articulated pose keeps its vertex colours and
-    /// sampled alpha while every texture's RGB is suppressed.
+    /// sampled alpha while every texture's RGB is suppressed. The material owner
+    /// chooses the clear: Stone uses black; Harden, Webbed and ground masks use white.
     pub fn render_diffuse_to(
         &mut self,
         target: &RenderTarget,
         logical: [f32; 2],
+        clear: [f32; 4],
         draw: impl FnOnce(&mut Self),
     ) {
         let previous = self.forced_texture_color_mode;
         self.forced_texture_color_mode = Some(TextureColorMode::AlphaMask);
-        self.render_to_color(target, logical, [1.0, 1.0, 1.0, 0.0], draw);
+        self.render_to_color(target, logical, clear, draw);
         self.forced_texture_color_mode = previous;
     }
 

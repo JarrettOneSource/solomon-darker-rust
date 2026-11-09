@@ -222,11 +222,16 @@ impl PlayerMaskTarget {
             origin: Vec2::new(plan.position.x - side, plan.position.y - side),
             scale: 0.5,
         };
-        renderer.render_diffuse_to(&self.target, [side as f32; 2], |renderer| {
-            for &index in &plan.mask_indices {
-                draw_mask(renderer, &camera, spells, &masks[index], SpellBlend::Add);
-            }
-        });
+        renderer.render_diffuse_to(
+            &self.target,
+            [side as f32; 2],
+            [1.0, 1.0, 1.0, 0.0],
+            |renderer| {
+                for &index in &plan.mask_indices {
+                    draw_mask(renderer, &camera, spells, &masks[index], SpellBlend::Add);
+                }
+            },
+        );
         renderer.render_onto(&self.target, [side as f32; 2], |renderer| {
             let atlas = spells.dead_hawg();
             let record = &atlas.records[COMPACT_MASK_RADIAL_ENTRY];
