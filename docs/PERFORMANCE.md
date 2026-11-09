@@ -149,10 +149,30 @@ Application bytes include compact-update zlib/base64 but exclude WebSocket frami
 TLS, and transport compression.
 
 Save publication carries the generated recovery token alongside its document.
-The publisher does not decode the complete new continuation just to retrieve that
-token. Save construction, claim signing and verification of incoming saves keep
-their existing validation. This removes one full parse per published checkpoint;
-it does not establish a cure for intermittent host scheduling or delivery holds.
+The publisher does not decode the complete new continuation to retrieve that token.
+Signed owner checkpoints prepare the owner projection once, sign a creator-held
+view of its unsigned bytes and owner/run/integrity bindings, then encode that same
+structured document with the token. Raw signing and incoming verification still
+normalize and fully parse/restore untrusted documents. The direct LuaValue JSON
+visitor retains number conversion and JavaScript object ordering while avoiding
+recursive untagged-variant buffering.
+
+Already encoded world and continuation JSON trees move into their parent objects;
+`json!` would serialize and copy those full subtrees again. This change preserves
+the same values, map ordering and final document bytes.
+
+Original-workload diagnostic controls correlate the 3,000-host-tick autosave with
+accepted-world holds. Native Report 81 publication falls from 120.3 to 24.1 ms;
+the final Report 87 control takes 35.8 ms versus 221.7 ms. Neither control observes
+an accepted-world hold above 80 ms. The corresponding Pixi publications fall from
+54.7/36.9 to 26.3/20.8 ms. Later native signed checkpoints are durably stored
+byte-for-byte as published, with transfer ACK observed separately; exact
+token/document and recovery integration checks pass. These retain full scenes
+and rules, but natural population/admission and local instrumentation limit
+comparisons. The final heavy Report 37 control still blocks publication for
+158.3 ms at 7.60 MB, with a 199.9 ms accepted-world hold and a 51.8 ms frozen-client
+receive callback. Earlier prepared-only controls took 268.1 ms at 8.77 MB. No exact
+speed ratio, full lag or public-network qualification follows.
 
 ## Native kernel and codec measurements
 

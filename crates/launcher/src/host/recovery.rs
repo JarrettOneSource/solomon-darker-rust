@@ -77,9 +77,32 @@ pub fn create_party_recovery_claim(
     let normalized = normalized_document(unsigned_document, None)
         .ok_or("party recovery document must have a null claim")?;
     validate_document_bindings(unsigned_document, claim, None)?;
+    sign_document(secret, claim, &normalized)
+}
+
+pub(super) fn create_owner_party_recovery_claim(
+    secret: &str,
+    claim: &PartyRecoveryClaim,
+    created: &website_save::CreatedRecoverySave<'_>,
+) -> Result<String, String> {
+    validate_secret(secret)?;
+    validate_claim(claim)?;
+    if !created.matches_owner(&claim.player_id, &claim.run_id, claim.integrity) {
+        return Err("party recovery document bindings are invalid".into());
+    }
+    let normalized = normalized_document(created.document(), None)
+        .ok_or("party recovery document must have a null claim")?;
+    sign_document(secret, claim, &normalized)
+}
+
+fn sign_document(
+    secret: &str,
+    claim: &PartyRecoveryClaim,
+    normalized: &str,
+) -> Result<String, String> {
     let signed = SignedPartyRecoveryClaim {
         claim: claim.clone(),
-        document_sha256: sha256(&normalized),
+        document_sha256: sha256(normalized),
         version: 2,
     };
     // The payload keeps the struct's field order. Reading that text back as a `LuaValue`
@@ -345,6 +368,58 @@ enum LifeStateWire {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn created_owner_saves_keep_the_checked_signature_and_document() {
+        use website_save::CreateSaveOptions;
+
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../sim/tests/fixtures/website/party-recovery-goldens.json"
+        ))
+        .unwrap();
+        let row = fixture["creates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["token"].is_string())
+            .unwrap();
+        let secret = row["secret"].as_str().unwrap();
+        let claim: PartyRecoveryClaim = serde_json::from_value(row["claim"].clone()).unwrap();
+        let restored =
+            website_save::restore(fixture["unsignedDocument"].as_str().unwrap()).unwrap();
+        let options = |token| CreateSaveOptions {
+            state: &restored.session,
+            player_id: &restored.player_id,
+            loaded_boneyard: restored.loaded_boneyard.as_ref(),
+            metadata: &restored.metadata,
+            party_rejoin_token: token,
+        };
+        let unsigned = website_save::create(options(None)).unwrap();
+        let expected = create_party_recovery_claim(secret, &claim, &unsigned).unwrap();
+        let (document, token) =
+            website_save::create_with_party_recovery(options(None), |created| {
+                create_owner_party_recovery_claim(secret, &claim, created)
+            })
+            .unwrap();
+        assert_eq!(token, expected);
+        assert_eq!(document, website_save::create(options(Some(&token))).unwrap());
+        assert_eq!(verify_party_recovery_claim(secret, &token, &document), Some(claim.clone()));
+
+        let mut wrong_run = claim;
+        wrong_run.run_id.push_str("-other");
+        assert!(
+            website_save::create_with_party_recovery(options(None), |created| {
+                create_owner_party_recovery_claim(secret, &wrong_run, created)
+            })
+            .is_err()
+        );
+        assert!(
+            website_save::create_with_party_recovery(options(None), |_| {
+                Ok("invalid-token".into())
+            })
+            .is_err()
+        );
+    }
 
     fn checked_document(unsigned: &str, token: &str, mode: &str) -> String {
         if mode == "unsigned" {

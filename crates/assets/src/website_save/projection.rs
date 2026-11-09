@@ -58,13 +58,16 @@ pub(super) fn simulation(state: &GameSession, owner_id: &str) -> Result<Value, S
             "skorcha":encode(&state.npcs.skorcha.skorcha)?,"studentPopulation":students,
             "traderAnimationSeed":state.hub_trader_animation_seed})
     };
-    Ok(json!({"accumulatorSeconds":0,"combatRng":encode(&state.combat_rng)?,
+    let mut result = json!({"accumulatorSeconds":0,"combatRng":encode(&state.combat_rng)?,
         "enhancedEffects":state.enhanced_effects,"screenFlashes":encode(&state.screen_flashes)?,
         "gameRng":encode(&state.gameplay_rng)?,"hallOfFameClockStartedAtTick":state.hall_of_fame_clock_started_at_tick,
         "levelUpBarrier":encode(&state.level_up_barrier)?,"worldManagerOrder":encode(&state.painter_order)?,
         "modEffects":[],"nextLevelUpBarrierId":state.next_level_up_barrier_id,"nextModConsumableUseId":1,
         "playerEntities":players,"primarySpells":encode(&state.spells)?,"run":encode(&state.run)?,
-        "secondaryAbilities":encode(&state.secondary)?,"tick":state.ticks,"world":world}))
+        "secondaryAbilities":encode(&state.secondary)?,"tick":state.ticks});
+    // json! serializes borrowed expressions, including an already encoded world.
+    result["world"] = world;
+    Ok(result)
 }
 
 pub(super) fn boneyard(world: &BoneyardWorld) -> Result<Value, String> {

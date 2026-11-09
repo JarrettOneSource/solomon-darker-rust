@@ -10,7 +10,7 @@ use solomon_sim::game_run::GameRunPhase;
 
 use super::{HostedGameHost, HostedWorlds};
 use crate::host::connection::HostConnection;
-use crate::host::recovery::{PartyRecoveryClaim, create_party_recovery_claim};
+use crate::host::recovery::{PartyRecoveryClaim, create_owner_party_recovery_claim};
 
 /// How to publish one player's save checkpoint: the recovery target revision, whether to send
 /// an unchanged document, and whether a terminal profile save is wanted.
@@ -63,12 +63,11 @@ impl HostedGameHost {
             metadata: &metadata,
             party_rejoin_token: token,
         };
-        let unsigned = website_save::create(options(None))?;
         let Some(lineage) = self.recovery_lineages.iter().find(|lineage| {
             state.run.run_id.as_ref() == Some(&lineage.run_id)
                 && self.party_id_for_player(id) == Some(&lineage.party_id)
         }) else {
-            return Ok((unsigned, None));
+            return Ok((website_save::create(options(None))?, None));
         };
         let party = self
             .worlds
@@ -92,8 +91,10 @@ impl HostedGameHost {
             session_kind: self.kind,
             target_revision: Some(target_revision.unwrap_or(&self.recovery_revision).into()),
         };
-        let token = create_party_recovery_claim(&self.recovery_secret, &claim, &unsigned)?;
-        let document = website_save::create(options(Some(&token)))?;
+        let (document, token) =
+            website_save::create_with_party_recovery(options(None), |created| {
+                create_owner_party_recovery_claim(&self.recovery_secret, &claim, created)
+            })?;
         Ok((document, Some(token)))
     }
 

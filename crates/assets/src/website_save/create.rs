@@ -39,6 +39,63 @@ struct Document<'a> {
 }
 
 pub fn create(options: CreateSaveOptions<'_>) -> Result<String, String> {
+    encode_prepared(&prepare_document(options)?)
+}
+
+/// An unsigned recovery document just constructed from its authoritative owner.
+/// Only the creator can pair its bytes with these validated source bindings.
+pub struct CreatedRecoverySave<'a> {
+    document: &'a str,
+    player_id: &'a str,
+    run_id: &'a str,
+    integrity: SaveIntegrity,
+}
+
+impl CreatedRecoverySave<'_> {
+    #[must_use]
+    pub fn document(&self) -> &str {
+        self.document
+    }
+
+    #[must_use]
+    pub fn matches_owner(&self, player_id: &str, run_id: &str, integrity: SaveIntegrity) -> bool {
+        self.player_id == player_id && self.run_id == run_id && self.integrity == integrity
+    }
+}
+
+/// Construct the owner's projection once, bind its recovery claim, then serialize
+/// that same document with the token. Incoming documents still use parse/restore.
+pub fn create_with_party_recovery(
+    options: CreateSaveOptions<'_>,
+    create_token: impl FnOnce(&CreatedRecoverySave<'_>) -> Result<String, String>,
+) -> Result<(String, String), String> {
+    if options.party_rejoin_token.is_some()
+        || options.state.boneyard.is_none()
+        || options.state.run.phase != GameRunPhase::Active
+    {
+        return Err("party recovery creation requires an unsigned active Boneyard".into());
+    }
+    let loaded =
+        options.loaded_boneyard.ok_or("Boneyard game save is missing its loaded content")?;
+    let player_id = options.player_id;
+    let integrity = options.metadata.integrity;
+    let mut prepared = prepare_document(options)?;
+    let unsigned = encode_prepared(&prepared)?;
+    let token = create_token(&CreatedRecoverySave {
+        document: &unsigned,
+        player_id,
+        run_id: &loaded.run_id,
+        integrity,
+    })?;
+    if !token.starts_with("sdrpr2.") || !super::contract::valid_party_token(&token, true) {
+        return Err("game save party rejoin token requires an active Boneyard".into());
+    }
+    prepared.continuation.as_mut().expect("the created save has a continuation")["summary"]["partyRejoinToken"] =
+        Value::String(token.clone());
+    Ok((encode_prepared(&prepared)?, token))
+}
+
+fn prepare_document(options: CreateSaveOptions<'_>) -> Result<Document<'_>, String> {
     let mut state = owner_projection(options.state, options.player_id)?;
     if matches!(state.run.phase, GameRunPhase::GameOver | GameRunPhase::Loadout) {
         return Err(format!(
@@ -72,18 +129,20 @@ pub fn create(options: CreateSaveOptions<'_>) -> Result<String, String> {
     disk_projection(&mut state);
     let owner = &state.participants[options.player_id];
     let world_kind = if state.boneyard.is_some() { "boneyard" } else { "hub" };
-    let continuation = json!({
-        "loadedBoneyard": loaded,
-        "simulation": projection::simulation(&state, options.player_id)?,
-        "summary": {
-            "activeRun": state.boneyard.is_some() && state.run.phase == GameRunPhase::Active,
-            "character": encode(&owner.player.selection)?,
-            "partyRejoinToken": options.party_rejoin_token,
-            "phase": encode(&state.run.phase)?, "playerId": options.player_id,
-            "savedAtTick": state.ticks, "worldKind": world_kind,
-        },
+    let summary = json!({
+        "activeRun": state.boneyard.is_some() && state.run.phase == GameRunPhase::Active,
+        "character": encode(&owner.player.selection)?,
+        "partyRejoinToken": options.party_rejoin_token,
+        "phase": encode(&state.run.phase)?, "playerId": options.player_id,
+        "savedAtTick": state.ticks, "worldKind": world_kind,
     });
-    encode_document(Some(continuation), profile, options.metadata)
+    // These values already own their JSON trees; move them without reserializing.
+    let continuation = Value::Object(serde_json::Map::from_iter([
+        ("loadedBoneyard".into(), loaded),
+        ("simulation".into(), projection::simulation(&state, options.player_id)?),
+        ("summary".into(), summary),
+    ]));
+    Ok(document(Some(continuation), profile, options.metadata))
 }
 
 pub fn create_profile(
@@ -202,7 +261,11 @@ fn encode_document(
     profile: Value,
     metadata: &SaveMetadata,
 ) -> Result<String, String> {
-    let text = serde_json::to_string(&Document {
+    encode_prepared(&document(continuation, profile, metadata))
+}
+
+fn document(continuation: Option<Value>, profile: Value, metadata: &SaveMetadata) -> Document<'_> {
+    Document {
         continuation,
         profile,
         integrity: metadata.integrity,
@@ -210,8 +273,11 @@ fn encode_document(
         mod_state: &metadata.mod_state,
         native_source: &metadata.native_source,
         schema_version: SCHEMA_VERSION,
-    })
-    .map_err(|error| error.to_string())?;
+    }
+}
+
+fn encode_prepared(document: &Document<'_>) -> Result<String, String> {
+    let text = serde_json::to_string(document).map_err(|error| error.to_string())?;
     if text.len() > MAX_SAVE_BYTES {
         return Err("game save exceeds its size limit".into());
     }

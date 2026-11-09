@@ -353,6 +353,15 @@ Persistence uses revision checks and atomic synced replacement. Encoding and dis
 I/O run outside the tick deadline. Welcome waits for a reconnect credential to be
 durable; SaveCommitted follows actual file completion.
 
+Hosted owner-save creation exposes an opaque view pairing newly constructed
+unsigned bytes with their validated owner, run and integrity. Its signer keeps
+claim validation and normalized hashing, while avoiding a full parse/restore of
+the same authoritative projection. The creator inserts the returned token into
+that prepared document. This boundary is internal to creation: raw signers and
+all incoming recovery documents retain full binding and restore validation.
+Exact signed tokens and final document bytes remain compatible, and publication,
+transfer sequencing and durable save acknowledgements retain their owners.
+
 Direct-host reconnect rotates its credential while retaining the credential the
 client presented until that connection acknowledges the Welcome snapshot. Both
 are durable during admission, so losing the final Welcome bytes or restarting

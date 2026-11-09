@@ -10,7 +10,10 @@ mod projection;
 mod restore;
 pub(crate) mod value;
 
-pub use create::{CreateSaveOptions, create, create_profile, retire};
+pub use create::{
+    CreateSaveOptions, CreatedRecoverySave, create, create_profile, create_with_party_recovery,
+    retire,
+};
 pub use profile::{RestoredGameProfile, hydrate_profile, restore_profile};
 pub use restore::{RestoredGameSave, restore};
 
