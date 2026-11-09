@@ -285,6 +285,12 @@ The patch therefore supplies fixed ordering and passive container backgrounds
 while retaining real child controls. These capabilities prevent reappearing panels
 from changing input priority merely because an Area was raised.
 
+The College Party chip belongs above the gameplay HUD and below the book and
+service panels. Registering it with the higher social overlays covered Hagatha's
+first owned charm and intercepted its Remove action. Only that chip moves below
+books; chat, Party menus, invitations and Player Cards keep their overlay order.
+Website's Party chip likewise sits below its opaque Inventory/service surface.
+
 The patch retains upstream metadata and licenses. Egui upgrades must review
 [the patch contract](../vendor/egui/SOLOMON-PATCH.md) and its focused regressions.
 
@@ -484,6 +490,14 @@ operational policy, longer than ordinary open/Welcome progress intervals and
 shorter than an unclaimed ticket's 120-second lifetime. A large valid Welcome and
 actual renderer readiness must fit it on M2. HTTP redelivery, another reservation
 and partial transfer progress never extend it.
+
+Caddy 2.11.7's reload cleanup can write a raw Close control inside an unfinished
+text frame. Private byte captures confirm the resulting invalid UTF-8 payload.
+The browser error callback waits for the actual Close event; eligible
+`1001`/`1006` losses keep their original diagnostic and use this same bounded
+recovery. Protocol validation remains at the receiver. The upstream
+[stream cleanup and Close writer](https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddyhttp/reverseproxy/streaming.go)
+owns this proxy boundary.
 
 `hosted/reconnect.rs` owns retained membership, neutral input, peer-generation
 binding and final cleanup. It keeps accepted state, action/transient history,
