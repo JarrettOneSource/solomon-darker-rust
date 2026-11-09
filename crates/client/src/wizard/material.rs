@@ -97,16 +97,21 @@ impl WizardView {
         let mut captured_wizard = wizard.clone();
         captured_wizard.position = Vec2::ZERO;
         let capture_camera = Camera { origin: Vec2::new(-128.0, -153.0), scale: 1.0 };
-        renderer.render_diffuse_to(&self.diffuse_capture, [256.0; 2], |renderer| {
-            self.draw_living_layers(
-                renderer,
-                &capture_camera,
-                &captured_wizard,
-                tick,
-                spells,
-                WizardDrawPass::Diffuse,
-            );
-        });
+        renderer.render_diffuse_to(
+            &self.diffuse_capture,
+            [256.0; 2],
+            [1.0, 1.0, 1.0, 0.0],
+            |renderer| {
+                self.draw_living_layers(
+                    renderer,
+                    &capture_camera,
+                    &captured_wizard,
+                    tick,
+                    spells,
+                    WizardDrawPass::Diffuse,
+                );
+            },
+        );
         if state.harden_coating > 0.0 {
             let offsets = wizard_draw_plan(
                 wizard.heading_index,

@@ -104,7 +104,7 @@ impl WizardView {
     ) {
         let mut captured_wizard = wizard.clone();
         captured_wizard.position = Vec2::ZERO;
-        renderer.render_diffuse_to(&self.diffuse_capture, [256.0; 2], |renderer| {
+        renderer.render_diffuse_to(&self.diffuse_capture, [256.0; 2], [0.0; 4], |renderer| {
             // Native bit1 suppresses the captured Shield. The ordinary hit
             // overlay is independent too; both stay outside the warped body.
             self.draw_actor(
