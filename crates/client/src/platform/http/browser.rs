@@ -9,10 +9,15 @@ use super::{CachePolicy, ReadError};
 #[derive(Clone)]
 pub(super) struct Transport(Window);
 
-struct RequestAbort(web_sys::AbortController);
+struct RequestAbort {
+    controller: web_sys::AbortController,
+    completed: bool,
+}
 impl Drop for RequestAbort {
     fn drop(&mut self) {
-        self.0.abort();
+        if !self.completed {
+            self.controller.abort();
+        }
     }
 }
 
@@ -29,12 +34,13 @@ impl Transport {
         body: Option<String>,
         cache: CachePolicy,
     ) -> Result<Response, String> {
-        let abort = RequestAbort(
-            web_sys::AbortController::new()
+        let abort = RequestAbort {
+            controller: web_sys::AbortController::new()
                 .map_err(|_| "Could not create the Website request cancellation")?,
-        );
+            completed: false,
+        };
         let options = RequestInit::new();
-        options.set_signal(Some(&abort.0.signal()));
+        options.set_signal(Some(&abort.controller.signal()));
         options.set_method(method);
         options.set_credentials(web_sys::RequestCredentials::SameOrigin);
         options.set_cache(match cache {
@@ -53,15 +59,15 @@ impl Transport {
             .await
             .map_err(|_| "Cannot reach the server. Check your connection.")?
             .dyn_into::<web_sys::Response>()
-            .map(|response| Response { response, _abort: abort })
+            .map(|response| Response { response, abort })
             .map_err(|_| "The Website returned an invalid response".into())
     }
 }
 
-/// A browser `fetch` response; dropping it aborts the request.
+/// A browser `fetch` response; dropping it before a complete read aborts the request.
 pub struct Response {
     pub(super) response: web_sys::Response,
-    _abort: RequestAbort,
+    abort: RequestAbort,
 }
 
 impl Response {
@@ -76,11 +82,14 @@ impl Response {
     }
 
     pub async fn bytes(
-        self,
+        mut self,
         limit: u64,
         mut on_chunk: impl FnMut(u64),
     ) -> Result<Vec<u8>, ReadError> {
-        let Some(body) = self.response.body() else { return Ok(Vec::new()) };
+        let Some(body) = self.response.body() else {
+            self.abort.completed = true;
+            return Ok(Vec::new());
+        };
         let reader = body
             .get_reader()
             .dyn_into::<web_sys::ReadableStreamDefaultReader>()
@@ -112,6 +121,9 @@ impl Response {
             crate::platform::warn("Could not cancel the failed Website response stream");
         }
         reader.release_lock();
+        // EOF is successful completion. Aborting here can cancel Chromium's pending
+        // network-completion notification even though the caller has every byte.
+        self.abort.completed = result.is_ok();
         result
     }
 }

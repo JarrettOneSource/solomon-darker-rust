@@ -37,7 +37,11 @@ Website account, admission and save controllers share one HTTP client over brows
 fetch and native `ureq`. Requests validate their origin before attaching account
 or session headers, native account tokens retain the browser's per-origin storage
 boundary, and response bodies enforce explicit size limits while reporting bytes
-actually received. Native HTTP and SHA-256 work run off the window thread.
+actually received. Browser cancellation belongs to unfinished requests: dropping
+an unread response or a failed/cancelled read aborts it, while reaching stream EOF
+releases cancellation ownership. Aborting after EOF can race Chromium's network
+completion and report a fully consumed admission response as `ERR_ABORTED`.
+Native HTTP and SHA-256 work run off the window thread.
 Immutable mod content uses the same descriptor length/digest checks over browser
 CacheStorage or atomic native files. Invalid cache bytes are discarded and only
 verified downloads are committed. A view-owned resource URL retains in-memory
