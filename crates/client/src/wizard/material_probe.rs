@@ -156,16 +156,26 @@ pub async fn run(
                             &spells,
                             WizardDrawPass::World,
                         );
-                        renderer.render_diffuse_to(&reference_capture, [256.0; 2], |renderer| {
-                            view.draw_actor(
-                                renderer,
-                                &camera,
-                                &wizard,
-                                300.0,
-                                &spells,
-                                WizardDrawPass::Diffuse,
-                            );
-                        });
+                        // Stone clears black at 0x546A11; the neighboring material
+                        // branches explicitly clear white. Keep this reference independent
+                        // of the production capture helper so its clear cannot self-validate.
+                        renderer.render_to_color(
+                            &reference_capture,
+                            [256.0; 2],
+                            [0.0; 4],
+                            |renderer| {
+                                renderer.draw_diffuse_with_opacity(1.0, |renderer| {
+                                    view.draw_actor(
+                                        renderer,
+                                        &camera,
+                                        &wizard,
+                                        300.0,
+                                        &spells,
+                                        WizardDrawPass::Diffuse,
+                                    );
+                                });
+                            },
+                        );
                         renderer.render_onto(&reference_capture, [256.0; 2], |renderer| {
                             let record = &view.records[3];
                             let head = wizard_draw_plan(heading, 2.0, 80.0).head_offset;
