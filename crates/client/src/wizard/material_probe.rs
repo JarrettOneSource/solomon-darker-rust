@@ -74,7 +74,15 @@ pub async fn run(
     let reference_capture = renderer.create_render_target(256)?;
     let warp = create_stoneskin_warp(&mut Rng::new(125));
     let camera = Camera { origin: Vec2::new(-128.0, -153.0), scale: 1.0 };
-    let mut cases = Vec::new();
+    let mut cases = white_material_capture_cases(
+        renderer,
+        read_pixels,
+        &mut view,
+        &spells,
+        &camera,
+        &target,
+        &reference_capture,
+    );
     let bare_rows: BareRows = serde_json::from_str(include_str!("material_probe_bare.json"))
         .map_err(|error| error.to_string())?;
     for (weapon_name, weapon_kind, bare_pose) in [
@@ -324,6 +332,85 @@ pub async fn run(
     renderer.destroy_render_target(&reference_capture);
     renderer.destroy_render_target(&target);
     Ok(cases)
+}
+
+// The same WizardView target serves all three materials. End these controls with a
+// white capture so the following Stone matrix also checks the white-to-black transition.
+fn white_material_capture_cases(
+    renderer: &mut Renderer,
+    read_pixels: &mut impl FnMut(&mut Renderer) -> Vec<u8>,
+    view: &mut WizardView,
+    spells: &SpellView,
+    camera: &Camera,
+    target: &RenderTarget,
+    reference_capture: &RenderTarget,
+) -> Vec<MaterialProbeCase> {
+    let mut cases = Vec::new();
+    let mut wizard = HubWizard::at(Vec2::ZERO);
+    wizard.heading_index = 6;
+    wizard.walk_cycle_primary = 2.0;
+    wizard.gait_degrees = 80.0;
+    view.set_material_tint(0x697c87);
+    for harden in [true, false] {
+        view.player_presentation = WizardPresentationState {
+            harden_coating: if harden { 0.8 } else { 0.0 },
+            webbed: (!harden).then_some(WebbedState {
+                severity: 1.0,
+                strength: 10.0,
+                cocoon_health: 0.0,
+                hit_pulse: 0.0,
+            }),
+            ..WizardPresentationState::default()
+        };
+        renderer.render_to_color(target, [256.0; 2], [0.0; 4], |renderer| {
+            view.draw_material_capture(renderer, camera, &wizard, 300.0, spells);
+        });
+        let mut actual = Vec::new();
+        renderer.render_onto(&view.diffuse_capture, [256.0; 2], |renderer| {
+            actual = read_pixels(renderer);
+        });
+        // DrawSpecial explicitly clears white for Harden and Webbed. Do not call
+        // render_diffuse_to here: it is the production operation under test.
+        renderer.render_to_color(reference_capture, [256.0; 2], [1.0, 1.0, 1.0, 0.0], |renderer| {
+            renderer.draw_diffuse_with_opacity(1.0, |renderer| {
+                view.draw_living_layers(
+                    renderer,
+                    camera,
+                    &wizard,
+                    300.0,
+                    spells,
+                    WizardDrawPass::Diffuse,
+                );
+            });
+        });
+        if harden {
+            renderer.render_onto(reference_capture, [256.0; 2], |renderer| {
+                let record = &view.records[1];
+                let head = wizard_draw_plan(6, 2.0, 80.0).head_offset;
+                super::material::draw_centered_texture(
+                    renderer,
+                    &Camera { origin: Vec2::ZERO, scale: 1.0 },
+                    &view.atlas,
+                    crate::beam_mesh::sprite_texel_rect(record),
+                    Vec2::new(128.0 + head.x, 128.0 + head.y),
+                    Vec2::new(record.width as f64, record.height as f64),
+                    144.0 * std::f64::consts::PI / 180.0,
+                    [1.0; 4],
+                    BlendMode::Multiply,
+                );
+            });
+        }
+        let mut reference = Vec::new();
+        renderer.render_onto(reference_capture, [256.0; 2], |renderer| {
+            reference = read_pixels(renderer);
+        });
+        cases.push(compare_case(
+            format!("{}-capture-retains-native-white", if harden { "harden" } else { "webbed" }),
+            actual,
+            reference,
+        ));
+    }
+    cases
 }
 
 fn configure_bare_pose(wizard: &mut HubWizard, secondary: &mut SecondaryPlayerState, pose: usize) {
