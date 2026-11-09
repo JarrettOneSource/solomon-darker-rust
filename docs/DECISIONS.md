@@ -422,6 +422,9 @@ serde visitor avoids recursively cloning untagged intermediate values.
 Objects with matching field names walk paired values directly; object shape
 changes retain the insertion/removal path. This avoids repeated map searches
 without changing delta contents or exact numeric comparisons.
+The receiver validates each inflated JSON document as UTF-8 once before parsing
+its fields, and applies each object edit through one map entry lookup. Exact byte
+accounting, malformed-update rejection and baseline retirement remain unchanged.
 Reconnect starts with a full publication. ACKs, controls, Flame history, and large
 Welcome/save transfers retain their separate sequencing contracts.
 

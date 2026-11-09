@@ -14,6 +14,7 @@ use base64::engine::general_purpose::STANDARD;
 use serde::de::{DeserializeOwned, Error as _, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use serde_json::map::Entry;
 
 use crate::{GAME_WEBSOCKET_MAX_PAYLOAD_BYTES, ServerMessage, SnapshotFrame};
 
@@ -151,8 +152,11 @@ impl SnapshotReader {
                     GAME_WEBSOCKET_MAX_PAYLOAD_BYTES,
                 )
                 .map_err(|_| "The snapshot update is invalid or exceeds its byte limit")?;
+                // Validate the complete UTF-8 document once. The string reader can
+                // then borrow its many short field names without revalidating each.
+                let text = std::str::from_utf8(&bytes).map_err(|error| error.to_string())?;
                 let change: Change =
-                    serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+                    serde_json::from_str(text).map_err(|error| error.to_string())?;
                 // Count changed fragments exactly, retaining the unchanged document's
                 // byte count instead of serializing all scenery and actors again.
                 change.apply(&mut previous.frame, &mut previous.encoded_bytes)?;
@@ -311,29 +315,33 @@ impl Change {
                 let object =
                     value.as_object_mut().ok_or("The snapshot field update has no object")?;
                 for (key, change) in changes {
-                    match change {
-                        Self::Remove => {
-                            let removed =
-                                object.get(&key).ok_or("The snapshot removes an absent field")?;
-                            let bytes = serialized_size(&key)?
+                    let length = object.len();
+                    match (object.entry(key), change) {
+                        (Entry::Occupied(entry), Self::Remove) => {
+                            let bytes = serialized_size(entry.key())?
                                 + 1
-                                + serialized_size(removed)?
-                                + usize::from(object.len() > 1);
+                                + serialized_size(entry.get())?
+                                + usize::from(length > 1);
                             change_size(encoded_bytes, bytes, 0)?;
-                            object.remove(&key);
+                            entry.remove();
                         }
-                        Self::Replace([next]) if !object.contains_key(&key) => {
-                            let bytes = serialized_size(&key)?
+                        (Entry::Vacant(entry), Self::Replace([next])) => {
+                            let bytes = serialized_size(entry.key())?
                                 + 1
                                 + serialized_size(&next)?
-                                + usize::from(!object.is_empty());
+                                + usize::from(length > 0);
                             change_size(encoded_bytes, 0, bytes)?;
-                            object.insert(key, next);
+                            entry.insert(next);
                         }
-                        change => change.apply(
-                            object.get_mut(&key).ok_or("The snapshot edits an absent field")?,
-                            encoded_bytes,
-                        )?,
+                        (Entry::Occupied(mut entry), change) => {
+                            change.apply(entry.get_mut(), encoded_bytes)?;
+                        }
+                        (Entry::Vacant(_), Self::Remove) => {
+                            return Err("The snapshot removes an absent field".into());
+                        }
+                        (Entry::Vacant(_), _) => {
+                            return Err("The snapshot edits an absent field".into());
+                        }
                     }
                 }
             }

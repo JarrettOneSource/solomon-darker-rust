@@ -112,11 +112,16 @@ fn invalid_updates_fail_without_allocating_missing_array_entries_or_reusing_a_br
         delta(1, 2, json!({"sequence":[2],"snapshot":{"actors":[2,[[1,["missing first item"]]]]}})),
         delta(1, 2, json!({"sequence":[2],"snapshot":{"actors":[1,[[0,[1]],[0,[2]]]]}})),
         delta(1, 2, json!({"sequence":[2],"snapshot":{"missing":null}})),
+        delta(1, 2, json!({"sequence":[2],"snapshot":{"missing":{}}})),
         delta(1, 2, json!([])),
         delta(1, 2, json!({"sequence":[2],"snapshot":{"actors":[0,[],"extra"]}})),
         delta(1, 2, json!({"sequence":[2],"snapshot":{"actors":[0.5,[]]}})),
         json!({"type":"snapshot_delta","sequence":2,"base_sequence":1,"changes":"not base64"})
             .to_string(),
+        json!({"type":"snapshot_delta","sequence":2,"base_sequence":1,
+            "changes":STANDARD.encode(miniz_oxide::deflate::compress_to_vec_zlib(
+                b"{\"sequence\":[2],\"snapshot\":{\"name\":[\"\xff\"]}}", 1))})
+        .to_string(),
     ];
     for packet in invalid {
         let mut reader = SnapshotReader::default();
