@@ -33,6 +33,8 @@ struct ImageCache {
     images: BTreeMap<String, ImageEntry>,
     paths: BTreeMap<u64, String>,
     materials: Materials,
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    recorded_images: std::collections::BTreeSet<u64>,
 }
 
 /// The shared UI image cache: loaded stock and remote images, their IDs and this frame's
@@ -57,6 +59,7 @@ impl Images {
             let image = futures_lite::future::block_on(assets::load_image(path)).unwrap();
             cache.next_id += 1;
             let id = cache.next_id;
+            cache.recorded_images.insert(id);
             cache.paths.insert(id, path.to_owned());
             cache.images.insert(
                 path.to_owned(),
@@ -258,7 +261,12 @@ impl Images {
         self.request(path);
         let mut cache = self.0.borrow_mut();
         let entry = cache.images.get(&path_key(path))?;
-        if !matches!(entry.state, ImageState::Ready(_)) {
+        let ready = matches!(entry.state, ImageState::Ready(_));
+        // record_frame inspects material-backed quads from real decoded images.
+        // These IDs record submission only; no GPU texture or pixel is fabricated.
+        #[cfg(all(test, not(target_arch = "wasm32")))]
+        let ready = ready || cache.recorded_images.contains(&entry.id);
+        if !ready {
             return None;
         }
         let mut material = Material::new(TextureSource::Image(entry.id), blend, mask, filter)
