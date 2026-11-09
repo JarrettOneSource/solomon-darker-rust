@@ -324,6 +324,156 @@ fn a_slow_reader_keeps_ordered_messages_and_receives_the_current_snapshot_after_
     assert_eq!(payload, "input after resuming");
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum SnapshotBoundary {
+    Encode(usize),
+    Readable,
+    Inbound,
+}
+
+fn wait_for_masked_text(stream: &TcpStream, text: &str) {
+    let header_length = if text.len() < 126 { 6 } else { 8 };
+    assert!(text.len() <= u16::MAX as usize);
+    let mut bytes = vec![0; header_length + text.len()];
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match stream.peek(&mut bytes) {
+            Ok(length) if length == bytes.len() => {
+                assert_eq!(bytes[0], 0x81, "the complete client Text frame is final");
+                assert_ne!(bytes[1] & 0x80, 0, "the actual client frame is masked");
+                let mask = &bytes[header_length - 4..header_length];
+                let unmasked: Vec<_> = bytes[header_length..]
+                    .iter()
+                    .enumerate()
+                    .map(|(index, byte)| byte ^ mask[index % 4])
+                    .collect();
+                assert_eq!(unmasked, text.as_bytes(), "the pending frame is the known input/ACK");
+                return;
+            }
+            Ok(0) => panic!("the connected test client closed before its input/ACK"),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(error) => panic!("could not inspect the real inbound frame: {error}"),
+        }
+        assert!(Instant::now() < deadline, "the complete input/ACK must reach the real TCP socket");
+        std::thread::yield_now();
+    }
+}
+
+fn pending_inbound_precedes_the_next_snapshot(message: solomon_protocol::ClientMessage) {
+    let assets = TestAssets::new();
+    let mut server = assets.start(TransportConfig::default());
+    let origin = format!("http://{}", server.local_addr());
+    let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    let input = serde_json::to_string(&message).unwrap();
+    let (events, observed) = mpsc::channel();
+    let (release, paused) = mpsc::channel();
+    {
+        let mut hooks = peer.0.test_hooks.lock().unwrap();
+        let selected = events.clone();
+        let expected = input.clone();
+        let mut count = 0;
+        hooks.before_snapshot = Some(Box::new(move |stream| {
+            count += 1;
+            selected.send(SnapshotBoundary::Encode(count)).unwrap();
+            if count == 1 {
+                paused.recv_timeout(Duration::from_secs(3)).unwrap();
+                // Readability is established without consuming any socket bytes.
+                // The deadline only detects a hung fixture; no latency is asserted.
+                wait_for_masked_text(stream, &expected);
+                selected.send(SnapshotBoundary::Readable).unwrap();
+            }
+        }));
+        hooks.received_text = Some(Box::new(move |_| {
+            events.send(SnapshotBoundary::Inbound).unwrap();
+        }));
+    }
+    let make_snapshot = |sequence, value| {
+        let state = serde_json::json!({"value": value, "unchanged": "retained".repeat(1024)});
+        let publication = PreparedSnapshot::new(&solomon_protocol::SnapshotFrame {
+            sequence,
+            snapshot: &state,
+            flame_presentation: None,
+            input_acknowledgements: Default::default(),
+            host: Default::default(),
+        })
+        .unwrap();
+        (publication, state)
+    };
+    let (first, first_state) = make_snapshot(1, 0.1_f64);
+    let (obsolete, _) = make_snapshot(2, 0.2_f64);
+    let (last, last_state) = make_snapshot(3, 0.3_f64);
+    peer.send_reliable(Arc::from("reliable before first snapshot")).unwrap();
+    peer.replace_snapshot(first).unwrap();
+    assert_eq!(observed.recv_timeout(Duration::from_secs(3)).unwrap(), SnapshotBoundary::Encode(1));
+    assert_eq!(next_message(&mut client), Message::Text("reliable before first snapshot".into()));
+    client.send(Message::Text(input.clone().into())).unwrap();
+    peer.send_reliable(Arc::from("reliable before second snapshot")).unwrap();
+    peer.replace_snapshot(obsolete).unwrap();
+    peer.replace_snapshot(last).unwrap();
+    release.send(()).unwrap();
+    let boundaries: Vec<_> =
+        (0..3).map(|_| observed.recv_timeout(Duration::from_secs(3)).unwrap()).collect();
+
+    let mut reader = solomon_protocol::snapshot::SnapshotReader::default();
+    let Message::Text(first_packet) = next_message(&mut client) else { panic!("first snapshot") };
+    let solomon_protocol::ServerMessage::Snapshot { frame } =
+        reader.decode::<serde_json::Value>(&first_packet).unwrap()
+    else {
+        panic!("the first actual publication reconstructs a complete frame");
+    };
+    assert_eq!(frame.sequence, 1);
+    assert_eq!(frame.snapshot, first_state);
+    assert_eq!(frame.snapshot["value"].as_f64().unwrap().to_bits(), 0.1_f64.to_bits());
+    assert_eq!(next_message(&mut client), Message::Text("reliable before second snapshot".into()));
+    let Message::Text(last_packet) = next_message(&mut client) else { panic!("second snapshot") };
+    let envelope: serde_json::Value = serde_json::from_str(&last_packet).unwrap();
+    assert_eq!(envelope["type"], "snapshot_delta");
+    assert_eq!(envelope["base_sequence"], 1, "an unsent replacement cannot become a wire baseline");
+    let solomon_protocol::ServerMessage::Snapshot { frame } =
+        reader.decode::<serde_json::Value>(&last_packet).unwrap()
+    else {
+        panic!("the second actual publication reconstructs a complete frame");
+    };
+    assert_eq!(frame.sequence, 3);
+    assert_eq!(frame.snapshot, last_state);
+    assert_eq!(frame.snapshot["value"].as_f64().unwrap().to_bits(), 0.3_f64.to_bits());
+    let TransportEvent::Message { peer_id, payload } = next_event(&server) else {
+        panic!("the actual input/ACK reaches the authority event receiver");
+    };
+    assert_eq!(peer_id, peer.id());
+    assert_eq!(payload, input);
+    client.close(None).unwrap();
+    assert!(matches!(next_message(&mut client), Message::Close(_)));
+    finish_close(&mut client);
+    assert!(matches!(next_event(&server), TransportEvent::Disconnected { .. }));
+    server.shutdown();
+    // Keep cleanup before this intended red assertion: baseline and correction both
+    // complete the real wire journey, and differ only in pending-inbound fairness.
+    assert_eq!(
+        boundaries,
+        [SnapshotBoundary::Readable, SnapshotBoundary::Inbound, SnapshotBoundary::Encode(2)],
+        "already-readable inbound work precedes encoding another newly queued snapshot"
+    );
+}
+
+#[test]
+fn already_readable_input_precedes_a_second_snapshot() {
+    pending_inbound_precedes_the_next_snapshot(solomon_protocol::ClientMessage::Input {
+        sequence: 41,
+        target_tick: 100,
+        input: Default::default(),
+    });
+}
+
+#[test]
+fn already_readable_ack_precedes_a_second_snapshot() {
+    pending_inbound_precedes_the_next_snapshot(solomon_protocol::ClientMessage::SnapshotAck {
+        sequence: 1,
+    });
+}
+
 #[test]
 fn a_peer_close_drains_the_started_frame_and_close_reply_after_output_resumes() {
     let assets = TestAssets::new();
@@ -544,6 +694,7 @@ fn reliable_backpressure_and_shared_snapshot_replacement_are_bounded() {
     let current = snapshot(2, "new frame");
     let peer = PeerSender(Arc::new(PeerState {
         transfers: Default::default(),
+        test_hooks: Default::default(),
         id: 7,
         closed: false.into(),
         outbox: Default::default(),

@@ -57,6 +57,7 @@ fn welcome_prefix_orders_sidebands_and_refreshes_only_on_source_progress() {
             outbox: Default::default(),
             transfers: Default::default(),
             config: Arc::new(TransportConfig::default()),
+            test_hooks: Default::default(),
         }));
         let origin = Instant::now();
         let mut now = origin;

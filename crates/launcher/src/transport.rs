@@ -167,6 +167,20 @@ struct PeerState {
     outbox: Mutex<PeerOutbox>,
     config: Arc<TransportConfig>,
     transfers: Mutex<transfer::PeerTransfers>,
+    #[cfg(test)]
+    test_hooks: Mutex<PeerTestHooks>,
+}
+
+#[cfg(test)]
+type BeforeSnapshotTestHook = Box<dyn FnMut(&TcpStream) + Send>;
+#[cfg(test)]
+type InboundTextTestHook = Box<dyn FnMut(&str) + Send>;
+
+#[cfg(test)]
+#[derive(Default)]
+struct PeerTestHooks {
+    before_snapshot: Option<BeforeSnapshotTestHook>,
+    received_text: Option<InboundTextTestHook>,
 }
 
 /// A nonblocking producer for one peer. Large published snapshots can share the same

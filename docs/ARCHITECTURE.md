@@ -252,6 +252,12 @@ The first packet is complete; later packets may contain lossless changes against
 the last document actually written. The receiver reconstructs every packet before
 coalescing display state. Unsent replacements cannot become baselines.
 
+The native socket worker sends reliable messages before the selected snapshot,
+then returns to its inbound read and flush after one snapshot. New publications
+cannot keep it encoding while already-readable input or render ACKs wait. Later
+reliable messages still precede the next snapshot, and Tungstenite retains complete
+partially written frames through socket backpressure.
+
 The host owns connection generations, admission credentials, input edges,
 readiness, pause/resume holds, and durable save receipts. The session owns rules.
 A checkpoint writer performs encoding and atomic synced replacement away from

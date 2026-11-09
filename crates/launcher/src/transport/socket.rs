@@ -235,6 +235,8 @@ pub(super) fn serve_connection(
         outbox: Default::default(),
         transfers: Default::default(),
         config: server.config.clone(),
+        #[cfg(test)]
+        test_hooks: Default::default(),
     }));
     {
         // Count handshakes too, so four concurrent upgrades cannot over-admit the limit.
@@ -440,7 +442,7 @@ impl PeerConnection<'_> {
         }
     }
 
-    /// Sends queued reliable messages, then the latest snapshot, until a frame would block.
+    /// Sends queued reliable messages and at most one snapshot before the next inbound read.
     fn send_outbox(&mut self) -> Option<TransportClose> {
         enum Publication {
             Reliable(Arc<str>),
@@ -462,12 +464,27 @@ impl PeerConnection<'_> {
                 }
             };
             let Some(payload) = payload else { break };
+            let is_snapshot = matches!(&payload, Publication::Snapshot(_));
             let payload = match payload {
                 Publication::Reliable(payload) => payload,
-                Publication::Snapshot(document) => match self.snapshots.encode(document) {
-                    Ok(payload) => payload,
-                    Err(reason) => return Some(TransportClose { code: Some(1011), reason }),
-                },
+                Publication::Snapshot(document) => {
+                    #[cfg(test)]
+                    if let Some(hook) = self
+                        .peer
+                        .0
+                        .test_hooks
+                        .lock()
+                        .expect("test hooks do not panic while locked")
+                        .before_snapshot
+                        .as_mut()
+                    {
+                        hook(&self.socket.get_ref().stream);
+                    }
+                    match self.snapshots.encode(document) {
+                        Ok(payload) => payload,
+                        Err(reason) => return Some(TransportClose { code: Some(1011), reason }),
+                    }
+                }
             };
             match self.socket.send(shared_text(payload)) {
                 Ok(()) => {}
@@ -477,6 +494,10 @@ impl PeerConnection<'_> {
                     self.write_pending = true;
                 }
                 Err(error) => return Some(failed_connection(error, self.closing.take())),
+            }
+            if is_snapshot {
+                // Read pending input/ACKs before encoding another newly produced snapshot.
+                break;
             }
         }
         None
@@ -519,6 +540,18 @@ impl PeerConnection<'_> {
     fn receive_message(&mut self, message: Message) -> Option<TransportClose> {
         match message {
             Message::Text(payload) if self.closing.is_none() => {
+                #[cfg(test)]
+                if let Some(hook) = self
+                    .peer
+                    .0
+                    .test_hooks
+                    .lock()
+                    .expect("test hooks do not panic while locked")
+                    .received_text
+                    .as_mut()
+                {
+                    hook(&payload);
+                }
                 if self
                     .server
                     .events
