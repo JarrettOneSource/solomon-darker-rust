@@ -181,6 +181,11 @@ arch gives the player a ±20 sort bias. Teacher release effects retain their two
 transient registrations for the release's lifetime. An actor's draw registration
 belongs to its lifecycle, rather than being recreated on each render.
 
+Stoneskin captures the articulated diffuse body over transparent black before
+its Clothes 3 multiply and two normal composites. Harden and Webbed retain
+transparent white. The caller chooses the clear color because native fractional
+alpha preserves the destination RGB inside these intermediate targets.
+
 GPU batching preserves that submission order. A target, projection, texture,
 blend, color material, sampler, or clip change can require a flush. Nested group
 rendering restores the enclosing target and state; retained vertex/index storage
