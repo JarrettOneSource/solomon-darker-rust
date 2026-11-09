@@ -5,7 +5,7 @@
 
 /// A JSON-compatible Lua value: null, a Boolean, a number, a string, an array or an object.
 #[derive(Clone, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "persistence", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 #[cfg_attr(feature = "persistence", serde(untagged))]
 pub enum LuaValue {
     #[default]
@@ -15,6 +15,71 @@ pub enum LuaValue {
     String(String),
     Array(Vec<Self>),
     Object(LuaObject),
+}
+
+#[cfg(feature = "persistence")]
+impl<'de> serde::Deserialize<'de> for LuaValue {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct ValueVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ValueVisitor {
+            type Value = LuaValue;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a JSON-compatible Lua value")
+            }
+
+            fn visit_unit<E>(self) -> Result<LuaValue, E> {
+                Ok(LuaValue::Null)
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<LuaValue, E> {
+                Ok(LuaValue::Boolean(value))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<LuaValue, E> {
+                Ok(LuaValue::Number(value as f64))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<LuaValue, E> {
+                Ok(LuaValue::Number(value as f64))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<LuaValue, E> {
+                Ok(LuaValue::Number(value))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<LuaValue, E> {
+                Ok(LuaValue::String(value.to_owned()))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<LuaValue, E> {
+                Ok(LuaValue::String(value))
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut sequence: A,
+            ) -> Result<LuaValue, A::Error> {
+                let mut values = Vec::new();
+                while let Some(value) = sequence.next_element()? {
+                    values.push(value);
+                }
+                Ok(LuaValue::Array(values))
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> Result<LuaValue, A::Error> {
+                <LuaObject as serde::Deserialize>::deserialize(
+                    serde::de::value::MapAccessDeserializer::new(map),
+                )
+                .map(LuaValue::Object)
+            }
+        }
+
+        // Trying untagged variants first buffers every nested value repeatedly.
+        // The incoming JSON kind already selects the one valid Lua representation.
+        deserializer.deserialize_any(ValueVisitor)
+    }
 }
 
 impl LuaValue {
@@ -202,5 +267,40 @@ impl<'de> serde::Deserialize<'de> for LuaObject {
         }
 
         deserializer.deserialize_map(ObjectVisitor)
+    }
+}
+
+#[cfg(all(test, feature = "persistence"))]
+mod tests {
+    use super::LuaValue;
+
+    #[test]
+    fn json_values_keep_number_bits_and_javascript_property_order() {
+        let value: LuaValue = serde_json::from_str(
+            r#"{"tail":[null,true,false,-0.0,9007199254740991,18446744073709551615,0.1,"🧙\n"],"10":"ten","2":"two","name":"first","name":"last"}"#,
+        )
+        .unwrap();
+        let object = value.as_object().unwrap();
+        assert_eq!(
+            object.iter().map(|(key, _)| key).collect::<Vec<_>>(),
+            ["2", "10", "tail", "name"]
+        );
+        assert_eq!(object.get("name").unwrap().as_str(), Some("last"));
+        let array = object.get("tail").unwrap().as_array().unwrap();
+        assert_eq!(array[0], LuaValue::Null);
+        assert_eq!(array[1].as_bool(), Some(true));
+        assert_eq!(array[2].as_bool(), Some(false));
+        for (index, expected) in
+            [(3, -0.0_f64), (4, 9_007_199_254_740_991.0), (5, u64::MAX as f64), (6, 0.1)]
+        {
+            assert_eq!(array[index].as_number().unwrap().to_bits(), expected.to_bits());
+        }
+        assert_eq!(array[7].as_str(), Some("🧙\n"));
+        let encoded = serde_json::to_string(&value).unwrap();
+        assert_eq!(serde_json::from_str::<LuaValue>(&encoded).unwrap(), value);
+        let from_value =
+            serde_json::from_value::<LuaValue>(serde_json::to_value(&value).unwrap()).unwrap();
+        assert_eq!(from_value.get("tail"), value.get("tail"));
+        assert!(serde_json::from_str::<LuaValue>("[true,]").is_err());
     }
 }
