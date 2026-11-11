@@ -114,9 +114,11 @@ sprite program retains the last uploaded values and changes only those that
 differ, avoiding repeated driver calls for unchanged projection and color state.
 Constructing a new program starts with no retained values.
 
-Courtyard records replace the reference client's independently cropped images.
-Sampling their raw atlas edges let the statue read an opaque white row from its
-neighbor. `Renderer::draw_clamped` clamps sample coordinates to the selected
+Courtyard scenery and NPC records replace the reference client's independently
+cropped images. Sampling their raw atlas edges let the statue read an opaque
+white row from its neighbor and Hagatha's body frames read opaque adjacent
+columns. NPC College and Clothes records share the same isolated-record draw
+boundary. `Renderer::draw_clamped` clamps sample coordinates to the selected
 record's texel centers in both shader programs while preserving the original
 quad and UV interpolation. UVs and bounds retain high precision for large stock
 atlases. Bounds belong to each draw and therefore participate in batching;

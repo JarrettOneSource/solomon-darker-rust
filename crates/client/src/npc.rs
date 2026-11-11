@@ -401,7 +401,7 @@ impl NpcView {
         record: &SpriteRecord,
         placement: QuadPlacement,
     ) {
-        renderer.draw(
+        renderer.draw_clamped(
             atlas,
             Quad {
                 source: [
