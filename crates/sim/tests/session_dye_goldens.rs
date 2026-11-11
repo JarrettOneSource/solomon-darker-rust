@@ -154,6 +154,8 @@ fn painting_permission_is_live_in_snapshots_and_absent_from_durable_checkpoints(
             .transaction
             .accepted
     );
+    let frozen_bytes = serde_json::to_vec(&state.snapshot()).unwrap();
+    let frozen = state.snapshot().into_owned();
     let frame = serde_json::to_value(state.snapshot()).unwrap();
     let received: GameCheckpoint = serde_json::from_value(frame).unwrap();
     assert_eq!(received.inventory_dye_sessions["local"].id, "live-menu");
@@ -170,4 +172,9 @@ fn painting_permission_is_live_in_snapshots_and_absent_from_durable_checkpoints(
     );
     state.step(&inputs, GameSessionTickContext::default());
     assert!(state.inventory_dye_session("local").is_none());
+    assert_eq!(
+        serde_json::to_vec(&frozen).unwrap(),
+        frozen_bytes,
+        "queued network state retains the completed tick and live dye permission"
+    );
 }

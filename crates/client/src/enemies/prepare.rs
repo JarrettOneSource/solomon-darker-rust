@@ -352,6 +352,10 @@ impl EnemyView {
                 });
             let plan = enemy_death_effect_plan_with_input(effect, frame.view_height, sample);
             let mut group = EnemyDrawGroup::at(effect.position);
+            if let Some(layer) = plan.layers.first() {
+                group.rotation =
+                    Some(self.death_rotations.sample(effect.id, layer.rotation_radians));
+            }
             group.draws.extend(plan.gradients.into_iter().map(EnemyDraw::Gradient));
             for layer in plan.layers {
                 group.draws.push(EnemyDraw::Sprite { layer, region_tint: false });
@@ -372,6 +376,7 @@ impl EnemyView {
                 ),
             }
         }
+        self.death_rotations.finish_frame();
     }
 
     pub(super) fn prepare_boss_spells(&mut self, world: &EnemyWorld, frame: &EnemyViewFrame<'_>) {

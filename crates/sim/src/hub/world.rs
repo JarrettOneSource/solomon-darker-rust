@@ -8,7 +8,9 @@ use crate::hub::college_intro::{
     hub_participant_onboarding_collision_bypass_active, plan_hub_participant_movement,
     step_hub_participant_movement,
 };
-use crate::hub::fixed_actors::{HUB_STORY_OFFICE_POLISHER, HubFixedActorCollider};
+use crate::hub::fixed_actors::{
+    HUB_STORY_OFFICE_POLISHER, HubFixedActorCollider, constrain_hub_bench_entry,
+};
 use crate::hub::npc::HubNpcState;
 use crate::hub::regions::HubRegion;
 use crate::hub::{
@@ -165,7 +167,16 @@ pub fn step_hub_participants(
     let mut results = Vec::with_capacity(participants.len());
     for (index, participant) in participants.iter_mut().enumerate() {
         let previous_region = participant.wizard.region;
-        participant.wizard.commit(&plans[index], bodies[index].position);
+        let position = if membership[index].static_collision {
+            constrain_hub_bench_entry(
+                previous_region,
+                participant.wizard.position,
+                bodies[index].position,
+            )
+        } else {
+            bodies[index].position
+        };
+        participant.wizard.commit(&plans[index], position);
         let result = step_hub_participant_movement(
             participant.wizard,
             participant.college_intro,

@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::io::{self, Write};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -18,35 +18,76 @@ use serde_json::Value;
 
 use crate::{GAME_WEBSOCKET_MAX_PAYLOAD_BYTES, ServerMessage, SnapshotFrame};
 
-/// One completed publication, shared by peers with the same world/flame projection.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SnapshotEncodingError {
+    Serialization(String),
+    PayloadTooLarge,
+}
+
+impl fmt::Display for SnapshotEncodingError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Serialization(reason) => formatter.write_str(reason),
+            Self::PayloadTooLarge => {
+                formatter.write_str("The game snapshot exceeds the transport payload bound")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SnapshotEncodingError {}
+
+type SnapshotEncoding = Box<dyn FnOnce() -> Result<Arc<str>, SnapshotEncodingError> + Send>;
+
+/// One frozen publication, shared by peers with the same world/flame projection.
+/// Replaced unsent publications drop their state without formatting JSON.
 pub struct PreparedSnapshot {
     sequence: u64,
+    encode: Mutex<Option<SnapshotEncoding>>,
     frame: OnceLock<Result<Value, String>>,
-    full_message: Arc<str>,
+    full_message: OnceLock<Result<Arc<str>, SnapshotEncodingError>>,
 }
 
 impl PreparedSnapshot {
-    pub fn new<S: Serialize>(frame: &SnapshotFrame<S>) -> Result<Arc<Self>, String> {
-        #[derive(Serialize)]
-        struct Message<'a, S> {
-            r#type: &'static str,
-            frame: &'a SnapshotFrame<S>,
-        }
-        let full_message = serde_json::to_string(&Message { r#type: "snapshot", frame })
-            .map_err(|error| error.to_string())?;
-        if full_message.len() > GAME_WEBSOCKET_MAX_PAYLOAD_BYTES {
-            return Err("The game snapshot exceeds the transport payload bound".into());
-        }
-        Ok(Arc::new(Self {
-            sequence: frame.sequence,
+    #[must_use]
+    pub fn new<S: Serialize + Send + 'static>(frame: SnapshotFrame<S>) -> Arc<Self> {
+        let sequence = frame.sequence;
+        let encode = Box::new(move || {
+            #[derive(Serialize)]
+            struct Message<'a, S> {
+                r#type: &'static str,
+                frame: &'a SnapshotFrame<S>,
+            }
+            let message = serde_json::to_string(&Message { r#type: "snapshot", frame: &frame })
+                .map_err(|error| SnapshotEncodingError::Serialization(error.to_string()))?;
+            if message.len() > GAME_WEBSOCKET_MAX_PAYLOAD_BYTES {
+                return Err(SnapshotEncodingError::PayloadTooLarge);
+            }
+            Ok(Arc::from(message))
+        });
+        Arc::new(Self {
+            sequence,
+            encode: Mutex::new(Some(encode)),
             frame: OnceLock::new(),
-            full_message: full_message.into(),
-        }))
+            full_message: OnceLock::new(),
+        })
     }
 
-    #[must_use]
-    pub fn full_message(&self) -> &Arc<str> {
-        &self.full_message
+    /// The socket writer formats once; peers share both the result and failures.
+    /// The captured owned state is released as soon as encoding finishes.
+    pub fn full_message(&self) -> Result<&Arc<str>, SnapshotEncodingError> {
+        self.full_message
+            .get_or_init(|| {
+                let encode = self
+                    .encode
+                    .lock()
+                    .expect("snapshot ownership does not panic")
+                    .take()
+                    .expect("the full message initializes once");
+                encode()
+            })
+            .as_ref()
+            .map_err(Clone::clone)
     }
 
     fn frame(&self) -> Result<&Value, String> {
@@ -58,9 +99,11 @@ impl PreparedSnapshot {
                 struct Message {
                     frame: Value,
                 }
-                serde_json::from_str::<Message>(&self.full_message)
-                    .map(|message| message.frame)
-                    .map_err(|error| error.to_string())
+                serde_json::from_str::<Message>(
+                    self.full_message().map_err(|error| error.to_string())?,
+                )
+                .map(|message| message.frame)
+                .map_err(|error| error.to_string())
             })
             .as_ref()
             .map_err(Clone::clone)
@@ -75,7 +118,7 @@ pub struct SnapshotWriter {
 
 impl SnapshotWriter {
     pub fn encode(&mut self, next: Arc<PreparedSnapshot>) -> Result<Arc<str>, String> {
-        let mut message = next.full_message.clone();
+        let mut message = next.full_message().map_err(|error| error.to_string())?.clone();
         if let Some(previous) = &self.previous {
             if next.sequence <= previous.sequence {
                 return Err("Snapshot publications must advance their sequence".into());
@@ -108,7 +151,7 @@ pub struct SnapshotReader {
 struct ReceivedSnapshot {
     sequence: u64,
     frame: Value,
-    encoded_bytes: usize,
+    size: SizeCache,
 }
 
 impl SnapshotReader {
@@ -149,9 +192,8 @@ impl SnapshotReader {
                 {
                     return Err("The received snapshot sequence did not advance".into());
                 }
-                let encoded_bytes = serialized_size(&frame)?;
-                self.previous =
-                    Some(ReceivedSnapshot { sequence: decoded.sequence, frame, encoded_bytes });
+                let size = SizeCache::new(&frame)?;
+                self.previous = Some(ReceivedSnapshot { sequence: decoded.sequence, frame, size });
                 Ok(ServerMessage::Snapshot { frame: decoded })
             }
             Some("snapshot_delta") => {
@@ -175,8 +217,8 @@ impl SnapshotReader {
                     serde_json::from_str(text).map_err(|error| error.to_string())?;
                 // Count changed fragments exactly, retaining the unchanged document's
                 // byte count instead of serializing all scenery and actors again.
-                change.apply(&mut previous.frame, &mut previous.encoded_bytes)?;
-                if previous.encoded_bytes > GAME_WEBSOCKET_MAX_PAYLOAD_BYTES {
+                change.apply(&mut previous.frame, &mut previous.size)?;
+                if previous.size.bytes > GAME_WEBSOCKET_MAX_PAYLOAD_BYTES {
                     return Err("The reconstructed snapshot exceeds its byte limit".into());
                 }
                 let decoded = SnapshotFrame::<S>::deserialize(&previous.frame)
@@ -388,34 +430,59 @@ impl Change<'_> {
         Some(Self::Retained(("r", entries)))
     }
 
-    fn apply(self, value: &mut Value, encoded_bytes: &mut usize) -> Result<(), String> {
+    fn apply_child(
+        self,
+        value: &mut Value,
+        size: &mut SizeCache,
+        parent_bytes: &mut usize,
+    ) -> Result<(), String> {
+        let old_bytes = size.bytes;
+        self.apply(value, size)?;
+        change_size(parent_bytes, old_bytes, size.bytes)
+    }
+
+    fn apply(self, value: &mut Value, size: &mut SizeCache) -> Result<(), String> {
+        let SizeCache { bytes, children } = size;
         match self {
             Self::Replace([next]) => {
-                change_size(encoded_bytes, serialized_size(value)?, serialized_size(&next)?)?;
+                *size = SizeCache::new(&next)?;
                 *value = next;
             }
             Self::Object(changes) => {
                 let object =
                     value.as_object_mut().ok_or("The snapshot field update has no object")?;
+                let fields = children.fields();
                 for (key, change) in changes {
                     let length = object.len();
                     if matches!(change, Self::Remove) {
                         let removed = object
                             .remove(key.as_ref())
                             .ok_or("The snapshot removes an absent field")?;
-                        let bytes = serialized_size(&key)?
-                            + 1
-                            + serialized_size(&removed)?
-                            + usize::from(length > 1);
-                        change_size(encoded_bytes, bytes, 0)?;
+                        let removed_bytes = match fields.remove(key.as_ref()) {
+                            Some(size) => size.bytes,
+                            None => serialized_size(&removed)?,
+                        };
+                        change_size(
+                            bytes,
+                            serialized_size(&key)? + 1 + removed_bytes + usize::from(length > 1),
+                            0,
+                        )?;
                     } else if let Some(value) = object.get_mut(key.as_ref()) {
-                        change.apply(value, encoded_bytes)?;
+                        if let Some(child) = fields.get_mut(key.as_ref()) {
+                            change.apply_child(value, child, bytes)?;
+                        } else {
+                            let mut child = SizeCache::new(value)?;
+                            change.apply_child(value, &mut child, bytes)?;
+                            fields.insert(key.into_owned(), child);
+                        }
                     } else if let Self::Replace([next]) = change {
-                        let bytes = serialized_size(&key)?
-                            + 1
-                            + serialized_size(&next)?
-                            + usize::from(length > 0);
-                        change_size(encoded_bytes, 0, bytes)?;
+                        let child = SizeCache::new(&next)?;
+                        change_size(
+                            bytes,
+                            0,
+                            serialized_size(&key)? + 1 + child.bytes + usize::from(length > 0),
+                        )?;
+                        fields.insert(key.clone().into_owned(), child);
                         object.insert(key.into_owned(), next);
                     } else {
                         return Err("The snapshot edits an absent field".into());
@@ -441,29 +508,36 @@ impl Change<'_> {
                         return Err("The snapshot new retained item has no replacement".into());
                     }
                 }
+                let items = children.items(array)?;
                 let previous_len = array.len();
                 let mut previous = std::mem::take(array);
-                for (value, selected) in previous.iter().zip(&selected) {
+                let mut previous_sizes = std::mem::take(items);
+                for (size, selected) in previous_sizes.iter().zip(&selected) {
                     if !selected {
-                        change_size(encoded_bytes, serialized_size(value)?, 0)?;
+                        change_size(bytes, size.bytes, 0)?;
                     }
                 }
                 change_size(
-                    encoded_bytes,
+                    bytes,
                     previous_len.saturating_sub(1),
                     entries.len().saturating_sub(1),
                 )?;
                 array.reserve(entries.len());
+                items.reserve(entries.len());
                 for (old, change) in entries {
                     if let Some(index) = old {
                         let mut item = previous[index].take();
+                        let mut size = std::mem::take(&mut previous_sizes[index]);
                         if let Some(change) = change {
-                            change.apply(&mut item, encoded_bytes)?;
+                            change.apply_child(&mut item, &mut size, bytes)?;
                         }
                         array.push(item);
+                        items.push(size);
                     } else if let Some(Self::Replace([next])) = change {
-                        change_size(encoded_bytes, 0, serialized_size(&next)?)?;
+                        let size = SizeCache::new(&next)?;
+                        change_size(bytes, 0, size.bytes)?;
                         array.push(next);
+                        items.push(size);
                     }
                 }
             }
@@ -477,23 +551,24 @@ impl Change<'_> {
                 {
                     return Err("The snapshot item update is outside its array bounds".into());
                 }
+                let items = children.items(array)?;
                 if length < array.len() {
-                    let mut removed = array.len().saturating_sub(1) - length.saturating_sub(1);
-                    for value in &array[length..] {
-                        removed += serialized_size(value)?;
-                    }
-                    change_size(encoded_bytes, removed, 0)?;
+                    let removed = array.len().saturating_sub(1) - length.saturating_sub(1)
+                        + items[length..].iter().map(|size| size.bytes).sum::<usize>();
+                    change_size(bytes, removed, 0)?;
                     array.truncate(length);
+                    items.truncate(length);
                 }
                 for (index, change) in changes {
                     if index < array.len() {
-                        change.apply(&mut array[index], encoded_bytes)?;
+                        change.apply_child(&mut array[index], &mut items[index], bytes)?;
                     } else if index == array.len()
                         && let Self::Replace([next]) = change
                     {
-                        let added = serialized_size(&next)? + usize::from(!array.is_empty());
-                        change_size(encoded_bytes, 0, added)?;
+                        let size = SizeCache::new(&next)?;
+                        change_size(bytes, 0, size.bytes + usize::from(!array.is_empty()))?;
                         array.push(next);
+                        items.push(size);
                     } else {
                         return Err("The snapshot item update leaves missing array entries".into());
                     }
@@ -505,6 +580,55 @@ impl Change<'_> {
             Self::Remove => return Err("The snapshot removes a value outside an object".into()),
         }
         Ok(())
+    }
+}
+
+/// Byte counts follow their values through every edit and retained-array move.
+/// Children are measured only when an edit first descends into their container;
+/// unchanged fields need neither a parallel tree nor another serialization.
+#[derive(Default)]
+struct SizeCache {
+    bytes: usize,
+    children: ChildSizes,
+}
+
+impl SizeCache {
+    fn new(value: &Value) -> Result<Self, String> {
+        Ok(Self { bytes: serialized_size(value)?, children: ChildSizes::Unexpanded })
+    }
+}
+
+#[derive(Default)]
+enum ChildSizes {
+    #[default]
+    Unexpanded,
+    Object(BTreeMap<String, SizeCache>),
+    Array(Vec<SizeCache>),
+}
+
+impl ChildSizes {
+    fn fields(&mut self) -> &mut BTreeMap<String, SizeCache> {
+        if matches!(self, Self::Unexpanded) {
+            *self = Self::Object(BTreeMap::new());
+        }
+        let Self::Object(fields) = self else {
+            unreachable!("a replacement retires the old value's byte counts")
+        };
+        fields
+    }
+
+    fn items(&mut self, values: &[Value]) -> Result<&mut Vec<SizeCache>, String> {
+        if matches!(self, Self::Unexpanded) {
+            let mut items = Vec::with_capacity(values.len());
+            for value in values {
+                items.push(SizeCache::new(value)?);
+            }
+            *self = Self::Array(items);
+        }
+        let Self::Array(items) = self else {
+            unreachable!("a replacement retires the old value's byte counts")
+        };
+        Ok(items)
     }
 }
 
@@ -559,13 +683,13 @@ mod tests {
             json!(null),
         ];
         let mut value = values[0].clone();
-        let mut bytes = serde_json::to_vec(&value).unwrap().len();
+        let mut size = SizeCache::new(&value).unwrap();
         for next in &values[1..] {
-            Change::between(&value, next).unwrap().apply(&mut value, &mut bytes).unwrap();
+            Change::between(&value, next).unwrap().apply(&mut value, &mut size).unwrap();
             let encoded = serde_json::to_vec(&value).unwrap();
             assert_eq!(encoded, serde_json::to_vec(next).unwrap());
             assert_eq!(
-                bytes,
+                size.bytes,
                 encoded.len(),
                 "the complete document bound includes JSON punctuation and escaped UTF-8"
             );
@@ -582,7 +706,7 @@ mod tests {
             })
             .collect();
         let mut value = json!(records);
-        let mut bytes = serialized_size(&value).unwrap();
+        let mut size = SizeCache::new(&value).unwrap();
         let mut next = records[1..].to_vec();
         next.reverse();
         next[0]["x"] = json!(0.0);
@@ -596,9 +720,54 @@ mod tests {
             let change = Change::between(&value, &next).unwrap();
             let encoded_change = serde_json::to_string(&change).unwrap();
             let change: Change = serde_json::from_str(&encoded_change).unwrap();
-            change.apply(&mut value, &mut bytes).unwrap();
+            change.apply(&mut value, &mut size).unwrap();
             assert_eq!(serde_json::to_vec(&value).unwrap(), serde_json::to_vec(&next).unwrap());
-            assert_eq!(bytes, serialized_size(&next).unwrap());
+            assert_eq!(size.bytes, serialized_size(&next).unwrap());
+        }
+    }
+
+    #[test]
+    fn nested_byte_counts_follow_retained_moves_and_container_replacements() {
+        let records: Vec<_> = (0..40)
+            .map(|id| json!({"id":id,"nested":[{"text":"🧙\n","x":-0.0},[id]],"keep":true}))
+            .collect();
+        let mut expected = json!({"records":records});
+        let mut actual = expected.clone();
+        let mut size = SizeCache::new(&actual).unwrap();
+        for stage in 0..6 {
+            match stage {
+                0 => {
+                    for record in expected["records"].as_array_mut().unwrap() {
+                        record["nested"][0]["x"] = json!(0.0);
+                        record["nested"][1] = json!([u64::MAX, i64::MIN]);
+                    }
+                }
+                1 => {
+                    let records = expected["records"].as_array_mut().unwrap();
+                    records.remove(0);
+                    records.reverse();
+                    records[0]["nested"][0]["text"] = json!("\"\\\u{0}");
+                    records.push(json!({"id":400,"nested":null}));
+                }
+                2 => {
+                    expected["records"][0]["nested"] = json!({"new":[null,false,1e300]});
+                    expected["records"][1].as_object_mut().unwrap().remove("nested");
+                }
+                3 => {
+                    expected["records"][0]["nested"]["new"] = json!([]);
+                    expected["records"][1]["nested"] = json!([{"reset":1e-300}]);
+                    expected["records"].as_array_mut().unwrap().rotate_left(3);
+                }
+                4 => expected["records"] = json!([]),
+                _ => expected = json!({}),
+            }
+            let change = Change::between(&actual, &expected).unwrap();
+            let packet = serde_json::to_string(&change).unwrap();
+            let received: Change = serde_json::from_str(&packet).unwrap();
+            received.apply(&mut actual, &mut size).unwrap();
+            let canonical = serde_json::to_vec(&expected).unwrap();
+            assert_eq!(serde_json::to_vec(&actual).unwrap(), canonical, "stage {stage}");
+            assert_eq!(size.bytes, canonical.len(), "stage {stage}");
         }
     }
 

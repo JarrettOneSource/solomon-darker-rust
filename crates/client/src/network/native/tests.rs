@@ -280,8 +280,7 @@ fn welcome_waits_for_game_acceptance_and_background_delivery_compacts_snapshots(
         );
         let mut writer = solomon_protocol::snapshot::SnapshotWriter::default();
         for sequence in [2, 3] {
-            let snapshot =
-                solomon_protocol::snapshot::PreparedSnapshot::new(&frame(sequence)).unwrap();
+            let snapshot = solomon_protocol::snapshot::PreparedSnapshot::new(frame(sequence));
             let text = writer.encode(snapshot).unwrap();
             socket.send(Message::Text(text.to_string().into())).unwrap();
         }

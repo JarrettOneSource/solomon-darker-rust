@@ -21,15 +21,14 @@ fn welded_packet() -> String {
     );
     let participant = session.participants.get_mut("wizard").unwrap();
     participant.player.grant_weld_build(WeldBuildId::Hailstones, &mut session.gameplay_rng);
-    let prepared = PreparedSnapshot::new(&SnapshotFrame {
+    let prepared = PreparedSnapshot::new(SnapshotFrame {
         sequence: 1,
-        snapshot: session.snapshot(),
+        snapshot: session.snapshot().into_owned(),
         host: HostSnapshot::default(),
         flame_presentation: None,
         input_acknowledgements: Default::default(),
-    })
-    .unwrap();
-    prepared.full_message().to_string()
+    });
+    prepared.full_message().unwrap().to_string()
 }
 
 #[test]

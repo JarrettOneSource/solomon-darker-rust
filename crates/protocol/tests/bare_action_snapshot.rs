@@ -39,14 +39,13 @@ fn borrowed_snapshots_delta_and_reconnect_preserve_bare_actions_and_rng() {
             let participant = session.participants.get_mut("wizard").unwrap();
             participant.wizard.primary_cast.hand_cast.as_mut().unwrap().step(0.5);
         }
-        let prepared = PreparedSnapshot::new(&SnapshotFrame {
+        let prepared = PreparedSnapshot::new(SnapshotFrame {
             sequence,
-            snapshot: session.snapshot(),
+            snapshot: session.snapshot().into_owned(),
             host: HostSnapshot::default(),
             flame_presentation: None,
             input_acknowledgements: Default::default(),
-        })
-        .unwrap();
+        });
         let packet = writer.encode(prepared).unwrap();
         if sequence == 2 {
             assert_eq!(
@@ -72,14 +71,13 @@ fn borrowed_snapshots_delta_and_reconnect_preserve_bare_actions_and_rng() {
     }
     let mut reconnected = SnapshotReader::default();
     assert!(reconnected.decode::<GameCheckpoint>(&packets[1]).is_err());
-    let full = PreparedSnapshot::new(&SnapshotFrame {
+    let full = PreparedSnapshot::new(SnapshotFrame {
         sequence: 3,
-        snapshot: session.snapshot(),
+        snapshot: session.snapshot().into_owned(),
         host: HostSnapshot::default(),
         flame_presentation: None,
         input_acknowledgements: Default::default(),
-    })
-    .unwrap();
+    });
     let packet = SnapshotWriter::default().encode(full).unwrap();
     let ServerMessage::Snapshot { frame } = reconnected.decode::<GameCheckpoint>(&packet).unwrap()
     else {

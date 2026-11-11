@@ -7,7 +7,9 @@ use solomon_sim::hub::college_intro::{
     CollegeIntroPhase, HubParticipantStepOptions, plan_hub_participant_movement,
     step_hub_participant_movement,
 };
-use solomon_sim::hub::fixed_actors::{HUB_STORY_OFFICE_POLISHER, HubFixedActorCollider};
+use solomon_sim::hub::fixed_actors::{
+    HUB_STORY_OFFICE_POLISHER, HubFixedActorCollider, constrain_hub_bench_entry,
+};
 use solomon_sim::hub::regions::HubRegion;
 use solomon_sim::hub::{
     PLAYER_CHARACTER_RADIUS, is_traversable_against_segments, move_with_segments,
@@ -173,6 +175,11 @@ fn predict_character(
             rng,
         },
     );
+    let position = if movement.plan.is_none() {
+        constrain_hub_bench_entry(participant.wizard.region, participant.wizard.position, position)
+    } else {
+        position
+    };
     participant.wizard.commit(&plan, position);
     step_hub_participant_movement(
         &mut participant.wizard,

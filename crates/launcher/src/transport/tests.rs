@@ -20,14 +20,13 @@ use solomon_protocol::WEBSOCKET_PATH;
 static NEXT_TEST_DIRECTORY: AtomicU64 = AtomicU64::new(1);
 
 fn snapshot(sequence: u64, value: &str) -> Arc<PreparedSnapshot> {
-    PreparedSnapshot::new(&solomon_protocol::SnapshotFrame {
+    PreparedSnapshot::new(solomon_protocol::SnapshotFrame {
         sequence,
-        snapshot: value,
+        snapshot: value.to_owned(),
         flame_presentation: None,
         input_acknowledgements: Default::default(),
         host: Default::default(),
     })
-    .unwrap()
 }
 
 struct TestAssets(PathBuf);
@@ -235,7 +234,7 @@ fn game_sockets_bypass_asset_workers_and_keep_text_order_and_close_identity() {
     assert_eq!(next_message(client), Message::Text("control-two".into()));
     let world = snapshot(1, "shared world 🧙");
     peer.replace_snapshot(world.clone()).unwrap();
-    assert_eq!(next_message(client), Message::Text(world.full_message().as_ref().into()));
+    assert_eq!(next_message(client), Message::Text(world.full_message().unwrap().as_ref().into()));
     client.send(Message::Ping(b"live".to_vec().into())).unwrap();
     assert_eq!(next_message(client), Message::Pong(b"live".to_vec().into()));
     peer.send_reliable(Arc::from("replacement notice")).unwrap();
@@ -391,14 +390,13 @@ fn pending_inbound_precedes_the_next_snapshot(message: solomon_protocol::ClientM
     }
     let make_snapshot = |sequence, value| {
         let state = serde_json::json!({"value": value, "unchanged": "retained".repeat(1024)});
-        let publication = PreparedSnapshot::new(&solomon_protocol::SnapshotFrame {
+        let publication = PreparedSnapshot::new(solomon_protocol::SnapshotFrame {
             sequence,
-            snapshot: &state,
+            snapshot: state.clone(),
             flame_presentation: None,
             input_acknowledgements: Default::default(),
             host: Default::default(),
-        })
-        .unwrap();
+        });
         (publication, state)
     };
     let (first, first_state) = make_snapshot(1, 0.1_f64);
@@ -692,8 +690,25 @@ fn reliable_backpressure_and_shared_snapshot_replacement_are_bounded() {
     // Exercise the producer while its consumer is stalled. These are public queue
     // contracts: accepted reliable messages remain ordered, obsolete snapshots release
     // their shared owner, and overload returns a concrete error without blocking.
-    let obsolete = snapshot(1, "old frame");
-    let current = snapshot(2, "new frame");
+    struct Pending(Arc<AtomicU64>);
+    impl serde::Serialize for Pending {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            serializer.serialize_str("unwritten state")
+        }
+    }
+    let formatted = Arc::new(AtomicU64::new(0));
+    let publication = |sequence| {
+        PreparedSnapshot::new(solomon_protocol::SnapshotFrame {
+            sequence,
+            snapshot: Pending(formatted.clone()),
+            flame_presentation: None,
+            input_acknowledgements: Default::default(),
+            host: Default::default(),
+        })
+    };
+    let obsolete = publication(1);
+    let current = publication(2);
     let peer = PeerSender(Arc::new(PeerState {
         transfers: Default::default(),
         test_hooks: Default::default(),
@@ -701,7 +716,7 @@ fn reliable_backpressure_and_shared_snapshot_replacement_are_bounded() {
         closed: false.into(),
         outbox: Default::default(),
         config: Arc::new(TransportConfig {
-            max_message_bytes: current.full_message().len(),
+            max_message_bytes: 1024,
             reliable_message_capacity: 2,
             reliable_byte_capacity: 8,
             ..TransportConfig::default()
@@ -710,14 +725,14 @@ fn reliable_backpressure_and_shared_snapshot_replacement_are_bounded() {
     peer.send_reliable(Arc::from("one")).unwrap();
     peer.send_reliable(Arc::from("two")).unwrap();
     assert_eq!(peer.send_reliable(Arc::from("3")), Err(PeerSendError::ReliableQueueFull));
-    assert_eq!(
-        peer.replace_snapshot(snapshot(3, "a frame larger than its bound")),
-        Err(PeerSendError::PayloadTooLarge)
-    );
+    // Size validation belongs to the writer. An oversized unsent snapshot may
+    // be replaced without formatting it or disturbing ordered reliable messages.
+    peer.replace_snapshot(snapshot(3, &"oversized unsent state".repeat(1024))).unwrap();
     peer.replace_snapshot(obsolete.clone()).unwrap();
     peer.replace_snapshot(current.clone()).unwrap();
     assert_eq!(Arc::strong_count(&obsolete), 1);
     assert_eq!(Arc::strong_count(&current), 2);
+    assert_eq!(formatted.load(Ordering::SeqCst), 0, "the producer never formats queued state");
     peer.close(4001, "host ended").unwrap();
     assert_eq!(peer.replace_snapshot(current), Err(PeerSendError::Closed));
     assert_eq!(peer.close(1006, "reserved code"), Err(PeerSendError::InvalidClose));
@@ -836,5 +851,56 @@ fn pending_admissions_do_not_block_their_players_websocket_upgrades() {
         caller.read_to_string(&mut response).unwrap();
         assert!(response.starts_with("HTTP/1.1 201 Created\r\n"));
     }
+    server.shutdown();
+}
+
+#[test]
+fn selected_oversized_snapshot_closes_before_transmitting_a_game_frame() {
+    let assets = TestAssets::new();
+    let mut server =
+        assets.start(TransportConfig { max_message_bytes: 1024, ..TransportConfig::default() });
+    let origin = format!("http://{}", server.local_addr());
+    let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    peer.replace_snapshot(snapshot(1, &"large".repeat(1024))).unwrap();
+    let Message::Close(Some(frame)) = next_message(&mut client) else {
+        panic!("oversized publication closes before a snapshot is sent")
+    };
+    assert_eq!(u16::from(frame.code), 1009);
+    assert!(frame.reason.contains("snapshot exceeds"));
+    finish_close(&mut client);
+    assert!(matches!(next_event(&server), TransportEvent::Disconnected { .. }));
+    server.shutdown();
+}
+
+#[test]
+fn failed_snapshot_encoding_sends_a_bounded_utf8_close_reason() {
+    struct Failed;
+    impl serde::Serialize for Failed {
+        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+            Err(serde::ser::Error::custom("🧙".repeat(50)))
+        }
+    }
+
+    let assets = TestAssets::new();
+    let mut server = assets.start(TransportConfig::default());
+    let origin = format!("http://{}", server.local_addr());
+    let mut client = connect(&server, WEBSOCKET_PATH, Some(&origin)).unwrap();
+    let peer = connected(&server);
+    peer.replace_snapshot(PreparedSnapshot::new(solomon_protocol::SnapshotFrame {
+        sequence: 1,
+        snapshot: Failed,
+        flame_presentation: None,
+        input_acknowledgements: Default::default(),
+        host: Default::default(),
+    }))
+    .unwrap();
+    let Message::Close(Some(frame)) = next_message(&mut client) else {
+        panic!("failed encoding closes before a game frame is sent")
+    };
+    assert_eq!(u16::from(frame.code), 1011);
+    assert_eq!(frame.reason, "🧙".repeat(30));
+    finish_close(&mut client);
+    assert!(matches!(next_event(&server), TransportEvent::Disconnected { .. }));
     server.shutdown();
 }

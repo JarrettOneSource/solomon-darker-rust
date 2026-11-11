@@ -231,8 +231,9 @@ impl PeerSender {
         Ok(())
     }
 
+    /// Queue frozen state without formatting it. The writer checks the selected
+    /// publication's byte limits before sending; oversized snapshots close the peer.
     pub fn replace_snapshot(&self, payload: Arc<PreparedSnapshot>) -> Result<(), PeerSendError> {
-        self.validate_payload(payload.full_message())?;
         let transfers =
             self.0.transfers.lock().expect("transfer producers never panic while locked");
         if transfers.welcome.is_some() {

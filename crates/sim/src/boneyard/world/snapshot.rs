@@ -3,8 +3,8 @@
 use super::super::waves::director::WaveSnapshot;
 use super::*;
 
-/// This serializes the same shape as BoneyardCheckpoint without cloning enemies,
-/// loot, event histories or mutable wave state for each network frame.
+/// Borrowed network view of BoneyardCheckpoint. Inline transfers borrow it;
+/// deferred publications freeze its mutable state before authority advances.
 #[cfg_attr(feature = "persistence", derive(serde::Serialize))]
 pub struct BoneyardSnapshot<'a> {
     pub choice_id: &'a str,
@@ -35,6 +35,76 @@ pub struct BoneyardSnapshot<'a> {
     pub lantern_position: &'a Option<Vec2>,
     pub lantern_light_registration: &'a Option<PainterRegistration>,
     pub solomon_painter_registration: &'a Option<PainterRegistration>,
+}
+
+#[cfg(feature = "persistence")]
+impl BoneyardSnapshot<'_> {
+    pub(crate) fn into_checkpoint(self) -> BoneyardCheckpoint {
+        BoneyardCheckpoint {
+            choice_id: self.choice_id.to_owned(),
+            choice_source: *self.choice_source,
+            mod_id: self.mod_id.clone(),
+            mod_name: self.mod_name.clone(),
+            run_id: self.run_id.to_owned(),
+            seed: self.seed.to_owned(),
+            source_sha256: self.source_sha256.to_owned(),
+            geometry_sha256: self.geometry_sha256.to_owned(),
+            ticks: *self.ticks,
+            gate_leaves: self.gate_leaves.clone(),
+            arena_transition: *self.arena_transition,
+            encounter: self.encounter.clone(),
+            waves: self.waves.map(WaveSnapshot::into_checkpoint),
+            tutorial: self.tutorial.clone(),
+            scenery_retained_bounds: *self.scenery_retained_bounds,
+            scenery_target_retention: self.scenery_target_retention.clone(),
+            enemies: self.enemies.clone(),
+            death_weapons: self.death_weapons.to_vec(),
+            next_death_weapon_id: *self.next_death_weapon_id,
+            loot: self.loot.clone(),
+            enemy_world_feedback: *self.enemy_world_feedback,
+            enemy_events: self.enemy_events.clone(),
+            loot_events: self.loot_events.clone(),
+            player_ouch_deadline_tick: *self.player_ouch_deadline_tick,
+            lantern_position: *self.lantern_position,
+            lantern_light_registration: *self.lantern_light_registration,
+            solomon_painter_registration: *self.solomon_painter_registration,
+        }
+    }
+}
+
+#[cfg(feature = "persistence")]
+impl BoneyardCheckpoint {
+    pub(crate) fn snapshot(&self) -> BoneyardSnapshot<'_> {
+        BoneyardSnapshot {
+            choice_id: &self.choice_id,
+            choice_source: &self.choice_source,
+            mod_id: &self.mod_id,
+            mod_name: &self.mod_name,
+            run_id: &self.run_id,
+            seed: &self.seed,
+            source_sha256: &self.source_sha256,
+            geometry_sha256: &self.geometry_sha256,
+            ticks: &self.ticks,
+            gate_leaves: &self.gate_leaves,
+            arena_transition: &self.arena_transition,
+            encounter: &self.encounter,
+            waves: self.waves.as_ref().map(WaveCheckpoint::snapshot),
+            tutorial: &self.tutorial,
+            scenery_retained_bounds: &self.scenery_retained_bounds,
+            scenery_target_retention: &self.scenery_target_retention,
+            enemies: &self.enemies,
+            death_weapons: &self.death_weapons,
+            next_death_weapon_id: &self.next_death_weapon_id,
+            loot: &self.loot,
+            enemy_world_feedback: &self.enemy_world_feedback,
+            enemy_events: &self.enemy_events,
+            loot_events: &self.loot_events,
+            player_ouch_deadline_tick: &self.player_ouch_deadline_tick,
+            lantern_position: &self.lantern_position,
+            lantern_light_registration: &self.lantern_light_registration,
+            solomon_painter_registration: &self.solomon_painter_registration,
+        }
+    }
 }
 
 impl BoneyardWorld {

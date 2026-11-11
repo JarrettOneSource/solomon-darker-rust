@@ -405,7 +405,7 @@ impl NativeAuthority {
         for (peer_id, staged_id, baseline) in recipients {
             let payload = if let Some(id) = staged_id {
                 self.prepare_completed_frame(Some(&id), sequence, now_ms, baseline, |frame| {
-                    solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
+                    Ok(solomon_protocol::snapshot::PreparedSnapshot::new(frame.into_owned()))
                 })?
             } else {
                 let key = baseline.map(|row| (row.epoch, row.world_tick));
@@ -414,7 +414,9 @@ impl NativeAuthority {
                 } else {
                     let payload =
                         self.prepare_completed_frame(None, sequence, now_ms, baseline, |frame| {
-                            solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
+                            Ok(solomon_protocol::snapshot::PreparedSnapshot::new(
+                                frame.into_owned(),
+                            ))
                         })?;
                     shared.insert(key, Arc::clone(&payload));
                     payload

@@ -154,23 +154,24 @@ impl HostedGameHost {
                 .as_ref()
                 .map(|id| {
                     self.prepare_frame(id, sequence, now_ms, baseline, |frame| {
-                        solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
+                        Ok(solomon_protocol::snapshot::PreparedSnapshot::new(frame.into_owned()))
                     })
                 })
                 .transpose()?;
             for peer_id in peer_ids {
                 let connection = &self.connections[&peer_id];
                 let id = connection.player_id.as_ref().unwrap().clone();
-                let payload =
-                    if self.rejoin_slots.iter().any(|slot| {
-                        slot.player_id == id && slot.connected && slot.detached.is_some()
-                    }) {
-                        self.prepare_frame(&id, sequence, now_ms, baseline, |frame| {
-                            solomon_protocol::snapshot::PreparedSnapshot::new(&frame)
-                        })?
-                    } else {
-                        shared.as_ref().expect("ordinary viewer has an ordinary projection").clone()
-                    };
+                let payload = if self
+                    .rejoin_slots
+                    .iter()
+                    .any(|slot| slot.player_id == id && slot.connected && slot.detached.is_some())
+                {
+                    self.prepare_frame(&id, sequence, now_ms, baseline, |frame| {
+                        Ok(solomon_protocol::snapshot::PreparedSnapshot::new(frame.into_owned()))
+                    })?
+                } else {
+                    shared.as_ref().expect("ordinary viewer has an ordinary projection").clone()
+                };
                 let loaded = self.worlds.loaded_for_player(&id).or_else(|| {
                     let slot = self.rejoin_slots.iter().find(|slot| slot.player_id == id)?;
                     self.worlds.loaded_for_run(&slot.run_id)

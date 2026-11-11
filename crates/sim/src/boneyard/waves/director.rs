@@ -191,6 +191,36 @@ pub struct WaveSnapshot<'a> {
     pub opening_release_threshold: Option<usize>,
 }
 
+#[cfg(feature = "persistence")]
+impl WaveSnapshot<'_> {
+    pub(crate) fn into_checkpoint(self) -> WaveCheckpoint {
+        WaveCheckpoint {
+            seed: self.seed.to_owned(),
+            source_sha256: self.source_sha256.map(str::to_owned),
+            state: self.state.clone(),
+            active_bursts: self.active_bursts.map(<[_]>::to_vec),
+            compiled_schedule: self.compiled_schedule.map(<[_]>::to_vec),
+            opening_bursts: self.opening_bursts.map(<[_]>::to_vec),
+            opening_release_threshold: self.opening_release_threshold,
+        }
+    }
+}
+
+#[cfg(feature = "persistence")]
+impl WaveCheckpoint {
+    pub(crate) fn snapshot(&self) -> WaveSnapshot<'_> {
+        WaveSnapshot {
+            seed: &self.seed,
+            source_sha256: self.source_sha256.as_deref(),
+            state: &self.state,
+            active_bursts: self.active_bursts.as_deref(),
+            compiled_schedule: self.compiled_schedule.as_deref(),
+            opening_bursts: self.opening_bursts.as_deref(),
+            opening_release_threshold: self.opening_release_threshold,
+        }
+    }
+}
+
 /// Runs one Boneyard run's waves: the opening, the compiled schedule and the generated
 /// Boneyard's scripts, emitting enemy spawn intents each tick.
 #[derive(Clone, Debug, PartialEq)]

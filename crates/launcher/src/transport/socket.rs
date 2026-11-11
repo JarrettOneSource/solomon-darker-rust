@@ -16,8 +16,8 @@ use tungstenite::protocol::{CloseFrame, WebSocket, WebSocketConfig};
 use tungstenite::{Bytes, Error, Message, Utf8Bytes, accept_hdr_with_config};
 
 use super::{
-    AcceptedConnection, HostedRouteLease, PeerSender, PeerState, ServerState, TransportClose,
-    TransportEvent,
+    AcceptedConnection, HostedRouteLease, PeerSendError, PeerSender, PeerState, ServerState,
+    TransportClose, TransportEvent,
 };
 use crate::AssetServer;
 
@@ -480,9 +480,38 @@ impl PeerConnection<'_> {
                     {
                         hook(&self.socket.get_ref().stream);
                     }
-                    match self.snapshots.encode(document) {
+                    let encoded = match document.full_message() {
+                        Ok(full) if full.len() > self.server.config.max_message_bytes => Err((
+                            1009,
+                            "The game snapshot exceeds the transport payload bound".to_owned(),
+                        )),
+                        Ok(_) => self.snapshots.encode(document).map_err(|reason| (1011, reason)),
+                        Err(error) => Err((
+                            if matches!(
+                                error,
+                                solomon_protocol::snapshot::SnapshotEncodingError::PayloadTooLarge
+                            ) {
+                                1009
+                            } else {
+                                1011
+                            },
+                            error.to_string(),
+                        )),
+                    };
+                    match encoded {
                         Ok(payload) => payload,
-                        Err(reason) => return Some(TransportClose { code: Some(1011), reason }),
+                        Err((code, reason)) => {
+                            // This failure belongs to a selected publication. Retire pending
+                            // transfers and use the ordinary close handshake, including any
+                            // reliable messages already accepted by the producer.
+                            let reason = &reason[..reason.floor_char_boundary(123)];
+                            match self.peer.close(code, reason) {
+                                Ok(()) | Err(PeerSendError::Closed) => {}
+                                Err(error) => panic!("valid snapshot close was rejected: {error}"),
+                            }
+                            self.start_requested_close();
+                            return None;
+                        }
                     }
                 }
             };

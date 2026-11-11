@@ -265,8 +265,22 @@ pub struct SnapshotFrame<S> {
     pub snapshot: S,
 }
 
-/// The host supplies `GameSnapshot<'_>` (borrowed); the browser decodes `GameCheckpoint`
-/// (owned). Their canonical field shape is identical, without a frame-time checkpoint clone.
+impl SnapshotFrame<solomon_sim::session::GameSnapshot<'_>> {
+    #[must_use]
+    pub fn into_owned(self) -> SnapshotFrame<solomon_sim::session::OwnedGameSnapshot> {
+        SnapshotFrame {
+            sequence: self.sequence,
+            flame_presentation: self.flame_presentation,
+            input_acknowledgements: self.input_acknowledgements,
+            host: self.host,
+            snapshot: self.snapshot.into_owned(),
+        }
+    }
+}
+
+/// The host borrows `GameSnapshot<'_>` for Welcome and freezes `OwnedGameSnapshot`
+/// for deferred publications. The browser decodes their identical network field
+/// shape into `GameCheckpoint`.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ServerMessage<S> {

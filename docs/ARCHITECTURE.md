@@ -269,15 +269,19 @@ acceptance and the final chunk acknowledgement. A delayed local operation cannot
 expire a completed network transfer. Connection failures remain available after
 event polling, so rejected commands report the original failure.
 
-`GameSnapshot` borrows state for serialization; `GameCheckpoint` owns state for
-restoration. They retain the same serialized shape. Snapshot application validates
+`GameSnapshot` borrows the network view, and `OwnedGameSnapshot` freezes that same
+view for deferred publication. Both use one serializer, retaining live dye
+permissions and private rejoin projections. `GameCheckpoint` owns restoration
+state; its durable serializer omits live menu permissions. Snapshot application validates
 the complete candidate before mutating the session and reuses immutable data when
 the world identity is unchanged. Detached-player saves project one participant
 and the small records that differ, borrowing the shared world instead of cloning
 an entire session per peer. Starting a new player cannot reset other participants.
 
-The host prepares one canonical publication for peers sharing a world. Each
-connection then chooses and encodes its own next snapshot. A reliable result names
+The host freezes one canonical publication for peers sharing a world and Flame
+baseline. Each connection selects its next snapshot; socket writers share the
+publication's full encoding and comparison tree. Unselected replacements require
+neither. Byte limits are checked before the selected packet reaches the socket. A reliable result names
 the publication it belongs to. Checkpoint writes keep one owned pending document
 and coalesce later revisions, preserving the revision needed by a waiting receipt.
 

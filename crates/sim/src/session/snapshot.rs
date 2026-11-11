@@ -1,6 +1,8 @@
 //! One borrowed network view over the canonical checkpoint schema.
 
 use super::*;
+#[cfg(feature = "persistence")]
+use crate::boneyard::world::BoneyardCheckpoint;
 use crate::boneyard::world::BoneyardSnapshot;
 
 /// A borrowed view of the session in the checkpoint schema, for sending over the network.
@@ -32,6 +34,92 @@ pub struct GameSnapshot<'a> {
     pub next_mod_consumable_use_id: &'a u64,
     pub ticks: &'a u64,
     pub boneyard: Option<BoneyardSnapshot<'a>>,
+}
+
+/// Frozen network projection. Its storage is private: a staged participant remains
+/// separate from the retained map so serialization preserves private rejoin order.
+#[cfg(feature = "persistence")]
+pub struct OwnedGameSnapshot {
+    state: GameCheckpoint,
+    detached: Option<SessionParticipant>,
+}
+
+#[cfg(feature = "persistence")]
+impl GameSnapshot<'_> {
+    /// Copy completed mutable state so the socket writer can serialize it after
+    /// authority advances. Immutable scenery/navigation stay outside the snapshot.
+    #[must_use]
+    pub fn into_owned(self) -> OwnedGameSnapshot {
+        OwnedGameSnapshot {
+            detached: self.participants.detached.cloned(),
+            state: GameCheckpoint {
+                inventory_dye_sessions: self.inventory_dye_sessions.clone(),
+                screen_flashes: self.screen_flashes.clone(),
+                enhanced_effects: *self.enhanced_effects,
+                participants: self.participants.retained.clone(),
+                participant_order: self.participant_order.clone(),
+                next_entity_id: *self.next_entity_id,
+                npcs: self.npcs.clone(),
+                ambient: self.ambient.clone(),
+                dowser_clock: self.dowser_clock.clone(),
+                hub_trader_animation_seed: *self.hub_trader_animation_seed,
+                hub_memorial: Box::new(self.hub_memorial.clone()),
+                collision_rng: *self.collision_rng,
+                gameplay_rng: self.gameplay_rng.clone(),
+                combat_rng: self.combat_rng.clone(),
+                secondary: self.secondary.clone(),
+                spells: self.spells.clone(),
+                hall_of_fame_clock_started_at_tick: *self.hall_of_fame_clock_started_at_tick,
+                painter_order: *self.painter_order,
+                run: self.run.clone(),
+                level_up_barrier: self.level_up_barrier.clone(),
+                next_level_up_barrier_id: *self.next_level_up_barrier_id,
+                mod_effects: self.mod_effects.to_vec(),
+                next_mod_consumable_use_id: *self.next_mod_consumable_use_id,
+                ticks: *self.ticks,
+                boneyard: self.boneyard.map(|world| Box::new(world.into_checkpoint())),
+            },
+        }
+    }
+}
+
+#[cfg(feature = "persistence")]
+impl serde::Serialize for OwnedGameSnapshot {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Use the same network serializer, including live dye sessions, rather
+        // than the durable checkpoint serializer that intentionally omits them.
+        GameSnapshot {
+            inventory_dye_sessions: &self.state.inventory_dye_sessions,
+            screen_flashes: &self.state.screen_flashes,
+            enhanced_effects: &self.state.enhanced_effects,
+            participants: GameSnapshotParticipants {
+                retained: &self.state.participants,
+                detached: self.detached.as_ref(),
+            },
+            participant_order: &self.state.participant_order,
+            next_entity_id: &self.state.next_entity_id,
+            npcs: &self.state.npcs,
+            ambient: &self.state.ambient,
+            dowser_clock: &self.state.dowser_clock,
+            hub_trader_animation_seed: &self.state.hub_trader_animation_seed,
+            hub_memorial: &self.state.hub_memorial,
+            collision_rng: &self.state.collision_rng,
+            gameplay_rng: &self.state.gameplay_rng,
+            combat_rng: &self.state.combat_rng,
+            secondary: &self.state.secondary,
+            spells: &self.state.spells,
+            hall_of_fame_clock_started_at_tick: &self.state.hall_of_fame_clock_started_at_tick,
+            painter_order: &self.state.painter_order,
+            run: &self.state.run,
+            level_up_barrier: &self.state.level_up_barrier,
+            next_level_up_barrier_id: &self.state.next_level_up_barrier_id,
+            mod_effects: &self.state.mod_effects,
+            next_mod_consumable_use_id: &self.state.next_mod_consumable_use_id,
+            ticks: &self.state.ticks,
+            boneyard: self.state.boneyard.as_deref().map(BoneyardCheckpoint::snapshot),
+        }
+        .serialize(serializer)
+    }
 }
 
 impl GameSession {

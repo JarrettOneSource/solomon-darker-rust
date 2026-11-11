@@ -206,7 +206,7 @@ impl HostedGameHost {
                 sequence,
                 now_ms,
                 connection.acknowledged_flame_baseline(),
-                |frame| solomon_protocol::snapshot::PreparedSnapshot::new(&frame),
+                |frame| Ok(solomon_protocol::snapshot::PreparedSnapshot::new(frame.into_owned())),
             )?;
             let flame_baseline = self.flame_baseline(state)?;
             let loaded = self.worlds.loaded_for_run(&observer.run_id);

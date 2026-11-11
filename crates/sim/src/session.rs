@@ -27,6 +27,8 @@ pub use detached::DetachedSessionProjection;
 pub use membership::{DetachedSessionParticipant, ParticipantProfile, SessionPartition};
 pub use participant::SessionParticipant;
 pub use snapshot::GameSnapshot;
+#[cfg(feature = "persistence")]
+pub use snapshot::OwnedGameSnapshot;
 pub use tick::{GameSessionTickContext, GameSessionTickResult};
 pub use world_step::GameSessionInput;
 

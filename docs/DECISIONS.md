@@ -263,9 +263,16 @@ College prediction resolves the region's permanent fixed bodies, the Office
 polisher during pending admission, and Skorcha's latest accepted position/presence
 through the same actor solver as authority. Ordinary movement retains scenery
 placement; scripted movement retains its wall exemption. Prediction does not
-advance Skorcha's appearance timer or other participants. A scenery-rejected
-full circle correction still retains the root move, as recovered in Website
-parity ledger 013; this display correction does not change the bench-pocket rule.
+advance Skorcha's appearance timer or other participants. The recovered actor
+solver retains the root move when scenery rejects its full separation. Ordinary
+participant movement additionally rejects new entry through Boasticus from the
+open courtyard: otherwise that native side effect admits the reported bench
+pocket. The bench endpoint and fountain corner distinguish that courtyard side
+from older saved pocket positions, whose eastward escape remains available;
+existing NPC overlaps can also move out. Authority and prediction share this
+admission rule. Scripted College walks and other actor contacts are unchanged.
+This is an intentional gameplay correction, documented in Website parity
+ledger 013, rather than a claim that native prevented the pocket.
 
 Immutable loaded scenes, static collision primitives, skill definitions, and
 unchanged scenery target tables use `Arc` storage to avoid per-frame deep copies.
@@ -433,12 +440,28 @@ This reduces repeated bytes while retaining exact state. It adds per-connection
 baseline memory and compression work; malformed sequences close the connection
 rather than fabricate a partial checkpoint.
 
-A publication serializes the borrowed canonical frame directly. Socket writers
-lazily parse one shared comparison tree only when they need a delta, so replaced
-unsent publications do not allocate that tree on the authority loop. Lossless
-field/array changes use the existing JSON, zlib, and base64 codecs. The decoder bounds reconstructed size through incremental exact
-accounting; it does not reserialize the whole document to measure it. A direct
-serde visitor avoids recursively cloning untagged intermediate values.
+A publication freezes its completed network projection into owned domain state.
+Copying a large effect population is substantially cheaper than formatting its
+numbers on the authority thread. The existing socket writer formats only a
+selected publication, once across peers, then releases the owned state. It lazily
+parses one shared comparison tree only when a delta needs it. Replacing an unsent
+publication drops its state without either serialization or comparison-tree work.
+
+The owned view uses the same network serializer as the borrowed view. It retains
+live dye permissions and privately staged rejoin participants, including map
+order; a durable checkpoint's serializer deliberately omits live dye permissions
+and cannot substitute for this view. Welcome and durable-save sequencing remain
+separate. Reliable sends keep their producer-side limits. A selected snapshot is
+checked against both the protocol and connection byte limits on its writer before
+any transmission; an invalid publication closes that connection instead of
+advancing its baseline.
+
+Lossless field/array changes use the existing JSON, zlib, and base64 codecs. The
+decoder bounds reconstructed size through incremental exact accounting. Lazy
+subtree byte counts travel with retained array entries and are retired with their
+values, avoiding repeated formatting of removed or replaced effects. It does not
+reserialize the whole document to measure it. A direct serde visitor avoids
+recursively cloning untagged intermediate values.
 Objects with matching field names walk paired values directly; object shape
 changes retain the insertion/removal path. This avoids repeated map searches
 without changing delta contents or exact numeric comparisons.

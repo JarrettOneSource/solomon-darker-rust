@@ -6,14 +6,13 @@ use solomon_protocol::{HostSnapshot, ServerMessage, SnapshotFrame};
 use std::sync::Arc;
 
 fn document(sequence: u64, snapshot: Value) -> Arc<PreparedSnapshot> {
-    PreparedSnapshot::new(&SnapshotFrame {
+    PreparedSnapshot::new(SnapshotFrame {
         sequence,
         snapshot,
         host: HostSnapshot::default(),
         flame_presentation: None,
         input_acknowledgements: Default::default(),
     })
-    .unwrap()
 }
 
 fn canonical(message: ServerMessage<Value>) -> String {
@@ -65,11 +64,12 @@ fn compact_updates_reconstruct_arrays_nulls_unicode_and_exact_numeric_values() {
         if index > 0 {
             assert_eq!(serde_json::from_str::<Value>(&packet).unwrap()["type"], "snapshot_delta");
             assert!(
-                packet.len() < prepared.full_message().len() / 4,
+                packet.len() < prepared.full_message().unwrap().len() / 4,
                 "unchanged authored state stays off the wire"
             );
         }
-        let expected: ServerMessage<Value> = serde_json::from_str(prepared.full_message()).unwrap();
+        let expected: ServerMessage<Value> =
+            serde_json::from_str(prepared.full_message().unwrap()).unwrap();
         assert_eq!(
             canonical(reader.decode(&packet).unwrap()),
             canonical(expected),
@@ -129,7 +129,7 @@ fn shared_publications_keep_each_socket_writers_selected_baseline() {
                 );
                 assert_eq!(
                     canonical(reader.decode(&packet).unwrap()),
-                    canonical(serde_json::from_str(final_frame.full_message()).unwrap())
+                    canonical(serde_json::from_str(final_frame.full_message().unwrap()).unwrap())
                 );
             });
         }
@@ -160,13 +160,13 @@ fn invalid_updates_fail_without_allocating_missing_array_entries_or_reusing_a_br
     ];
     for packet in invalid {
         let mut reader = SnapshotReader::default();
-        reader.decode::<Value>(first.full_message()).unwrap();
+        reader.decode::<Value>(first.full_message().unwrap()).unwrap();
         assert!(reader.decode::<Value>(&packet).is_err());
         assert!(
             reader.decode::<Value>(&delta(1, 2, json!({"sequence":[2]}))).is_err(),
             "a failed packet retires its baseline"
         );
-        assert!(reader.decode::<Value>(first.full_message()).is_ok());
+        assert!(reader.decode::<Value>(first.full_message().unwrap()).is_ok());
     }
 }
 
@@ -180,7 +180,7 @@ fn retained_items_preserve_order_exact_values_and_following_edits() {
     ],"label":"old"}),
     );
     let mut reader = SnapshotReader::default();
-    reader.decode::<Value>(first.full_message()).unwrap();
+    reader.decode::<Value>(first.full_message().unwrap()).unwrap();
     let packet = delta(
         1,
         2,
@@ -197,7 +197,7 @@ fn retained_items_preserve_order_exact_values_and_following_edits() {
     );
     assert_eq!(
         canonical(reader.decode(&packet).unwrap()),
-        canonical(serde_json::from_str(expected.full_message()).unwrap())
+        canonical(serde_json::from_str(expected.full_message().unwrap()).unwrap())
     );
     let last = delta(2, 3, json!({"sequence":[3],"snapshot":{"actors":["r",[]]}}));
     let ServerMessage::Snapshot { frame } = reader.decode::<Value>(&last).unwrap() else {
@@ -229,12 +229,12 @@ fn retiring_and_reordering_records_does_not_resend_their_unchanged_contents() {
     let final_frame = document(2, json!({"actors":next}));
     let packet = writer.encode(final_frame.clone()).unwrap();
     assert!(
-        packet.len() < final_frame.full_message().len() / 20,
+        packet.len() < final_frame.full_message().unwrap().len() / 20,
         "retired records must not force surviving authored contents back onto the wire"
     );
     assert_eq!(
         canonical(reader.decode(&packet).unwrap()),
-        canonical(serde_json::from_str(final_frame.full_message()).unwrap())
+        canonical(serde_json::from_str(final_frame.full_message().unwrap()).unwrap())
     );
 }
 
@@ -255,13 +255,111 @@ fn invalid_retained_references_retire_the_connection_baseline() {
         json!(["unknown", []]),
     ] {
         let mut reader = SnapshotReader::default();
-        reader.decode::<Value>(first.full_message()).unwrap();
+        reader.decode::<Value>(first.full_message().unwrap()).unwrap();
         let packet = delta(1, 2, json!({"sequence":[2],"snapshot":{"actors":change}}));
         assert!(reader.decode::<Value>(&packet).is_err(), "reject {change}");
         assert!(
             reader.decode::<Value>(&delta(1, 2, json!({"sequence":[2]}))).is_err(),
             "a failed retained update clears the whole baseline"
         );
-        assert!(reader.decode::<Value>(first.full_message()).is_ok());
+        assert!(reader.decode::<Value>(first.full_message().unwrap()).is_ok());
     }
+}
+
+#[test]
+fn replaced_publications_do_not_serialize_and_selected_peers_share_one_encoding() {
+    use std::sync::{Arc, Mutex};
+
+    struct Witness {
+        serializations: Arc<Mutex<Vec<std::thread::ThreadId>>>,
+        value: u64,
+    }
+    impl serde::Serialize for Witness {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            self.serializations.lock().unwrap().push(std::thread::current().id());
+            self.value.serialize(serializer)
+        }
+    }
+    let serializations = Arc::new(Mutex::new(Vec::new()));
+    let publication = |sequence| {
+        PreparedSnapshot::new(SnapshotFrame {
+            sequence,
+            flame_presentation: None,
+            input_acknowledgements: Default::default(),
+            host: Default::default(),
+            snapshot: Witness { serializations: serializations.clone(), value: sequence },
+        })
+    };
+    let obsolete = publication(1);
+    let selected = publication(2);
+    drop(obsolete);
+    assert!(serializations.lock().unwrap().is_empty(), "publication must not format on authority");
+    let (writer_id, first) = std::thread::spawn(move || {
+        let first = SnapshotWriter::default().encode(selected.clone()).unwrap();
+        let second = SnapshotWriter::default().encode(selected).unwrap();
+        assert!(Arc::ptr_eq(&first, &second), "peers share the completed full packet");
+        (std::thread::current().id(), first)
+    })
+    .join()
+    .unwrap();
+    assert_eq!(*serializations.lock().unwrap(), [writer_id]);
+    let decoded: ServerMessage<u64> = serde_json::from_str(&first).unwrap();
+    let ServerMessage::Snapshot { frame } = decoded else { panic!("snapshot") };
+    assert_eq!(frame.sequence, 2);
+    assert_eq!(frame.snapshot, 2);
+}
+
+#[test]
+fn a_failed_deferred_encoding_is_shared_without_advancing_the_writer_baseline() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Rejected(Arc<AtomicUsize>);
+    impl serde::Serialize for Rejected {
+        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Err(serde::ser::Error::custom("rejected network state"))
+        }
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let rejected = PreparedSnapshot::new(SnapshotFrame {
+        sequence: 2,
+        snapshot: Rejected(calls.clone()),
+        host: HostSnapshot::default(),
+        flame_presentation: None,
+        input_acknowledgements: Default::default(),
+    });
+    let mut writer = SnapshotWriter::default();
+    let mut reader = SnapshotReader::default();
+    reader.decode::<Value>(&writer.encode(document(1, json!({"tick":1}))).unwrap()).unwrap();
+    for _ in 0..2 {
+        assert_eq!(writer.encode(rejected.clone()).unwrap_err(), "rejected network state");
+    }
+    assert_eq!(
+        rejected.full_message().unwrap_err(),
+        solomon_protocol::snapshot::SnapshotEncodingError::Serialization(
+            "rejected network state".to_owned()
+        )
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let packet = writer.encode(document(2, json!({"tick":2}))).unwrap();
+    let ServerMessage::Snapshot { frame } = reader.decode::<Value>(&packet).unwrap() else {
+        panic!("complete state after rejected encoding")
+    };
+    assert_eq!(frame.sequence, 2);
+    assert_eq!(frame.snapshot, json!({"tick":2}));
+}
+
+#[test]
+fn deferred_publication_retains_the_full_protocol_byte_bound() {
+    let oversized = PreparedSnapshot::new(SnapshotFrame {
+        sequence: 1,
+        snapshot: "x".repeat(solomon_protocol::GAME_WEBSOCKET_MAX_PAYLOAD_BYTES),
+        host: HostSnapshot::default(),
+        flame_presentation: None,
+        input_acknowledgements: Default::default(),
+    });
+    assert_eq!(
+        oversized.full_message().unwrap_err(),
+        solomon_protocol::snapshot::SnapshotEncodingError::PayloadTooLarge
+    );
+    assert!(SnapshotWriter::default().encode(oversized).is_err());
 }

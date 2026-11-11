@@ -321,7 +321,7 @@ fn hub_prediction_preserves_scripted_wall_exemption_and_fixed_contacts() {
 }
 
 #[test]
-fn hub_prediction_preserves_native_bench_pocket_and_east_escape() {
+fn hub_prediction_prevents_new_bench_pocket_entry() {
     let mut session = session_at(HubRegion::Courtyard, Vec2::new(898.0, 500.0));
     let mut timeline = timeline_for(&session, Vec2::new(0.0, -1.0));
     let mut minimum_distance = f64::MAX;
@@ -337,12 +337,32 @@ fn hub_prediction_preserves_native_bench_pocket_and_east_escape() {
             minimum_distance = minimum_distance.min(distance(position, Vec2::new(895.5, 455.5)));
         }
     }
-    assert!(minimum_distance < 10.0, "the recovered rejected-correction pocket remains reachable");
-    let pocket = session.wizard("local").unwrap().position;
-    assert!((830.0..850.0).contains(&pocket.x) && (435.0..445.0).contains(&pocket.y));
+    assert!(minimum_distance >= 33.0, "the fixed NPC remains solid when scenery blocks separation");
     for _ in 0..300 {
         assert_predicted_tick(&mut timeline, &mut session, Vec2::new(1.0, 0.0), "east escape");
     }
     let escaped = session.wizard("local").unwrap().position;
-    assert!(escaped.x > 1080.0 && distance(escaped, pocket) > 230.0);
+    assert!(escaped.x > 1080.0, "ordinary east movement reaches the open courtyard");
+}
+
+#[test]
+fn hub_prediction_preserves_escape_from_retained_bench_positions() {
+    for start in
+        [Vec2::new(842.9961464554825, 440.6021311517868), Vec2::new(927.7249718, 452.5413180)]
+    {
+        let mut session = session_at(HubRegion::Courtyard, start);
+        let mut timeline = timeline_for(&session, Vec2::new(1.0, 0.0));
+        for _ in 0..300 {
+            assert_predicted_tick(
+                &mut timeline,
+                &mut session,
+                Vec2::new(1.0, 0.0),
+                "saved pocket escape",
+            );
+        }
+        assert!(
+            session.wizard("local").unwrap().position.x > 1080.0,
+            "ordinary east movement escapes retained position {start:?}"
+        );
+    }
 }

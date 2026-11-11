@@ -266,10 +266,17 @@ fn membership_and_detached_choices_match_public_game_without_world_staging_clone
         );
         if !step["projected"].is_null() {
             let projected = session.project_detached(detached.as_ref().unwrap()).unwrap();
-            let checkpoint: GameCheckpoint = serde_json::from_value(
-                serde_json::to_value(session.snapshot_with_detached(&projected)).unwrap(),
-            )
-            .unwrap();
+            let projected_bytes =
+                serde_json::to_vec(&session.snapshot_with_detached(&projected)).unwrap();
+            let frozen = session.snapshot_with_detached(&projected).into_owned();
+            drop(projected);
+            assert_eq!(
+                serde_json::to_vec(&frozen).unwrap(),
+                projected_bytes,
+                "private rejoin projection survives its source and preserves exact network order"
+            );
+            let checkpoint: GameCheckpoint =
+                serde_json::from_value(serde_json::to_value(&frozen).unwrap()).unwrap();
             let view = GameSession::restore(
                 checkpoint,
                 session.boneyard.as_ref().map(|world| world.loaded.clone()),

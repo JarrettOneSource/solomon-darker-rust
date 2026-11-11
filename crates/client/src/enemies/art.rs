@@ -1,5 +1,7 @@
 //! Registered atlas uploads and sprite transforms shared by all enemy families.
 
+use std::collections::BTreeMap;
+
 use solomon_assets::{SpriteRecord, parse_bundle};
 use solomon_sim::Vec2;
 use solomon_sim::enemies::actor_presentation::{
@@ -12,6 +14,45 @@ use super::{EnemyDraw, EnemyDrawGroup, EnemyView};
 use crate::courtyard::Camera;
 use solomon_graphics::assets::{fetch_bytes, load_image};
 use solomon_graphics::{BlendMode, Renderer, Texture, TextureColorMode, Vertex};
+
+#[derive(Clone, Copy)]
+pub(super) struct SpriteRotation {
+    radians: f64,
+    axes: (f64, f64),
+}
+
+impl SpriteRotation {
+    fn new(radians: f64) -> Self {
+        Self { radians, axes: float::sin_cos(radians) }
+    }
+
+    fn matches(self, radians: f64) -> bool {
+        self.radians.to_bits() == radians.to_bits()
+    }
+}
+
+/// Death smoke often keeps one angle for its whole lifetime. Retain the canonical
+/// rotation instead of evaluating its fused polynomial again on every paint.
+#[derive(Default)]
+pub(super) struct DeathRotations {
+    entries: BTreeMap<usize, (SpriteRotation, bool)>,
+}
+
+impl DeathRotations {
+    pub(super) fn sample(&mut self, id: usize, radians: f64) -> SpriteRotation {
+        let (rotation, used) =
+            self.entries.entry(id).or_insert_with(|| (SpriteRotation::new(radians), false));
+        if !rotation.matches(radians) {
+            *rotation = SpriteRotation::new(radians);
+        }
+        *used = true;
+        *rotation
+    }
+
+    pub(super) fn finish_frame(&mut self) {
+        self.entries.retain(|_, (_, used)| std::mem::take(used));
+    }
+}
 
 struct EnemyAtlas {
     records: Vec<SpriteRecord>,
@@ -244,7 +285,10 @@ impl EnemyView {
         };
         let width = f64::from(record.width);
         let height = f64::from(record.height);
-        let (sine, cosine) = float::sin_cos(rotation);
+        let (sine, cosine) = match group.rotation {
+            Some(cached) if cached.matches(rotation) => cached.axes,
+            _ => float::sin_cos(rotation),
+        };
         let positions = [(0.0, 0.0), (width, 0.0), (width, height), (0.0, height)].map(|(x, y)| {
             let x = (x - anchor_x) * scale_x;
             let y = (y - anchor_y) * scale_y;
@@ -311,4 +355,40 @@ fn draw_solid_quad(
         &[[vertices[0], vertices[1], vertices[2]], [vertices[0], vertices[2], vertices[3]]],
         blend,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_rotations_keep_scalar_bits_when_an_effect_changes_angle() {
+        let mut rotations = DeathRotations::default();
+        for angle in [0.0, -0.0, 0.125, -0.125, 3.696237130162904, 1e6, -1e6, 0.0] {
+            let expected = (float::sin(angle).to_bits(), float::cos(angle).to_bits());
+            for _ in 0..3 {
+                let sample = rotations.sample(7, angle);
+                assert!(sample.matches(angle));
+                assert_eq!((sample.axes.0.to_bits(), sample.axes.1.to_bits()), expected);
+                rotations.finish_frame();
+            }
+        }
+        assert!(!SpriteRotation::new(0.0).matches(-0.0));
+    }
+
+    #[test]
+    fn retired_effects_release_their_retained_rotations() {
+        let mut rotations = DeathRotations::default();
+        rotations.sample(7, 0.25);
+        rotations.sample(8, 0.5);
+        rotations.finish_frame();
+        rotations.sample(7, 0.25);
+        rotations.finish_frame();
+        assert_eq!(rotations.entries.keys().copied().collect::<Vec<_>>(), [7]);
+        rotations.finish_frame();
+        assert!(rotations.entries.is_empty());
+        let sample = rotations.sample(8, -0.5);
+        assert_eq!(sample.axes.0.to_bits(), float::sin(-0.5).to_bits());
+        assert_eq!(sample.axes.1.to_bits(), float::cos(-0.5).to_bits());
+    }
 }

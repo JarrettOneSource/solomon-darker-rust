@@ -75,12 +75,13 @@ struct EnemyDrawGroup {
     position: Vec2,
     scale: f64,
     material_tint: Option<u32>,
+    rotation: Option<art::SpriteRotation>,
     draws: Vec<EnemyDraw>,
 }
 
 impl EnemyDrawGroup {
     fn at(position: Vec2) -> Self {
-        Self { position, scale: 1.0, material_tint: None, draws: Vec::new() }
+        Self { position, scale: 1.0, material_tint: None, rotation: None, draws: Vec::new() }
     }
 
     fn sprites(position: Vec2, layers: Vec<EnemySpriteLayer>, region_tint: bool) -> Self {
@@ -134,6 +135,7 @@ pub struct EnemyView {
     pending_events: Vec<EnemyEvent>,
     last_event_id: usize,
     auxiliary: BTreeMap<usize, attacks::EnemyAttackEffect>,
+    death_rotations: art::DeathRotations,
 }
 
 impl EnemyView {
@@ -177,6 +179,7 @@ impl EnemyView {
             pending_events: Vec::new(),
             last_event_id: 0,
             auxiliary: BTreeMap::new(),
+            death_rotations: art::DeathRotations::default(),
         })
     }
 
@@ -214,6 +217,7 @@ impl EnemyView {
         self.pending_events.clear();
         self.last_event_id = 0;
         self.auxiliary.clear();
+        self.death_rotations = art::DeathRotations::default();
     }
 
     fn clear_prepared(&mut self) {

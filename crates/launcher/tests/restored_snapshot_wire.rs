@@ -61,6 +61,11 @@ fn restored_current_and_historical_scenery_roundtrips_through_welcome_and_snapsh
             .unwrap_or_else(|error| panic!("{name} source restore: {error}"));
         let session = &restored.session;
         let checkpoint_bytes = serde_json::to_vec(&session.snapshot()).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&session.snapshot().into_owned()).unwrap(),
+            checkpoint_bytes,
+            "{name} frozen publication retains exact borrowed network bytes"
+        );
         let checkpoint: GameCheckpoint = serde_json::from_slice(&checkpoint_bytes)
             .unwrap_or_else(|error| panic!("{name} direct checkpoint: {error}"));
         checkpoint.validate().unwrap();
@@ -104,13 +109,13 @@ fn restored_current_and_historical_scenery_roundtrips_through_welcome_and_snapsh
         let mut writer = SnapshotWriter::default();
         messages.push((
             "full stream frame",
-            writer.encode(PreparedSnapshot::new(&frame(session)).unwrap()).unwrap().to_string(),
+            writer.encode(PreparedSnapshot::new(frame(session).into_owned())).unwrap().to_string(),
         ));
         let mut next = frame(session);
         next.sequence = 2;
         messages.push((
             "compact stream frame",
-            writer.encode(PreparedSnapshot::new(&next).unwrap()).unwrap().to_string(),
+            writer.encode(PreparedSnapshot::new(next.into_owned())).unwrap().to_string(),
         ));
         let mut reader = SnapshotReader::default();
         for (kind, text) in messages {
