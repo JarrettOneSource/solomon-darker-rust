@@ -206,14 +206,14 @@ fn supported_archive_protocols_keep_their_complete_checkpoint() {
     let (bytes, _) = super::encoding::serialize_archive(&archive, "historical-run").unwrap();
     let mut document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let checkpoint = document["states"][0]["checkpoint"].clone();
-    for version in [1, 2, 3] {
+    for version in [1, 2, 3, 4] {
         document["archive"]["protocolVersion"] = json!(version);
         let decoded = super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap())
             .expect("supported archives retain the canonical checkpoint");
         assert_eq!(decoded.archive.protocol_version, version);
         assert_eq!(serde_json::to_value(&decoded.states[0].checkpoint).unwrap(), checkpoint);
     }
-    for version in [0, 4, u32::MAX] {
+    for version in [0, 5, u32::MAX] {
         document["archive"]["protocolVersion"] = json!(version);
         assert!(super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap()).is_err());
     }

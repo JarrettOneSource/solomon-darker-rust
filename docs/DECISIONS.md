@@ -433,17 +433,18 @@ This reduces repeated bytes while retaining exact state. It adds per-connection
 baseline memory and compression work; malformed sequences close the connection
 rather than fabricate a partial checkpoint.
 
-Protocol version 2 prepares one canonical JSON publication and shares it across
-matching peers. Lossless field/array changes use the existing JSON, zlib, and
-base64 codecs. The decoder bounds reconstructed size through incremental exact
+A publication serializes the borrowed canonical frame directly. Socket writers
+lazily parse one shared comparison tree only when they need a delta, so replaced
+unsent publications do not allocate that tree on the authority loop. Lossless
+field/array changes use the existing JSON, zlib, and base64 codecs. The decoder bounds reconstructed size through incremental exact
 accounting; it does not reserialize the whole document to measure it. A direct
 serde visitor avoids recursively cloning untagged intermediate values.
 Objects with matching field names walk paired values directly; object shape
 changes retain the insertion/removal path. This avoids repeated map searches
 without changing delta contents or exact numeric comparisons.
 The receiver validates each inflated JSON document as UTF-8 once before parsing
-its fields, and applies each object edit through one map entry lookup. Exact byte
-accounting, malformed-update rejection and baseline retirement remain unchanged.
+its fields, borrows unescaped field names, and allocates owned names only for
+new or escaped fields. Exact byte accounting, malformed-update rejection and baseline retirement remain unchanged.
 Reconnect starts with a full publication. ACKs, controls, Flame history, and large
 Welcome/save transfers retain their separate sequencing contracts.
 
@@ -453,6 +454,17 @@ current pose and retained terminal frame; clients render those accepted values.
 An older matched-build protocol cannot silently ignore them. Existing disk saves
 without the optional fields remain readable without sampling RNG. The hosted
 deployment protocol remains version 2 because its publication contract is separate.
+
+Protocol version 4 can retain an item by its prior array index and apply an
+optional edit at its new position. Unique integer IDs select this encoding when
+records shift after retirement; small, positionally stable or ambiguous arrays
+keep ordinary indexed edits. Canonical values, array order and births are
+unchanged. A prior item may be retained only once, every new item needs a complete
+replacement, and discarded values contribute to the exact reconstructed byte
+count. This avoids treating thousands of surviving death effects as different
+records after an earlier effect retires. The version change requires matched
+host/client builds; complete saved checkpoints and private archives retain their
+existing layout.
 
 ## Deployment identity and recovery
 

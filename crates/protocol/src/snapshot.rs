@@ -4,43 +4,42 @@
 //! then permits one baseline at each endpoint, independent of render-time ACKs. Game
 //! rules, checkpoint fields, floating-point values and flame cursors remain unchanged.
 
-use std::collections::BTreeMap;
+use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::io::{self, Write};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::de::{DeserializeOwned, Error as _, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use serde_json::map::Entry;
 
 use crate::{GAME_WEBSOCKET_MAX_PAYLOAD_BYTES, ServerMessage, SnapshotFrame};
 
 /// One completed publication, shared by peers with the same world/flame projection.
 pub struct PreparedSnapshot {
     sequence: u64,
-    frame: Value,
+    frame: OnceLock<Result<Value, String>>,
     full_message: Arc<str>,
 }
 
 impl PreparedSnapshot {
     pub fn new<S: Serialize>(frame: &SnapshotFrame<S>) -> Result<Arc<Self>, String> {
-        let value = serde_json::to_value(frame).map_err(|error| error.to_string())?;
         #[derive(Serialize)]
-        struct Message<'a> {
+        struct Message<'a, S> {
             r#type: &'static str,
-            frame: &'a Value,
+            frame: &'a SnapshotFrame<S>,
         }
-        let full_message = serde_json::to_string(&Message { r#type: "snapshot", frame: &value })
+        let full_message = serde_json::to_string(&Message { r#type: "snapshot", frame })
             .map_err(|error| error.to_string())?;
         if full_message.len() > GAME_WEBSOCKET_MAX_PAYLOAD_BYTES {
             return Err("The game snapshot exceeds the transport payload bound".into());
         }
         Ok(Arc::new(Self {
             sequence: frame.sequence,
-            frame: value,
+            frame: OnceLock::new(),
             full_message: full_message.into(),
         }))
     }
@@ -48,6 +47,23 @@ impl PreparedSnapshot {
     #[must_use]
     pub fn full_message(&self) -> &Arc<str> {
         &self.full_message
+    }
+
+    fn frame(&self) -> Result<&Value, String> {
+        // The socket writer needs a comparison tree only for publications it sends.
+        // Share that tree across peers without allocating it on the authority loop.
+        self.frame
+            .get_or_init(|| {
+                #[derive(Deserialize)]
+                struct Message {
+                    frame: Value,
+                }
+                serde_json::from_str::<Message>(&self.full_message)
+                    .map(|message| message.frame)
+                    .map_err(|error| error.to_string())
+            })
+            .as_ref()
+            .map_err(Clone::clone)
     }
 }
 
@@ -64,7 +80,7 @@ impl SnapshotWriter {
             if next.sequence <= previous.sequence {
                 return Err("Snapshot publications must advance their sequence".into());
             }
-            let change = Change::between(&previous.frame, &next.frame)
+            let change = Change::between(previous.frame()?, next.frame()?)
                 .expect("an advancing snapshot changes its sequence");
             let changes = serde_json::to_vec(&change).map_err(|error| error.to_string())?;
             let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&changes, 1);
@@ -182,45 +198,65 @@ enum DeltaMessage {
     SnapshotDelta { sequence: u64, base_sequence: u64, changes: String },
 }
 
+// No prior index means a new replacement; no change means an unchanged prior item.
+type RetainedItem<'a> = (Option<usize>, Option<Change<'a>>);
+
 /// Single-element arrays replace a value; two-element arrays edit indexed items;
-/// objects edit fields; null removes an object field. Null values use `[null]`.
+/// `["r", items]` retains/reorders prior items with optional edits. Objects edit
+/// fields; null removes an object field. Null values use `[null]`.
 #[derive(Serialize)]
 #[serde(untagged)]
-enum Change {
+enum Change<'a> {
     Replace([Value; 1]),
-    Array((usize, Vec<(usize, Change)>)),
-    Object(BTreeMap<String, Change>),
+    Array((usize, Vec<(usize, Change<'a>)>)),
+    Retained((&'static str, Vec<RetainedItem<'a>>)),
+    Object(BTreeMap<Cow<'a, str>, Change<'a>>),
     Remove,
 }
 
-impl<'de> Deserialize<'de> for Change {
+impl<'de> Deserialize<'de> for Change<'de> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         // Recursive untagged derives buffer and clone each subtree at every level.
-        // The JSON shape already identifies these four cases, so visit it once.
+        // The JSON shape already identifies these cases, so visit it once.
         struct ChangeVisitor;
         impl<'de> Visitor<'de> for ChangeVisitor {
-            type Value = Change;
+            type Value = Change<'de>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str("a snapshot replacement, array edit, field edit, or removal")
+                formatter.write_str("a snapshot replacement, indexed or retained array edit, field edit, or removal")
             }
 
-            fn visit_unit<E: serde::de::Error>(self) -> Result<Change, E> {
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Change<'de>, E> {
                 Ok(Change::Remove)
             }
 
-            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Change, A::Error> {
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Change<'de>, A::Error> {
                 let mut changes = BTreeMap::new();
-                while let Some((key, change)) = map.next_entry()? {
-                    changes.insert(key, change);
+                #[derive(Deserialize)]
+                struct FieldName<'a>(#[serde(borrow)] Cow<'a, str>);
+
+                while let Some(FieldName(key)) = map.next_key()? {
+                    changes.insert(key, map.next_value()?);
                 }
                 Ok(Change::Object(changes))
             }
 
-            fn visit_seq<A: SeqAccess<'de>>(self, mut sequence: A) -> Result<Change, A::Error> {
+            fn visit_seq<A: SeqAccess<'de>>(
+                self,
+                mut sequence: A,
+            ) -> Result<Change<'de>, A::Error> {
                 let first = sequence
                     .next_element::<Value>()?
                     .ok_or_else(|| A::Error::invalid_length(0, &self))?;
+                if first.as_str() == Some("r") {
+                    let Some(entries) = sequence.next_element::<Vec<RetainedItem>>()? else {
+                        return Ok(Change::Replace([first]));
+                    };
+                    if sequence.next_element::<IgnoredAny>()?.is_some() {
+                        return Err(A::Error::invalid_length(3, &self));
+                    }
+                    return Ok(Change::Retained(("r", entries)));
+                }
                 let Some(changes) = sequence.next_element::<Vec<(usize, Change)>>()? else {
                     return Ok(Change::Replace([first]));
                 };
@@ -238,7 +274,7 @@ impl<'de> Deserialize<'de> for Change {
     }
 }
 
-impl Change {
+impl Change<'_> {
     fn between(previous: &Value, next: &Value) -> Option<Self> {
         Some(match (previous, next) {
             (Value::Object(previous), Value::Object(next)) => {
@@ -248,12 +284,12 @@ impl Change {
                     // instead of searching the same object for every value on every frame.
                     for ((_, previous), (key, value)) in previous.iter().zip(next) {
                         if let Some(change) = Self::between(previous, value) {
-                            changes.insert(key.clone(), change);
+                            changes.insert(Cow::Owned(key.clone()), change);
                         }
                     }
                 } else {
                     for key in previous.keys().filter(|key| !next.contains_key(*key)) {
-                        changes.insert(key.clone(), Self::Remove);
+                        changes.insert(Cow::Owned(key.clone()), Self::Remove);
                     }
                     for (key, value) in next {
                         let change = previous.get(key).map_or_else(
@@ -261,7 +297,7 @@ impl Change {
                             |previous| Self::between(previous, value),
                         );
                         if let Some(change) = change {
-                            changes.insert(key.clone(), change);
+                            changes.insert(Cow::Owned(key.clone()), change);
                         }
                     }
                 }
@@ -271,6 +307,9 @@ impl Change {
                 Self::Object(changes)
             }
             (Value::Array(previous), Value::Array(next)) => {
+                if let Some(retained) = Self::retained(previous, next) {
+                    return Some(retained);
+                }
                 let changes: Vec<_> = next
                     .iter()
                     .enumerate()
@@ -305,6 +344,50 @@ impl Change {
         })
     }
 
+    fn retained(previous: &[Value], next: &[Value]) -> Option<Self> {
+        // Small or positionally stable arrays do not need an identity index.
+        if previous.len().min(next.len()) < 32
+            || previous.iter().zip(next).all(|(old, new)| old.get("id") == new.get("id"))
+        {
+            return None;
+        }
+        // IDs select an encoding only. The resulting values and their order still
+        // come entirely from the next canonical array, including births and edits.
+        let mut indices = HashMap::with_capacity(previous.len());
+        for (index, value) in previous.iter().enumerate() {
+            if indices.insert(value.get("id")?.as_u64()?, index).is_some() {
+                return None;
+            }
+        }
+        let mut ids = HashSet::with_capacity(next.len());
+        let mut positions = Vec::with_capacity(next.len());
+        let mut shifted = false;
+        for (index, value) in next.iter().enumerate() {
+            let id = value.get("id")?.as_u64()?;
+            if !ids.insert(id) {
+                return None;
+            }
+            let old = indices.get(&id).copied();
+            shifted |= old.is_some_and(|old| old != index);
+            positions.push(old);
+        }
+        if !shifted {
+            return None;
+        }
+        let entries = positions
+            .into_iter()
+            .zip(next)
+            .map(|(old, value)| {
+                let change = old.map_or_else(
+                    || Some(Self::Replace([value.clone()])),
+                    |old| Self::between(&previous[old], value),
+                );
+                (old, change)
+            })
+            .collect();
+        Some(Self::Retained(("r", entries)))
+    }
+
     fn apply(self, value: &mut Value, encoded_bytes: &mut usize) -> Result<(), String> {
         match self {
             Self::Replace([next]) => {
@@ -316,32 +399,71 @@ impl Change {
                     value.as_object_mut().ok_or("The snapshot field update has no object")?;
                 for (key, change) in changes {
                     let length = object.len();
-                    match (object.entry(key), change) {
-                        (Entry::Occupied(entry), Self::Remove) => {
-                            let bytes = serialized_size(entry.key())?
-                                + 1
-                                + serialized_size(entry.get())?
-                                + usize::from(length > 1);
-                            change_size(encoded_bytes, bytes, 0)?;
-                            entry.remove();
+                    if matches!(change, Self::Remove) {
+                        let removed = object
+                            .remove(key.as_ref())
+                            .ok_or("The snapshot removes an absent field")?;
+                        let bytes = serialized_size(&key)?
+                            + 1
+                            + serialized_size(&removed)?
+                            + usize::from(length > 1);
+                        change_size(encoded_bytes, bytes, 0)?;
+                    } else if let Some(value) = object.get_mut(key.as_ref()) {
+                        change.apply(value, encoded_bytes)?;
+                    } else if let Self::Replace([next]) = change {
+                        let bytes = serialized_size(&key)?
+                            + 1
+                            + serialized_size(&next)?
+                            + usize::from(length > 0);
+                        change_size(encoded_bytes, 0, bytes)?;
+                        object.insert(key.into_owned(), next);
+                    } else {
+                        return Err("The snapshot edits an absent field".into());
+                    }
+                }
+            }
+            Self::Retained((_, entries)) => {
+                let array =
+                    value.as_array_mut().ok_or("The snapshot retained item update has no array")?;
+                // Each prior value may move once; repeated references would allow
+                // a tiny packet to amplify the complete baseline without a bound.
+                let mut selected = vec![false; array.len()];
+                for (old, change) in &entries {
+                    if let Some(index) = old {
+                        let used = selected
+                            .get_mut(*index)
+                            .ok_or("The snapshot retained index is outside its array bounds")?;
+                        if *used {
+                            return Err("The snapshot repeats a retained index".into());
                         }
-                        (Entry::Vacant(entry), Self::Replace([next])) => {
-                            let bytes = serialized_size(entry.key())?
-                                + 1
-                                + serialized_size(&next)?
-                                + usize::from(length > 0);
-                            change_size(encoded_bytes, 0, bytes)?;
-                            entry.insert(next);
+                        *used = true;
+                    } else if !matches!(change, Some(Self::Replace(_))) {
+                        return Err("The snapshot new retained item has no replacement".into());
+                    }
+                }
+                let previous_len = array.len();
+                let mut previous = std::mem::take(array);
+                for (value, selected) in previous.iter().zip(&selected) {
+                    if !selected {
+                        change_size(encoded_bytes, serialized_size(value)?, 0)?;
+                    }
+                }
+                change_size(
+                    encoded_bytes,
+                    previous_len.saturating_sub(1),
+                    entries.len().saturating_sub(1),
+                )?;
+                array.reserve(entries.len());
+                for (old, change) in entries {
+                    if let Some(index) = old {
+                        let mut item = previous[index].take();
+                        if let Some(change) = change {
+                            change.apply(&mut item, encoded_bytes)?;
                         }
-                        (Entry::Occupied(mut entry), change) => {
-                            change.apply(entry.get_mut(), encoded_bytes)?;
-                        }
-                        (Entry::Vacant(_), Self::Remove) => {
-                            return Err("The snapshot removes an absent field".into());
-                        }
-                        (Entry::Vacant(_), _) => {
-                            return Err("The snapshot edits an absent field".into());
-                        }
+                        array.push(item);
+                    } else if let Some(Self::Replace([next])) = change {
+                        change_size(encoded_bytes, 0, serialized_size(&next)?)?;
+                        array.push(next);
                     }
                 }
             }
@@ -447,6 +569,36 @@ mod tests {
                 encoded.len(),
                 "the complete document bound includes JSON punctuation and escaped UTF-8"
             );
+        }
+    }
+
+    #[test]
+    fn retained_reordering_and_identity_fallback_keep_exact_byte_counts() {
+        let records: Vec<_> = (0..64)
+            .map(|id| {
+                json!({
+                    "id":u64::MAX-id,"x":-0.0,"name":"\n🧙","nested":[null,{"value":id}]
+                })
+            })
+            .collect();
+        let mut value = json!(records);
+        let mut bytes = serialized_size(&value).unwrap();
+        let mut next = records[1..].to_vec();
+        next.reverse();
+        next[0]["x"] = json!(0.0);
+        next[1]["new"] = json!("\"\\");
+        next.push(json!({"id":7,"new":true}));
+        let mut duplicate = next.clone();
+        duplicate[0]["id"] = duplicate[1]["id"].clone();
+        let mut unidentified = next.clone();
+        unidentified[0].as_object_mut().unwrap().remove("id");
+        for next in [json!(next), json!(duplicate), json!(unidentified), json!([])] {
+            let change = Change::between(&value, &next).unwrap();
+            let encoded_change = serde_json::to_string(&change).unwrap();
+            let change: Change = serde_json::from_str(&encoded_change).unwrap();
+            change.apply(&mut value, &mut bytes).unwrap();
+            assert_eq!(serde_json::to_vec(&value).unwrap(), serde_json::to_vec(&next).unwrap());
+            assert_eq!(bytes, serialized_size(&next).unwrap());
         }
     }
 

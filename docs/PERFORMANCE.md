@@ -343,3 +343,58 @@ included in release `92e3fe4c`. The retained local evidence is
 Receipts, raw frame intervals, encoded packets, screenshots, and shutdown results
 support the tables. These records live outside temporary worktrees and are not
 inputs to the normal game build.
+
+
+## Surviving records in changing arrays
+
+An original Report 37 Faculty journey produces over 8,000 death effects and
+multi-megabyte snapshots. In 21 captured changing frames with at least 5,000
+effects, positional comparison edits about 7,105 records per frame; about 6,910
+of those positions now hold a different surviving ID. The transport was
+resending unchanged fields because earlier records had retired.
+
+Retained-index updates align unique integer IDs and move prior records into the
+next canonical order before applying their changes. Native replay of all 316
+captured packets, in three alternating baseline/candidate passes, compares the
+same full states. Every raw JSON byte and typed checkpoint agrees after decoding;
+validation is outside the timing window. Both arms include lazy comparison-tree
+preparation and borrowed field names. For the 21 changing heavy frames, medians
+of per-pass means are:
+
+| Metric | Positional arrays | Retained indices |
+| --- | ---: | ---: |
+| Packet bytes | 916,904 | 294,466 |
+| Writer encoding | 55.86 ms | 44.90 ms |
+| Native typed decoding | 28.14 ms | 17.27 ms |
+
+These are private native feasibility measurements on Apple M2, not
+installed-release performance. The product implementation additionally skips
+identity indexing when corresponding IDs have not changed.
+
+Two ordinary-input browser pairs, alternating baseline/candidate and
+candidate/baseline, compare the published `ef148e84` runtime with the combined
+save-field, lazy-tree, borrowed-field and retained-index changes. Each starts
+from the original save at 100% lighting, approaches the surviving Lucritius,
+holds the primary spell and observes at least 240 accepted ticks after death.
+The M2 Chrome/Metal viewport is 1600×900. Medians of the two run means during
+the measured death window are:
+
+| Metric | Published baseline | Combined candidate |
+| --- | ---: | ---: |
+| Render callback | 9.84 ms | 7.23 ms |
+| Frame interval | 21.33 ms | 18.13 ms |
+| Accepted-state hold | 75.35 ms | 53.30 ms |
+
+Baseline peaks are 8,580/8,634 effects; candidate peaks are 8,104/7,685.
+The evolved states and packet mixes differ, so this supports the exact-state
+codec result without isolating a causal browser percentage. Candidate maximum
+frame intervals remain 50.0/33.4 ms and accepted-state holds 109.5/85.7 ms.
+All four runs complete two saved Leaves and fresh-document Continue with exact
+stored/checkpoint bytes, zero unexpected errors and reviewed original images.
+Each run records four Canvas2D readback advisories and three loaded-media
+cancellations individually attributed to completed document replacement.
+
+Full release qualification remains pending. These local observations do not
+reproduce the unavailable Aliss lethal frame or resolve every historical lag
+claim. Raw measurements and artifact identities are retained under
+`~/codex-runs/solomon-remaining-reports-20261110/`.

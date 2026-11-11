@@ -269,21 +269,19 @@ fn source_field(name: &str, field: &str) -> String {
         ("BoneyardSpawn", "facing_degrees") => return "facingDeg".into(),
         _ => {}
     }
+    let mut result = String::with_capacity(field.len());
     let mut upper = false;
-    field
-        .chars()
-        .filter_map(|letter| {
-            if letter == '_' {
-                upper = true;
-                None
-            } else if upper {
-                upper = false;
-                Some(letter.to_ascii_uppercase())
-            } else {
-                Some(letter)
-            }
-        })
-        .collect()
+    for letter in field.chars() {
+        if letter == '_' {
+            upper = true;
+        } else if upper {
+            upper = false;
+            result.push(letter.to_ascii_uppercase());
+        } else {
+            result.push(letter);
+        }
+    }
+    result
 }
 
 fn source_variant(name: &str, variant: &str) -> String {

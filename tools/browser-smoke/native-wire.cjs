@@ -8,6 +8,25 @@ const CHUNK_CHARACTERS = 8 * 1024;
 function applySnapshotChange(value, change) {
   if(Array.isArray(change)) {
     if(change.length===1)return change[0];
+    if(change[0]==='r') {
+      if(change.length!==2||!Array.isArray(value)||!Array.isArray(change[1])) {
+        throw new Error('The observed retained snapshot update has no array');
+      }
+      const selected=new Set();
+      return change[1].map(item=>{
+        if(!Array.isArray(item)||item.length!==2)throw new Error('The observed retained item is invalid');
+        const [index,entry]=item;
+        if(index===null) {
+          if(!Array.isArray(entry)||entry.length!==1)throw new Error('The observed new item has no replacement');
+          return entry[0];
+        }
+        if(!Number.isSafeInteger(index)||index<0||index>=value.length||selected.has(index)) {
+          throw new Error('The observed retained index is repeated or out of bounds');
+        }
+        selected.add(index);
+        return entry===null?value[index]:applySnapshotChange(value[index],entry);
+      });
+    }
     const [length,items]=change;
     if(change.length!==2||!Array.isArray(value)||!Number.isSafeInteger(length)||length<0
       ||!Array.isArray(items)||length>value.length+items.length) {

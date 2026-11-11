@@ -24,7 +24,7 @@ pub mod transfer;
 
 // Action poses and Boulder guidance are authoritative gameplay state.
 // Older clients must reject this host rather than silently omit those fields.
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 pub const WEBSOCKET_PATH: &str = "/session";
 pub const GAME_TICK_RATE: u32 = 100;
 pub const SNAPSHOT_RATE: u32 = 20;

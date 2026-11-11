@@ -106,3 +106,29 @@ test('checkpoint prefixes, bounds and metadata must match the actual transfer', 
   assert.throws(() => read(checkpoint(1, 2, 5, 'cd')), /pending transfer/);
   assert.throws(() => read(checkpoint(2, 2, 4, 'cd')), /first chunk/);
 });
+
+test('retained observations preserve selected order and leave earlier frames untouched', () => {
+  const read=createNativeMessageReader();
+  const first={type:'snapshot',frame:{sequence:1,snapshot:{actors:[
+    {id:7,x:-0,name:'🧙\n'},{id:8,x:1},{id:9,x:2}],label:'old'}}};
+  read(first);
+  const next=read(delta(1,2,{sequence:[2],snapshot:{
+    actors:['r',[[2,{x:[3]}],[0,null],[null,[{id:10,x:0}]]]],label:['r']}}));
+  assert.deepEqual(next.frame.snapshot,{actors:[{id:9,x:3},{id:7,x:-0,name:'🧙\n'},
+    {id:10,x:0}],label:'r'});
+  assert.deepEqual(first.frame.snapshot.actors,[{id:7,x:-0,name:'🧙\n'},{id:8,x:1},{id:9,x:2}]);
+  assert.deepEqual(read(delta(2,3,{sequence:[3],snapshot:{actors:['r',[]]}})).frame.snapshot,
+    {actors:[],label:'r'});
+});
+
+test('retained observation rejects duplicated, missing and invalid source entries', () => {
+  for(const change of [
+    ['r',[[0,null],[0,null]]],['r',[[2,null]]],['r',[[-1,null]]],['r',[[0.5,null]]],
+    ['r',[[null,null]]],['r',[[null,{id:[9]}]]],['r',[[0]]],['r',[[0,null,'extra']]],
+    ['r',[],'extra'],['unknown',[]],
+  ]) {
+    const read=createNativeMessageReader();
+    read({type:'snapshot',frame:{sequence:1,snapshot:{actors:[{id:7},{id:8}]}}});
+    assert.throws(()=>read(delta(1,2,{sequence:[2],snapshot:{actors:change}})));
+  }
+});
