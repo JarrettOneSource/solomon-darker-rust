@@ -36,7 +36,7 @@ impl EnemyView {
                         })
                     })
                     .collect();
-                renderer.draw_triangles(texture, &triangles, blend(*mode));
+                renderer.draw_triangles(&texture, &triangles, blend(*mode));
             }
             EnemyDraw::Web(mesh) => {
                 let triangles: Vec<_> = mesh

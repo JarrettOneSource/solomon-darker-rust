@@ -2,8 +2,16 @@
 //! Run the bindgen web output with tools/browser-smoke/gpu-composition.cjs.
 
 #[cfg(target_arch = "wasm32")]
+#[path = "support/allocation_binding.rs"]
+mod allocation_binding;
+
+#[cfg(target_arch = "wasm32")]
 #[path = "support/atlas_crop.rs"]
 mod atlas_crop;
+
+#[cfg(target_arch = "wasm32")]
+#[path = "support/stock_record.rs"]
+mod stock_record;
 
 #[cfg(target_arch = "wasm32")]
 mod browser {
@@ -16,9 +24,63 @@ mod browser {
     use web_sys::WebGl2RenderingContext as Gl;
 
     #[wasm_bindgen]
+    pub fn allocation_binding_probe(
+        gl: Gl,
+        image: web_sys::HtmlImageElement,
+        incomplete_image: web_sys::HtmlImageElement,
+    ) -> Result<String, JsValue> {
+        let mut renderer = Renderer::new(gl).map_err(|error| JsValue::from_str(&error))?;
+        super::allocation_binding::probe(&mut renderer, &image, Some(&incomplete_image))
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen]
+    pub fn allocation_unbound_probe(
+        gl: Gl,
+        image: web_sys::HtmlImageElement,
+        incomplete_image: web_sys::HtmlImageElement,
+    ) -> Result<String, JsValue> {
+        super::allocation_binding::unbound_probe(gl, &image, &incomplete_image)
+            .map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen]
+    pub fn stock_record_probe(
+        gl: Gl,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+        source: &[u32],
+        mode: u32,
+        scale: f32,
+    ) -> Result<Vec<u8>, JsValue> {
+        let mut renderer = Renderer::new(gl).map_err(|error| JsValue::from_str(&error))?;
+        let source =
+            source.try_into().map_err(|_| JsValue::from_str("Record rectangle missing"))?;
+        super::stock_record::render(
+            &mut renderer,
+            [width, height],
+            pixels,
+            &super::stock_record::Sample {
+                source,
+                native_uv: mode & 1 != 0,
+                isolated: mode & 2 != 0,
+                scale,
+            },
+        )
+        .map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen]
     pub fn atlas_crop_probe(gl: Gl) -> Result<String, JsValue> {
         let mut renderer = Renderer::new(gl).map_err(|error| JsValue::from_str(&error))?;
         super::atlas_crop::probe(&mut renderer).map_err(|error| JsValue::from_str(&error))
+    }
+
+    #[wasm_bindgen]
+    pub fn atlas_batch_probe(gl: Gl) -> Result<String, JsValue> {
+        let mut renderer = Renderer::new(gl).map_err(|error| JsValue::from_str(&error))?;
+        super::atlas_crop::batch_probe(&mut renderer).map_err(|error| JsValue::from_str(&error))
     }
 
     #[wasm_bindgen]

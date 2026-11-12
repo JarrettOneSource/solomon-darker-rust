@@ -455,7 +455,7 @@ impl CreateView {
             stage.at(1042.0, 17.0) - Vec2::new(record_size.x, 0.0),
             record_size,
         );
-        frame.image_quad(
+        frame.with_sprite_record(metrics).image_quad(
             ui.painter(),
             self.ui.path(),
             [right.right_top(), right.left_top(), right.left_bottom(), right.right_bottom()],
@@ -648,7 +648,7 @@ pub(super) fn paint_vfx(
             b,
             (draw.alpha.clamp(0.0, 1.0) * 255.0).round() as u8,
         );
-        frame.image_quad_blended(
+        frame.with_sprite_record(record).image_quad_blended(
             painter,
             atlas.path(),
             quad,

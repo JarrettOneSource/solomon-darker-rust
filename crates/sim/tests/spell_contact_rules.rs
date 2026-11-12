@@ -89,6 +89,83 @@ fn step_drain(session: &mut GameSession, navigation: &NavigationSet) {
 }
 
 #[test]
+fn accepted_status_feedback_survives_combat_event_pressure() {
+    for selectors in [&[24][..], &[25][..], &[24, 25][..], &[7][..], &[7, 24, 25][..]] {
+        for victim in ["owner", "peer"] {
+            let (mut session, navigation) = drain_session();
+            let player = &mut session.participants.get_mut(victim).unwrap().player;
+            player.economy.owned_perk_selectors = selectors.to_vec();
+            player.progression.hagatha_runtime.purchase(selectors);
+            session.damage_player(victim, if selectors.contains(&7) { 100.0 } else { 1.0 }, 0);
+            let world = session.boneyard.as_mut().unwrap();
+            let accepted = world.enemy_events.clone();
+            assert!(!accepted.is_empty());
+            // Intervening ordinary semantic traffic before the next snapshot.
+            // The status records above came from the actual damage receiver.
+            let ordinary: Vec<_> = (0..513)
+                .map(|index| {
+                    let mut event = EnemyEvent::new(EnemyEventKind::EnemyDeath, index + 1, 0);
+                    event.event_id = world.enemies.next_event_id + index;
+                    event
+                })
+                .collect();
+            world.enemies.next_event_id += ordinary.len();
+            world.enemy_events.extend_from_slice(&ordinary);
+            session.step(
+                &BTreeMap::new(),
+                GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+            );
+            let snapshot = session.snapshot();
+            let retained = snapshot.boneyard.as_ref().unwrap().enemy_events;
+            assert_eq!(&retained[..accepted.len()], accepted, "{victim}/{selectors:?}");
+            assert_eq!(retained.len(), 512);
+            assert_eq!(&retained[accepted.len()..], &ordinary[accepted.len() + 1..]);
+            assert!(retained.windows(2).all(|pair| pair[0].event_id < pair[1].event_id));
+
+            session.ticks = 99;
+            session.step(
+                &BTreeMap::new(),
+                GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+            );
+            assert_eq!(
+                &session.boneyard.as_ref().unwrap().enemy_events[..accepted.len()],
+                accepted
+            );
+            session.step(
+                &BTreeMap::new(),
+                GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+            );
+            assert!(session.boneyard.as_ref().unwrap().enemy_events.is_empty());
+        }
+    }
+}
+
+#[test]
+fn status_only_event_pressure_stays_bounded() {
+    let (mut session, navigation) = drain_session();
+    let player = &mut session.participants.get_mut("owner").unwrap().player;
+    player.economy.owned_perk_selectors = vec![7, 24, 25];
+    player.progression.hagatha_runtime.purchase(&[7, 24, 25]);
+    session.damage_player("owner", 100.0, 0);
+    let world = session.boneyard.as_mut().unwrap();
+    let templates = world.enemy_events.clone();
+    let events: Vec<_> = (0..515)
+        .map(|index| {
+            let mut event = templates[index % templates.len()].clone();
+            event.event_id = index + 1;
+            event
+        })
+        .collect();
+    world.enemies.next_event_id = events.len() + 1;
+    world.enemy_events.clone_from(&events);
+    session.step(
+        &BTreeMap::new(),
+        GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+    );
+    assert_eq!(session.boneyard.as_ref().unwrap().enemy_events, events[3..]);
+}
+
+#[test]
 fn ether_drain_retains_cheat_death_feedback_for_caster_and_peer() {
     for victim in ["owner", "peer"] {
         let (mut session, navigation) = drain_session();

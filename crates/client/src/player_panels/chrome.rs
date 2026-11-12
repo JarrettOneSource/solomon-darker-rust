@@ -250,7 +250,7 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
             point(left + r.width as f64, top + r.height as f64),
             point(left, top + r.height as f64),
         ];
-        self.frame.image_quad_blended(
+        self.frame.with_sprite_record(r).image_quad_blended(
             &self.painter,
             atlas.path(),
             positions,
@@ -315,7 +315,12 @@ impl<'a, 'gpu> PanelCanvas<'a, 'gpu> {
         if mirrored {
             std::mem::swap(&mut uv.min.x, &mut uv.max.x);
         }
-        self.frame.image(&self.painter, url, destination, Some(uv), self.color(tint));
+        self.frame
+            .with_image_bounds(Rect::from_min_size(
+                egui::pos2(frame.x as f32, frame.y as f32),
+                egui::vec2(frame.width as f32, frame.height as f32),
+            ))
+            .image(&self.painter, url, destination, Some(uv), self.color(tint));
     }
     pub fn raw(
         &self,
@@ -852,6 +857,7 @@ pub(crate) fn paint_split_art(
     tints: [Color32; 2],
 ) -> Result<(), String> {
     let r = atlas.record(index)?;
+    let frame = frame.with_sprite_record(r);
     let size = frame.image_size(atlas.path()).ok_or("Weld glow atlas is not ready")?;
     let [left, top] = r.registered_origin();
     let min = center

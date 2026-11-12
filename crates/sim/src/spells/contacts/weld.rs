@@ -55,9 +55,7 @@ impl ContactWork<'_, '_> {
             spell.build_id,
             WeldBuildId::BurningBolt | WeldBuildId::FrostMissile | WeldBuildId::BallLightning
         );
-        let mut targets =
-            if magic_missile { self.context.primary_scenery_targets.to_vec() } else { Vec::new() };
-        targets.extend(rows.iter().map(|row| row.target.clone()));
+        let scenery = if magic_missile { self.context.primary_scenery_targets } else { &[] };
         let target = first_primary_point_contact(PrimaryPointContactQuery {
             actor_mask: if magic_missile && (common.age_ticks >= 200 || spell.target_id.is_none()) {
                 0x6
@@ -66,7 +64,7 @@ impl ContactWork<'_, '_> {
             },
             position: common.position,
             query_radius: if spell.build_id == WeldBuildId::CrawlingShock { 15.0 } else { 6.0 },
-            targets: &targets,
+            targets: scenery.iter().chain(rows.iter().map(|row| &row.target)),
         });
         let Some(target) = target else { return };
         let Some(row) = rows.iter().find(|row| row.target.id == target.id) else {

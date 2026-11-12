@@ -640,6 +640,10 @@ fn paint_sprite(
     glow: Option<(Color32, f32)>,
 ) {
     let source = sprite.source;
+    let source_rect = Rect::from_min_size(
+        pos2(source.x as f32, source.y as f32),
+        vec2(source.width as f32, source.height as f32),
+    );
     let uv = Rect::from_min_max(
         pos2((source.x / sprite.image_size.x) as f32, (source.y / sprite.image_size.y) as f32),
         pos2(
@@ -655,17 +659,14 @@ fn paint_sprite(
         frame.atlas_image_shadowed(
             painter,
             &sprite.path,
-            Rect::from_min_max(
-                pos2(source.x as f32, source.y as f32),
-                pos2((source.x + source.width) as f32, (source.y + source.height) as f32),
-            ),
+            source_rect,
             target,
             crate::gpu_ui::ImageShadow { offset: egui::Vec2::ZERO, blur, color },
             Color32::from_white_alpha((alpha * 255.0) as u8),
         );
         return;
     }
-    frame.image(
+    frame.with_image_bounds(source_rect).image(
         painter,
         &sprite.path,
         target,

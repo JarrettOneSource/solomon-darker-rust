@@ -972,7 +972,10 @@ impl SpellView {
                         })
                     })
                     .collect();
-                renderer.draw_triangles(&self.bad_guys.texture, &triangles, BlendMode::Add);
+                // Flame Lash keeps its absolute page UVs; its samples still belong
+                // to record 25, including where a painter band clips the mesh.
+                let texture = self.bad_guys.texture.clamped_to(record.atlas_rect());
+                renderer.draw_triangles(&texture, &triangles, BlendMode::Add);
             }
             SpellDraw::Line { position, draw } => {
                 let delta = Vec2::new(draw.end.x - draw.start.x, draw.end.y - draw.start.y);
@@ -1014,7 +1017,7 @@ impl SpellView {
                     height,
                 );
                 renderer.draw_quad(
-                    &self.bad_guys.texture,
+                    &self.bad_guys.texture.clamped_to(self.bad_guys.records[15].atlas_rect()),
                     sprite_texel_rect(&self.bad_guys.records[15]),
                     [[x, y], [x + width, y], [x + width, y + height], [x, y + height]],
                     [rgba(0xff8040, *alpha, [1.0; 3]); 4],
@@ -1070,7 +1073,7 @@ impl SpellView {
             [projected[0], projected[1]]
         });
         renderer.draw_quad_with_color_mode(
-            &atlas.texture,
+            &atlas.texture.clamped_to(record.atlas_rect()),
             sprite_texel_rect(record),
             corners,
             [rgba(draw.tint, draw.alpha, region_tint); 4],

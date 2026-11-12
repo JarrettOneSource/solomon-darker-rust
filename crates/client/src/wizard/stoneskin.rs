@@ -127,7 +127,7 @@ impl WizardView {
             super::material::draw_centered_texture(
                 renderer,
                 &Camera { origin: Vec2::ZERO, scale: 1.0 },
-                &self.atlas,
+                &self.atlas.clamped_to(record.atlas_rect()),
                 sprite_texel_rect(record),
                 Vec2::new(128.0 + head.x, 128.0 + head.y),
                 Vec2::new(record.width as f64, record.height as f64),

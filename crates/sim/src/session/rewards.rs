@@ -145,7 +145,24 @@ pub(super) fn retain_boneyard_enemy_events(
         !world.enemy_events.windows(2).any(|events| events[0].event_id == events[1].event_id),
         "duplicate Boneyard enemy event ID"
     );
-    if world.enemy_events.len() > 512 {
-        world.enemy_events.drain(..world.enemy_events.len() - 512);
+    let mut excess = world.enemy_events.len().saturating_sub(512);
+    if excess > 0 {
+        // Ordinary combat traffic must not evict an accepted player notice before
+        // its next snapshot. Status-only pressure still obeys the same total bound.
+        world.enemy_events.retain(|event| {
+            if excess > 0
+                && !matches!(
+                    event.kind,
+                    crate::enemies::model::EnemyEventKind::PlayerCharmLost
+                        | crate::enemies::model::EnemyEventKind::PlayerCheatDeath
+                )
+            {
+                excess -= 1;
+                false
+            } else {
+                true
+            }
+        });
+        world.enemy_events.drain(..excess);
     }
 }

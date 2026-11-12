@@ -155,7 +155,13 @@ impl CloudArt {
                 }
                 position + delta
             });
-        frame.image_quad(ui.painter(), self.ui.path(), quad, uv, Color32::WHITE);
+        frame.with_sprite_record(record).image_quad(
+            ui.painter(),
+            self.ui.path(),
+            quad,
+            uv,
+            Color32::WHITE,
+        );
         Ok(())
     }
     pub fn list(&self, frame: &UiFrame<'_>, ui: &Ui, rect: Rect, scale: f32) -> Result<(), String> {
@@ -284,7 +290,7 @@ impl CloudArt {
             egui::pos2(record.x as f32 / size.x, record.y as f32 / size.y),
             egui::pos2((record.x as f32 + 34.0) / size.x, (record.y as f32 + h) / size.y),
         );
-        frame.image_quad(
+        frame.with_sprite_record(record).image_quad(
             ui.painter(),
             self.ui.path(),
             [right.right_top(), right.left_top(), right.left_bottom(), right.right_bottom()],

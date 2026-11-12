@@ -140,7 +140,15 @@ impl StockAtlas {
             (source.min.to_vec2() / size).to_pos2(),
             (source.max.to_vec2() / size).to_pos2(),
         );
-        frame.image_rotated(painter, &self.path, destination, Some(uv), rotation, center, tint);
+        frame.with_sprite_record(record).image_rotated(
+            painter,
+            &self.path,
+            destination,
+            Some(uv),
+            rotation,
+            center,
+            tint,
+        );
         Ok(())
     }
 
@@ -171,7 +179,13 @@ impl StockAtlas {
     ) -> Result<(), String> {
         let record = self.record(index)?;
         let source = source.translate(vec2(record.x as f32, record.y as f32));
-        if frame.atlas_image(painter, &self.path, source, destination, tint) {
+        if frame.with_sprite_record(record).atlas_image(
+            painter,
+            &self.path,
+            source,
+            destination,
+            tint,
+        ) {
             Ok(())
         } else {
             Err(format!("{} is not ready", self.path))
@@ -272,6 +286,7 @@ impl StockAtlas {
         tint: Color32,
     ) -> Result<(), String> {
         let record = self.record(index)?;
+        let frame = frame.with_sprite_record(record);
         let size = vec2(record.width as f32, record.height as f32);
         let texture_size =
             frame.image_size(&self.path).ok_or_else(|| format!("{} is not ready", self.path))?;

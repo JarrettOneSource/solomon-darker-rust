@@ -245,10 +245,20 @@ impl Images {
         mask: bool,
         filter: ColorFilter,
         shadow: Option<AlphaShadow>,
+        source_bounds: Option<Rect>,
     ) -> Option<TextureId> {
-        self.sampled_texture_id(path, blend, mask, filter, shadow, TextureSampling::Texture)
+        self.sampled_texture_id(
+            path,
+            blend,
+            mask,
+            filter,
+            shadow,
+            TextureSampling::Texture,
+            source_bounds,
+        )
     }
 
+    #[allow(clippy::too_many_arguments)] // One draw retains its complete image material.
     pub fn sampled_texture_id(
         &self,
         path: &str,
@@ -257,6 +267,7 @@ impl Images {
         filter: ColorFilter,
         shadow: Option<AlphaShadow>,
         sampling: TextureSampling,
+        source_bounds: Option<Rect>,
     ) -> Option<TextureId> {
         self.request(path);
         let mut cache = self.0.borrow_mut();
@@ -270,7 +281,8 @@ impl Images {
             return None;
         }
         let mut material = Material::new(TextureSource::Image(entry.id), blend, mask, filter)
-            .with_sampling(sampling);
+            .with_sampling(sampling)
+            .with_source_bounds(source_bounds);
         if let Some(shadow) = shadow {
             material = material.with_shadow(shadow);
         }
@@ -488,6 +500,11 @@ impl GpuPainter {
                     ),
                 };
                 let mask = material.mask;
+                let texture = if let Some(source) = material.source_bounds() {
+                    texture.clamped_to(source)
+                } else {
+                    texture
+                };
                 (
                     texture,
                     material.blend(),

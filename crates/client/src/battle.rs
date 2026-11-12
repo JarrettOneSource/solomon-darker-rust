@@ -212,9 +212,9 @@ impl BattleViews {
         })
     }
 
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self, renderer: &mut Renderer) {
         self.enemies.reset();
-        self.secondary.memory.fire_explosion_point_gains.clear();
+        self.secondary.reset(renderer);
         self.solomon.reset();
         self.loot.reset();
         self.player_effects.reset();
@@ -241,7 +241,6 @@ impl BattleViews {
         let mut equipment = Vec::with_capacity(frame.players.len());
         for participant in frame.players {
             equipment.push(WizardEquipment::prepare(
-                renderer,
                 participant.player.selection.element,
                 &participant.player.economy.equipment,
                 mod_assets.as_deref_mut(),

@@ -249,7 +249,7 @@ impl ElementPaint {
                 (record.y + record.height) as f32 / image.y,
             ),
         );
-        frame.image_quad(painter, atlas.path(), corners, uv, tint);
+        frame.with_sprite_record(record).image_quad(painter, atlas.path(), corners, uv, tint);
         Ok(())
     }
 }

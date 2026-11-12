@@ -75,6 +75,15 @@ pub async fn secondary_fixture_init() -> Result<(), JsValue> {
 }
 
 #[wasm_bindgen]
+pub fn reset_secondary_fixture() {
+    FIXTURE.with(|fixture| {
+        let mut fixture = fixture.borrow_mut();
+        let view = fixture.as_mut().expect("secondary_fixture_init completes before reset");
+        view.secondary.reset(&mut view.renderer);
+    });
+}
+
+#[wasm_bindgen]
 pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
     let input: Value =
         serde_json::from_str(input).map_err(|error| JsValue::from_str(&error.to_string()))?;
@@ -132,7 +141,7 @@ pub fn render_secondary_fixture(input: &str) -> Result<String, JsValue> {
         let secondary_count = layers.len();
         for actor in &staff {
             layers.push(
-                SecondaryView::staff_painter(&actor)
+                SecondaryView::staff_painter(actor)
                     .expect("fixture admits visible staff rows")
                     .layer,
             );

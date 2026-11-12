@@ -207,6 +207,7 @@ impl HostedGameHost {
         self.reconnects.remove(&id);
         self.checkpoint_run_for_player(&id);
         let player = self.players.remove(index);
+        self.pending_player_saves.remove(&id);
         let server_tick = self.worlds.state_for_player(&id).map_or(0, |state| state.ticks);
         let display_name = self
             .retained_participant(&id)

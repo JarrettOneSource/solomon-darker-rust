@@ -3,7 +3,12 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use solomon_graphics::{BlendMode, Quad, Renderer, Texture, TextureColorMode, assets};
+#[cfg(feature = "browser-fixtures")]
+mod atlas_fixture;
+
+use solomon_graphics::{
+    BlendMode, Quad, Renderer, Texture, TextureColorMode, TextureSampling, assets,
+};
 use solomon_sim::ui_text::{
     UiFontName, UiTextSpec, layout_ui_text, measure_ui_text, ui_font, ui_glyph_ink_bounds,
 };
@@ -444,35 +449,37 @@ impl Loader {
             return;
         };
         let mut bounds = [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY];
-        for glyph in &layout.glyphs {
-            let ink = ui_glyph_ink_bounds(glyph);
-            let [x, y, w, h] = glyph.glyph.frame;
-            let left = ink.left as f32;
-            let top = ink.top as f32;
-            let right = left + ink.width as f32;
-            let bottom = top + ink.height as f32;
-            bounds = [
-                bounds[0].min(left),
-                bounds[1].min(top),
-                bounds[2].max(right),
-                bounds[3].max(bottom),
-            ];
-            self.renderer.draw_quad_with_color_mode(
-                texture,
-                [x as f32, y as f32, w as f32, h as f32],
-                [[left, top], [right, top], [right, bottom], [left, bottom]],
-                [[
-                    f32::from((tint >> 16) as u8) / 255.0,
-                    f32::from((tint >> 8) as u8) / 255.0,
-                    f32::from(tint as u8) / 255.0,
-                    1.0,
-                ]; 4],
-                BlendMode::Normal,
-                TextureColorMode::AlphaMask,
-            );
-            self.meshes += 1;
-            self.triangles += 2;
-        }
+        self.renderer.draw_sampled(TextureSampling::Nearest, |renderer| {
+            for glyph in &layout.glyphs {
+                let ink = ui_glyph_ink_bounds(glyph);
+                let [x, y, w, h] = glyph.glyph.frame;
+                let left = ink.left as f32;
+                let top = ink.top as f32;
+                let right = left + ink.width as f32;
+                let bottom = top + ink.height as f32;
+                bounds = [
+                    bounds[0].min(left),
+                    bounds[1].min(top),
+                    bounds[2].max(right),
+                    bounds[3].max(bottom),
+                ];
+                renderer.draw_quad_with_color_mode(
+                    &texture.clamped_to(glyph.glyph.frame.map(|value| value as f32)),
+                    [x as f32, y as f32, w as f32, h as f32],
+                    [[left, top], [right, top], [right, bottom], [left, bottom]],
+                    [[
+                        f32::from((tint >> 16) as u8) / 255.0,
+                        f32::from((tint >> 8) as u8) / 255.0,
+                        f32::from(tint as u8) / 255.0,
+                        1.0,
+                    ]; 4],
+                    BlendMode::Normal,
+                    TextureColorMode::AlphaMask,
+                );
+                self.meshes += 1;
+                self.triangles += 2;
+            }
+        });
         if bounds[0].is_finite() {
             self.record(
                 id,

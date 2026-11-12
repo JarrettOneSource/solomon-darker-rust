@@ -578,3 +578,94 @@ fn controller_scope_is_the_layer_holding_the_dialogue_controls() {
         );
     }
 }
+
+#[test]
+fn compact_panel_navigation_paints_through_portrait_rotation_for_every_book_and_service() {
+    let fixture = Fixture::new();
+    let images = [
+        STOCK_PANEL_IMAGES.as_slice(),
+        &[
+            "assets/stock/menu/main-menu-button.png",
+            "assets/stock/menu/main-menu-button-hover.png",
+            "assets/stock/menu/main-menu-button-corner.png",
+            "assets/stock/menu/main-menu-button-rail.png",
+        ],
+    ]
+    .concat();
+    for (panel, boasts_open) in [
+        (PlayerPanel::Inventory, false),
+        (PlayerPanel::Skills, false),
+        (PlayerPanel::Skills, true),
+        (PlayerPanel::Service(HubTraderId::Fomentius), false),
+        (PlayerPanel::Service(HubTraderId::Hagatha), false),
+        (PlayerPanel::Service(HubTraderId::Luthacus), false),
+        (PlayerPanel::Service(HubTraderId::Shlorio), false),
+    ] {
+        let mut panels = panels();
+        let ctx = egui::Context::default();
+        panels.show(panel, 0.0).unwrap();
+        panels.boasts_open = boasts_open;
+        let actions: &[&str] = match panel {
+            PlayerPanel::Skills => &["view-previous", "view-next", "boasts", "inventory", "close"],
+            PlayerPanel::Service(_) => {
+                &["view-shop", "view-backpack", "view-equipment", "view-stats", "skills", "close"]
+            }
+            _ => &["view-stats", "view-backpack", "view-equipment", "skills", "close"],
+        };
+        // Open directly in portrait, rotate to landscape and back, then include
+        // the narrower supported phone width without replacing the panel owner.
+        for (width, height) in [(390, 844), (844, 390), (390, 844), (320, 568)] {
+            panels.update(&fixture.snapshot(), 500.0, width, height).unwrap();
+            panels.take_actions();
+            let frame = crate::gpu_ui::record_frame(&ctx, &images, |frame| {
+                panels.paint(frame).unwrap();
+            });
+            assert_eq!(frame.widgets["panel:navigation"].paint_bounds.rect().height(), 48.0);
+            let mut visible = 0;
+            for action in actions {
+                let Some(control) = frame.widgets.get(&format!("panel:{action}")) else {
+                    continue; // The scroller omits offscreen semantic controls.
+                };
+                visible += 1;
+                let bounds = control.paint_bounds.rect();
+                assert_eq!(bounds.height(), 40.0, "{panel:?} {width} {action}");
+                assert!(bounds.width() >= 128.0, "{panel:?} {width} {action} keeps readable ink");
+                if width == 844 {
+                    assert!(
+                        bounds.left() >= 6.0 && bounds.right() <= 838.01,
+                        "{panel:?} {action} preserves the complete landscape toolbar"
+                    );
+                }
+            }
+            assert!(visible >= 2, "{panel:?} {width} exposes usable section controls");
+            if width == 844 {
+                assert_eq!(visible, actions.len(), "{panel:?} retains every landscape action");
+            }
+            assert_eq!(panels.panel(), Some(panel));
+            assert!(
+                panels.take_actions().is_empty(),
+                "painting/resizing cannot activate navigation"
+            );
+        }
+    }
+}
+
+#[test]
+fn compact_navigation_labels_retain_at_least_half_the_native_font_size() {
+    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(128.0, 40.0));
+    for label in
+        ["Stats", "Backpack", "Equip", "Skills", "Done", "Shop", "Prev", "Next", "Boasts", "Items"]
+    {
+        for pressed in [false, true] {
+            let spec = crate::menu::widgets::stock_button_label_spec(
+                label,
+                rect,
+                40.0 / 69.0,
+                40.0 / 69.0,
+                pressed,
+                1.0,
+            );
+            assert!(spec.scale >= 0.5, "{label} must not be compressed into unreadable ink");
+        }
+    }
+}

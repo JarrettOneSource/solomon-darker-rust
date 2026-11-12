@@ -25,8 +25,8 @@ pub(super) struct TargetDraw {
 
 /// A sprite's texture, source rectangle, logical size and registered origin; `texels`
 /// marks atlas records, whose UVs are inset from the rectangle's edges.
-pub(super) struct SpriteRecord<'a> {
-    pub texture: &'a Texture,
+pub(super) struct SpriteRecord {
+    pub texture: Texture,
     pub source: [f32; 4],
     pub width: f64,
     pub height: f64,
@@ -35,12 +35,12 @@ pub(super) struct SpriteRecord<'a> {
 }
 
 impl SecondaryView {
-    pub(super) fn record(&self, atlas: SecondaryAtlas, entry: usize) -> SpriteRecord<'_> {
+    pub(super) fn record(&self, atlas: SecondaryAtlas, entry: usize) -> SpriteRecord {
         if atlas == SecondaryAtlas::Clothes {
             let texture =
                 &self.clothes[entry.checked_sub(1).expect("Clothes secondary entry is 1 or 2")];
             return SpriteRecord {
-                texture,
+                texture: texture.clone(),
                 source: [0.0, 0.0, texture.width, texture.height],
                 width: f64::from(texture.width),
                 height: f64::from(texture.height),
@@ -57,7 +57,7 @@ impl SecondaryView {
         };
         let record = &atlas.records[entry];
         SpriteRecord {
-            texture: &atlas.texture,
+            texture: atlas.texture.clamped_to(record.atlas_rect()),
             source: [record.x as f32, record.y as f32, record.width as f32, record.height as f32],
             width: f64::from(record.width),
             height: f64::from(record.height),
@@ -101,7 +101,7 @@ impl SecondaryView {
         if let Some([x, y, width, height]) = draw.clip {
             let clip = camera.project(root.x + x, root.y + y, width, height);
             renderer.draw_triangles_with_color_mode(
-                record.texture,
+                &record.texture,
                 &clipped_sprite_triangles(vertices, clip),
                 blend(draw.blend),
                 mode,
@@ -111,7 +111,7 @@ impl SecondaryView {
         let triangles =
             [[vertices[0], vertices[1], vertices[2]], [vertices[0], vertices[2], vertices[3]]];
         renderer.draw_triangles_with_color_mode(
-            record.texture,
+            &record.texture,
             &triangles,
             blend(draw.blend),
             mode,
@@ -124,7 +124,7 @@ impl SecondaryView {
         root: Vec2,
         draw: &SecondarySpriteDraw,
         tint: [f32; 3],
-    ) -> (SpriteRecord<'_>, [Vertex; 4]) {
+    ) -> (SpriteRecord, [Vertex; 4]) {
         let record = self.record(draw.atlas, draw.entry);
         let left = -record.width / 2.0 + record.origin.x;
         let top = -record.height / 2.0 + record.origin.y;
@@ -320,7 +320,7 @@ impl SecondaryView {
         });
         let triangles = quad_triangles(vertices);
         if let Some(record) = record {
-            renderer.draw_triangles(record.texture, &triangles, blend(draw.blend));
+            renderer.draw_triangles(&record.texture, &triangles, blend(draw.blend));
         } else {
             renderer.draw_solid_triangles(&triangles, blend(draw.blend));
         }
@@ -354,7 +354,7 @@ impl SecondaryView {
             })
             .collect::<Vec<_>>();
         renderer.draw_triangles(
-            record.texture,
+            &record.texture,
             &indexed_triangles(&vertices, &mesh.indices),
             BlendMode::Add,
         );
@@ -431,7 +431,7 @@ pub(super) fn rgba(tint: u32, alpha: f64, light: [f32; 3]) -> [f32; 4] {
     ]
 }
 
-pub(super) fn texels(record: &SpriteRecord<'_>) -> [[f32; 2]; 4] {
+pub(super) fn texels(record: &SpriteRecord) -> [[f32; 2]; 4] {
     let [x, y, width, height] = record.source;
     // Atlas records start half a texel in and end a quarter texel past their far edge.
     let (left, top, right, bottom) = if record.texels {

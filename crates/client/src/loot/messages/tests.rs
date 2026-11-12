@@ -1,11 +1,12 @@
 use super::*;
 use solomon_sim::boneyard::loot::{BoneyardLootEvent, BoneyardLootEventType};
+use solomon_sim::boneyard::navigation::NavigationSet;
 use solomon_sim::combat::PlayerLifeState;
 use solomon_sim::economy::{HubActionFeedback, HubActionFeedbackAction};
 use solomon_sim::enemies::model::EnemyEvent;
 use solomon_sim::profile::{NewGameSelection, WizardDiscipline, WizardElement};
 use solomon_sim::secondary::SecondaryEventState;
-use solomon_sim::session::GameSessionOptions;
+use solomon_sim::session::{GameSessionOptions, GameSessionTickContext};
 
 #[test]
 fn the_fixed_native_context_keeps_notifications_above_gameplay_and_below_hud() {
@@ -187,6 +188,44 @@ fn only_fresh_owner_charm_loss_creates_a_brief_notice_without_guessing_a_charm()
             "the existing notification clock expires loss text"
         );
     }
+}
+
+#[test]
+fn accepted_status_notices_cross_the_snapshot_after_combat_event_pressure() {
+    let mut authority = session();
+    let player = &mut authority.participants.get_mut("local").unwrap().player;
+    player.economy.owned_perk_selectors = vec![7, 24, 25];
+    player.progression.hagatha_runtime.purchase(&[7, 24, 25]);
+    let loaded = authority.boneyard.as_ref().unwrap().loaded.clone();
+    let navigation = NavigationSet::for_scene(&loaded);
+    let mut client = GameSession::restore(authority.checkpoint(), Some(loaded)).unwrap();
+    let mut notifications = WorldNotifications::default();
+    notifications.update(&client, "local", true).unwrap();
+
+    authority.damage_player("local", 100.0, 0);
+    let world = authority.boneyard.as_mut().unwrap();
+    for index in 0..513 {
+        let mut event = EnemyEvent::new(EnemyEventKind::EnemyDeath, index + 1, 0);
+        event.event_id = world.enemies.next_event_id;
+        world.enemies.next_event_id += 1;
+        world.enemy_events.push(event);
+    }
+    authority.step(
+        &BTreeMap::new(),
+        GameSessionTickContext { navigation: Some(&navigation), ..Default::default() },
+    );
+    let wire = serde_json::to_vec(&authority.snapshot()).unwrap();
+    client.apply_checkpoint(serde_json::from_slice(&wire).unwrap(), None).unwrap();
+    notifications.update(&client, "local", true).unwrap();
+    let visuals = notifications.state.as_ref().unwrap().visuals.clone();
+    assert_eq!(keys(&notifications), ["combat:1", "combat:2"]);
+    assert_eq!(
+        visuals.iter().map(|visual| visual.message.text.as_str()).collect::<Vec<_>>(),
+        ["CHARM EFFECT LOST!", "CHEAT DEATH!"]
+    );
+    assert!(visuals.iter().all(|visual| visual.alpha > 0.0 && visual.scale > 0.0));
+    notifications.update(&client, "local", true).unwrap();
+    assert_eq!(notifications.state.as_ref().unwrap().visuals, visuals);
 }
 
 #[test]

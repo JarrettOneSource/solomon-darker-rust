@@ -608,7 +608,7 @@ impl SettingsView {
                     ((record.y + record.height) as f32) / atlas_size.y,
                 ),
             );
-            frame.image_quad(
+            frame.with_sprite_record(record).image_quad(
                 ui.painter(),
                 self.ui_atlas.path(),
                 [

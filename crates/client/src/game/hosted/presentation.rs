@@ -76,11 +76,10 @@ impl Game {
         self.mod_audio = None;
         self.mod_projection = None;
         self.mod_viewport_size = None;
-        self.battle_views.reset();
+        self.battle_views.reset(&mut self.renderer);
         self.world_screen_feedback.reset();
         // Release the wizard's shared custom frame banks before destroying their textures.
         let stock = crate::wizard::WizardEquipment::prepare(
-            &mut self.renderer,
             WizardElement::Ether,
             &solomon_sim::economy::HubEquipmentState::default(),
             None,

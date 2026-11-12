@@ -9,6 +9,10 @@ publish.workspace = true
 name = "composition_probe"
 crate-type = ["cdylib"]
 
+[[example]]
+name = "batch_cost"
+crate-type = ["cdylib"]
+
 [dependencies]
 solomon-sim = { workspace = true }
 glow = "=0.18.0"

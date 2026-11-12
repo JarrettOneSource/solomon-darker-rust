@@ -114,18 +114,22 @@ sprite program retains the last uploaded values and changes only those that
 differ, avoiding repeated driver calls for unchanged projection and color state.
 Constructing a new program starts with no retained values.
 
-Courtyard scenery and NPC records replace the reference client's independently
-cropped images. Sampling their raw atlas edges let the statue read an opaque
-white row from its neighbor and Hagatha's body frames read opaque adjacent
-columns. NPC College and Clothes records share the same isolated-record draw
-boundary. `Renderer::draw_clamped` clamps sample coordinates to the selected
-record's texel centers in both shader programs while preserving the original
-quad and UV interpolation. UVs and bounds retain high precision for large stock
-atlases. Bounds belong to each draw and therefore participate in batching;
-ordinary draws retain their existing repeating or authored UV behavior. The
-browser composition and native graphics probes compare these draws against an
-independently uploaded crop at fractional scales and positions, including state
-restoration and the color-filter path.
+Stock records replace independently cropped images. Unrestricted atlas sampling
+let Hagatha, Golem limbs and UI artwork read adjacent records. A texture view
+created with `Texture::clamped_to` confines samples to the original record's
+texel centers while retaining the parent handle, dimensions and coordinate
+space. Slices, rotated quads and clipped meshes keep their original UVs and the
+complete source bounds. Both shader programs carry high-precision bounds in the
+vertex buffer, so different records on one page remain in the same ordered
+batch. Whole textures, render targets and intended repeats retain their own
+sampling policy. Admitted authored frames smaller than a texel sample their
+midpoint on that axis.
+
+The browser composition and native graphics probes compare atlas draws against
+independently uploaded crops at fractional scales and positions, including state
+restoration and the color-filter path. A mixed-record batch also includes an
+unrestricted page view: neither neighboring bounds nor an earlier crop may leak
+into subsequent draws.
 
 ## One simulation
 
@@ -380,6 +384,29 @@ that prepared document. This boundary is internal to creation: raw signers and
 all incoming recovery documents retain full binding and restore validation.
 Exact signed tokens and final document bytes remain compatible, and publication,
 transfer sequencing and durable save acknowledgements retain their owners.
+
+Autonomous hosted saves use one concrete encoder owned by the Supervisor. A
+completed authority observation freezes the world, loaded geometry, mod VM export
+and recovery claim together; only plain owned values cross to the worker. The
+worker runs the canonical schema-52 creator, normalization, signing and transport
+preparation. Socket workers continue serving input, acknowledgements and heartbeat
+while that larger operation runs. The native schema-2 file writer remains separate.
+
+At most one complete hosted capture is in flight across all Colleges. Later
+requests coalesce as player IDs, selected in rotation across Colleges and players.
+Capturing removes the selected dirty ID; commands accepted during encoding can
+reinsert it. Initial and terminal obligations retire only when the matching result
+is accepted. Completion checks the host instance, admission and peer, run and phase,
+party/recovery identity, content, integrity, eligibility and last save sequence.
+An obsolete result cannot refill a reconnect cache or install a token in another
+run; a live changed owner keeps its obligation to capture current state.
+
+Explicit Save Before Leave and deployment saves stay synchronous so their exact
+checkpoint enters the reliable lane before its control receipt. Advancing that
+sequence invalidates older autonomous work. Deployment still polls completions
+while suspending new captures and simulation. Supervisor shutdown joins its
+encoder without publishing into closed authorities. The measured authority cost
+and limits are described in [Performance](PERFORMANCE.md#hosted-autonomous-saves).
 
 Direct-host reconnect rotates its credential while retaining the credential the
 client presented until that connection acknowledges the Welcome snapshot. Both

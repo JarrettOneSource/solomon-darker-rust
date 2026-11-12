@@ -101,7 +101,7 @@ impl BeltPullOffBurst {
             } else if member.record == 69 {
                 spokes += 1;
             }
-            frame.image_rotated(
+            frame.with_sprite_record(record).image_rotated(
                 painter,
                 atlas.path(),
                 destination,

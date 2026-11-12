@@ -108,6 +108,7 @@ fn render(
                 key_codes: &[],
                 blend: BlendMode::Normal,
                 color_filter: ColorFilter::default(),
+                image_bounds: None,
                 announcements: &announcements,
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,

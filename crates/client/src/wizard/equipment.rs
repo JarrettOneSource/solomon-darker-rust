@@ -21,7 +21,6 @@ pub struct WizardEquipment {
 
 impl WizardEquipment {
     pub fn prepare(
-        renderer: &mut Renderer,
         element: WizardElement,
         equipment: &HubEquipmentState,
         mut assets: Option<&mut ModPresentationAssets>,
@@ -31,7 +30,7 @@ impl WizardEquipment {
             let assets =
                 assets.as_deref_mut().ok_or("mod presentation textures are unavailable")?;
             let bank = assets
-                .wearable(renderer, content)?
+                .wearable(content)?
                 .ok_or_else(|| format!("Missing mod {slot:?} wearable textures"))?;
             if bank.slot != slot {
                 return Err(format!("Missing mod {slot:?} wearable textures"));

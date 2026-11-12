@@ -2,6 +2,9 @@
 //! One session owns the verified image URLs and base textures. Derived icon, sprite and
 //! wearable records borrow those sources; they never own a second content catalog.
 
+#[cfg(all(target_arch = "wasm32", feature = "browser-fixtures"))]
+mod atlas_fixture;
+
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -14,7 +17,7 @@ use solomon_sim::modding::inventory::{
 
 use crate::mod_content::{GameModContentLoadError, ModContentCache, ModContentUrl};
 use solomon_graphics::assets;
-use solomon_graphics::{BlendMode, Renderer, Texture};
+use solomon_graphics::{BlendMode, Renderer, Texture, TextureSampling};
 
 const WEARABLE_CELL: f64 = 170.0;
 const WEARABLE_HEADINGS: usize = 24;
@@ -102,6 +105,7 @@ pub struct ModPresentationAssets {
 pub struct ModSpriteTexture {
     pub texture: Texture,
     pub frame: ModSpriteFrame,
+    sampling: TextureSampling,
 }
 
 /// Where and how to draw a mod sprite frame: center, scale, anchor, rotation, tint and blend.
@@ -126,18 +130,15 @@ impl ModSpriteTexture {
             draw.rotation_radians,
         )
         .map(|point| [point.x as f32, point.y as f32]);
-        renderer.draw_quad(
-            &self.texture,
-            [
-                self.frame.x as f32,
-                self.frame.y as f32,
-                self.frame.width as f32,
-                self.frame.height as f32,
-            ],
-            corners,
-            [draw.tint; 4],
-            draw.blend,
-        );
+        renderer.draw_sampled(self.sampling, |renderer| {
+            renderer.draw_quad(
+                &self.texture,
+                frame_rect(self.frame),
+                corners,
+                [draw.tint; 4],
+                draw.blend,
+            );
+        });
     }
 }
 
@@ -239,20 +240,15 @@ impl ModPresentationAssets {
 
     pub fn wearable(
         &mut self,
-        renderer: &mut Renderer,
         content: &ModItemContent,
     ) -> Result<Option<Rc<ModWearableTextureFrames>>, String> {
         self.require_live()?;
         let Some(wearable) = &content.wearable else { return Ok(None) };
         if !self.wearables.contains_key(&content.content_id) {
-            let primary = self.actor_sheet(
-                renderer,
-                &content.mod_id,
-                &wearable.worn_image_path,
-                wearable.slot,
-            )?;
+            let primary =
+                self.actor_sheet(&content.mod_id, &wearable.worn_image_path, wearable.slot)?;
             let secondary = if let Some(path) = &wearable.worn_trim_image_path {
-                Some(self.actor_sheet(renderer, &content.mod_id, path, wearable.slot)?)
+                Some(self.actor_sheet(&content.mod_id, path, wearable.slot)?)
             } else {
                 None
             };
@@ -272,7 +268,6 @@ impl ModPresentationAssets {
 
     fn actor_sheet(
         &self,
-        renderer: &mut Renderer,
         mod_id: &str,
         path: &str,
         slot: ModWearableSlot,
@@ -280,14 +275,15 @@ impl ModPresentationAssets {
         let source = self.base(mod_id, path, "mod wearable asset")?;
         let rows = mod_wearable_rows(f64::from(source.width), f64::from(source.height), slot)
             .ok_or_else(|| format!("mod wearable asset has invalid geometry: {mod_id}:{path}"))?;
-        renderer.set_texture_nearest(source);
         let mut headings = Vec::with_capacity(WEARABLE_HEADINGS);
         for heading in 0..WEARABLE_HEADINGS {
             let mut poses = Vec::with_capacity(rows);
             for pose in 0..rows {
+                let frame = mod_wearable_cell(heading, pose);
                 poses.push(ModSpriteTexture {
-                    texture: source.clone(),
-                    frame: mod_wearable_cell(heading, pose),
+                    texture: source.clamped_to(frame_rect(frame)),
+                    frame,
+                    sampling: TextureSampling::Nearest,
                 });
             }
             headings.push(poses);
@@ -324,8 +320,8 @@ impl ModPresentationAssets {
         if let Some(cached) = self.frames.get(&key) {
             return Ok(cached.clone());
         }
-        let texture = self.base(mod_id, path, field)?.clone();
-        let result = ModSpriteTexture { texture, frame };
+        let texture = self.base(mod_id, path, field)?.clamped_to(frame_rect(frame));
+        let result = ModSpriteTexture { texture, frame, sampling: TextureSampling::Texture };
         self.frames.insert(key, result.clone());
         Ok(result)
     }
@@ -361,6 +357,10 @@ pub fn mod_wearable_frame(
 
 fn asset_key(mod_id: &str, path: &str) -> String {
     format!("{}\0{}", mod_id.to_lowercase(), path.to_lowercase())
+}
+
+fn frame_rect(frame: ModSpriteFrame) -> [f32; 4] {
+    [frame.x as f32, frame.y as f32, frame.width as f32, frame.height as f32]
 }
 
 fn mod_wearable_rows(width: f64, height: f64, slot: ModWearableSlot) -> Option<usize> {

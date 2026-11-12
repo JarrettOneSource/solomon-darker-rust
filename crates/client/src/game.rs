@@ -505,7 +505,7 @@ impl Game {
         }
         self.spell_view.reset();
         self.scene.reset_overlays();
-        self.battle_views.reset();
+        self.battle_views.reset(&mut self.renderer);
         self.world_screen_feedback.reset();
         self.level_up.clear();
         if let Some(mut cursor) = self.combat_audio.take() {

@@ -74,7 +74,7 @@ impl GpuPainter {
                 );
                 let marker = &paint.records[2];
                 renderer.draw_quad(
-                    &atlas,
+                    &atlas.clamped_to(marker.atlas_rect()),
                     record_source(marker),
                     positions(paint.marker_positions),
                     [[paint.frame.marker_red, 1.0, 1.0, paint.opacity]; 4],
@@ -95,7 +95,7 @@ fn draw_record(
 ) {
     let [left, top] = record.registered_origin();
     renderer.draw(
-        atlas,
+        &atlas.clamped_to(record.atlas_rect()),
         Quad {
             source: record_source(record),
             destination: [

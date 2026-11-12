@@ -2,9 +2,10 @@
 
 ## Title and College rendering
 
-The sprite program retains its projection, pixel-center offset, crop bounds and
-two premultiplication values. Each draw uploads only the values that changed;
-program activation, batch order, geometry and shaders remain the same.
+The sprite program retains its projection, pixel-center offset and two
+premultiplication values. Each draw uploads only the values that changed.
+Record bounds now travel with vertices, as described below; the historical
+October comparison measured the earlier uniform-cache change.
 
 Measurements on 2026-10-31 compare this change with `f4e79a9d` on an Apple M2,
 using Rust 1.98.1 release builds and Chrome 156.0.8078.74 with ANGLE/Metal. Each
@@ -46,6 +47,40 @@ The reproducible driver and exact build identities are retained in
 `baseline-build/receipt.json`, `candidate-build/receipt.json`, the candidate
 source patch, `comparison-suite.json` and `comparison-review.json`. Native and
 browser composition probes cover projection, blend, crop and program restoration.
+
+## Atlas record batches
+
+Complete source-record bounds travel with every vertex instead of changing a
+uniform between records. The ordinary and effect programs clamp only the sample
+coordinate; native UV interpolation and geometry remain unchanged. Different
+records and an unbounded view of one atlas can share a draw. Whole-image,
+repeating, masked and captured sources retain their own sampling contracts.
+
+A November 12 Apple M2/ANGLE Metal control compares `f2001f48` with the new
+renderer using the identical `batch_cost` example, Rust 1.98.1 release builds,
+Chrome 157.0.8103.50, a 512x512 buffer, 64 atlas records and no concurrent build
+or test load. Six alternating rounds each submit eight complete frames after
+warmup. Each frame flushes the real renderer and calls GL finish; separate
+observations check visible pixels and actual draw calls. Values below are
+medians of round mean call times, rounded to hundredths of a millisecond.
+
+| Quads | Sampling | Previous / current draws | Previous / current call time, ms |
+| ---: | --- | ---: | ---: |
+| 256 | Unbounded | 1 / 1 | 0.01 / 0.02 |
+| 256 | Isolated records | 256 / 1 | 0.17 / 0.02 |
+| 4096 | Unbounded | 1 / 1 | 0.16 / 0.21 |
+| 4096 | Isolated records | 4096 / 1 | 3.84 / 0.23 |
+
+The bounds attribute expands vertices from eight to twelve floats. That has a
+measurable submission cost for already unbounded batches, while replacing
+per-record flushes substantially reduces the cost of isolated draws. The
+browser timer has 0.1ms granularity, so the smallest differences are coarse;
+these microbenchmarks establish neither game frame rate nor isolated GPU time.
+The repeatable driver is `tools/browser-smoke/gpu-batch-cost.cjs`, supplied with
+`PW`, `BASELINE_DIR`, `CANDIDATE_DIR` and `OUT`. Both directories contain
+`wasm-bindgen --target web` output from the same `batch_cost` example built
+against the respective renderer. Its receipt records artifact hashes, GPU
+identity, pixels, draw counts and every round.
 
 ## Boulder collision exclusions
 
@@ -97,6 +132,44 @@ identify the current exclusion-lookup cost; they do not replay hosted transport,
 two-player stalls, the original saved bearing, reporter hardware or the
 unspecified October31 recurrence. The historical duplicate split-painter repair,
 More Missiles count and Smart Missiles guidance remain separate contracts.
+
+## Point-contact target ownership
+
+Point contacts borrow immutable scenery targets and the current enemy/Maggot rows
+instead of cloning both collections and their ID strings for every projectile.
+The same query accepts slices or chained target iterators. It preserves cell
+priority, first-occurrence ties, eligibility, strict radii and Fire's hostile
+corridor. Enemy rows still rebuild between contacts after gameplay mutations;
+there is no mutable cache. Ether creates an owned continuation list only after
+an actual piercing hit needs it.
+
+The November 12 Apple M2 comparison restores the unmodified original Report 9,
+87, 115 and late 118 documents through the public save codec. Three alternating
+baseline/candidate pairs use identical held-input sequences. Report 9 runs for
+60 ticks, before its level-up barrier; each other control runs for 1,000 ticks.
+All 24 final checkpoints are byte-identical within their report, spanning 18,360
+advanced ticks. Independent targeting cases also cover split-list ordering,
+current eligibility and the hostile corridor.
+
+| Original workload | Before mean / p95, ms | Borrowed targets mean / p95, ms |
+| --- | ---: | ---: |
+| Report 9, 60 ticks | 1.992 / 2.740 | 1.993 / 2.697 |
+| Report 87, Burning Bolt | 1.185 / 2.026 | 0.969 / 1.804 |
+| Report 115, Frost Missile | 0.780 / 1.403 | 0.531 / 1.144 |
+| Late Report 118, Flame | 0.452 / 0.772 | 0.456 / 0.770 |
+
+Values are medians of run means and p95s. The native driver uses Rust 1.98.1,
+optimization level 3, no LTO and 16 codegen units, with setup and final checkpoint
+encoding outside the step timer. No compiler or profiler runs during timing.
+The pointer is 500 world units from the wizard's feet along its original saved
+direction; the casting-origin offset slightly changes the resulting bearing.
+These are identical-input controls, not exact historical input replays.
+
+The measured mean cost falls by 18.2% for Burning Bolt and 31.9% for Frost
+Missile. Report 9 and Flame show no meaningful change. This establishes a
+bounded native simulation improvement and state preservation; it does not
+measure browser frame rate, hosted autosave latency or reporter hardware, and
+does not resolve the historical lag claims.
 
 ## Broader measured scope
 
@@ -161,18 +234,62 @@ Already encoded world and continuation JSON trees move into their parent objects
 `json!` would serialize and copy those full subtrees again. This change preserves
 the same values, map ordering and final document bytes.
 
-Original-workload diagnostic controls correlate the 3,000-host-tick autosave with
-accepted-world holds. Native Report 81 publication falls from 120.3 to 24.1 ms;
-the final Report 87 control takes 35.8 ms versus 221.7 ms. Neither control observes
-an accepted-world hold above 80 ms. The corresponding Pixi publications fall from
+Before the bounded hosted encoder, original-workload controls correlated the
+3,000-host-tick autosave with accepted-world holds. Native Report 81 publication
+fell from 120.3 to 24.1 ms;
+the Report 87 control took 35.8 ms versus 221.7 ms. Neither control observed
+an accepted-world hold above 80 ms. The corresponding Pixi publications fell from
 54.7/36.9 to 26.3/20.8 ms. Later native signed checkpoints are durably stored
 byte-for-byte as published, with transfer ACK observed separately; exact
 token/document and recovery integration checks pass. These retain full scenes
 and rules, but natural population/admission and local instrumentation limit
-comparisons. The final heavy Report 37 control still blocks publication for
+comparisons. The heavy Report 37 control blocked publication for
 158.3 ms at 7.60 MB, with a 199.9 ms accepted-world hold and a 51.8 ms frozen-client
 receive callback. Earlier prepared-only controls took 268.1 ms at 8.77 MB. No exact
 speed ratio, full lag or public-network qualification follows.
+
+## Hosted autonomous saves
+
+The Supervisor captures periodic, dirty and terminal player saves once, then uses
+one background encoder for canonical document creation, signing and transfer
+preparation. Pending work remains coalesced player IDs, selected fairly across
+Colleges and players. Explicit Leave and deployment publication still completes
+synchronously before its exact-sequence receipt. The worker does not own a Lua VM,
+authoritative state or socket input processing.
+
+The local M2 control crosses actual shared host tick 3,000 with original Report 37
+paused and Report 87 held-input saves, plus an independent College peer. The
+release-profile diagnostic uses Rust 1.98.1, opt3, LTO and one codegen unit;
+diagnostic source is restored before executing the copied test binary. The old
+creator's session clone alone took about 0.14 ms. The new capture measurement
+includes identity, metadata/mod export, recovery bindings and owned world/content.
+
+| Original workload | Before authority publication, ms | Owned capture, ms | Prepared admission, ms | Background encode/preparation, ms |
+| --- | ---: | ---: | ---: | ---: |
+| Report 37, paused | 52.636 | 0.163 | 0.0043 | 50.602 |
+| Report 87, held input | 30.647 | 0.144 | 0.0033 | 30.534 |
+
+Capture and admission occur on separate authority iterations. The fair scheduler
+selects the independent College first at shared tick 3,000, then the report owner
+when the encoder is available; its short boundary tick is not an owner-tick
+comparison. Natural admission/input timing changes the captured tick and document
+size. Candidate periodic documents contain 3,169,023 and 1,158,211 bytes; these
+are original-save workload controls, not identical-state codec timings. The
+complete baseline authority ticks were 53.893 and 34.142 ms.
+
+All three 35-second controls finish normal Save Before Leave. Final continuations
+for paused Report 37 and held Report 87 verify their signatures. Held Report 37
+reaches Game Over before the periodic boundary and publishes a valid 20,579-byte
+terminal profile; a later equivalent profile keeps its existing sequence. Maximum
+independent-peer snapshot gaps are 64.95, 64.35 and 63.89 ms across paused 37,
+held 37 and held 87; owner maxima are 64.34, 70.33 and 67.97 ms. Forced Leave
+encoding remains synchronous by design.
+
+These controls measure native authority work and signed continuation compatibility;
+they do not establish browser frame rate, public-network performance or closure of
+historical lag reports. The authority suite retains controlled scheduling,
+frozen-document/raw-signature compatibility, staged recovery, fair coalescing,
+forced-publication, stale-result and permanent-versus-retained disconnect cases.
 
 ## Native kernel and codec measurements
 

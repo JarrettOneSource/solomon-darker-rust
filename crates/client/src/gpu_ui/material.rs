@@ -29,6 +29,7 @@ pub(super) struct Material {
     blend: u8,
     pub mask: bool,
     pub sampling: TextureSampling,
+    source_bounds: Option<[u32; 4]>,
     brightness: u32,
     saturation: u32,
     shadow: Option<ShadowKey>,
@@ -45,6 +46,7 @@ impl Material {
             },
             mask,
             sampling: TextureSampling::Texture,
+            source_bounds: None,
             brightness: filter.brightness.to_bits(),
             saturation: filter.saturation.to_bits(),
             shadow: None,
@@ -54,6 +56,17 @@ impl Material {
     pub fn with_sampling(mut self, sampling: TextureSampling) -> Self {
         self.sampling = sampling;
         self
+    }
+
+    pub fn with_source_bounds(mut self, source: Option<egui::Rect>) -> Self {
+        self.source_bounds = source.map(|source| {
+            [source.left(), source.top(), source.width(), source.height()].map(f32::to_bits)
+        });
+        self
+    }
+
+    pub fn source_bounds(self) -> Option<[f32; 4]> {
+        self.source_bounds.map(|source| source.map(f32::from_bits))
     }
 
     pub fn with_shadow(mut self, shadow: AlphaShadow) -> Self {

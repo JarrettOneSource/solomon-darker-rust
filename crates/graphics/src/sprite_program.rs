@@ -9,14 +9,14 @@ const FRAGMENT_SHADER: &str = r"#version 300 es
 precision mediump float;
 in highp vec2 v_uv;
 in vec4 v_color;
+flat in highp vec4 v_texture_bounds;
 uniform sampler2D u_texture;
-uniform highp vec4 u_texture_bounds;
 uniform float u_premultiply_rgb;
 uniform float u_texture_premultiplied;
 out vec4 o_color;
 void main() {
-    highp vec2 uv = u_texture_bounds.z >= u_texture_bounds.x
-        ? clamp(v_uv, u_texture_bounds.xy, u_texture_bounds.zw) : v_uv;
+    highp vec2 uv = v_texture_bounds.z >= v_texture_bounds.x
+        ? clamp(v_uv, v_texture_bounds.xy, v_texture_bounds.zw) : v_uv;
     vec4 texel = texture(u_texture, uv);
     if (u_texture_premultiplied > 0.5 && texel.a > 0.0) {
         texel.rgb /= texel.a;
@@ -35,7 +35,6 @@ pub(super) struct SpriteProgram {
     pixel_center_offset: glow::UniformLocation,
     premultiply_rgb: glow::UniformLocation,
     texture_premultiplied: glow::UniformLocation,
-    texture_bounds: glow::UniformLocation,
     uniforms: Option<Uniforms>,
 }
 
@@ -43,7 +42,6 @@ pub(super) struct SpriteProgram {
 struct Uniforms {
     logical: [f32; 2],
     offset: [f32; 2],
-    bounds: [f32; 4],
     premultiply_rgb: bool,
     texture_premultiplied: bool,
 }
@@ -66,7 +64,6 @@ impl SpriteProgram {
                     pixel_center_offset: uniform("u_pixel_center_offset")?,
                     premultiply_rgb: uniform("u_premultiply_rgb")?,
                     texture_premultiplied: uniform("u_texture_premultiplied")?,
-                    texture_bounds: uniform("u_texture_bounds")?,
                     uniforms: None,
                 };
                 gl.use_program(Some(program));
@@ -86,12 +83,10 @@ impl SpriteProgram {
         offset: [f32; 2],
         blend: BlendMode,
         color_mode: TextureColorMode,
-        bounds: Option<[f32; 4]>,
     ) {
         let uniforms = Uniforms {
             logical,
             offset,
-            bounds: bounds.unwrap_or([1.0, 1.0, 0.0, 0.0]),
             premultiply_rgb: blend != BlendMode::Multiply,
             texture_premultiplied: color_mode == TextureColorMode::Premultiplied,
         };
@@ -99,15 +94,12 @@ impl SpriteProgram {
         unsafe {
             self.gl.use_program(Some(self.program));
             // Uniform values belong to this program and survive effect-program draws.
-            // A new projection, crop or colour mode updates only its changed values.
+            // A new projection or colour mode updates only its changed values.
             if self.uniforms.is_none_or(|previous| previous.logical != uniforms.logical) {
                 self.gl.uniform_2_f32_slice(Some(&self.logical_size), &uniforms.logical);
             }
             if self.uniforms.is_none_or(|previous| previous.offset != uniforms.offset) {
                 self.gl.uniform_2_f32_slice(Some(&self.pixel_center_offset), &uniforms.offset);
-            }
-            if self.uniforms.is_none_or(|previous| previous.bounds != uniforms.bounds) {
-                self.gl.uniform_4_f32_slice(Some(&self.texture_bounds), &uniforms.bounds);
             }
             if self
                 .uniforms

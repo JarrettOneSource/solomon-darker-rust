@@ -31,6 +31,11 @@ Painting and input share the same transformed viewport. Inverse-transform the
 browser viewport before clipping a design-space Area; clipping against unscaled
 CSS coordinates can discard valid controls before the layer transform. Compact
 player panels reserve a 48-pixel navigation bar above their scrolling body.
+Its 40-pixel buttons scale stock chrome and text from the same 69-unit body;
+a 128-pixel minimum width retains at least half-size native label ink, including
+Backpack and the pressed skull clearance. The toolbar scrolls horizontally when
+those controls do not fit. Inventory, Skills/Boasts and every College service
+share this layout, including when an open panel changes orientation.
 Rendering, hit regions, and raw pointer/wheel admission use the same body clip,
 and an active drag retains its owner through release or cancellation outside it.
 
@@ -251,6 +256,23 @@ interaction rules. Regression recordings retain their actual provenance;
 Source checks verify GPU ownership and resource paths. Browser journeys use
 ordinary input and read-only geometry/state observations. Review screenshots and
 collect page errors, console errors, failed requests, and cleanup results.
+
+`gpu-ui-atlas.cjs`, `gpu-loader-font.cjs`, and `gpu-mod-atlas.cjs` exercise the
+actual UI, loader and authored-frame owners. Build the client or loader with
+`--features browser-fixtures`, then pass its `wasm-bindgen --target web` output
+as `CLIENT_DIR` or `LOADER_DIR`. Their `FIXTURE_DIR` contains exact RGBA texels,
+exported with the existing native PNG decoder:
+
+```sh
+cargo run -p solomon-graphics --example atlas_pixels -- target/atlas-pixels \
+  web/assets/stock/UI.png web/assets/stock/Create.png web/assets/stock/Fonts.png
+```
+
+Supply `PW` with the installed Playwright module path and `OUT` with a receipt
+directory. These drivers serve their own isolated loopback fixture pages. The
+independent crops preserve hidden RGB and alpha bytes; a Canvas conversion is
+not the source for those comparisons. `gpu-composition.cjs` separately covers
+the shared submission paths, mixed-record batching and stock page records.
 
 Use full painted glyph/card bounds for layout assertions and clipped hit bounds
 for pointer targeting. Clipping must not make an overflowing title appear to fit.

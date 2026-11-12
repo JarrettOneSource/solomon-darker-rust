@@ -1,6 +1,8 @@
 //! World nameplates, speech bubbles for accepted chat, and Hub activity badges.
 //! These screen-space layers follow the final world camera and precede screen feedback.
 
+#[cfg(all(target_arch = "wasm32", feature = "browser-fixtures"))]
+mod atlas_fixture;
 mod graphics;
 
 use solomon_protocol::HubActivity;
@@ -18,7 +20,7 @@ use graphics::{
     chamfered_plate, circle, circle_stroke, diamond, polygon, rectangle, round_rectangle,
 };
 use solomon_graphics::assets;
-use solomon_graphics::{BlendMode, Quad, Renderer, Texture};
+use solomon_graphics::{BlendMode, Quad, Renderer, Texture, TextureSampling};
 
 /// One player's nameplate, speech and activity badge inputs for a frame.
 pub struct WorldOverlayPlayer<'a> {
@@ -180,21 +182,23 @@ impl WorldOverlaysView {
         self.prepare_activities(&players, frame, &mut diagnostics);
         self.prepare_speech(&players, frame, &mut diagnostics);
         renderer.set_saturation(1.0);
-        for view in &self.nameplates {
-            if let Some(position) = view.position {
-                self.draw_nameplate(renderer, position, view);
+        renderer.draw_sampled(TextureSampling::Nearest, |renderer| {
+            for view in &self.nameplates {
+                if let Some(position) = view.position {
+                    self.draw_nameplate(renderer, position, view);
+                }
             }
-        }
-        for view in &self.activities {
-            if let Some(position) = view.position {
-                draw_activity(renderer, position, view.activity);
+            for view in &self.activities {
+                if let Some(position) = view.position {
+                    draw_activity(renderer, position, view.activity);
+                }
             }
-        }
-        for view in &self.speech_views {
-            if let Some(position) = view.position {
-                self.draw_speech(renderer, position, &view.layout, view.alpha);
+            for view in &self.speech_views {
+                if let Some(position) = view.position {
+                    self.draw_speech(renderer, position, &view.layout, view.alpha);
+                }
             }
-        }
+        });
         diagnostics
     }
 
@@ -446,7 +450,7 @@ impl WorldOverlaysView {
         let glyph = layout.glyph;
         let [_, _, width, height] = glyph.frame;
         renderer.draw(
-            &self.font_atlas,
+            &self.font_atlas.clamped_to(glyph.frame.map(|value| value as f32)),
             Quad {
                 source: sprite_frame_texel_rect(glyph.frame),
                 destination: [

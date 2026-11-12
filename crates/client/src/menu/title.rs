@@ -156,7 +156,7 @@ impl TitleView {
                     w * row.scale,
                     h * row.scale,
                 );
-                frame.image_rotated(
+                frame.with_sprite_record(record).image_rotated(
                     ui.painter(),
                     self.atlas.path(),
                     rect,

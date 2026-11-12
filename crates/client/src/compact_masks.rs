@@ -40,7 +40,7 @@ pub fn draw_environment_aperture(
     let record = &atlas.records[DIRECT_ENVIRONMENT_LIGHT_ENTRY];
     let alpha = direct_environment_light_alpha(now_ms, slot);
     renderer.draw(
-        &atlas.texture,
+        &atlas.texture.clamped_to(record.atlas_rect()),
         Quad {
             source: sprite_texel_rect(record),
             destination: camera.project(
@@ -239,7 +239,7 @@ impl PlayerMaskTarget {
             let width = f64::from(record.width);
             let height = f64::from(record.height);
             renderer.draw(
-                &atlas.texture,
+                &atlas.texture.clamped_to(record.atlas_rect()),
                 Quad {
                     source: sprite_texel_rect(record),
                     destination: [

@@ -5,6 +5,8 @@
 //! platform input/accessibility adapters and the renderer's GPU resource lifetime.
 
 mod accessibility;
+#[cfg(all(target_arch = "wasm32", feature = "browser-fixtures"))]
+mod atlas_fixture;
 mod batches;
 mod edit;
 mod effects;
@@ -211,6 +213,7 @@ pub struct UiFrame<'a> {
     key_codes: &'a [KeyStroke],
     blend: BlendMode,
     color_filter: ColorFilter,
+    image_bounds: Option<Rect>,
     announcements: &'a RefCell<Vec<accessibility::Announcement>>,
     rotation: egui::emath::Rot2,
     translation: Vec2,
@@ -374,6 +377,7 @@ impl UiFrame<'_> {
             key_codes: self.key_codes,
             blend,
             color_filter: self.color_filter,
+            image_bounds: self.image_bounds,
             announcements: self.announcements,
             rotation: self.rotation,
             translation: self.translation,
@@ -385,6 +389,17 @@ impl UiFrame<'_> {
             editor_errors: self.editor_errors,
             native_click_count: self.native_click_count,
         }
+    }
+    /// Isolates one source image while preserving its UVs, slices and transforms.
+    pub fn with_image_bounds(&self, source: Rect) -> UiFrame<'_> {
+        let mut frame = self.with_blend(self.blend);
+        frame.image_bounds = Some(Rect::from_two_pos(source.min, source.max));
+        frame
+    }
+
+    pub fn with_sprite_record(&self, record: &solomon_assets::SpriteRecord) -> UiFrame<'_> {
+        let [left, top, width, height] = record.atlas_rect();
+        self.with_image_bounds(Rect::from_min_size(pos2(left, top), vec2(width, height)))
     }
     /// Sets the image RGB gain for this view; stock bitmap text inherits it.
     pub fn with_brightness(&self, brightness: f32) -> UiFrame<'_> {
@@ -465,6 +480,7 @@ impl UiFrame<'_> {
             self.color_filter,
             None,
             sampling,
+            self.image_bounds,
         ) else {
             return false;
         };
@@ -529,7 +545,7 @@ impl UiFrame<'_> {
             self.images.request(path);
             return false;
         };
-        self.image(
+        self.with_image_bounds(self.image_bounds.unwrap_or(source)).image(
             painter,
             path,
             destination,
@@ -595,9 +611,14 @@ impl UiFrame<'_> {
             (source.max.to_vec2() / size).to_pos2(),
         );
         let (destination, uv, shadow) = geometry::shadow_geometry(uv, destination, shadow);
-        let Some(texture_id) =
-            self.images.texture_id(path, BlendMode::Normal, false, self.color_filter, Some(shadow))
-        else {
+        let Some(texture_id) = self.images.texture_id(
+            path,
+            BlendMode::Normal,
+            false,
+            self.color_filter,
+            Some(shadow),
+            self.image_bounds,
+        ) else {
             return false;
         };
         self.paint_texture_quad(
@@ -663,7 +684,8 @@ impl UiFrame<'_> {
         tint: Color32,
         blend: BlendMode,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, false, self.color_filter, None)
+        let Some(texture_id) =
+            self.images.texture_id(path, blend, false, self.color_filter, None, self.image_bounds)
         else {
             return false;
         };
@@ -714,7 +736,8 @@ impl UiFrame<'_> {
         blend: BlendMode,
         mask: bool,
     ) -> bool {
-        let Some(texture_id) = self.images.texture_id(path, blend, mask, self.color_filter, None)
+        let Some(texture_id) =
+            self.images.texture_id(path, blend, mask, self.color_filter, None, self.image_bounds)
         else {
             return false;
         };
@@ -1272,6 +1295,7 @@ impl GpuUi {
                 key_codes: &pass.codes,
                 blend: BlendMode::Normal,
                 color_filter: ColorFilter::default(),
+                image_bounds: None,
                 announcements: &announcements,
                 rotation: egui::emath::Rot2::IDENTITY,
                 translation: Vec2::ZERO,

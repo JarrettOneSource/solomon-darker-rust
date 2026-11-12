@@ -161,13 +161,23 @@ impl PeerSender {
         sequence: u64,
         atomic: bool,
     ) -> Result<(), String> {
+        self.publish_prepared_save_checkpoint(PreparedSaveCheckpoint::new(
+            save, reason, sequence, atomic,
+        )?)
+    }
+
+    /// Admit an already encoded checkpoint through the same sequence and queue bounds.
+    pub fn publish_prepared_save_checkpoint(
+        &self,
+        prepared: PreparedSaveCheckpoint,
+    ) -> Result<(), String> {
         let messages = self
             .0
             .transfers
             .lock()
             .expect("transfer producers never panic while locked")
             .save
-            .publish(Checkpoint { save, reason, sequence }, atomic)?;
+            .publish(prepared)?;
         self.send_checkpoint_messages(messages)
     }
 
@@ -186,11 +196,8 @@ impl PeerSender {
         self.send_checkpoint_messages(messages)
     }
 
-    fn send_checkpoint_messages(&self, messages: Vec<HostedServerMessage>) -> Result<(), String> {
-        for message in messages {
-            let payload = serde_json::to_string(&ServerMessage::<()>::Hosted { message })
-                .map(Arc::from)
-                .map_err(|error| format!("Cannot encode a save transfer: {error}"))?;
+    fn send_checkpoint_messages(&self, messages: Vec<Arc<str>>) -> Result<(), String> {
+        for payload in messages {
             match self.send_reliable(payload) {
                 Ok(()) | Err(PeerSendError::Closed) => {}
                 Err(PeerSendError::ReliableQueueFull) => {
@@ -215,11 +222,52 @@ fn welcome_chunk(chunk: GameStringChunk) -> Arc<str> {
     .into()
 }
 
-struct Checkpoint {
-    save: String,
-    reason: SaveCheckpointReason,
+/// A checkpoint's complete JSON or UTF-16 stream, prepared away from the authority.
+/// Preparation does not reserve a sequence or publish any part of the document.
+pub struct PreparedSaveCheckpoint {
     sequence: u64,
+    payload: PreparedCheckpointPayload,
 }
+
+enum PreparedCheckpointPayload {
+    Atomic(Arc<str>),
+    Stream(PreparedCheckpointStream),
+}
+
+struct PreparedCheckpointStream {
+    current: SendingCheckpoint,
+    initial_messages: Vec<Arc<str>>,
+}
+
+impl PreparedSaveCheckpoint {
+    pub fn new(
+        save: String,
+        reason: SaveCheckpointReason,
+        sequence: u64,
+        atomic: bool,
+    ) -> Result<Self, String> {
+        if !atomic {
+            let data: Vec<u16> = save.encode_utf16().collect();
+            if data.len() > GAME_STRING_STREAM_THRESHOLD {
+                let mut sender = GameStringSender::new(data)?;
+                let chunks = sender.start();
+                let current = SendingCheckpoint { sender, reason, sequence };
+                let initial_messages = save_chunks(&current, chunks)?;
+                return Ok(Self {
+                    sequence,
+                    payload: PreparedCheckpointPayload::Stream(PreparedCheckpointStream {
+                        current,
+                        initial_messages,
+                    }),
+                });
+            }
+        }
+        let message = HostedServerMessage::SaveCheckpoint { save, reason, sequence };
+        let payload = encode_checkpoint_message(message)?;
+        Ok(Self { sequence, payload: PreparedCheckpointPayload::Atomic(payload) })
+    }
+}
+
 struct SendingCheckpoint {
     sender: GameStringSender,
     reason: SaveCheckpointReason,
@@ -231,50 +279,37 @@ struct SendingCheckpoint {
 pub(super) struct SaveCheckpointSender {
     sequence: u64,
     current: Option<SendingCheckpoint>,
-    pending: Option<Checkpoint>,
+    pending: Option<PreparedCheckpointStream>,
 }
 
 impl SaveCheckpointSender {
-    fn publish(
-        &mut self,
-        message: Checkpoint,
-        atomic: bool,
-    ) -> Result<Vec<HostedServerMessage>, String> {
+    fn publish(&mut self, message: PreparedSaveCheckpoint) -> Result<Vec<Arc<str>>, String> {
         if message.sequence <= self.sequence {
             return Err("Checkpoint publication sequence must advance".into());
         }
         self.sequence = message.sequence;
-        if atomic || message.save.encode_utf16().count() <= GAME_STRING_STREAM_THRESHOLD {
-            self.close();
-            return Ok(vec![HostedServerMessage::SaveCheckpoint {
-                save: message.save,
-                reason: message.reason,
-                sequence: message.sequence,
-            }]);
+        match message.payload {
+            PreparedCheckpointPayload::Atomic(payload) => {
+                self.close();
+                Ok(vec![payload])
+            }
+            PreparedCheckpointPayload::Stream(stream) => {
+                if self.current.is_some() {
+                    self.pending = Some(stream);
+                    Ok(Vec::new())
+                } else {
+                    Ok(self.start(stream))
+                }
+            }
         }
-        if self.current.is_some() {
-            self.pending = Some(message);
-            return Ok(Vec::new());
-        }
-        Ok(self.start(message))
     }
 
-    fn start(&mut self, message: Checkpoint) -> Vec<HostedServerMessage> {
-        let mut sender = GameStringSender::new(message.save.encode_utf16().collect())
-            .expect("streamed saves are nonempty");
-        let chunks = sender.start();
-        let current =
-            SendingCheckpoint { sender, reason: message.reason, sequence: message.sequence };
-        let messages = save_chunks(&current, chunks);
-        self.current = Some(current);
-        messages
+    fn start(&mut self, stream: PreparedCheckpointStream) -> Vec<Arc<str>> {
+        self.current = Some(stream.current);
+        stream.initial_messages
     }
 
-    fn acknowledge(
-        &mut self,
-        sequence: u64,
-        next_offset: usize,
-    ) -> Result<Vec<HostedServerMessage>, String> {
+    fn acknowledge(&mut self, sequence: u64, next_offset: usize) -> Result<Vec<Arc<str>>, String> {
         if sequence > self.sequence {
             return Err("Checkpoint acknowledgment refers to an unsent sequence".into());
         }
@@ -292,7 +327,7 @@ impl SaveCheckpointSender {
             self.current = None;
             return Ok(self.pending.take().map(|next| self.start(next)).unwrap_or_default());
         }
-        Ok(save_chunks(current, progress.chunks))
+        save_chunks(current, progress.chunks)
     }
 
     pub(super) fn close(&mut self) {
@@ -304,17 +339,25 @@ impl SaveCheckpointSender {
 fn save_chunks(
     current: &SendingCheckpoint,
     chunks: Vec<GameStringChunk>,
-) -> Vec<HostedServerMessage> {
+) -> Result<Vec<Arc<str>>, String> {
     chunks
         .into_iter()
-        .map(|chunk| HostedServerMessage::SaveCheckpointChunk {
-            data: chunk.data,
-            offset: chunk.offset,
-            total_length: chunk.total_length,
-            reason: current.reason,
-            sequence: current.sequence,
+        .map(|chunk| {
+            encode_checkpoint_message(HostedServerMessage::SaveCheckpointChunk {
+                data: chunk.data,
+                offset: chunk.offset,
+                total_length: chunk.total_length,
+                reason: current.reason,
+                sequence: current.sequence,
+            })
         })
         .collect()
+}
+
+fn encode_checkpoint_message(message: HostedServerMessage) -> Result<Arc<str>, String> {
+    serde_json::to_string(&ServerMessage::<()>::Hosted { message })
+        .map(Arc::from)
+        .map_err(|error| format!("Cannot encode a save transfer: {error}"))
 }
 
 #[cfg(test)]

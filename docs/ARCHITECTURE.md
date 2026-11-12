@@ -263,6 +263,16 @@ readiness, pause/resume holds, and durable save receipts. The session owns rules
 A checkpoint writer performs encoding and atomic synced replacement away from
 the tick deadline. Welcome and SaveCommitted wait for their required disk writes.
 
+Hosted player saves use a separate Supervisor-owned encoder for periodic, dirty
+and terminal publication. One complete plain-value capture can be in flight;
+round-robin College/player cursors select later coalesced requests. The authority
+exports live mod state and captures staged participants before handing off the
+world and recovery bindings. Encoding, signing and full transfer preparation run
+on the encoder; the authority admits the returned document only if its captured
+identity and publication sequence are still current. Forced Leave/deployment
+saves retain synchronous document-before-control ordering. See the
+[persistence decision](DECISIONS.md#persistent-state) for cancellation and markers.
+
 The client Welcome receive deadline ends when the full message has been decoded.
 Local validation and durable reconnect-credential storage still precede game
 acceptance and the final chunk acknowledgement. A delayed local operation cannot

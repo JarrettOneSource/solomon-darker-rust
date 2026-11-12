@@ -58,7 +58,7 @@ impl WizardView {
             draw_centered_texture(
                 renderer,
                 camera,
-                &self.atlas,
+                &self.atlas.clamped_to(record.atlas_rect()),
                 sprite_texel_rect(record),
                 Vec2::new(
                     wizard.position.x + f64::from(record.center_x) * shield.scale,
@@ -123,7 +123,7 @@ impl WizardView {
                 draw_centered_texture(
                     renderer,
                     &Camera { origin: Vec2::ZERO, scale: 1.0 },
-                    &self.atlas,
+                    &self.atlas.clamped_to(record.atlas_rect()),
                     sprite_texel_rect(record),
                     Vec2::new(128.0 + offsets.head_offset.x, 128.0 + offsets.head_offset.y),
                     Vec2::new(f64::from(record.width), f64::from(record.height)),
@@ -185,7 +185,7 @@ impl WizardView {
                 [point[0], point[1]]
             });
             renderer.draw_quad(
-                &atlas.texture,
+                &atlas.texture.clamped_to(record.atlas_rect()),
                 sprite_texel_rect(record),
                 corners,
                 [[1.0; 4]; 4],
@@ -194,7 +194,7 @@ impl WizardView {
             if web.hit_pulse > 0.0 {
                 let alpha = packed_alpha(web.hit_pulse);
                 renderer.draw_quad(
-                    &atlas.texture,
+                    &atlas.texture.clamped_to(record.atlas_rect()),
                     sprite_texel_rect(record),
                     corners,
                     [[1.0, 0.0, 0.0, alpha]; 4],

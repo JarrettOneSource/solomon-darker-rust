@@ -1,0 +1,340 @@
+[
+  {
+    "atlas": "BadGuys",
+    "width": 2048,
+    "height": 2048,
+    "record": 258,
+    "source": [
+      255,
+      1115,
+      29,
+      41
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "College",
+    "width": 2048,
+    "height": 2048,
+    "record": 517,
+    "source": [
+      1916,
+      536,
+      59,
+      101
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "College",
+    "width": 2048,
+    "height": 2048,
+    "record": 528,
+    "source": [
+      105,
+      923,
+      54,
+      91
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Create",
+    "width": 1024,
+    "height": 1024,
+    "record": 9,
+    "source": [
+      60,
+      822,
+      150,
+      84
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Create",
+    "width": 1024,
+    "height": 1024,
+    "record": 11,
+    "source": [
+      381,
+      143,
+      96,
+      80
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Create",
+    "width": 1024,
+    "height": 1024,
+    "record": 12,
+    "source": [
+      506,
+      160,
+      157,
+      77
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Golem",
+    "width": 512,
+    "height": 512,
+    "record": 9,
+    "source": [
+      146,
+      265,
+      31,
+      45
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "Golem",
+    "width": 512,
+    "height": 512,
+    "record": 61,
+    "source": [
+      97,
+      105,
+      49,
+      45
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "Golem",
+    "width": 512,
+    "height": 512,
+    "record": 199,
+    "source": [
+      353,
+      149,
+      28,
+      32
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "UI",
+    "width": 1024,
+    "height": 1024,
+    "record": 3,
+    "source": [
+      0,
+      328,
+      211,
+      94
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "UI",
+    "width": 1024,
+    "height": 1024,
+    "record": 37,
+    "source": [
+      266,
+      129,
+      413,
+      75
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "UI",
+    "width": 1024,
+    "height": 1024,
+    "record": 49,
+    "source": [
+      1,
+      63,
+      264,
+      264
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "UI",
+    "width": 1024,
+    "height": 1024,
+    "record": 62,
+    "source": [
+      266,
+      205,
+      276,
+      276
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Bonedit",
+    "width": 1024,
+    "height": 512,
+    "record": 17,
+    "source": [
+      84,
+      42,
+      19,
+      16
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Clothes",
+    "width": 2048,
+    "height": 1024,
+    "record": 0,
+    "source": [
+      1667,
+      633,
+      130,
+      130
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "ControlPanel",
+    "width": 512,
+    "height": 128,
+    "record": 2,
+    "source": [
+      436,
+      62,
+      63,
+      62
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "DeadHawg",
+    "width": 2048,
+    "height": 2048,
+    "record": 110,
+    "source": [
+      1082,
+      1210,
+      42,
+      49
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "Demon",
+    "width": 512,
+    "height": 512,
+    "record": 0,
+    "source": [
+      71,
+      31,
+      3,
+      3
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "Faculty",
+    "width": 1024,
+    "height": 1024,
+    "record": 0,
+    "source": [
+      136,
+      9,
+      3,
+      3
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "Heartmonger",
+    "width": 1024,
+    "height": 1024,
+    "record": 0,
+    "source": [
+      442,
+      412,
+      91,
+      104
+    ],
+    "uv": "native"
+  },
+  {
+    "atlas": "Inventory",
+    "width": 1024,
+    "height": 512,
+    "record": 47,
+    "source": [
+      175,
+      294,
+      50,
+      49
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "LevelPicker",
+    "width": 1024,
+    "height": 1024,
+    "record": 0,
+    "source": [
+      362,
+      0,
+      95,
+      93
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Library",
+    "width": 1024,
+    "height": 1024,
+    "record": 1,
+    "source": [
+      338,
+      74,
+      26,
+      40
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Skills",
+    "width": 1024,
+    "height": 512,
+    "record": 69,
+    "source": [
+      386,
+      356,
+      43,
+      41
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Title",
+    "width": 2048,
+    "height": 1024,
+    "record": 0,
+    "source": [
+      807,
+      558,
+      512,
+      218
+    ],
+    "uv": "raw"
+  },
+  {
+    "atlas": "Unholy",
+    "width": 1024,
+    "height": 1024,
+    "record": 0,
+    "source": [
+      49,
+      338,
+      5,
+      34
+    ],
+    "uv": "native"
+  }
+]

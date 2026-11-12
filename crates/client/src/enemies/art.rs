@@ -112,13 +112,13 @@ impl EnemyAtlases {
         }]
     }
 
-    pub(super) fn sprite(&self, atlas: EnemyArtAtlas, entry: usize) -> (&Texture, &SpriteRecord) {
+    pub(super) fn sprite(&self, atlas: EnemyArtAtlas, entry: usize) -> (Texture, &SpriteRecord) {
         let bank = self.bank(atlas);
         let record = bank
             .records
             .get(entry)
             .unwrap_or_else(|| panic!("{} is missing stock record {entry}", atlas.id()));
-        (&bank.texture, record)
+        (bank.texture.clamped_to(record.atlas_rect()), record)
     }
 
     pub(super) fn demon_atlas(&self) -> crate::spells::StockAtlas {
@@ -189,7 +189,7 @@ impl EnemyView {
                     });
                     // These trapezoids keep the native diagonal; changing it changes glyph UVs.
                     renderer.draw_triangles(
-                        texture,
+                        &texture,
                         &[
                             [vertices[0], vertices[1], vertices[2]],
                             [vertices[1], vertices[3], vertices[2]],
@@ -299,7 +299,7 @@ impl EnemyView {
             project(camera, group.position, local)
         });
         renderer.draw_quad_with_color_mode(
-            texture,
+            &texture,
             source(record),
             positions,
             [color(layer.tint, layer.alpha, region_tint); 4],

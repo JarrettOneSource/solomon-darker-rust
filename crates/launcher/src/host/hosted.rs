@@ -35,7 +35,9 @@ pub use rejoin::{
     HostedRecoveryLineage, HostedRejoinRejection, HostedRejoinSlot, HostedRejoinStatus,
     HostedRejoinTarget,
 };
-pub(in crate::host) use saves::PlayerSaveRequest;
+#[cfg(test)]
+pub(in crate::host) use saves::SaveEncodeGate;
+pub(in crate::host) use saves::{PlayerSaveRequest, SaveCompletion, SaveJob};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -156,6 +158,11 @@ pub struct HostedGameHost {
     pub rejoin_slots: Vec<HostedRejoinSlot>,
     pub recovery_lineages: Vec<HostedRecoveryLineage>,
     pub(super) pending_player_saves: BTreeSet<String>,
+    save_instance: Arc<()>,
+    save_player_cursor: usize,
+    autonomous_save_player: Option<String>,
+    #[cfg(test)]
+    pub(super) save_encode_gate: Option<Arc<SaveEncodeGate>>,
     pub(super) next_player_id: u64,
     pub(super) next_snapshot_sequence: u64,
     pub(super) next_chat_sequence: u64,
@@ -244,6 +251,11 @@ impl HostedGameHost {
             rejoin_slots: Vec::new(),
             recovery_lineages: Vec::new(),
             pending_player_saves: BTreeSet::new(),
+            save_instance: Arc::new(()),
+            save_player_cursor: 0,
+            autonomous_save_player: None,
+            #[cfg(test)]
+            save_encode_gate: None,
             next_player_id: 1,
             next_snapshot_sequence: 1,
             next_chat_sequence: 1,

@@ -29,10 +29,12 @@ precision highp float;
 in vec2 a_position;
 in vec2 a_uv;
 in vec4 a_color;
+in vec4 a_texture_bounds;
 uniform vec2 u_logical_size;
 uniform vec2 u_pixel_center_offset;
 out vec2 v_uv;
 out vec4 v_color;
+flat out vec4 v_texture_bounds;
 void main() {
     vec2 position = a_position + u_pixel_center_offset;
     vec2 clip = vec2(
@@ -41,6 +43,7 @@ void main() {
     gl_Position = vec4(clip, 0.0, 1.0);
     v_uv = a_uv;
     v_color = a_color;
+    v_texture_bounds = a_texture_bounds;
 }
 ";
 
@@ -48,8 +51,8 @@ const FRAGMENT_SHADER: &str = r"#version 300 es
 precision mediump float;
 in highp vec2 v_uv;
 in vec4 v_color;
+flat in highp vec4 v_texture_bounds;
 uniform sampler2D u_texture;
-uniform highp vec4 u_texture_bounds;
 uniform float u_saturation;
 uniform float u_alpha_mask;
 uniform float u_white_alpha_filter;
@@ -64,12 +67,16 @@ uniform float u_texture_premultiplied;
 uniform vec4 u_blur_bounds;
 uniform vec2 u_blur_sigma;
 out vec4 o_color;
+highp vec2 record_uv(highp vec2 uv) {
+    return v_texture_bounds.z >= v_texture_bounds.x
+        ? clamp(uv, v_texture_bounds.xy, v_texture_bounds.zw) : uv;
+}
 vec4 bounded_texture(vec2 uv, vec4 bounds) {
     if (any(lessThan(uv, bounds.xy)) || any(greaterThanEqual(uv, bounds.zw))) {
         return vec4(0.0);
     }
-    vec2 halfTexel = 0.5 / vec2(textureSize(u_texture, 0));
-    return textureLod(u_texture, clamp(uv, bounds.xy + halfTexel, bounds.zw - halfTexel), 0.0);
+    vec2 inset = min(0.5 / vec2(textureSize(u_texture, 0)), (bounds.zw - bounds.xy) * 0.5);
+    return textureLod(u_texture, record_uv(clamp(uv, bounds.xy + inset, bounds.zw - inset)), 0.0);
 }
 vec4 cropped_texture(vec2 uv) {
     return bounded_texture(uv, u_shadow_bounds);
@@ -111,8 +118,7 @@ void main() {
         return;
     }
     bool shadow = u_shadow_sigma.x >= 0.0;
-    highp vec2 uv = u_texture_bounds.z >= u_texture_bounds.x
-        ? clamp(v_uv, u_texture_bounds.xy, u_texture_bounds.zw) : v_uv;
+    highp vec2 uv = record_uv(v_uv);
     vec4 texel = shadow ? cropped_texture(v_uv) : texture(u_texture, uv);
     if (u_texture_premultiplied > 0.5 && texel.a > 0.0) {
         texel.rgb /= texel.a;
@@ -153,7 +159,7 @@ void main() {
 }
 ";
 
-const FLOATS_PER_VERTEX: usize = 8;
+const FLOATS_PER_VERTEX: usize = 12;
 
 /// A GPU texture and its size in texels.
 #[derive(Clone)]
@@ -162,6 +168,29 @@ pub struct Texture {
     handle: glow::Texture,
     pub width: f32,
     pub height: f32,
+    sample_bounds: Option<[f32; 4]>,
+}
+
+impl Texture {
+    /// Borrow this atlas with sampling confined to one complete source record.
+    /// The handle, atlas dimensions and texel-coordinate space stay unchanged,
+    /// so clipped slices and transformed meshes retain their original UVs.
+    #[must_use]
+    pub fn clamped_to(&self, [left, top, width, height]: [f32; 4]) -> Self {
+        assert!(width > 0.0 && height > 0.0, "Clamped images have positive dimensions");
+        // Authored frames may span less than one texel; collapse those axes to
+        // their midpoint rather than reversing the sampling interval.
+        let inset_x = 0.5_f32.min(width / 2.0);
+        let inset_y = 0.5_f32.min(height / 2.0);
+        let mut view = self.clone();
+        view.sample_bounds = Some([
+            (left + inset_x) / self.width,
+            (top + inset_y) / self.height,
+            (left + width - inset_x) / self.width,
+            (top + height - inset_y) / self.height,
+        ]);
+        view
+    }
 }
 
 /// An offscreen colour target. Its texture is vertically inverted relative to loaded PNGs.
@@ -315,8 +344,6 @@ pub struct Renderer {
     browser_gl: Option<WebGl2RenderingContext>,
     u_logical_size: glow::UniformLocation,
     u_pixel_center_offset: glow::UniformLocation,
-    u_texture_bounds: glow::UniformLocation,
-    texture_bounds: Option<[f32; 4]>,
     u_saturation: glow::UniformLocation,
     u_alpha_mask: glow::UniformLocation,
     u_white_alpha_filter: glow::UniformLocation,
@@ -423,7 +450,12 @@ impl Renderer {
             let vertex_buffer = gl.create_buffer()?;
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(vertex_buffer));
             let stride = (FLOATS_PER_VERTEX * 4) as i32;
-            for (name, size, offset) in [("a_position", 2, 0), ("a_uv", 2, 8), ("a_color", 4, 16)] {
+            for (name, size, offset) in [
+                ("a_position", 2, 0),
+                ("a_uv", 2, 8),
+                ("a_color", 4, 16),
+                ("a_texture_bounds", 4, 32),
+            ] {
                 let location = gl
                     .get_attrib_location(program, name)
                     .ok_or_else(|| format!("shader attribute {name} is missing"))?;
@@ -438,9 +470,6 @@ impl Renderer {
                 .ok_or("u_pixel_center_offset is missing")?;
             let u_texture =
                 gl.get_uniform_location(program, "u_texture").ok_or("u_texture is missing")?;
-            let u_texture_bounds = gl
-                .get_uniform_location(program, "u_texture_bounds")
-                .ok_or("u_texture_bounds is missing")?;
             let u_saturation = gl
                 .get_uniform_location(program, "u_saturation")
                 .ok_or("u_saturation is missing")?;
@@ -481,7 +510,6 @@ impl Renderer {
                 .get_uniform_location(program, "u_blur_sigma")
                 .ok_or("u_blur_sigma is missing")?;
             gl.uniform_1_i32(Some(&u_texture), 0);
-            gl.uniform_4_f32_slice(Some(&u_texture_bounds), &[1.0, 1.0, 0.0, 0.0]);
             gl.uniform_2_f32(Some(&u_pixel_center_offset), 0.0, 0.0);
             gl.uniform_1_f32(Some(&u_saturation), 1.0);
             gl.uniform_1_f32(Some(&u_alpha_mask), 0.0);
@@ -542,8 +570,6 @@ impl Renderer {
                 browser_gl: None,
                 u_logical_size,
                 u_pixel_center_offset,
-                u_texture_bounds,
-                texture_bounds: None,
                 u_saturation,
                 u_alpha_mask,
                 u_white_alpha_filter,
@@ -579,7 +605,13 @@ impl Renderer {
                 nearest_sampler,
                 blend: BlendMode::Normal,
                 next_texture_id: std::cell::Cell::new(1),
-                white_texture: Texture { id: 0, handle: white, width: 1.0, height: 1.0 },
+                white_texture: Texture {
+                    id: 0,
+                    handle: white,
+                    width: 1.0,
+                    height: 1.0,
+                    sample_bounds: None,
+                },
                 _program: program,
                 _vertex_array: vertex_array,
                 _vertex_buffer: vertex_buffer,
@@ -594,20 +626,7 @@ impl Renderer {
 
     /// Native ground and road meshes intentionally address beyond one tile's texel bounds.
     pub fn upload_with_repeat(&self, image: &Image, repeat: bool) -> Result<Texture, String> {
-        // SAFETY: the renderer owns these handles in the live current context;
-        // uploads borrow initialized slices only for the duration of each driver call.
-        unsafe {
-            let wrap = if repeat { glow::REPEAT } else { glow::CLAMP_TO_EDGE };
-            let handle = self.gl.create_texture()?;
-            self.gl.bind_texture(glow::TEXTURE_2D, Some(handle));
-            for (parameter, value) in [
-                (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
-                (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
-                (glow::TEXTURE_WRAP_S, wrap),
-                (glow::TEXTURE_WRAP_T, wrap),
-            ] {
-                self.gl.tex_parameter_i32(glow::TEXTURE_2D, parameter, value as i32);
-            }
+        self.allocate_texture([image.natural_width(), image.natural_height()], repeat, || {
             #[cfg(target_arch = "wasm32")]
             self.browser_gl
                 .as_ref()
@@ -622,62 +641,96 @@ impl Renderer {
                 )
                 .map_err(|error| format!("texture upload of {}: {error:?}", image.src()))?;
             #[cfg(not(target_arch = "wasm32"))]
-            self.gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA8 as i32,
-                image.width() as i32,
-                image.height() as i32,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelUnpackData::Slice(Some(image.rgba())),
-            );
-            check_error(&self.gl, "image texture upload")?;
-            let id = self.next_texture_id.get();
-            self.next_texture_id.set(id + 1);
-            Ok(Texture {
-                id,
-                handle,
-                width: image.natural_width() as f32,
-                height: image.natural_height() as f32,
-            })
-        }
+            // SAFETY: the current context borrows the decoded image during this upload.
+            unsafe {
+                self.gl.tex_image_2d(
+                    glow::TEXTURE_2D,
+                    0,
+                    glow::RGBA8 as i32,
+                    image.width() as i32,
+                    image.height() as i32,
+                    0,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelUnpackData::Slice(Some(image.rgba())),
+                );
+            }
+            Ok(())
+        })
     }
 
     /// Uploads RGBA pixels built in code, such as a colour ramp, as a linearly filtered,
     /// edge-clamped texture without passing through a browser canvas.
     pub fn upload_rgba(&self, width: u32, height: u32, pixels: &[u8]) -> Result<Texture, String> {
-        // SAFETY: the renderer owns these handles in the live current context;
-        // uploads borrow initialized slices only for the duration of each driver call.
+        assert!(width > 0 && height > 0, "RGBA textures have a positive size");
+        assert_eq!(pixels.len(), width as usize * height as usize * 4);
+        self.allocate_texture([width, height], false, || {
+            // SAFETY: the current context borrows the complete RGBA slice during this upload.
+            unsafe {
+                self.gl.tex_image_2d(
+                    glow::TEXTURE_2D,
+                    0,
+                    glow::RGBA8 as i32,
+                    width as i32,
+                    height as i32,
+                    0,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelUnpackData::Slice(Some(pixels)),
+                );
+            }
+            Ok(())
+        })
+    }
+
+    fn allocate_texture(
+        &self,
+        [width, height]: [u32; 2],
+        repeat: bool,
+        upload: impl FnOnce() -> Result<(), String>,
+    ) -> Result<Texture, String> {
+        // SAFETY: the renderer owns these handles in the live current context.
         unsafe {
-            assert!(width > 0 && height > 0, "RGBA textures have a positive size");
-            assert_eq!(pixels.len(), width as usize * height as usize * 4);
+            #[cfg(target_arch = "wasm32")]
+            let browser =
+                self.browser_gl.as_ref().expect("browser renderer has its image-upload context");
+            // Allocations may occur between queued draws. Restore the actual binding so
+            // pending vertices and the cached texture ID still refer to the same source.
+            #[cfg(target_arch = "wasm32")]
+            let previous = browser
+                .get_parameter(glow::TEXTURE_BINDING_2D)
+                .map_err(|error| format!("texture binding: {error:?}"))?;
+            #[cfg(not(target_arch = "wasm32"))]
+            let previous = self.gl.get_parameter_texture(glow::TEXTURE_BINDING_2D);
             let handle = self.gl.create_texture()?;
             self.gl.bind_texture(glow::TEXTURE_2D, Some(handle));
+            let wrap = if repeat { glow::REPEAT } else { glow::CLAMP_TO_EDGE };
             for (parameter, value) in [
                 (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
                 (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
-                (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
-                (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
+                (glow::TEXTURE_WRAP_S, wrap),
+                (glow::TEXTURE_WRAP_T, wrap),
             ] {
                 self.gl.tex_parameter_i32(glow::TEXTURE_2D, parameter, value as i32);
             }
-            self.gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA8 as i32,
-                width as i32,
-                height as i32,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelUnpackData::Slice(Some(pixels)),
-            );
-            check_error(&self.gl, "texture upload")?;
+            let uploaded = upload().and_then(|()| check_error(&self.gl, "texture upload"));
+            #[cfg(target_arch = "wasm32")]
+            browser.bind_texture(glow::TEXTURE_2D, previous.dyn_ref());
+            #[cfg(not(target_arch = "wasm32"))]
+            self.gl.bind_texture(glow::TEXTURE_2D, previous);
+            if let Err(error) = uploaded {
+                self.gl.delete_texture(handle);
+                return Err(error);
+            }
             let id = self.next_texture_id.get();
             self.next_texture_id.set(id + 1);
-            Ok(Texture { id, handle, width: width as f32, height: height as f32 })
+            Ok(Texture {
+                id,
+                handle,
+                width: width as f32,
+                height: height as f32,
+                sample_bounds: None,
+            })
         }
     }
 
@@ -689,38 +742,35 @@ impl Renderer {
         &self,
         [width, height]: [u32; 2],
     ) -> Result<RenderTarget, String> {
-        // SAFETY: the renderer owns these handles in the live current context;
-        // uploads borrow initialized slices only for the duration of each driver call.
+        // SAFETY: the renderer owns these handles in the live current context.
         unsafe {
-            let handle = self.gl.create_texture()?;
-            self.gl.bind_texture(glow::TEXTURE_2D, Some(handle));
-            for (parameter, value) in [
-                (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
-                (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
-                (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
-                (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
-            ] {
-                self.gl.tex_parameter_i32(glow::TEXTURE_2D, parameter, value as i32);
-            }
-            self.gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA8 as i32,
-                width as i32,
-                height as i32,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelUnpackData::Slice(None),
-            );
-            check_error(&self.gl, "texture upload")?;
-            let framebuffer = self.gl.create_framebuffer()?;
+            let texture = self.allocate_texture([width, height], false, || {
+                self.gl.tex_image_2d(
+                    glow::TEXTURE_2D,
+                    0,
+                    glow::RGBA8 as i32,
+                    width as i32,
+                    height as i32,
+                    0,
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    glow::PixelUnpackData::Slice(None),
+                );
+                Ok(())
+            })?;
+            let framebuffer = match self.gl.create_framebuffer() {
+                Ok(framebuffer) => framebuffer,
+                Err(error) => {
+                    self.gl.delete_texture(texture.handle);
+                    return Err(error);
+                }
+            };
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(framebuffer));
             self.gl.framebuffer_texture_2d(
                 glow::FRAMEBUFFER,
                 glow::COLOR_ATTACHMENT0,
                 glow::TEXTURE_2D,
-                Some(handle),
+                Some(texture.handle),
                 0,
             );
             let complete =
@@ -728,15 +778,10 @@ impl Renderer {
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, self.framebuffer);
             if !complete {
                 self.gl.delete_framebuffer(framebuffer);
-                self.gl.delete_texture(handle);
+                self.gl.delete_texture(texture.handle);
                 return Err("the light framebuffer is incomplete".into());
             }
-            let id = self.next_texture_id.get();
-            self.next_texture_id.set(id + 1);
-            Ok(RenderTarget {
-                texture: Texture { id, handle, width: width as f32, height: height as f32 },
-                framebuffer,
-            })
+            Ok(RenderTarget { texture, framebuffer })
         }
     }
 
@@ -1226,20 +1271,6 @@ impl Renderer {
         }
     }
 
-    /// Authored mod wearables use nearest sampling for every frame sharing their sheet.
-    pub fn set_texture_nearest(&mut self, texture: &Texture) {
-        // SAFETY: the renderer owns these handles in the live current context;
-        // uploads borrow initialized slices only for the duration of each driver call.
-        unsafe {
-            self.flush();
-            self.gl.bind_texture(glow::TEXTURE_2D, Some(texture.handle));
-            self.bound_texture = Some(texture.id);
-            for parameter in [glow::TEXTURE_MIN_FILTER, glow::TEXTURE_MAG_FILTER] {
-                self.gl.tex_parameter_i32(glow::TEXTURE_2D, parameter, glow::NEAREST as i32);
-            }
-        }
-    }
-
     pub fn destroy_render_target(&self, target: &RenderTarget) {
         Self::delete_render_target(&self.gl, target);
     }
@@ -1324,23 +1355,7 @@ impl Renderer {
     /// Draw an isolated atlas record, matching an independently cropped image's
     /// clamp-to-edge sampling without shrinking or shifting its source geometry.
     pub fn draw_clamped(&mut self, texture: &Texture, quad: Quad) {
-        let [x, y, width, height] = quad.destination;
-        let positions = [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
-        let [left, top, width, height] = quad.source;
-        assert!(width >= 1.0 && height >= 1.0, "Clamped images contain at least one texel");
-        let bounds = [
-            (left + 0.5) / texture.width,
-            (top + 0.5) / texture.height,
-            (left + width - 0.5) / texture.width,
-            (top + height - 0.5) / texture.height,
-        ];
-        self.draw_vertices(
-            texture,
-            quad_vertices(quad.source, positions, [quad.tint; 4]).into_iter(),
-            quad.blend,
-            TextureColorMode::Texture,
-            Some(bounds),
-        );
+        self.draw(&texture.clamped_to(quad.source), quad);
     }
 
     /// Draws the native four-vertex attachment/effect quad, with colors in corner order:
@@ -1378,7 +1393,6 @@ impl Renderer {
             quad_vertices(source, positions, colors).into_iter(),
             blend,
             color_mode,
-            None,
         );
     }
 
@@ -1400,7 +1414,7 @@ impl Renderer {
         blend: BlendMode,
         color_mode: TextureColorMode,
     ) {
-        self.draw_vertices(texture, triangles.iter().flatten().copied(), blend, color_mode, None);
+        self.draw_vertices(texture, triangles.iter().flatten().copied(), blend, color_mode);
     }
 
     /// Submit an indexed UI mesh without expanding it into a second CPU triangle buffer.
@@ -1417,7 +1431,6 @@ impl Renderer {
             indices.iter().map(|index| vertices[*index as usize]),
             blend,
             color_mode,
-            None,
         );
     }
 
@@ -1427,21 +1440,11 @@ impl Renderer {
         vertices: impl Iterator<Item = Vertex>,
         blend: BlendMode,
         color_mode: TextureColorMode,
-        texture_bounds: Option<[f32; 4]>,
     ) {
         // SAFETY: the renderer owns these handles in the live current context;
         // uploads borrow initialized slices only for the duration of each driver call.
         unsafe {
             let color_mode = self.forced_texture_color_mode.unwrap_or(color_mode);
-            if self.texture_bounds != texture_bounds {
-                self.flush();
-                self.bind_effect_program();
-                self.gl.uniform_4_f32_slice(
-                    Some(&self.u_texture_bounds),
-                    &texture_bounds.unwrap_or([1.0, 1.0, 0.0, 0.0]),
-                );
-                self.texture_bounds = texture_bounds;
-            }
             if self.bound_texture != Some(texture.id) {
                 self.flush();
                 self.gl.bind_texture(glow::TEXTURE_2D, Some(texture.handle));
@@ -1488,6 +1491,8 @@ impl Renderer {
                 }
                 tint[3] *= self.opacity;
                 self.vertices.extend_from_slice(&tint);
+                self.vertices
+                    .extend_from_slice(&texture.sample_bounds.unwrap_or([1.0, 1.0, 0.0, 0.0]));
             }
         }
     }
@@ -1545,7 +1550,6 @@ impl Renderer {
                     self.pixel_center_offset,
                     self.blend,
                     self.texture_color_mode,
-                    self.texture_bounds,
                 );
                 self.sprite_program_active = true;
             } else {
@@ -1592,7 +1596,9 @@ fn link_program(
         gl.attach_shader(program, vertex);
         gl.attach_shader(program, fragment);
         // Both programs consume the same batch buffer and vertex array.
-        for (location, name) in [(0, "a_position"), (1, "a_uv"), (2, "a_color")] {
+        for (location, name) in
+            [(0, "a_position"), (1, "a_uv"), (2, "a_color"), (3, "a_texture_bounds")]
+        {
             gl.bind_attrib_location(program, location, name);
         }
         gl.link_program(program);

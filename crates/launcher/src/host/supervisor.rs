@@ -1,6 +1,8 @@
 //! The Website supervisor contract over Rust College authorities. One thread owns the
 //! Colleges, tickets and social broker; transport workers own bytes and heartbeat only.
 
+#[cfg(test)]
+mod autosave_tests;
 pub(in crate::host) mod http;
 mod preparation;
 mod recovery;
@@ -150,6 +152,8 @@ pub struct HostedSupervisor {
     deployment: Option<DeploymentRestart>,
     retired_recoveries: BTreeSet<String>,
     shared_host_tick: u64,
+    save_encoder: super::save_encoder::SaveEncoder,
+    save_college_cursor: usize,
     preparations: Vec<preparation::AdmissionPreparation>,
     recovery_sessions: BTreeMap<String, recovery::PartyRecoverySession>,
     pending_rejoins: Vec<recovery::PendingPartyRejoin>,
@@ -233,6 +237,8 @@ impl HostedSupervisor {
             deployment: None,
             retired_recoveries: BTreeSet::new(),
             shared_host_tick: 0,
+            save_encoder: super::save_encoder::SaveEncoder::start()?,
+            save_college_cursor: 0,
             preparations: Vec::new(),
             recovery_sessions: BTreeMap::new(),
             pending_rejoins: Vec::new(),
@@ -323,6 +329,7 @@ impl HostedSupervisor {
         let closed = self.shutdown_authorities(&server, start, result.is_err());
         self.broker.close();
         server.shutdown();
+        let encoded = self.save_encoder.finish();
         for preparation in self.preparations.drain(..) {
             // Each temporary definition VM belongs to its worker and closes there.
             // Shutdown joins these bounded executions rather than detaching Lua work.
@@ -334,7 +341,7 @@ impl HostedSupervisor {
         if let Some(events) = &mut self.runtime_events {
             events.close();
         }
-        result.and(closed)
+        result.and(closed).and(encoded)
     }
 
     fn event(
@@ -382,6 +389,7 @@ impl HostedSupervisor {
     }
 
     fn tick(&mut self, now_ms: f64) -> Result<(), String> {
+        self.complete_autonomous_save()?;
         if self.deployment.is_some()
             || (self.standalone_credential.is_some() && self.colleges[0].host.players.is_empty())
         {
@@ -403,7 +411,7 @@ impl HostedSupervisor {
             college.host.publish_runtime_activity();
             college.host.publish_leaderboard_receipts()?;
             college.host.publish_tick_audio(&ticks)?;
-            college.host.publish_pending_saves(self.shared_host_tick.is_multiple_of(3_000))?;
+            college.host.request_autonomous_saves(self.shared_host_tick.is_multiple_of(3_000));
             if self.shared_host_tick.is_multiple_of(5) || college.host.publish_dirty {
                 college.host.publish_snapshot(now_ms)?;
             }
@@ -421,7 +429,34 @@ impl HostedSupervisor {
             }
         }
         self.broker.prune(unix_ms()?);
-        self.deliver_broker()
+        self.deliver_broker()?;
+        self.start_autonomous_save()
+    }
+
+    fn complete_autonomous_save(&mut self) -> Result<(), String> {
+        if let Some(completion) = self.save_encoder.poll()?
+            && let Some(college) =
+                self.colleges.iter_mut().find(|college| college.host.id == completion.college_id)
+        {
+            college.host.accept_encoded_save(completion)?;
+        }
+        Ok(())
+    }
+
+    fn start_autonomous_save(&mut self) -> Result<(), String> {
+        if !self.save_encoder.is_available() || self.colleges.is_empty() {
+            return Ok(());
+        }
+        let count = self.colleges.len();
+        for offset in 0..count {
+            let index = (self.save_college_cursor + offset) % count;
+            if let Some(job) = self.colleges[index].host.capture_pending_save() {
+                self.save_college_cursor = (index + 1) % count;
+                self.save_encoder.submit(job)?;
+                break;
+            }
+        }
+        Ok(())
     }
 
     fn prune(&mut self, server: &NativeServer, now_ms: f64) -> Result<(), String> {

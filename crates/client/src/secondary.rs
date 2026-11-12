@@ -118,6 +118,22 @@ impl SecondaryView {
         })
     }
 
+    /// Forget presentation state owned by a replaced world, retaining stock uploads.
+    pub fn reset(&mut self, renderer: &mut Renderer) {
+        renderer.flush();
+        self.destroy_targets(renderer);
+        self.leviathan_targets.clear();
+        self.storm_targets.clear();
+        self.hit_targets.clear();
+        self.actors.clear();
+        self.roots.clear();
+        self.background.clear();
+        self.pre_world.clear();
+        self.composite_children.clear();
+        self.puppet_hits.clear();
+        self.memory.fire_explosion_point_gains.clear();
+    }
+
     /// Call after begin_frame and before world submission. State remains read-only;
     /// render-target updates happen here, so draw() is a small painter callback.
     #[allow(clippy::too_many_arguments)] // One actual world frame, retained clocks and current render quality.
@@ -436,6 +452,15 @@ impl SecondaryView {
     }
 
     pub fn destroy(&self, renderer: &Renderer) {
+        self.destroy_targets(renderer);
+        renderer.destroy_texture(&self.golem.texture);
+        for texture in &self.clothes {
+            renderer.destroy_texture(texture);
+        }
+        renderer.destroy_texture(&self.ether_plane);
+    }
+
+    fn destroy_targets(&self, renderer: &Renderer) {
         for target in self
             .leviathan_targets
             .values()
@@ -444,11 +469,6 @@ impl SecondaryView {
         {
             renderer.destroy_render_target(target);
         }
-        renderer.destroy_texture(&self.golem.texture);
-        for texture in &self.clothes {
-            renderer.destroy_texture(texture);
-        }
-        renderer.destroy_texture(&self.ether_plane);
     }
 }
 

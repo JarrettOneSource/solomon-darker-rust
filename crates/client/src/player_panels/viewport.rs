@@ -259,9 +259,15 @@ impl PlayerPanels {
                 }
                 frame.record_rect("panel:navigation", "Panel sections", "navigation", bar, false);
                 let gap = 2.0;
+                let button_height = 40.0;
+                // Match the stock 69-unit body. Backpack's ink reaches 69.5
+                // units per side; UI.54 plus the press envelope needs another 50.
+                // 2*(69.5*0.5 + 50*40/69) = 127.47px preserves half-size text.
+                // Narrow screens scroll instead of squeezing the label further.
+                let button_scale = button_height / 69.0;
                 let button_width = ((width - 12.0 - gap * (actions.len() - 1) as f32)
                     / actions.len() as f32)
-                    .max(48.0);
+                    .max(128.0);
                 let content_width =
                     button_width * actions.len() as f32 + gap * (actions.len() - 1) as f32;
                 let mut scroll_ui = super::chrome::child_ui(
@@ -281,7 +287,7 @@ impl PlayerPanels {
                         for (index, (action, label)) in actions.iter().enumerate() {
                             let rect = egui::Rect::from_min_size(
                                 origin + egui::vec2(index as f32 * (button_width + gap), 4.0),
-                                egui::vec2(button_width, 40.0),
+                                egui::vec2(button_width, button_height),
                             );
                             let response = crate::menu::widgets::interact(
                                 frame,
@@ -296,7 +302,12 @@ impl PlayerPanels {
                                 if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 },
                             );
                             crate::menu::widgets::paint_stock_button(
-                                &paint, ui, &response, rect, 1.0, enabled,
+                                &paint,
+                                ui,
+                                &response,
+                                rect,
+                                button_scale,
+                                enabled,
                             );
                             if response.clicked() {
                                 self.events.push(PanelEvent::Activate(
@@ -312,7 +323,13 @@ impl PlayerPanels {
                                 if enabled && frame.focus_visible(&response) { 1.2 } else { 1.0 },
                             );
                             crate::menu::widgets::paint_stock_button_label(
-                                &paint, ui, &response, label, rect, 1.0, enabled,
+                                &paint,
+                                ui,
+                                &response,
+                                label,
+                                rect,
+                                button_scale,
+                                enabled,
                             );
                         }
                     });

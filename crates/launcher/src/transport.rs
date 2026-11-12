@@ -24,6 +24,7 @@ use crate::AssetServer;
 use solomon_protocol::snapshot::PreparedSnapshot;
 
 pub use http::{HostedHttpRequest, HostedHttpResponse};
+pub use transfer::PreparedSaveCheckpoint;
 
 const HTTP_WORKERS: usize = 4;
 const HTTP_QUEUE_CAPACITY: usize = 64;

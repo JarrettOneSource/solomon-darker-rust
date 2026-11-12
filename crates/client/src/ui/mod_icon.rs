@@ -68,7 +68,17 @@ fn frame_icon(
     mirrored: bool,
 ) {
     let geometry = layer.geometry(center, scale, mirrored);
-    gpu.image(painter, &layer.image_url, geometry.destination, Some(geometry.uv), layer.tint);
+    let source = Rect::from_min_size(
+        pos2(layer.frame.x as f32, layer.frame.y as f32),
+        vec2(layer.frame.width as f32, layer.frame.height as f32),
+    );
+    gpu.with_image_bounds(source).image(
+        painter,
+        &layer.image_url,
+        geometry.destination,
+        Some(geometry.uv),
+        layer.tint,
+    );
 }
 
 pub(crate) fn mod_item_icon_layers(

@@ -16,6 +16,12 @@ pub struct SpriteRecord {
 }
 
 impl SpriteRecord {
+    /// The complete atlas rectangle, before native UV interpolation or geometric clipping.
+    #[must_use]
+    pub fn atlas_rect(&self) -> [f32; 4] {
+        [self.x as f32, self.y as f32, self.width as f32, self.height as f32]
+    }
+
     /// Where the atlas crop's top-left corner sits inside the logical box.
     ///
     /// Native registration centres the crop in the logical box and then applies the record's

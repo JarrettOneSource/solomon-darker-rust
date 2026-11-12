@@ -807,7 +807,7 @@ impl WizardView {
             [p[0], p[1]]
         });
         renderer.draw_quad(
-            &self.atlas,
+            &self.atlas.clamped_to(record.atlas_rect()),
             [record.x as f32, record.y as f32, record.width as f32, record.height as f32],
             corners,
             [tint_rgba(material_tint); 4],
@@ -842,7 +842,7 @@ impl WizardView {
         near[3] = ((plan.near_alpha.clamp(0.0, 1.0) * 255.0).trunc() / 255.0) as f32;
         far[3] = ((plan.far_alpha.clamp(0.0, 1.0) * 255.0).trunc() / 255.0) as f32;
         renderer.draw_quad(
-            &self.atlas,
+            &self.atlas.clamped_to(record.atlas_rect()),
             [record.x as f32, record.y as f32, record.width as f32, record.height as f32],
             corners,
             [near, near, far, far],
@@ -896,7 +896,7 @@ impl WizardView {
         let cell_left = left + ((PLAYER_CELL - f64::from(record.logical_width)) / 2.0).floor();
         let cell_top = top + ((PLAYER_CELL - f64::from(record.logical_height)) / 2.0).floor();
         renderer.draw(
-            &self.atlas,
+            &self.atlas.clamped_to(record.atlas_rect()),
             Quad {
                 source: [
                     record.x as f32,

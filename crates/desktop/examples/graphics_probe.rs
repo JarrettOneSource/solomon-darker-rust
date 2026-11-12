@@ -1,6 +1,10 @@
 //! Actual native-context qualification of the shared shader and texture pipeline.
 
 #[cfg(not(target_arch = "wasm32"))]
+#[path = "../../graphics/examples/support/allocation_binding.rs"]
+mod allocation_binding;
+
+#[cfg(not(target_arch = "wasm32"))]
 #[path = "../../graphics/examples/support/atlas_crop.rs"]
 mod atlas_crop;
 
@@ -76,6 +80,49 @@ fn main() -> Result<(), String> {
                         || case["restored"] != true
                     {
                         return Err(format!("Isolated atlas crop differs: {case}"));
+                    }
+                }
+                let batch: serde_json::Value =
+                    serde_json::from_str(&atlas_crop::batch_probe(renderer)?)
+                        .map_err(|error| error.to_string())?;
+                if batch
+                    != serde_json::json!({
+                        "firstEdge":[255,0,0,255], "secondEdge":[0,255,0,255],
+                        "unboundedJoin":[159,96,0,255],
+                    })
+                {
+                    return Err(format!("Mixed atlas record bounds differ: {batch}"));
+                }
+                std::fs::write(self.output.join("atlas-batch.json"), batch.to_string())
+                    .map_err(|error| error.to_string())?;
+                let blue = solomon_graphics::assets::decode_image(
+                    "allocation-blue.png",
+                    allocation_binding::BLUE_IMAGE,
+                )?;
+                let allocations: serde_json::Value =
+                    serde_json::from_str(&allocation_binding::probe(renderer, &blue, None)?)
+                        .map_err(|error| error.to_string())?;
+                std::fs::write(
+                    self.output.join("allocation-bindings.json"),
+                    allocations.to_string(),
+                )
+                .map_err(|error| error.to_string())?;
+                for row in allocations.as_array().ok_or("Allocation rows are absent")? {
+                    if row["pixels"]
+                        != serde_json::json!([255, 0, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255])
+                        || [
+                            "textureRestored",
+                            "framebufferRestored",
+                            "samplerRestored",
+                            "viewportRestored",
+                        ]
+                        .iter()
+                        .any(|field| row[*field] != true)
+                        || row["rejected"]
+                            != row["kind"].as_str().is_some_and(|kind| kind.ends_with("-error"))
+                        || row["errors"] != serde_json::json!([])
+                    {
+                        return Err(format!("Allocation changed the current draw: {row}"));
                     }
                 }
                 let texture = self.texture.as_ref().ok_or("Stock texture absent")?;

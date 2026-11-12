@@ -104,7 +104,7 @@ impl SecondaryView {
             if hit.is_some() { TextureColorMode::AlphaMask } else { TextureColorMode::Texture };
         renderer.draw_clipped(clip, 1.0, |renderer| {
             renderer.draw_triangles_with_color_mode(
-                record.texture,
+                &record.texture,
                 &triangles,
                 BlendMode::Multiply,
                 color_mode,

@@ -217,7 +217,7 @@ fn draw_registered(
     let anchor_x = width * 0.5 - f64::from(record.center_x);
     let anchor_y = height * 0.5 - f64::from(record.center_y);
     renderer.draw(
-        &sprite.texture,
+        &sprite.texture.clamped_to(record.atlas_rect()),
         Quad {
             source: [record.x as f32, record.y as f32, record.width as f32, record.height as f32],
             destination: camera.project(

@@ -47,7 +47,7 @@ impl SecondaryView {
                     })
                 })
                 .collect::<Vec<_>>();
-                renderer.draw_triangles(record.texture, &triangles, BlendMode::Add);
+                renderer.draw_triangles(&record.texture, &triangles, BlendMode::Add);
             }
         }
     }

@@ -74,7 +74,6 @@ impl Game {
         }
         let player = &session.participants[&self.local_player_id].player;
         prepare_local_wizard(
-            &mut self.renderer,
             &mut self.wizard_view,
             &mut self.mod_assets,
             &displayed,
@@ -196,7 +195,7 @@ impl Game {
             };
             self.renderer.draw_clipped(clip(underlay.clip), underlay.alpha as f32, |renderer| {
                 renderer.draw(
-                    &texture,
+                    &texture.clamped_to(rect(underlay.source)),
                     solomon_graphics::Quad {
                         source: rect(underlay.source),
                         destination: rect(underlay.destination),
@@ -341,7 +340,6 @@ impl Game {
         let mut hub_equipment = Vec::with_capacity(hub_players.len());
         for participant in &hub_players {
             hub_equipment.push(crate::wizard::WizardEquipment::prepare(
-                &mut self.renderer,
                 participant.player.selection.element,
                 &participant.player.economy.equipment,
                 self.mod_assets.as_mut(),
@@ -484,7 +482,6 @@ struct CourtyardActors {
 /// Prepare the shared wizard view for the local wizard: equipment, material tint and
 /// presentation.
 fn prepare_local_wizard(
-    renderer: &mut Renderer,
     wizard_view: &mut WizardView,
     mod_assets: &mut Option<crate::mod_presentation_assets::ModPresentationAssets>,
     displayed: &DisplayedSession<'_>,
@@ -494,7 +491,6 @@ fn prepare_local_wizard(
 ) -> Result<(), String> {
     let DisplayedSession { session, presentation_tick, clocks, .. } = *displayed;
     let equipment = crate::wizard::WizardEquipment::prepare(
-        renderer,
         player.selection.element,
         &player.economy.equipment,
         mod_assets.as_mut(),

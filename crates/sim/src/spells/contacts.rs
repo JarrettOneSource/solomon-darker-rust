@@ -635,8 +635,11 @@ impl ContactWork<'_, '_> {
                 self.resolve_weld_projectile_contact(spell, &rows);
                 continue;
             }
-            let mut targets = self.context.primary_scenery_targets.to_vec();
-            targets.extend(rows.iter().map(|row| row.target.clone()));
+            let targets = self
+                .context
+                .primary_scenery_targets
+                .iter()
+                .chain(rows.iter().map(|row| &row.target));
             let target = match &projectile {
                 PrimarySpellProjectile::Fire(_) => {
                     first_fireball_point_contact(FireballPointContactQuery {
@@ -644,7 +647,7 @@ impl ContactWork<'_, '_> {
                             actor_mask: 0x6,
                             position: common.position,
                             query_radius: 20.0,
-                            targets: &targets,
+                            targets: targets.clone(),
                         },
                         direction: common.direction,
                         hostile_corridor_length: (self.context.fireball_hostile_corridor_length)(
@@ -661,7 +664,7 @@ impl ContactWork<'_, '_> {
                         },
                         position: common.position,
                         query_radius: 6.0,
-                        targets: &targets,
+                        targets: targets.clone(),
                     })
                 }
                 PrimarySpellProjectile::Earth(_) | PrimarySpellProjectile::Weld(_) => {
@@ -714,6 +717,7 @@ impl ContactWork<'_, '_> {
             if let PrimarySpellProjectile::Ether(spell) = &projectile
                 && spell.pierces_remaining > 0
             {
+                let targets: Vec<_> = targets.cloned().collect();
                 let (spell, origins) = continue_piercing_ether(spell.clone(), target, &targets);
                 for origin in origins {
                     let mut common = transient_base(
@@ -829,12 +833,11 @@ impl ContactWork<'_, '_> {
                 continue;
             }
             let rows = target_rows(self.enemies);
-            let targets: Vec<_> = rows.iter().map(|row| row.target.clone()).collect();
             let Some(target) = first_primary_point_contact(PrimaryPointContactQuery {
                 actor_mask: 0x2,
                 position: effect.position,
                 query_radius: 7.0,
-                targets: &targets,
+                targets: rows.iter().map(|row| &row.target),
             }) else {
                 continue;
             };

@@ -68,19 +68,19 @@ pub struct PrimarySpellTarget {
 }
 
 /// A point contact query: the first eligible target in the point's grid cell that lies
-/// within the query radius.
+/// within the query radius. Borrowed iteration keeps scenery and enemy rows in their owners.
 #[derive(Clone, Copy)]
-pub struct PrimaryPointContactQuery<'a> {
+pub struct PrimaryPointContactQuery<T> {
     pub actor_mask: u32,
     pub position: Vec2,
     pub query_radius: f64,
-    pub targets: &'a [PrimarySpellTarget],
+    pub targets: T,
 }
 
 /// A fireball's point contact query. A non-hostile contact is passed over while a hostile
 /// target lies in the corridor ahead.
-pub struct FireballPointContactQuery<'a> {
-    pub contact: PrimaryPointContactQuery<'a>,
+pub struct FireballPointContactQuery<T> {
+    pub contact: PrimaryPointContactQuery<T>,
     pub direction: Vec2,
     pub hostile_corridor_length: f64,
 }
@@ -141,9 +141,9 @@ pub fn primary_cell_coordinate(position: f64) -> i64 {
 }
 
 #[must_use]
-pub fn first_primary_point_contact(
-    query: PrimaryPointContactQuery<'_>,
-) -> Option<&PrimarySpellTarget> {
+pub fn first_primary_point_contact<'a>(
+    query: PrimaryPointContactQuery<impl IntoIterator<Item = &'a PrimarySpellTarget>>,
+) -> Option<&'a PrimarySpellTarget> {
     let cell_x = primary_cell_coordinate(query.position.x);
     let cell_y = primary_cell_coordinate(query.position.y);
     let mut selected: Option<&PrimarySpellTarget> = None;
@@ -169,10 +169,10 @@ pub fn first_primary_point_contact(
 }
 
 #[must_use]
-pub fn first_fireball_point_contact(
-    query: FireballPointContactQuery<'_>,
-) -> Option<&PrimarySpellTarget> {
-    let contact = first_primary_point_contact(query.contact)?;
+pub fn first_fireball_point_contact<'a>(
+    query: FireballPointContactQuery<impl IntoIterator<Item = &'a PrimarySpellTarget> + Clone>,
+) -> Option<&'a PrimarySpellTarget> {
+    let contact = first_primary_point_contact(query.contact.clone())?;
     if contact.actor_flags & PRIMARY_HOSTILE_FLAG != 0 {
         return Some(contact);
     }
@@ -196,7 +196,7 @@ pub fn first_fireball_point_contact(
         Vec2::new(fround(far.x - side.x), fround(far.y - side.y)),
         Vec2::new(fround(far.x + side.x), fround(far.y + side.y)),
     ];
-    let hostile_ahead = query.contact.targets.iter().any(|target| {
+    let hostile_ahead = query.contact.targets.into_iter().any(|target| {
         primary_target_eligible(target, PRIMARY_HOSTILE_FLAG)
             && native_point_in_polygon(target.position, &polygon)
     });

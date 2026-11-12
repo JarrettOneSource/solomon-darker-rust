@@ -21,6 +21,7 @@ pub mod recovery;
 mod rejoin;
 pub mod run_archive;
 pub mod runtime_events;
+mod save_encoder;
 mod signing;
 mod social;
 pub mod supervisor;

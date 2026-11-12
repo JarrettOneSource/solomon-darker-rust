@@ -123,7 +123,7 @@ impl SecondaryView {
         let blend =
             if draw.blend == SecondaryBlend::Add { BlendMode::Add } else { BlendMode::Normal };
         renderer.draw_triangles_with_color_mode(
-            record.texture,
+            &record.texture,
             &[[vertices[0], vertices[1], vertices[2]], [vertices[0], vertices[2], vertices[3]]],
             blend,
             TextureColorMode::AlphaMask,

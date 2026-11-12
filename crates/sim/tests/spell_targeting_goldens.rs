@@ -144,6 +144,112 @@ fn target_id(target: Option<&PrimarySpellTarget>) -> Option<&str> {
 fn target_ids(targets: Vec<&PrimarySpellTarget>) -> Vec<&str> {
     targets.into_iter().map(|target| target.id.as_str()).collect()
 }
+
+fn point_target(
+    id: &str,
+    position: Vec2,
+    cell_binding_order: usize,
+    actor_flags: u32,
+) -> PrimarySpellTarget {
+    PrimarySpellTarget {
+        active: true,
+        actor_flags,
+        attachment: Vec2::ZERO,
+        body_radius: 0.0,
+        cell_binding_order,
+        heading_degrees: None,
+        grid_position: None,
+        id: id.into(),
+        kind: if actor_flags == 0x2 {
+            PrimarySpellTargetKind::Enemy
+        } else {
+            PrimarySpellTargetKind::Scenery
+        },
+        priority: 0,
+        pending_remove: false,
+        position,
+        query_lane: PrimarySpellQueryLane::Grid,
+        registration_order: 0,
+    }
+}
+
+#[test]
+fn point_contacts_keep_cell_priority_ties_and_live_eligibility_across_target_lists() {
+    let position = Vec2::new(10.0, 10.0);
+    let mut targets = [
+        point_target("scenery", position, 7, 0x4),
+        point_target("equal-priority-enemy", position, 7, 0x2),
+        point_target("inactive", position, 0, 0x2),
+        point_target("pending", position, 1, 0x2),
+        point_target("other-mask", position, 2, 0x8),
+        point_target("other-cell", Vec2::new(110.0, 10.0), 3, 0x2),
+        point_target("exact-radius", Vec2::new(16.0, 10.0), 4, 0x2),
+    ];
+    targets[2].active = false;
+    targets[3].pending_remove = true;
+    for split in 0..=targets.len() {
+        assert_eq!(
+            target_id(first_primary_point_contact(PrimaryPointContactQuery {
+                actor_mask: 0x6,
+                position,
+                query_radius: 6.0,
+                targets: targets[..split].iter().chain(&targets[split..]),
+            })),
+            Some("scenery"),
+            "target list split {split}",
+        );
+    }
+    targets[1].cell_binding_order = 6;
+    assert_eq!(
+        target_id(first_primary_point_contact(PrimaryPointContactQuery {
+            actor_mask: 0x6,
+            position,
+            query_radius: 6.0,
+            targets: &targets,
+        })),
+        Some("equal-priority-enemy"),
+    );
+    targets[1].active = false;
+    assert_eq!(
+        target_id(first_primary_point_contact(PrimaryPointContactQuery {
+            actor_mask: 0x6,
+            position,
+            query_radius: 6.0,
+            targets: targets.iter(),
+        })),
+        Some("scenery"),
+    );
+}
+
+#[test]
+fn fireball_corridors_consult_later_target_lists_before_accepting_scenery() {
+    let position = Vec2::new(10.0, 10.0);
+    let mut scenery = [point_target("scenery", Vec2::new(20.0, 10.0), 1, 0x4)];
+    let mut enemies = [point_target("hostile-ahead", Vec2::new(210.0, 10.0), 2, 0x2)];
+    let query = |scenery: &[PrimarySpellTarget], enemies: &[PrimarySpellTarget]| {
+        first_fireball_point_contact(FireballPointContactQuery {
+            contact: PrimaryPointContactQuery {
+                actor_mask: 0x6,
+                position,
+                query_radius: 20.0,
+                targets: scenery.iter().chain(enemies),
+            },
+            direction: Vec2::new(1.0, 0.0),
+            hostile_corridor_length: 400.0,
+        })
+        .map(|target| target.id.clone())
+    };
+    assert_eq!(query(&scenery, &enemies), None);
+    enemies[0].pending_remove = true;
+    assert_eq!(query(&scenery, &enemies).as_deref(), Some("scenery"));
+    enemies[0].pending_remove = false;
+    enemies[0].position.y = 40.0;
+    assert_eq!(query(&scenery, &enemies).as_deref(), Some("scenery"));
+    enemies[0].position.y = 10.0;
+    scenery[0].position = Vec2::new(11.0, 10.0);
+    assert_eq!(query(&scenery, &enemies).as_deref(), Some("scenery"));
+}
+
 fn movement(actual: EtherPrimaryHomingResult, expected: MovementResult) {
     assert_eq!(actual.position, Vec2::from(expected.position));
     assert_eq!(actual.heading_degrees, expected.heading_degrees);

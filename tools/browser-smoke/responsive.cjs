@@ -212,7 +212,8 @@ async function walkToFomentius(page) {
     if(page){
       await ui.settleErrors(page);
       failure.errors=observed.errors;
-      failure.ui=await ui.readUi(page);
+      try { failure.ui=await ui.readUi(page) }
+      catch(observationError) { failure.uiObservationError=observationError.stack }
       await shot(page,'responsive-failure.png');
     }
     fs.writeFileSync(path.join(output,'responsive-failure.json'),JSON.stringify(failure,null,2));
