@@ -65,6 +65,10 @@ impl Game {
     }
 
     pub(super) fn render_world(&mut self) -> Result<(), String> {
+        self.hub_guidance.clear();
+        self.social.set_guidance_bounds(&[]);
+        #[cfg(target_arch = "wasm32")]
+        self.hub_guidance.apply_diagnostics(self.surface.canvas(), 1.0)?;
         let displayed = DisplayedSession::of(self.native.as_ref(), &self.session);
         let DisplayedSession { display, session, presentation_tick, clocks } = displayed;
         self.hud.set_mode(if session.boneyard.is_some() { HudMode::Run } else { HudMode::Hub })?;
@@ -346,6 +350,21 @@ impl Game {
             )?);
         }
         let player_painters = hub_player_painters(&hub_players);
+        if session.participants[&self.local_player_id].wizard.region
+            == solomon_sim::hub::regions::HubRegion::Courtyard
+            && !self.menu.is_blocking()
+            && !self.panels.is_open()
+            && !self.social.input_active()
+            && !self.skill_picker.is_open()
+            && !player.economy.college_intro_pending
+        {
+            self.hub_guidance.prepare(
+                &player.economy.npc.help_flags,
+                session.ticks,
+                &camera,
+                viewport,
+            );
+        }
         let hub = HubDraw {
             session,
             local_player_id: &self.local_player_id,
@@ -378,8 +397,14 @@ impl Game {
                 &mut self.wizard_view,
                 &hub,
                 player_painters,
+                &self.hub_guidance,
             );
         }
+        self.hub_guidance.draw_screen(&mut self.renderer);
+        let display_scale = f64::from(self.surface.logical_width()) / viewport.x;
+        self.social.set_guidance_bounds(&self.hub_guidance.screen_bounds(display_scale));
+        #[cfg(target_arch = "wasm32")]
+        self.hub_guidance.apply_diagnostics(self.surface.canvas(), display_scale)?;
         let nameplate_camera = Camera {
             origin: Vec2::new(
                 -transform.position.x / transform.scale,
@@ -688,6 +713,7 @@ fn draw_courtyard(
     wizard_view: &mut WizardView,
     hub: &HubDraw<'_>,
     player_painters: Vec<PainterLayer>,
+    guidance: &crate::hub_guidance::HubGuidanceView,
 ) {
     let HubDraw {
         session,
@@ -788,6 +814,7 @@ fn draw_courtyard(
             CourtyardPass::Band(HubDepth::UsefulThyngsShadow) => {
                 npc_view.draw_tent_shadow(renderer, camera);
             }
+            CourtyardPass::Band(HubDepth::CourtyardOnboarding) => guidance.draw_world(renderer),
             CourtyardPass::Band(_) => {}
         },
     );

@@ -21,6 +21,7 @@ pub mod game_over;
 pub mod gpu_ui;
 pub mod hosted;
 pub mod hotbar;
+mod hub_guidance;
 pub mod hud;
 pub mod input;
 pub mod loot;

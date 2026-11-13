@@ -6,6 +6,80 @@ use crate::ui_text::{UiFontName, UiTextAlign, is_javascript_whitespace, measure_
 
 use super::PartyVisibility;
 
+/// Keep the added Party card clear of native guidance without moving its world anchor.
+#[must_use]
+pub fn place_party_chip(card: HudRect, viewport: crate::Vec2, guidance: &[HudRect]) -> crate::Vec2 {
+    let visible: Vec<_> = guidance
+        .iter()
+        .filter(|hint| {
+            hint.x < viewport.x
+                && hint.y < viewport.y
+                && hint.x + hint.width > 0.0
+                && hint.y + hint.height > 0.0
+        })
+        .collect();
+    let mut xs = vec![card.x];
+    let mut ys = vec![card.y];
+    for hint in &visible {
+        xs.extend([hint.x + hint.width + 4.0, hint.x - card.width - 4.0]);
+        ys.extend([hint.y + hint.height + 4.0, hint.y - card.height - 4.0]);
+    }
+    let mut position = crate::Vec2::new(card.x, card.y);
+    let mut distance = f64::INFINITY;
+    for x in xs {
+        for &y in &ys {
+            if x < card.x
+                || y < card.y
+                || x + card.width > viewport.x
+                || y + card.height > viewport.y
+            {
+                continue;
+            }
+            if visible.iter().any(|hint| {
+                x < hint.x + hint.width + 4.0
+                    && x + card.width + 4.0 > hint.x
+                    && y < hint.y + hint.height + 4.0
+                    && y + card.height + 4.0 > hint.y
+            }) {
+                continue;
+            }
+            let candidate_distance = (x - card.x).powi(2) + (y - card.y).powi(2);
+            if candidate_distance < distance {
+                position = crate::Vec2::new(x, y);
+                distance = candidate_distance;
+            }
+        }
+    }
+    position
+}
+
+#[cfg(test)]
+mod placement_tests {
+    use super::*;
+    use crate::Vec2;
+
+    #[test]
+    fn party_clears_native_guidance_and_returns_when_it_passes() {
+        let card = HudRect::new(11.0, 174.0, 236.0, 98.0);
+        let viewport = Vec2::new(1600.0, 900.0);
+        let callout = HudRect::new(175.0, 244.0, 236.0, 130.0);
+        assert_eq!(place_party_chip(card, viewport, &[callout]), Vec2::new(11.0, 378.0));
+        assert_eq!(place_party_chip(card, viewport, &[]), Vec2::new(11.0, 174.0));
+        assert_eq!(
+            place_party_chip(HudRect { height: 630.0, ..card }, viewport, &[callout]),
+            Vec2::new(415.0, 174.0)
+        );
+    }
+
+    #[test]
+    fn expanded_touch_party_clears_both_hints_inside_the_viewport() {
+        let card = HudRect::new(6.0, 54.0, 129.8, 200.0);
+        let hints =
+            [HudRect::new(0.0, 120.0, 150.0, 90.0), HudRect::new(125.0, 270.0, 120.0, 100.0)];
+        assert_eq!(place_party_chip(card, Vec2::new(896.0, 414.0), &hints), Vec2::new(154.0, 54.0));
+    }
+}
+
 pub const PARTY_MENU_FRAME: HudRect = HudRect::new(390.0, 110.0, 820.0, 680.0);
 pub const PARTY_MENU_VIEWPORT: HudRect = HudRect::new(460.0, 278.0, 680.0, 367.0);
 pub const PARTY_MENU_ROW_PITCH: f64 = 66.0;

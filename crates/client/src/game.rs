@@ -120,6 +120,7 @@ pub struct Game {
     teacher_view: TeacherView,
     spell_view: SpellView,
     world_overlays: WorldOverlaysView,
+    hub_guidance: crate::hub_guidance::HubGuidanceView,
     world_overlay_diagnostics: crate::world_overlays::WorldOverlayDiagnostics,
     notifications: crate::loot::WorldNotifications,
     world_screen_feedback: WorldScreenFeedback,
@@ -270,6 +271,7 @@ impl Game {
             audio.set_scene(MusicScene::Title)?;
             let battle_views = BattleViews::load(&renderer, &spell_view).await?;
             let world_overlays = WorldOverlaysView::load(&renderer).await?;
+            let hub_guidance = crate::hub_guidance::HubGuidanceView::load(&renderer).await?;
             let tutorial_ui = TutorialUi::attach().await?;
             let college_overlay = CollegeIntroOverlay::attach().await?;
             let game_over = GameOverOverlay::attach()?;
@@ -295,6 +297,7 @@ impl Game {
                 teacher_view,
                 spell_view,
                 world_overlays,
+                hub_guidance,
                 world_overlay_diagnostics: Default::default(),
                 notifications: crate::loot::WorldNotifications::default(),
                 world_screen_feedback: WorldScreenFeedback::default(),

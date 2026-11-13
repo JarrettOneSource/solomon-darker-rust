@@ -893,6 +893,9 @@ impl HubNpcProgress {
     }
 }
 
+/// The authored first-profile College callout.
+pub const HUB_WALK_TO_TALK_TEXT: &str = "WALK INTO WIZARDS\nTO TALK TO THEM";
+
 /// An onboarding hint over the College: the walk-to-talk arrow and text, or a directional arrow
 /// toward an NPC.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -927,7 +930,7 @@ pub fn hub_npc_onboarding_plan(
             arrow_offset: Vec2::new(15.0, -65.0),
             arrow_record: 28,
             arrow_rotation_degrees: 200.0,
-            text: "WALK INTO WIZARDS\nTO TALK TO THEM",
+            text: HUB_WALK_TO_TALK_TEXT,
             text_offset: Vec2::new(15.0, -115.0),
         }];
     }

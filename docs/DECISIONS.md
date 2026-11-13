@@ -308,6 +308,12 @@ first owned charm and intercepted its Remove action. Only that chip moves below
 books; chat, Party menus, invitations and Player Cards keep their overlay order.
 Website's Party chip likewise sits below its opaque Inventory/service surface.
 
+The added Party card also yields space to native College onboarding. Its actual
+height and the submitted callout/arrow bounds choose the closest clear position
+at or below its usual inset. Active directional arrows reserve space through
+their blink interval. The callout keeps its authored world anchor and painter
+band; the social extension moves without changing help flags or acknowledgement.
+
 The patch retains upstream metadata and licenses. Egui upgrades must review
 [the patch contract](../vendor/egui/SOLOMON-PATCH.md) and its focused regressions.
 

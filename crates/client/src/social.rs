@@ -85,6 +85,7 @@ pub struct SocialUi {
     hosted_notice: Option<String>,
     focus_college: bool,
     party_expanded: bool,
+    guidance_bounds: Vec<solomon_sim::hud::HudRect>,
     party_ui: party::PartyMenuInteraction,
     clipboard: party::PartyClipboard,
     shown_party_invitation: Option<String>,
@@ -137,6 +138,7 @@ impl SocialUi {
             hosted_notice: None,
             focus_college: false,
             party_expanded: false,
+            guidance_bounds: Vec::new(),
             party_ui: party::PartyMenuInteraction::default(),
             shown_party_invitation: None,
             chat_open: false,
@@ -176,6 +178,11 @@ impl SocialUi {
         if self.party_mods != mods {
             self.party_mods = mods.to_vec();
         }
+    }
+
+    pub fn set_guidance_bounds(&mut self, bounds: &[solomon_sim::hud::HudRect]) {
+        self.guidance_bounds.clear();
+        self.guidance_bounds.extend_from_slice(bounds);
     }
 
     pub fn set_controls(&mut self, controls: GameControlBindings) {

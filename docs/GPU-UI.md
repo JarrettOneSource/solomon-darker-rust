@@ -17,6 +17,16 @@ World notices stay below the HUD; modal and transition layers keep their explici
 scope. The local egui integration is documented in
 [its patch contract](../vendor/egui/SOLOMON-PATCH.md).
 
+`HubGuidanceView` paints the College walk-to-talk text and UI 28 arrow between
+the foreground and southern architecture, then projects the two UI 88 hints
+into screen space. Its submitted geometry reserves room for the added Party
+card, including the arrows' dark blink frames. `hub-guidance.cjs` exercises the
+built client, camera movement, Party controls, modal suppression, acknowledgement
+and saved Continue; use a native host URL with `?host=1` and `TOUCH=1` for touch.
+Give each journey a fresh local host save so earlier wizards do not occupy its
+movement route. Portrait touch intentionally shows the landscape prompt; await
+the gameplay HUD after rotating back before sending the next movement input.
+
 For each input dispatch, resolve the active control, commit its action, and
 refresh the model before processing the next event. The final layout pass paints
 without replaying actions. Hidden sizing passes cannot consume focus requests.

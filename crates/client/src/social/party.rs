@@ -62,6 +62,17 @@ impl SocialUi {
         let mut y = 54.0 + if error.is_empty() { 0.0 } else { 22.0 };
         let tall = !rows.is_empty() || !error.is_empty();
         let height = if tall { y + rows.len() as f64 * 36.0 - 4.0 + 12.0 } else { 50.0 };
+        let scale = if self.coarse { 0.55 } else { 1.0 };
+        let position = solomon_sim::social::party_ui::place_party_chip(
+            solomon_sim::hud::HudRect::new(
+                if self.coarse { 6.0 } else { 11.0 },
+                if self.coarse { 54.0 } else { 174.0 },
+                236.0 * scale,
+                height * scale,
+            ),
+            solomon_sim::Vec2::new(f64::from(self.size.0), f64::from(self.size.1)),
+            &self.guidance_bounds,
+        );
         let ctx = frame.ctx.clone();
         let mut action = None;
         let layer = Self::party_layer();
@@ -69,11 +80,11 @@ impl SocialUi {
         ctx.set_transform_layer(
             area.layer(),
             egui::emath::TSTransform {
-                scaling: if self.coarse { 0.55 } else { 1.0 },
-                translation: if self.coarse { vec2(6.0, 54.0) } else { egui::Vec2::ZERO },
+                scaling: scale as f32,
+                translation: vec2(position.x as f32, position.y as f32),
             },
         );
-        area.fixed_pos(if self.coarse { egui::Pos2::ZERO } else { pos2(11.0, 174.0) })
+        area.fixed_pos(egui::Pos2::ZERO)
             .show(&ctx, |ui| -> Result<(), String> {
                 let origin = ui.min_rect().min;
                 let panel = Rect::from_min_size(origin, vec2(236.0, height as f32));
