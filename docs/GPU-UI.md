@@ -27,6 +27,14 @@ Give each journey a fresh local host save so earlier wizards do not occupy its
 movement route. Portrait touch intentionally shows the landscape prompt; await
 the gameplay HUD after rotating back before sending the next movement input.
 
+Party rejection messages keep their complete text. The card wraps at 188 pixels
+with the existing medium font at 0.85 scale and reserves 22 pixels per line before
+roster rows. Touch collapse hides the roster while keeping the message visible;
+the complete measured card also participates in guidance avoidance. Name fitting
+retains its separate row-width contract. `party-errors.cjs` checks all rejection
+messages and card modes against a native host using explicit command-response
+fixtures; it qualifies presentation, not host rejection policy.
+
 For each input dispatch, resolve the active control, commit its action, and
 refresh the model before processing the next event. The final layout pass paints
 without replaying actions. Hidden sizing passes cannot consume focus requests.

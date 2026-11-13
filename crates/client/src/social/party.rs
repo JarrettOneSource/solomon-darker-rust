@@ -8,7 +8,7 @@ pub(super) use interaction::{PartyClipboard, PartyMenuInteraction};
 use egui::{Color32, Id, Rect, Sense, pos2, vec2};
 use solomon_sim::social::party_ui::{fit_party_menu_text, party_menu_name_font};
 use solomon_sim::social::{GameChatWorldKind, party_member_display_name};
-use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, measure_ui_text};
+use solomon_sim::ui_text::{UiFontName, UiTextAlign, UiTextSpec, measure_ui_text, wrap_ui_text};
 
 use super::{SocialUi, gpu};
 use crate::gpu_ui::UiFrame;
@@ -54,12 +54,13 @@ impl SocialUi {
         let gear = leader
             || state.party.member_player_ids.len() > 1
             || snapshot.session_kind == solomon_sim::social::GameSessionKind::PrivateCollege;
-        let error = self
-            .party_status
-            .as_deref()
-            .map(|error| fit_party_menu_text(error, UiFontName::Medium, 188.0, 0.85))
-            .unwrap_or_default();
-        let mut y = 54.0 + if error.is_empty() { 0.0 } else { 22.0 };
+        let error = self.party_status.as_deref().unwrap_or_default();
+        let error_height = if error.is_empty() {
+            0.0
+        } else {
+            wrap_ui_text(error, UiFontName::Medium, Some(188.0), 0.85).len() as f64 * 22.0
+        };
+        let mut y = 54.0 + error_height;
         let tall = !rows.is_empty() || !error.is_empty();
         let height = if tall { y + rows.len() as f64 * 36.0 - 4.0 + 12.0 } else { 50.0 };
         let scale = if self.coarse { 0.55 } else { 1.0 };
@@ -196,9 +197,11 @@ impl SocialUi {
                         ui.painter(),
                         &UiTextSpec {
                             align: UiTextAlign::Left,
+                            max_width: Some(188.0),
+                            line_height: Some(22.0 / 0.85),
                             scale: 0.85,
                             tint: 0xff9a8a,
-                            ..UiTextSpec::new(UiFontName::Medium, &error, 24.0, 67.0)
+                            ..UiTextSpec::new(UiFontName::Medium, error, 24.0, 67.0)
                         },
                         origin,
                         1.0,

@@ -2392,6 +2392,47 @@ fn cheat_menu_goldens() {
 }
 
 #[test]
+fn party_menu_keeps_every_authored_rejection_complete() {
+    use solomon_sim::social::PartyActionRejection::*;
+    use solomon_sim::social::PartyVisibility;
+    use solomon_sim::social::party_ui::{PartyMenuSpec, PartyMenuTab, plan_party_menu};
+
+    for reason in [
+        AlreadyInParty,
+        AlreadyInvited,
+        AlreadyRequested,
+        InvitationMissing,
+        NotLeader,
+        NotInHub,
+        NotRecipient,
+        PartyFull,
+        PartyMissing,
+        PartyPrivate,
+        PlayerMissing,
+        RequestMissing,
+        SameParty,
+        SelfInvite,
+        SelfKick,
+    ] {
+        let plan = plan_party_menu(&PartyMenuSpec {
+            code: None,
+            copied: false,
+            error: Some(reason.text()),
+            leader: true,
+            leave_label: None,
+            members: &[],
+            requests: &[],
+            scroll_y: 0.0,
+            selected_tab: PartyMenuTab::Members,
+            visibility: PartyVisibility::Public,
+            visibility_options: &[],
+        });
+        let error = plan.texts.iter().find(|text| text.label == "party:error").unwrap();
+        assert_eq!(error.text, reason.text(), "{}", reason.id());
+    }
+}
+
+#[test]
 fn party_ui_goldens() {
     use serde_json::{Value, json};
     use solomon_sim::hud::HudRect;
