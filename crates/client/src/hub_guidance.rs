@@ -254,7 +254,7 @@ fn arrow_geometry(
         f64::from(sprite.height),
     );
     // UI 88 registers a 16x21 crop inside a 116x128 logical box. Reserve that
-    // authored box, as the maintained Pixi sprite does, without stretching its ink.
+    // authored box without stretching the cropped ink to fill it.
     let bounds = corners_bounds(project_rect(
         left,
         top,
