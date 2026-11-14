@@ -4131,6 +4131,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "smallvec",
  "solomon-assets",
  "solomon-graphics",
  "solomon-protocol",
@@ -4309,6 +4310,7 @@ dependencies = [
  "ryu-js",
  "serde",
  "serde_json",
+ "smallvec",
 ]
 
 [[package]]

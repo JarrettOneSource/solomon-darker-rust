@@ -8,6 +8,7 @@ mod prepare;
 
 use std::collections::BTreeMap;
 
+use smallvec::SmallVec;
 use solomon_assets::SpriteRecord;
 use solomon_sim::Vec2;
 use solomon_sim::boneyard::shadows::ShadowRecord;
@@ -76,15 +77,19 @@ struct EnemyDrawGroup {
     scale: f64,
     material_tint: Option<u32>,
     rotation: Option<art::SpriteRotation>,
-    draws: Vec<EnemyDraw>,
+    draws: SmallVec<[EnemyDraw; 2]>,
 }
 
 impl EnemyDrawGroup {
     fn at(position: Vec2) -> Self {
-        Self { position, scale: 1.0, material_tint: None, rotation: None, draws: Vec::new() }
+        Self { position, scale: 1.0, material_tint: None, rotation: None, draws: SmallVec::new() }
     }
 
-    fn sprites(position: Vec2, layers: Vec<EnemySpriteLayer>, region_tint: bool) -> Self {
+    fn sprites(
+        position: Vec2,
+        layers: impl IntoIterator<Item = EnemySpriteLayer>,
+        region_tint: bool,
+    ) -> Self {
         let mut group = Self::at(position);
         for layer in layers {
             group.draws.push(EnemyDraw::Sprite { layer, region_tint });

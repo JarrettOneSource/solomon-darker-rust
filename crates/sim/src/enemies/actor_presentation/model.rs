@@ -1,6 +1,8 @@
 //! Enemy draw values: art atlases and records, sprite and segment layers, and the plan each
 //! actor hands to the renderer.
 
+use std::borrow::Cow;
+
 use crate::Vec2;
 
 /// The stock sprite atlas an enemy layer draws from.
@@ -70,7 +72,7 @@ pub struct EnemySpriteLayer {
     pub blend: EnemyArtBlend,
     pub entry: usize,
     pub offset: Vec2,
-    pub role: String,
+    pub role: Cow<'static, str>,
     pub rotation_radians: f64,
     pub scale: f64,
     pub scale_x: Option<f64>,
@@ -83,7 +85,7 @@ pub struct EnemySpriteLayer {
 
 impl EnemySpriteLayer {
     #[must_use]
-    pub fn new(atlas: EnemyArtAtlas, entry: usize, role: impl Into<String>) -> Self {
+    pub fn new(atlas: EnemyArtAtlas, entry: usize, role: impl Into<Cow<'static, str>>) -> Self {
         Self {
             alpha: 1.0,
             atlas,
@@ -126,7 +128,7 @@ impl From<crate::enemies::presentation::EnemyProjectileLayer> for EnemySpriteLay
             },
             entry: layer.entry,
             offset: layer.offset,
-            role: layer.role,
+            role: layer.role.into(),
             rotation_radians: layer.rotation_radians,
             scale: layer.scale,
             scale_x: None,

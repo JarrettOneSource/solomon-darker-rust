@@ -9,6 +9,7 @@ publish.workspace = true
 persistence = ["dep:serde"]
 
 [dependencies]
+smallvec = { workspace = true }
 ryu-js = "1.0.3"
 serde = { workspace = true, optional = true, features = ["rc"] }
 

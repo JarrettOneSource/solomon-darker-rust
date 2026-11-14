@@ -76,7 +76,7 @@ impl EnemyView {
             group.material_tint = Some((frame.actor_tint)(actor));
             for layer in plan.layers {
                 for segment in &plan.segments {
-                    if segment.before_role == layer.role {
+                    if segment.before_role == layer.role.as_ref() {
                         group.draws.push(EnemyDraw::Segment(segment.clone()));
                     }
                 }
@@ -161,7 +161,7 @@ impl EnemyView {
             };
             self.underlays.push((
                 maggot.registration_ordinal,
-                EnemyDrawGroup::sprites(maggot.position, vec![shadow], false),
+                EnemyDrawGroup::sprites(maggot.position, [shadow], false),
             ));
         }
     }
@@ -196,7 +196,7 @@ impl EnemyView {
                 .copied()
                 .unwrap_or(state.age_ticks as f64);
             let plan = enemy_projectile_plan_at_age(&visual, frame.tick as f64, age);
-            let underlays = plan.underlays.into_iter().map(EnemySpriteLayer::from).collect();
+            let underlays = plan.underlays.into_iter().map(EnemySpriteLayer::from);
             self.pre_world.push(EnemyDrawGroup::sprites(plan.position, underlays, false));
             if projectile.kind() == EnemyProjectileKind::PoisonPool {
                 continue;
@@ -315,7 +315,7 @@ impl EnemyView {
                     tint: glow.tint,
                     ..EnemySpriteLayer::new(EnemyArtAtlas::BadGuys, 15, "enemy-fire-ground-glow")
                 };
-                self.pre_world.push(EnemyDrawGroup::sprites(glow.position, vec![layer], false));
+                self.pre_world.push(EnemyDrawGroup::sprites(glow.position, [layer], false));
             }
             match effect.kind {
                 EnemyProjectileEffectKind::DemonExplosionArray
@@ -481,7 +481,7 @@ impl EnemyView {
                     tint: crow.tint,
                     ..EnemySpriteLayer::new(EnemyArtAtlas::Heartmonger, crow.entry, "crow")
                 };
-                self.post_world.push(EnemyDrawGroup::sprites(crow.position, vec![layer], false));
+                self.post_world.push(EnemyDrawGroup::sprites(crow.position, [layer], false));
             }
         } else {
             for actor in world.actors.iter() {
@@ -504,7 +504,7 @@ impl EnemyView {
                     rotation_radians: decal.rotation_deg * std::f64::consts::PI / 180.0,
                     ..EnemySpriteLayer::new(EnemyArtAtlas::DeadHawg, decal.entry, "spider-decal")
                 };
-                self.background.push(EnemyDrawGroup::sprites(decal.position, vec![layer], false));
+                self.background.push(EnemyDrawGroup::sprites(decal.position, [layer], false));
             }
             let Some(entry) = dead_spider_entry(state) else { continue };
             if state.life < 10.0 {
@@ -515,7 +515,7 @@ impl EnemyView {
                 ..EnemySpriteLayer::new(EnemyArtAtlas::DeadHawg, entry, "dead-spider")
             };
             let shadow = EnemySpriteLayer { tint: 0, offset: Vec2::new(0.0, 1.0), ..body.clone() };
-            self.pre_world.push(EnemyDrawGroup::sprites(state.position, vec![shadow, body], false));
+            self.pre_world.push(EnemyDrawGroup::sprites(state.position, [shadow, body], false));
         }
     }
 
@@ -532,7 +532,7 @@ impl EnemyView {
                 "crow",
             )
         };
-        self.post_world.push(EnemyDrawGroup::sprites(position, vec![layer], false));
+        self.post_world.push(EnemyDrawGroup::sprites(position, [layer], false));
     }
 
     pub(super) fn push_root(

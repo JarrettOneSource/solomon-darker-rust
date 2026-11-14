@@ -125,7 +125,10 @@ impl CombatAudioCursor {
             let Some(volume) = player_attenuation(frame, player.id) else { continue };
             let build = active_weld_build(player);
             let element = selected_primary_element(player);
-            if player.cast.cast_sequence > previous.cast {
+            // Selection retains global counters. Establish a new audio baseline
+            // before attributing those counters to the newly selected spell.
+            let same_primary = previous.primary == (player.selected_primary_skill_id, build);
+            if same_primary && player.cast.cast_sequence > previous.cast {
                 if let Some(build) = build {
                     if !weld_one_shot(build) {
                         for _ in previous.cast..player.cast.cast_sequence {
@@ -148,7 +151,7 @@ impl CombatAudioCursor {
                     }
                 }
             }
-            if player.cast.fizzle_sequence > previous.fizzle {
+            if same_primary && player.cast.fizzle_sequence > previous.fizzle {
                 if element == WizardElement::Earth {
                     let boulder = frame.primary.projectiles.iter().find_map(|spell| match spell {
                         PrimarySpellProjectile::Earth(earth)
@@ -166,7 +169,7 @@ impl CombatAudioCursor {
                     play(output, AudioCue::Fizzle, 1.0, volume);
                 }
             }
-            if player.cast.emission_sequence > previous.emission {
+            if same_primary && player.cast.emission_sequence > previous.emission {
                 if let Some(build) = build {
                     if weld_one_shot(build) {
                         let pitch = player

@@ -218,7 +218,11 @@ pub fn boss_spell_plan(spell: &BossSpell, tick: u64, view_height: f64) -> EnemyB
     EnemyBossSpellPlan { gradients: Vec::new(), layers }
 }
 
-fn layer(atlas: EnemyArtAtlas, entry: usize, role: impl Into<String>) -> EnemySpriteLayer {
+fn layer(
+    atlas: EnemyArtAtlas,
+    entry: usize,
+    role: impl Into<std::borrow::Cow<'static, str>>,
+) -> EnemySpriteLayer {
     EnemySpriteLayer::new(atlas, entry, role)
 }
 

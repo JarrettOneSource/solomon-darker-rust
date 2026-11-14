@@ -38,3 +38,20 @@ fn owner_promotion_retains_pixis_display_order_across_frames_and_empty_views() {
         assert_eq!(retained.apply(&painters, &overlays, &live), expected, "{}", frame["name"]);
     }
 }
+
+#[test]
+fn sparse_draw_ids_and_equal_depths_keep_the_planned_order() {
+    let mut order = PainterOverlayOrder::default();
+    let painters = [(9001, 8.0), (73, 2.0), (400, 8.0), (19, 2.0), (800, 1.0)];
+    assert_eq!(order.apply(&painters, &[], &[]), [800, 73, 19, 9001, 400]);
+
+    let overlays = [
+        PainterOwnerOverlay { draw_id: 73, owner_draw_id: 9001, view_id: 5 },
+        PainterOwnerOverlay { draw_id: 800, owner_draw_id: 73, view_id: 8 },
+    ];
+    assert_eq!(
+        order.apply(&painters, &overlays, &[(5, 0), (8, 1)]),
+        [19, 9001, 400, 73, 800],
+        "a later overlay sees the already promoted owner depth"
+    );
+}

@@ -309,7 +309,7 @@ fn compose_family(
             -bob
         } else if layer.role.ends_with("-body")
             || matches!(
-                layer.role.as_str(),
+                layer.role.as_ref(),
                 "skeleton-weapon" | "skeleton-mace-head" | "mage-cloak"
             )
         {
@@ -380,7 +380,7 @@ fn compose_family(
     for pass in 1..=2 {
         for (index, source) in articulated.iter().enumerate() {
             let mut glow = source.clone();
-            glow.role = format!("{}:burn-glow-{pass}", source.role);
+            glow.role = format!("{}:burn-glow-{pass}", source.role).into();
             glow.blend = EnemyArtBlend::Add;
             glow.tint = if flail_head.is_some_and(|head| pass == 2 || index >= head) {
                 base_tint

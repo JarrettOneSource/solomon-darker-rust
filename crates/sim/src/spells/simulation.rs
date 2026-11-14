@@ -567,8 +567,8 @@ impl SpellState {
                 rng,
             ));
         }
-        wizard.primary_cast.last_weld_playback_rate = None;
-        wizard.primary_cast.last_weld_sound_variant = None;
+        // A snapshot may span the previous emission and this windup. Its audio
+        // metadata belongs to the emission counter until another shot replaces it.
         match cast.authority.primary_skill {
             PrimarySkillProfile::Air(_) | PrimarySkillProfile::Water(_) => {
                 wizard.primary_cast.channel_active = true

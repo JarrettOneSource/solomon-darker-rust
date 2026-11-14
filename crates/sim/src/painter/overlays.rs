@@ -68,15 +68,17 @@ impl PainterOverlayOrder {
         self.views.sort_by(|left, right| left.depth.total_cmp(&right.depth));
         let retained_order: BTreeMap<_, _> =
             self.views.iter().enumerate().map(|(rank, view)| (view.id, rank)).collect();
-        let mut order: Vec<_> = painters.iter().map(|&(id, _)| id).collect();
-        order.sort_by(|left, right| {
-            depths[left].total_cmp(&depths[right]).then_with(|| {
+        // Resolve depths once per draw, rather than searching the map for every
+        // comparison when a death burst adds thousands of painters.
+        let mut order: Vec<_> = painters.iter().map(|&(id, _)| (id, depths[&id])).collect();
+        order.sort_by(|(left, left_depth), (right, right_depth)| {
+            left_depth.total_cmp(right_depth).then_with(|| {
                 match (overlay_views.get(left), overlay_views.get(right)) {
                     (Some(left), Some(right)) => retained_order[left].cmp(&retained_order[right]),
                     _ => std::cmp::Ordering::Equal,
                 }
             })
         });
-        order
+        order.into_iter().map(|(id, _)| id).collect()
     }
 }

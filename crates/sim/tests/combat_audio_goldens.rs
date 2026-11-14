@@ -17,6 +17,56 @@ fn point(value: &Value) -> Vec2 {
     Vec2::new(value["x"].as_f64().unwrap(), value["y"].as_f64().unwrap())
 }
 
+#[test]
+fn changing_primary_selection_does_not_replay_the_previous_spells_emission() {
+    let primary = SpellState::default();
+    let secondary = SecondarySimulationState::new(1);
+    let mut cursor = None;
+    let mut update = |cast: &PlayerPrimaryCastState, selected_primary_skill_id| {
+        let players = [CombatAudioPlayer {
+            id: "local",
+            world_key: "boneyard:audio",
+            position: Vec2::ZERO,
+            element: WizardElement::Ether,
+            selected_primary_skill_id,
+            weld_build_id: Some(WeldBuildId::BallLightning),
+            cast,
+            footstep_tick: 0,
+        }];
+        let frame = CombatAudioFrame {
+            tick: cast.emission_sequence,
+            run_id: Some("audio"),
+            listener_id: "local",
+            players: &players,
+            primary: &primary,
+            secondary: &secondary,
+            staff_contacts: &[],
+            enemies: None,
+            enemy_events: &[],
+            loot_events: &[],
+            encounter: None,
+            point_gain: &|_| 1.0,
+            hit_gain: &|_| 1.0,
+        };
+        cursor.get_or_insert_with(|| CombatAudioCursor::new(&frame)).update(&frame)
+    };
+    let mut cast = PlayerPrimaryCastState::default();
+    assert!(update(&cast, 8).events.is_empty());
+    // The skipped snapshot emitted Ether, then the player selected the Weld.
+    cast.emission_sequence = 1;
+    cast.reset_for_selection(1002);
+    assert!(update(&cast, 52).events.is_empty());
+    cast.emission_sequence = 2;
+    cast.last_weld_playback_rate = Some(1.125);
+    cast.last_weld_sound_variant = Some(0);
+    let output = update(&cast, 52);
+    assert_eq!(output.events.len(), 1);
+    let AudioEvent::Play(cue, options) = &output.events[0] else { panic!("shot") };
+    assert_eq!(cue.as_str(), "throw-lightning-1");
+    assert_eq!(options.playback_rate, 1.125);
+    assert!(update(&cast, 52).events.is_empty());
+}
+
 fn common(value: &Value) -> PrimarySpellTransientBase {
     PrimarySpellTransientBase {
         id: value["id"].as_u64().unwrap(),

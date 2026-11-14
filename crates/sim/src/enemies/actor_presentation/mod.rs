@@ -112,7 +112,7 @@ pub fn enemy_actor_plan_with_input(
                 continue;
             }
             layer.alpha *= hit_flash;
-            layer.role = format!("hit:{}", layer.role);
+            layer.role = format!("hit:{}", layer.role).into();
             layer.tint = puppet_hit_tint(context.complex_lighting, layer.tint);
             layer.texture_diffuse = true;
             layers.push(layer);
@@ -244,7 +244,7 @@ pub fn maggot_plan_with_input(
     if hit > 0.0 {
         layers.push(EnemySpriteLayer {
             alpha: sample.alpha.clamp(0.0, 1.0) * hit,
-            role: "hit:maggot-body".to_owned(),
+            role: "hit:maggot-body".into(),
             texture_diffuse: true,
             tint: puppet_hit_tint(complex_lighting, 0xffffff),
             ..body

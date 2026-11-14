@@ -515,3 +515,29 @@ Full release qualification remains pending. These local observations do not
 reproduce the unavailable Aliss lethal frame or resolve every historical lag
 claim. Raw measurements and artifact identities are retained under
 `~/codex-runs/solomon-remaining-reports-20261110/`.
+
+
+## Faculty presentation work
+
+A November 14 M2 Chrome/ANGLE Metal comparison continues the unmodified Report 37
+wizard through the public account save path, then uses ordinary movement and
+primary fire to defeat the surviving Faculty member. The viewport is 1600×900;
+no build or test suite runs during measurement. Both runs use the same published
+native authority (`8bf1e51d`) and differ in the browser presentation implementation.
+
+The baseline death burst reaches 8,162 effects. Forward matching of ordered
+populations, once-resolved painter depths, inline sprite-plan storage and borrowed
+static role text reduce mean drawing callback time during the measured heavy
+window from 10.67 to 8.64 ms in the final unprofiled comparison, whose candidate
+peaks at 8,383 effects. Frame rate remains approximately 56–57 FPS. The runs
+are independently evolving combat, so the roughly 19% callback reduction is an
+observed workload result rather than an exact-state causal percentage. College
+returns remain approximately 60 FPS; large accepted-snapshot gaps remain a
+separate transport cost. This does not establish every historical slowdown's
+cause or performance on other devices.
+
+An attempted global ordered-JSON representation reduced sender preparation time
+but increased browser decoding cost and lowered local burst frame rate. It is
+not part of the implementation. The existing snapshot codec and payload remain
+unchanged. The source-level rendering changes are protected by the unchanged
+enemy fixtures and behavioral interpolation and painter-order tests.

@@ -982,3 +982,34 @@ serious runtime errors retain rendering priority. College invitation failures ke
 their separate notice owner, and card expiry or dismissal cannot clear them.
 Controller and composed egui regressions protect the deadline, stale-reply,
 keyboard, pointer and focus lifetimes; actual built-game acceptance is separate.
+
+## Emission audio survives the next cast windup
+
+A snapshot can include a one-shot Weld emission followed by the start of another
+cast. Its emission counter still describes the completed shot, so its playback
+rate and sound variant must remain available until another emission replaces
+them. Clearing those fields at cast acceptance left the audio consumer without
+the values required by that counter and could stop the browser during held fire.
+The rule covers Burning Bolt, Frost Missile, Ball Lightning and Crawling Shock
+with bare hands, Staff and Wand. It changes no cast timing or random draws.
+
+Selecting another primary spell clears its cast-local metadata while retaining
+the global counters. Audio consumers establish a new counter baseline when the
+selected primary or Weld build changes, preventing an earlier spell's emission
+from being attributed to the new selection. Later shots retain their accepted
+pitch and play once. Missing audio metadata for an emission under an unchanged
+selection remains an invariant failure.
+
+## Rendering ordered effect populations
+
+Presentation pairs surviving actors by their monotonically assigned IDs with a
+forward merge over the admitted populations. The helper verifies both orders and
+uses the existing keyed lookup when an input is unordered. Births, removals and
+the current population order retain their existing meaning. Painter depths are
+resolved once for the complete draw group rather than searched for every sprite.
+
+Small sprite plans use `smallvec` 1.16.3, already present in the dependency lock,
+for inline draw/layer storage with ordinary spill behavior. Static presentation
+roles borrow their text; dynamically authored roles remain owned. These are
+presentation allocations only: simulation state, authored draw order, effect
+populations, save formats and snapshot encoding retain their existing contracts.

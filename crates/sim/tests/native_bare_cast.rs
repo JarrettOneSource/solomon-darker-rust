@@ -22,6 +22,51 @@ fn profile(element: WizardElement, weld: Option<WeldBuildId>) -> PrimarySkillPro
     primary_skill_profile(&book, &OffensiveSpellFactors::default())
 }
 
+#[test]
+fn repeated_weld_casts_retain_the_last_emissions_audio_until_the_next_emission() {
+    for build in [
+        WeldBuildId::BurningBolt,
+        WeldBuildId::FrostMissile,
+        WeldBuildId::BallLightning,
+        WeldBuildId::CrawlingShock,
+    ] {
+        for weapon in [None, Some(PlayerWeaponKind::Staff), Some(PlayerWeaponKind::Wand)] {
+            let profile = profile(WizardElement::Ether, Some(build));
+            let mut wizard = HubWizard::at(Vec2::ZERO);
+            let mut spells = SpellState::default();
+            let mut rng = Rng::new(73);
+            let mut restarts = 0;
+            for tick in 0..500 {
+                let before = wizard.primary_cast.clone();
+                step(
+                    &mut spells,
+                    &mut wizard,
+                    &mut rng,
+                    &profile,
+                    weapon,
+                    tick,
+                    true,
+                    1.8,
+                    1.0,
+                    true,
+                );
+                let after = &wizard.primary_cast;
+                if before.emission_sequence > 0
+                    && after.emission_sequence == before.emission_sequence
+                {
+                    assert_eq!(
+                        (after.last_weld_playback_rate, after.last_weld_sound_variant),
+                        (before.last_weld_playback_rate, before.last_weld_sound_variant),
+                        "{build:?}/{weapon:?} tick {tick}: snapshots may skip the emission tick"
+                    );
+                    restarts += u32::from(after.cast_sequence > before.cast_sequence);
+                }
+            }
+            assert!(restarts > 2, "exercise repeated cast starts for {build:?}/{weapon:?}");
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn step(
     spells: &mut SpellState,

@@ -378,7 +378,7 @@ fn projectile_heading(projectile: &EnemyProjectile) -> f64 {
 
 #[must_use]
 pub(crate) fn interpolate_death_effects<'a>(
-    older: impl IntoIterator<Item = &'a EnemyDeathEffect>,
+    older: impl IntoIterator<Item = &'a EnemyDeathEffect> + Clone,
     newer: impl IntoIterator<Item = &'a EnemyDeathEffect> + Clone,
     blend: f64,
 ) -> (Vec<EnemyDeathEffect>, BTreeMap<usize, EnemyEffectPresentationInput>) {
@@ -390,28 +390,23 @@ pub(crate) fn interpolate_death_effects<'a>(
         |effect| effect.id,
         |first, second, blend| {
             let mut effect = endpoint(first, second, blend).clone();
+            let rotation_radians = lerp_cycle(
+                first.rotation_deg * PI / 180.0,
+                second.rotation_deg * PI / 180.0,
+                blend,
+                TAU,
+            );
             ages.insert(
                 effect.id,
                 EnemyEffectPresentationInput {
                     age_ticks: lerp(first.age_ticks as f64, second.age_ticks as f64, blend),
-                    rotation_radians: lerp_cycle(
-                        first.rotation_deg * PI / 180.0,
-                        second.rotation_deg * PI / 180.0,
-                        blend,
-                        TAU,
-                    ),
+                    rotation_radians,
                 },
             );
             effect.alpha = lerp(first.alpha, second.alpha, blend);
             effect.height = lerp(first.height, second.height, blend);
             effect.position = lerp_vec(first.position, second.position, blend);
-            effect.rotation_deg = lerp_cycle(
-                first.rotation_deg * PI / 180.0,
-                second.rotation_deg * PI / 180.0,
-                blend,
-                TAU,
-            ) * 180.0
-                / PI;
+            effect.rotation_deg = rotation_radians * 180.0 / PI;
             effect.scale = lerp(first.scale, second.scale, blend);
             effect.scale_y = lerp(first.scale_y, second.scale_y, blend);
             effect

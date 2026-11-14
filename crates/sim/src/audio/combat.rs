@@ -90,6 +90,7 @@ pub struct CombatAudioFrame<'a> {
 
 #[derive(Clone, Copy)]
 struct PlayerSoundClock {
+    primary: (u32, Option<WeldBuildId>),
     cast: u64,
     emission: u64,
     fizzle: u64,
@@ -100,6 +101,7 @@ struct PlayerSoundClock {
 impl From<&CombatAudioPlayer<'_>> for PlayerSoundClock {
     fn from(player: &CombatAudioPlayer<'_>) -> Self {
         Self {
+            primary: (player.selected_primary_skill_id, skills::active_weld_build(player)),
             cast: player.cast.cast_sequence,
             emission: player.cast.emission_sequence,
             fizzle: player.cast.fizzle_sequence,

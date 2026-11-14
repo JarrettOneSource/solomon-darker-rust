@@ -1,5 +1,7 @@
 //! Draw plans for enemy death effects: corpse sprites and the Banish columns.
 
+use smallvec::SmallVec;
+
 use super::actor_presentation::{EnemyArtAtlas, EnemyArtBlend, EnemySpriteLayer};
 use super::model::{EnemyDeathEffect, EnemyDeathEffectKind};
 use super::projectile_presentation::{effect_atlas, effect_blend};
@@ -24,7 +26,7 @@ pub struct EnemyBanishGradient {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct EnemyDeathEffectPlan {
     pub gradients: Vec<EnemyBanishGradient>,
-    pub layers: Vec<EnemySpriteLayer>,
+    pub layers: SmallVec<[EnemySpriteLayer; 2]>,
     pub queue_family: SecondaryQueueFamily,
 }
 
@@ -81,14 +83,14 @@ pub fn enemy_death_effect_plan_with_input(
         tint: effect.tint,
         ..EnemySpriteLayer::new(effect_atlas(effect.atlas), effect.entry, "death-effect")
     };
-    let mut layers = Vec::new();
+    let mut layers = SmallVec::new();
     if effect.shadow && (effect.kind != Kind::BoulderBit || effect.height != 0.0) {
         layers.push(EnemySpriteLayer {
             blend: EnemyArtBlend::Normal,
             offset: Vec2::new(0.0, 2.0),
             scale_y: Some(effect.scale_y * 0.75),
             tint: 0,
-            role: "death-effect-shadow".to_owned(),
+            role: "death-effect-shadow".into(),
             ..sprite.clone()
         });
     }
@@ -152,7 +154,7 @@ fn banish_plan(
     } else {
         0xff0000 | ((progress * 0.75 * 255.0).min(255.0).round() as u32) << 8
     };
-    let mut layers = Vec::new();
+    let mut layers = SmallVec::new();
     for index in 0..2 {
         layers.push(EnemySpriteLayer {
             alpha: progress.min(1.0),

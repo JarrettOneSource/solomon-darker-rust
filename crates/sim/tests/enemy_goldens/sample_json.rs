@@ -191,7 +191,7 @@ pub fn animation_from_json(value: &Value) -> EnemyPresentationInput {
                 ..EnemySpriteLayer::new(
                     EnemyArtAtlas::BadGuys,
                     49,
-                    effect["role"].as_str().unwrap(),
+                    effect["role"].as_str().unwrap().to_owned(),
                 )
             },
         })

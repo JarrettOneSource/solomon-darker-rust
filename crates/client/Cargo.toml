@@ -16,6 +16,7 @@ harness = false
 browser-fixtures = []
 
 [dependencies]
+smallvec = { workspace = true }
 solomon-graphics = { workspace = true }
 solomon-sim = { workspace = true, features = ["persistence"] }
 solomon-assets = { workspace = true }

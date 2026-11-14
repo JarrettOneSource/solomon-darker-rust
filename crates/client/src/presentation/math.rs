@@ -54,7 +54,7 @@ pub(super) fn lerp_option(first: Option<f64>, second: Option<f64>, blend: f64) -
 /// admitted, and retired members removed, only at the newer endpoint.
 #[must_use]
 pub(super) fn interpolate_members<'a, T: Clone + 'a, K: Clone + Ord>(
-    older: impl IntoIterator<Item = &'a T>,
+    older: impl IntoIterator<Item = &'a T> + Clone,
     newer: impl IntoIterator<Item = &'a T> + Clone,
     blend: f64,
     id: impl Fn(&T) -> K,
@@ -76,18 +76,64 @@ pub(super) fn interpolate_members<'a, T: Clone + 'a, K: Clone + Ord>(
 /// newer snapshot's members instead. Members are usually borrowed records, so the
 /// output type can differ from the member type.
 pub(super) fn interpolate_projected_members<V, T, K: Clone + Ord>(
-    older: impl IntoIterator<Item = V>,
+    older: impl IntoIterator<Item = V> + Clone,
     newer: impl IntoIterator<Item = V> + Clone,
     blend: f64,
     id: impl Fn(&V) -> K,
     snapshot: impl Fn(&V) -> T,
     mut project: impl FnMut(&V, &V, f64) -> T,
 ) -> Vec<T> {
+    // Most adjacent snapshots retain the same ordered population. Match those
+    // directly before handling births, retirements and reordering.
+    if older
+        .clone()
+        .into_iter()
+        .map(|member| id(&member))
+        .eq(newer.clone().into_iter().map(|member| id(&member)))
+    {
+        return older
+            .into_iter()
+            .zip(newer)
+            .map(|(first, next)| project(&first, &next, blend))
+            .collect();
+    }
+    let at_newer_endpoint = blend >= 1.0;
+    // Effect IDs increase in admission order. Even as those populations change,
+    // merge their ordered IDs directly without building a per-frame lookup tree.
+    if older.clone().into_iter().map(|member| id(&member)).is_sorted_by(|a, b| a < b)
+        && newer.clone().into_iter().map(|member| id(&member)).is_sorted_by(|a, b| a < b)
+    {
+        let older = older.into_iter();
+        let mut newer = newer.into_iter().peekable();
+        let mut result = Vec::with_capacity(older.size_hint().1.unwrap_or(0));
+        let mut births = Vec::new();
+        for member in older {
+            let key = id(&member);
+            while newer.peek().is_some_and(|next| id(next) < key) {
+                let born = newer.next().unwrap();
+                if at_newer_endpoint {
+                    births.push(snapshot(&born));
+                }
+            }
+            match newer.peek() {
+                Some(next) if id(next) == key => {
+                    result.push(project(&member, next, blend));
+                    newer.next();
+                }
+                _ if !at_newer_endpoint => result.push(snapshot(&member)),
+                _ => {}
+            }
+        }
+        if at_newer_endpoint {
+            result.extend(births);
+            result.extend(newer.map(|member| snapshot(&member)));
+        }
+        return result;
+    }
     let newer_by_id: BTreeMap<_, _> =
         newer.clone().into_iter().map(|member| (id(&member), member)).collect();
     let older = older.into_iter();
     let mut result = Vec::with_capacity(older.size_hint().1.unwrap_or(0));
-    let at_newer_endpoint = blend >= 1.0;
     let mut known = BTreeSet::new();
     for member in older {
         let key = id(&member);
@@ -111,4 +157,52 @@ pub(super) fn interpolate_projected_members<V, T, K: Clone + Ord>(
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn members(older: &[(u32, f64)], newer: &[(u32, f64)], blend: f64) -> Vec<(u32, f64)> {
+        interpolate_members(
+            older,
+            newer,
+            blend,
+            |member| member.0,
+            |first, next, blend| (first.0, lerp(first.1, next.1, blend)),
+        )
+    }
+
+    #[test]
+    fn matching_members_interpolate_values_at_both_endpoints_and_between_them() {
+        let older = [(40, 2.0), (3, 10.0)];
+        let newer = [(40, 6.0), (3, 18.0)];
+        assert_eq!(members(&older, &newer, 0.0), older);
+        assert_eq!(members(&older, &newer, 0.5), [(40, 4.0), (3, 14.0)]);
+        assert_eq!(members(&older, &newer, 1.0), newer);
+        assert!(members(&[], &[], 0.5).is_empty());
+    }
+
+    #[test]
+    fn births_retirements_and_reordering_keep_residents_in_older_order() {
+        let older = [(40, 2.0), (3, 10.0), (9, 20.0)];
+        let newer = [(3, 18.0), (7, 30.0), (40, 6.0)];
+        assert_eq!(members(&older, &newer, 0.5), [(40, 4.0), (3, 14.0), (9, 20.0)]);
+        assert_eq!(members(&older, &newer, 1.0), [(40, 6.0), (3, 18.0), (7, 30.0)]);
+        assert_eq!(members(&older, &[], 0.5), older);
+        assert!(members(&older, &[], 1.0).is_empty());
+        assert!(members(&[], &newer, 0.5).is_empty());
+        assert_eq!(members(&[], &newer, 1.0), newer);
+    }
+
+    #[test]
+    fn ordered_populations_keep_births_after_residents_at_the_newer_endpoint() {
+        let older = [(3, 10.0), (7, 20.0), (9, 30.0)];
+        let newer = [(2, 2.0), (3, 14.0), (8, 8.0), (9, 34.0), (10, 10.0)];
+        assert_eq!(members(&older, &newer, 0.5), [(3, 12.0), (7, 20.0), (9, 32.0)]);
+        assert_eq!(
+            members(&older, &newer, 1.0),
+            [(3, 14.0), (9, 34.0), (2, 2.0), (8, 8.0), (10, 10.0)]
+        );
+    }
 }
