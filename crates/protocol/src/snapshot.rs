@@ -10,11 +10,13 @@ use std::fmt;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use self::value::Value;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::de::{DeserializeOwned, Error as _, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+
+mod value;
 
 use crate::{GAME_WEBSOCKET_MAX_PAYLOAD_BYTES, ServerMessage, SnapshotFrame};
 
@@ -198,7 +200,7 @@ impl SnapshotReader {
             }
             Some("snapshot_delta") => {
                 let DeltaMessage::SnapshotDelta { sequence, base_sequence, changes } =
-                    serde_json::from_value(message).map_err(|error| error.to_string())?;
+                    Deserialize::deserialize(&message).map_err(|error| error.to_string())?;
                 let previous =
                     self.previous.as_mut().ok_or("The snapshot update has no complete baseline")?;
                 if base_sequence != previous.sequence || sequence <= base_sequence {
@@ -229,7 +231,7 @@ impl SnapshotReader {
                 previous.sequence = sequence;
                 Ok(ServerMessage::Snapshot { frame: decoded })
             }
-            _ => serde_json::from_value(message).map_err(|error| error.to_string()),
+            _ => Deserialize::deserialize(&message).map_err(|error| error.to_string()),
         }
     }
 }
@@ -321,26 +323,16 @@ impl Change<'_> {
         Some(match (previous, next) {
             (Value::Object(previous), Value::Object(next)) => {
                 let mut changes = BTreeMap::new();
-                if previous.len() == next.len() && previous.keys().eq(next.keys()) {
-                    // Session records keep their field set. Walk matching fields together
-                    // instead of searching the same object for every value on every frame.
-                    for ((_, previous), (key, value)) in previous.iter().zip(next) {
-                        if let Some(change) = Self::between(previous, value) {
-                            changes.insert(Cow::Owned(key.clone()), change);
-                        }
-                    }
-                } else {
-                    for key in previous.keys().filter(|key| !next.contains_key(*key)) {
-                        changes.insert(Cow::Owned(key.clone()), Self::Remove);
-                    }
-                    for (key, value) in next {
-                        let change = previous.get(key).map_or_else(
-                            || Some(Self::Replace([value.clone()])),
-                            |previous| Self::between(previous, value),
-                        );
-                        if let Some(change) = change {
-                            changes.insert(Cow::Owned(key.clone()), change);
-                        }
+                if previous.len() != next.len()
+                    || !previous.iter().map(|(key, _)| key).eq(next.iter().map(|(key, _)| key))
+                {
+                    // Field insertion and reordering are observable for Lua objects.
+                    // Replacing this object preserves them in the existing wire format.
+                    return Some(Self::Replace([Value::Object(next.clone())]));
+                }
+                for ((_, previous), (key, value)) in previous.iter().zip(next) {
+                    if let Some(change) = Self::between(previous, value) {
+                        changes.insert(Cow::Owned(key.clone()), change);
                     }
                 }
                 if changes.is_empty() {
@@ -448,46 +440,65 @@ impl Change<'_> {
                 *size = SizeCache::new(&next)?;
                 *value = next;
             }
-            Self::Object(changes) => {
+            Self::Object(mut changes) => {
                 let object =
                     value.as_object_mut().ok_or("The snapshot field update has no object")?;
+                let previous_length = object.len();
                 let fields = children.fields();
-                for (key, change) in changes {
-                    let length = object.len();
-                    if matches!(change, Self::Remove) {
-                        let removed = object
-                            .remove(key.as_ref())
-                            .ok_or("The snapshot removes an absent field")?;
-                        let removed_bytes = match fields.remove(key.as_ref()) {
-                            Some(size) => size.bytes,
-                            None => serialized_size(&removed)?,
-                        };
-                        change_size(
-                            bytes,
-                            serialized_size(&key)? + 1 + removed_bytes + usize::from(length > 1),
-                            0,
-                        )?;
-                    } else if let Some(value) = object.get_mut(key.as_ref()) {
-                        if let Some(child) = fields.get_mut(key.as_ref()) {
-                            change.apply_child(value, child, bytes)?;
-                        } else {
-                            let mut child = SizeCache::new(value)?;
-                            change.apply_child(value, &mut child, bytes)?;
-                            fields.insert(key.into_owned(), child);
-                        }
-                    } else if let Self::Replace([next]) = change {
-                        let child = SizeCache::new(&next)?;
-                        change_size(
-                            bytes,
-                            0,
-                            serialized_size(&key)? + 1 + child.bytes + usize::from(length > 0),
-                        )?;
-                        fields.insert(key.clone().into_owned(), child);
-                        object.insert(key.into_owned(), next);
-                    } else {
-                        return Err("The snapshot edits an absent field".into());
+                let mut failure = None;
+                // Visit existing fields once, preserving their order. This also avoids
+                // repeated linear searches and shifts for wide Lua objects.
+                object.retain_mut(|(key, value)| {
+                    if failure.is_some() {
+                        return true;
                     }
+                    let Some(change) = changes.remove(key.as_str()) else {
+                        return true;
+                    };
+                    let updated = (|| -> Result<bool, String> {
+                        if matches!(change, Self::Remove) {
+                            let removed_bytes = match fields.remove(key.as_str()) {
+                                Some(size) => size.bytes,
+                                None => serialized_size(value)?,
+                            };
+                            change_size(bytes, serialized_size(key)? + 1 + removed_bytes, 0)?;
+                            Ok(false)
+                        } else {
+                            if let Some(child) = fields.get_mut(key.as_str()) {
+                                change.apply_child(value, child, bytes)?;
+                            } else {
+                                let mut child = SizeCache::new(value)?;
+                                change.apply_child(value, &mut child, bytes)?;
+                                fields.insert(key.clone(), child);
+                            }
+                            Ok(true)
+                        }
+                    })();
+                    match updated {
+                        Ok(keep) => keep,
+                        Err(error) => {
+                            failure = Some(error);
+                            true
+                        }
+                    }
+                });
+                if let Some(error) = failure {
+                    return Err(error);
                 }
+                for (key, change) in changes {
+                    let Self::Replace([next]) = change else {
+                        return Err("The snapshot edits or removes an absent field".into());
+                    };
+                    let child = SizeCache::new(&next)?;
+                    change_size(bytes, 0, serialized_size(&key)? + 1 + child.bytes)?;
+                    fields.insert(key.clone().into_owned(), child);
+                    object.push((key.into_owned(), next));
+                }
+                change_size(
+                    bytes,
+                    previous_length.saturating_sub(1),
+                    object.len().saturating_sub(1),
+                )?;
             }
             Self::Retained((_, entries)) => {
                 let array =
@@ -667,6 +678,30 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn tree(value: &serde_json::Value) -> Value {
+        serde_json::from_str(&value.to_string()).unwrap()
+    }
+
+    #[test]
+    fn legacy_field_patches_keep_exact_sizes_as_objects_grow_and_empty() {
+        let mut value = tree(&json!({}));
+        let mut size = SizeCache::new(&value).unwrap();
+        for (patch, expected) in [
+            (r#"{"z":[1],"a":[{"z":2,"a":3}]}"#, r#"{"a":{"z":2,"a":3},"z":1}"#),
+            (
+                r#"{"z":null,"a":{"z":null,"a":[-0.0],"🧙\n":[{"v":"\\\""}]}}"#,
+                r#"{"a":{"a":-0.0,"🧙\n":{"v":"\\\""}}}"#,
+            ),
+            (r#"{"a":{"a":null,"🧙\n":null}}"#, r#"{"a":{}}"#),
+            (r#"{"a":null}"#, "{}"),
+        ] {
+            let change: Change = serde_json::from_str(patch).unwrap();
+            change.apply(&mut value, &mut size).unwrap();
+            assert_eq!(serde_json::to_string(&value).unwrap(), expected);
+            assert_eq!(size.bytes, expected.len());
+        }
+    }
+
     #[test]
     fn incremental_byte_counts_match_complete_json_after_nested_insertions_and_removals() {
         let values = [
@@ -682,10 +717,10 @@ mod tests {
             json!([]),
             json!(null),
         ];
-        let mut value = values[0].clone();
+        let mut value = tree(&values[0]);
         let mut size = SizeCache::new(&value).unwrap();
         for next in &values[1..] {
-            Change::between(&value, next).unwrap().apply(&mut value, &mut size).unwrap();
+            Change::between(&value, &tree(next)).unwrap().apply(&mut value, &mut size).unwrap();
             let encoded = serde_json::to_vec(&value).unwrap();
             assert_eq!(encoded, serde_json::to_vec(next).unwrap());
             assert_eq!(
@@ -705,7 +740,7 @@ mod tests {
                 })
             })
             .collect();
-        let mut value = json!(records);
+        let mut value = tree(&json!(records));
         let mut size = SizeCache::new(&value).unwrap();
         let mut next = records[1..].to_vec();
         next.reverse();
@@ -717,7 +752,7 @@ mod tests {
         let mut unidentified = next.clone();
         unidentified[0].as_object_mut().unwrap().remove("id");
         for next in [json!(next), json!(duplicate), json!(unidentified), json!([])] {
-            let change = Change::between(&value, &next).unwrap();
+            let change = Change::between(&value, &tree(&next)).unwrap();
             let encoded_change = serde_json::to_string(&change).unwrap();
             let change: Change = serde_json::from_str(&encoded_change).unwrap();
             change.apply(&mut value, &mut size).unwrap();
@@ -732,7 +767,7 @@ mod tests {
             .map(|id| json!({"id":id,"nested":[{"text":"🧙\n","x":-0.0},[id]],"keep":true}))
             .collect();
         let mut expected = json!({"records":records});
-        let mut actual = expected.clone();
+        let mut actual = tree(&expected);
         let mut size = SizeCache::new(&actual).unwrap();
         for stage in 0..6 {
             match stage {
@@ -761,7 +796,7 @@ mod tests {
                 4 => expected["records"] = json!([]),
                 _ => expected = json!({}),
             }
-            let change = Change::between(&actual, &expected).unwrap();
+            let change = Change::between(&actual, &tree(&expected)).unwrap();
             let packet = serde_json::to_string(&change).unwrap();
             let received: Change = serde_json::from_str(&packet).unwrap();
             received.apply(&mut actual, &mut size).unwrap();

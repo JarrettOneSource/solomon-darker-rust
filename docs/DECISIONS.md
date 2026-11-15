@@ -504,9 +504,18 @@ subtree byte counts travel with retained array entries and are retired with thei
 values, avoiding repeated formatting of removed or replaced effects. It does not
 reserialize the whole document to measure it. A direct serde visitor avoids
 recursively cloning untagged intermediate values.
-Objects with matching field names walk paired values directly; object shape
-changes retain the insertion/removal path. This avoids repeated map searches
-without changing delta contents or exact numeric comparisons.
+The private comparison tree stores object fields contiguously in wire order.
+Lua object order is observable in state-cell revisions and projections, so a
+sorted JSON map cannot represent a snapshot losslessly. Keeping this tree local
+to the protocol avoids changing JSON maps throughout the game. Numbers retain
+the existing JSON number representation, including full-width integers and
+signed zero; typed numeric map keys use the JSON parser's numeric rules.
+Objects with matching ordered keys walk paired values directly. A changed key
+sequence replaces that object using the existing replacement encoding. This
+preserves inserted and reordered Lua fields without a new wire or save format.
+Legacy object field patches remain accepted and keep retained fields in order.
+Wide objects use a temporary parse index and a single field-edit traversal so
+duplicate handling and removals do not require quadratic scans.
 The receiver validates each inflated JSON document as UTF-8 once before parsing
 its fields, borrows unescaped field names, and allocates owned names only for
 new or escaped fields. Exact byte accounting, malformed-update rejection and baseline retirement remain unchanged.

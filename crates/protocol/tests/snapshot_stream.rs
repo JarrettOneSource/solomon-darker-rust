@@ -3,6 +3,7 @@ use base64::engine::general_purpose::STANDARD;
 use serde_json::{Value, json};
 use solomon_protocol::snapshot::{PreparedSnapshot, SnapshotReader, SnapshotWriter};
 use solomon_protocol::{HostSnapshot, ServerMessage, SnapshotFrame};
+use solomon_sim::modding::{LuaObject, LuaValue};
 use std::sync::Arc;
 
 fn document(sequence: u64, snapshot: Value) -> Arc<PreparedSnapshot> {
@@ -22,6 +23,106 @@ fn canonical(message: ServerMessage<Value>) -> String {
 fn delta(base_sequence: u64, sequence: u64, changes: Value) -> String {
     json!({"type":"snapshot_delta", "base_sequence":base_sequence, "sequence":sequence,
         "changes":STANDARD.encode(miniz_oxide::deflate::compress_to_vec_zlib(changes.to_string().as_bytes(),1))}).to_string()
+}
+
+#[test]
+fn lua_object_order_survives_full_snapshots_updates_and_reordering() {
+    let mut writer = SnapshotWriter::default();
+    let mut reader = SnapshotReader::default();
+    let states = [
+        r#"{"z":1,"a":{"y":2,"b":3}}"#,
+        r#"{"z":1,"a":{"y":2,"b":4},"m":5}"#,
+        r#"{"m":5,"a":{"b":4,"y":2},"z":1}"#,
+        r#"{"m":5,"z":1}"#,
+        r#"{"z":1,"m":5,"a":[{"y":2,"b":3}]}"#,
+    ];
+    for (index, source) in states.into_iter().enumerate() {
+        let mut state: LuaObject = serde_json::from_str(source).unwrap();
+        state.insert("unchanged".into(), LuaValue::String("scenery".repeat(500)));
+        let prepared = PreparedSnapshot::new(SnapshotFrame {
+            sequence: index as u64 + 1,
+            snapshot: state.clone(),
+            host: HostSnapshot::default(),
+            flame_presentation: None,
+            input_acknowledgements: Default::default(),
+        });
+        let packet = writer.encode(prepared).unwrap();
+        if index > 0 {
+            assert_eq!(serde_json::from_str::<Value>(&packet).unwrap()["type"], "snapshot_delta");
+        }
+        let ServerMessage::Snapshot { frame } = reader.decode::<LuaObject>(&packet).unwrap() else {
+            panic!("snapshot")
+        };
+        assert_eq!(frame.snapshot, state, "frame {index} must preserve observable Lua order");
+    }
+}
+
+#[test]
+fn reliable_lua_results_and_mod_projections_preserve_nested_property_order() {
+    use solomon_protocol::hosted::HostedServerMessage;
+    let value: LuaValue = serde_json::from_str(r#"{"z":[{"y":1,"a":2}],"a":3}"#).unwrap();
+    let LuaValue::Object(projection) = value.clone() else { unreachable!() };
+    let messages = [
+        HostedServerMessage::LuaResult {
+            error: None,
+            ok: true,
+            output: vec![],
+            request_id: 4,
+            values: vec![value],
+        },
+        HostedServerMessage::ModContent { projection: projection.clone() },
+        HostedServerMessage::ModRuntime { projection, revision: 7 },
+    ];
+    for message in messages {
+        let source = serde_json::to_string(&ServerMessage::<LuaValue>::Hosted { message }).unwrap();
+        let decoded = SnapshotReader::default().decode::<LuaValue>(&source).unwrap();
+        assert_eq!(serde_json::to_string(&decoded).unwrap(), source);
+    }
+}
+
+#[test]
+fn wide_objects_keep_order_through_legacy_field_edits_and_duplicate_keys() {
+    let fields = (0..256)
+        .rev()
+        .map(|index| format!("\"field-{index}\":{index}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    // Use the regular envelope defaults instead of inventing a partial host schema.
+    let prepared = PreparedSnapshot::new(SnapshotFrame {
+        sequence: 1,
+        snapshot: serde_json::from_str::<LuaObject>(&format!("{{{fields}}}")).unwrap(),
+        host: HostSnapshot::default(),
+        flame_presentation: None,
+        input_acknowledgements: Default::default(),
+    });
+    let full = prepared
+        .full_message()
+        .unwrap()
+        .replace("\"field-0\":0.0}", "\"field-0\":0.0,\"field-255\":999}");
+    let mut reader = SnapshotReader::default();
+    let ServerMessage::Snapshot { frame } = reader.decode::<LuaObject>(&full).unwrap() else {
+        panic!("snapshot")
+    };
+    assert_eq!(frame.snapshot.iter().next().unwrap(), ("field-255", &LuaValue::Number(999.0)));
+    assert_eq!(frame.snapshot.len(), 256);
+    let changes = (0..256)
+        .map(|index| {
+            (
+                format!("field-{index}"),
+                if index % 2 == 0 { Value::Null } else { json!([index * 2]) },
+            )
+        })
+        .collect::<serde_json::Map<_, _>>();
+    let packet = delta(1, 2, json!({"sequence":[2],"snapshot":changes}));
+    let ServerMessage::Snapshot { frame } = reader.decode::<LuaObject>(&packet).unwrap() else {
+        panic!("snapshot")
+    };
+    let expected = (0..256)
+        .rev()
+        .filter(|index| index % 2 == 1)
+        .map(|index| (format!("field-{index}"), LuaValue::Number((index * 2).into())))
+        .collect::<LuaObject>();
+    assert_eq!(frame.snapshot, expected);
 }
 
 #[test]

@@ -31,13 +31,3 @@ The no-item HandCast1 owner now latches the recovered native float stores. Staff
 and Wand retain their existing cast cadence. Audit their broader construction
 rate precision separately, using fresh retail evidence and independent expected
 values rather than replacing historical replay fixtures.
-
-## Lua object order in snapshot decoding
-
-`SnapshotReader` currently decodes JSON through sorted object maps. A Lua object's
-insertion order can therefore change on receipt, including a full snapshot.
-A focused object sequence (`z, a`, then an inserted or reordered field) reproduces
-this independently of the death-effect optimization. Preserve the current wire
-and save contracts while investigating a bounded representation for observable
-Lua order. Enabling ordered maps for every snapshot object increased browser
-cost in a Faculty death burst, so that global change is not retained.
