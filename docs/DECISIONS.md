@@ -374,6 +374,13 @@ retained tree so editing a supported field preserves the rest of the player's
 document. ZIP, XOR/LZ, profile, and document codecs live in `solomon-assets` and
 work on native and WebAssembly targets.
 
+Continuation normalization initializes an absent skeleton-boss program from the
+loaded Boneyard's canonical defaults. The check uses field absence, because an
+older upgrade could re-save a pre-schema-34 document without adding the field.
+Explicit null and recorded Ironmaw/Foulshaft progress remain unchanged. Restoring
+does not replay missed wave triggers. `skeleton_boss_save` covers all twelve
+authored sources, legacy and current envelopes, progress and non-survival worlds.
+
 Large save/checkpoint records are heap-owned at deserialization boundaries.
 Resource construction completes before saved-session admission so their large
 futures and parsing frames do not overlap the WebAssembly stack.

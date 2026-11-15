@@ -332,6 +332,13 @@ fn waves(value: &Value, defaults: &Value, source_sha: &str, version: u64) -> Res
             defaults.get("bossEncounters").cloned().unwrap_or(json!([])),
         );
     }
+    // Earlier upgrades could re-save the omitted field under a current schema.
+    if !waves.contains_key("skeletonBosses") {
+        waves.insert(
+            "skeletonBosses".into(),
+            defaults.get("skeletonBosses").cloned().unwrap_or(Value::Null),
+        );
+    }
     for (field, fallback) in [
         ("openingBursts", json!([])),
         ("openingReleaseThreshold", json!(0)),
