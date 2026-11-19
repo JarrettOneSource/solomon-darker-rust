@@ -188,10 +188,14 @@ fn source_run_archive_living_retention_lifecycle_and_performance_windows_are_exa
 }
 
 fn directory() -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // Parallel tests can observe the same system-clock value on macOS.
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     std::env::temp_dir().join(format!(
-        "solomon-run-archive-{}-{}",
+        "solomon-run-archive-{}-{}-{}",
         std::process::id(),
-        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos()
+        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
     ))
 }
 fn sample_archive() -> RunArchive {
@@ -206,14 +210,14 @@ fn supported_archive_protocols_keep_their_complete_checkpoint() {
     let (bytes, _) = super::encoding::serialize_archive(&archive, "historical-run").unwrap();
     let mut document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let checkpoint = document["states"][0]["checkpoint"].clone();
-    for version in [1, 2, 3, 4] {
+    for version in [1, 2, 3, 4, 5] {
         document["archive"]["protocolVersion"] = json!(version);
         let decoded = super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap())
             .expect("supported archives retain the canonical checkpoint");
         assert_eq!(decoded.archive.protocol_version, version);
         assert_eq!(serde_json::to_value(&decoded.states[0].checkpoint).unwrap(), checkpoint);
     }
-    for version in [0, 5, u32::MAX] {
+    for version in [0, 6, u32::MAX] {
         document["archive"]["protocolVersion"] = json!(version);
         assert!(super::encoding::decode_archive(&serde_json::to_vec(&document).unwrap()).is_err());
     }

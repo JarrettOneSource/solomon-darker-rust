@@ -172,8 +172,8 @@ pub fn decode_archive(bytes: &[u8]) -> Result<RunArchiveFile, String> {
         || file.encoding_version != 1
         || metadata.schema_version != 1
         // Earlier complete checkpoints use the same disk migration as native saves.
-        // Protocol 4 changes snapshot transport only; complete disk states are unchanged.
-        || !matches!(metadata.protocol_version, 1..=4)
+        // Protocol 5 adds optional pending Storm births; older clouds default to none.
+        || !matches!(metadata.protocol_version, 1..=5)
         || metadata.revision.len() != 40
         || !metadata
             .revision
