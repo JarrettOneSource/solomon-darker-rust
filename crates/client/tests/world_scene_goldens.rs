@@ -112,6 +112,10 @@ fn movement_contacts_facing_locks_and_native_release_follow_the_real_world_step(
         "../../sim/tests/fixtures/website/world-scene-goldens.json"
     ))
     .unwrap();
+    let recovered_webbed: Value = serde_json::from_str(include_str!(
+        "../../sim/tests/fixtures/website/world-scene-webbed-recovery.json"
+    ))
+    .unwrap();
     let catalog = BoneyardCatalog::load_embedded().unwrap();
     for case in fixture["cases"].as_array().unwrap() {
         let index = case["templateIndex"].as_u64().unwrap() as usize;
@@ -192,9 +196,21 @@ fn movement_contacts_facing_locks_and_native_release_follow_the_real_world_step(
                 .get(record_index)
                 .is_some_and(|record| record["tick"].as_u64().unwrap() == tick)
             {
+                let mut expected = records[record_index]["state"].clone();
+                if !case["webbed"].is_null() {
+                    // Only the recorded fields affected by the old movement-lane bug
+                    // are superseded; every surrounding world field stays exact.
+                    assert_eq!(case["templateIndex"], recovered_webbed["templateIndex"]);
+                    let recovered = &recovered_webbed["records"][record_index];
+                    assert_eq!(recovered["tick"], records[record_index]["tick"]);
+                    expected["wizard"]["position"]["x"] = recovered["positionX"].clone();
+                    expected["wizard"]["velocity"]["x"] = recovered["velocityX"].clone();
+                    expected["wizard"]["gaitDegrees"] = recovered["gaitDegrees"].clone();
+                    expected["wizard"]["walkCyclePrimary"] = recovered["walkCyclePrimary"].clone();
+                }
                 support::assert_website_json(
                     &snapshot(&world, &wizard, &movement),
-                    &records[record_index]["state"],
+                    &expected,
                     &format!("map {index},scene tick {tick}"),
                     &["encounter.position.x", "encounter.position.y", "encounter.headingDeg"],
                 );

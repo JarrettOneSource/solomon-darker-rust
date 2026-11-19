@@ -1,0 +1,281 @@
+{
+  "source": "Website movement kernel with native Webbed collision-only scaling; not a direct retail capture",
+  "websiteRevision": "1e4604759a0139726d2b1fbf29738c33c17f9cc3",
+  "originalFixtureSha256": "9e67ea9ac40995512cc89cda92b9567c1e008c72c6bbcb76e0a6f9c46d39f69e",
+  "originalGeneratorSha256": "5a80dbeac671156d600cb33270a1ed64b5553747d64cd9ac97da6858eaaedb3e",
+  "sourceSha256": {
+    "frontend/src/game/core-server/boneyard-world.ts": "4bb1720b45d327f3709890f0461dce348c92f85024265669098b20e2e3695319",
+    "frontend/src/game/core-kernels/player-character.ts": "73c8b9a21ed3064195ad4163e67fade4427c22f01545ca617e865584d1e54272",
+    "frontend/src/game/core-kernels/native-webbed.ts": "6f76a13d980388782bbee730157950a46a9cd239557ba81433d301dee46b3811",
+    "frontend/src/game/host/native-generated-boneyards.ts": "7ad6d7c571efd90a67a65048fdd7c0823667fe430722309cf95bfcacf9466fe8"
+  },
+  "templateIndex": 3,
+  "seed": "scene-world-3",
+  "webbed": {
+    "severity": 1.25,
+    "strength": 12,
+    "cocoonHealth": 0,
+    "hitPulse": 0
+  },
+  "records": [
+    {
+      "tick": 0,
+      "positionX": 912.1849975585938,
+      "velocityX": 0,
+      "gaitDegrees": 0,
+      "walkCyclePrimary": 0
+    },
+    {
+      "tick": 25,
+      "positionX": 919.7163307070732,
+      "velocityX": 66.83114624023438,
+      "gaitDegrees": 66.18443794548512,
+      "walkCyclePrimary": 1.3236887454986572
+    },
+    {
+      "tick": 50,
+      "positionX": 930.822664141655,
+      "velocityX": 71.62893676757812,
+      "gaitDegrees": 163.78554321825504,
+      "walkCyclePrimary": 3.2757110595703125
+    },
+    {
+      "tick": 75,
+      "positionX": 942.1823787689209,
+      "velocityX": 71.97335815429688,
+      "gaitDegrees": 263.6133322864771,
+      "walkCyclePrimary": 0.27226629853248596
+    },
+    {
+      "tick": 100,
+      "positionX": 953.4692485332489,
+      "velocityX": 57.59808349609375,
+      "gaitDegrees": 2.8009692579507828,
+      "walkCyclePrimary": 2.256019115447998
+    },
+    {
+      "tick": 109,
+      "positionX": 953.8808134198189,
+      "velocityX": -21.791046142578125,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 125,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 133,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 150,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 175,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 200,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 225,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 250,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 275,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 300,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 325,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 350,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 375,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 400,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 425,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 450,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 475,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 500,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 525,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 550,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 575,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 600,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 625,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 650,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 675,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 687,
+      "positionX": 953.8808134198189,
+      "velocityX": 0,
+      "gaitDegrees": 11.752968654036522,
+      "walkCyclePrimary": 2.435059070587158
+    },
+    {
+      "tick": 700,
+      "positionX": 956.6062402129173,
+      "velocityX": 39.29856872558594,
+      "gaitDegrees": 35.703687220811844,
+      "walkCyclePrimary": 2.914073944091797
+    },
+    {
+      "tick": 712,
+      "positionX": 955.7214192152023,
+      "velocityX": -40.56599807739258,
+      "gaitDegrees": 49.64129872620106,
+      "walkCyclePrimary": 3.192826509475708
+    },
+    {
+      "tick": 725,
+      "positionX": 951.1380546689034,
+      "velocityX": -64.00990295410156,
+      "gaitDegrees": 89.91934858262539,
+      "walkCyclePrimary": 3.998387575149536
+    },
+    {
+      "tick": 741,
+      "positionX": 944.2256642580032,
+      "velocityX": -70.51942443847656,
+      "gaitDegrees": 150.66459380090237,
+      "walkCyclePrimary": 0.21329259872436523
+    },
+    {
+      "tick": 750,
+      "positionX": 940.180715829134,
+      "velocityX": -71.4263916015625,
+      "gaitDegrees": 186.21110789477825,
+      "walkCyclePrimary": 0.9242228269577026
+    },
+    {
+      "tick": 773,
+      "positionX": 929.7414939403534,
+      "velocityX": -71.94915771484375,
+      "gaitDegrees": 277.9497190564871,
+      "walkCyclePrimary": 2.7589948177337646
+    }
+  ]
+}

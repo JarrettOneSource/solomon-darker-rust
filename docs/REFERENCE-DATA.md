@@ -66,6 +66,14 @@ checks the recovered factor values and public-session movement, partial recovery
 full restraint, staff escape and saved-game continuation. Every other recorded
 Spider/Silk field remains an exact comparison.
 
+The map-3 Webbed case in `world-scene-goldens.json` also predates raw-movement
+retention. Its 37 samples qualify only x position, x velocity, gait and walk
+cycle through `world-scene-webbed-recovery.json`, captured independently from
+the already corrected Website revision named in that file. The original inputs,
+recording and all other fields remain intact and checked. Both complete non-Webbed
+cases are unchanged. This is an intermediary regression, supported by the native
+instruction proof, rather than a new clean-stock recording.
+
 The schema-51 `current-save-continuation-goldens` recording also remains intact.
 Its comparison expects the current export schema and the seven schema-52 Boulder
 guidance fields. The four recorded rocks retain all motion and ownership values:
