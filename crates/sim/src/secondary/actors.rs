@@ -264,6 +264,8 @@ pub struct SecondaryActorState {
     /// Native effect actors can also carry non-ability rows 14, 22 and 53.
     pub skill_id: Option<usize>,
     pub slow_factor: f64,
+    #[cfg_attr(feature = "persistence", serde(default, skip_serializing_if = "Option::is_none"))]
+    pub storm_burst: Option<super::storm::StormBurst>,
     pub target_id: Option<usize>,
     pub variant: i32,
     pub velocity: Vec2,
@@ -310,6 +312,7 @@ impl SecondaryActorState {
             scale: 1.0,
             skill_id,
             slow_factor: 0.0,
+            storm_burst: None,
             target_id: None,
             variant: 0,
             velocity: Vec2::ZERO,
@@ -400,7 +403,9 @@ pub fn secondary_light_disposition(actor: &SecondaryActorState) -> SecondaryLigh
         Leviathan | EtherBolt | MovingFire | Shockwave | MindblastShockwave | RescueShockwave
         | FirePatch | RingFireFragment | StormCloud | FreezeWave | Golem | MagicTrap | AcidRain
         | EtherDrain | Comet => SecondaryLightDisposition::ActorProvider,
-        RingFireExplosion | ElectricBurnFlare => SecondaryLightDisposition::TransientProvider,
+        RingFireExplosion | ElectricBurnFlare | StormStrike => {
+            SecondaryLightDisposition::TransientProvider
+        }
         EtherFade if actor.variant == 1 => SecondaryLightDisposition::TransientProvider,
         MagicCircle | FireBurn | EtherBurn | ElectricBurn => SecondaryLightDisposition::Misc,
         _ => SecondaryLightDisposition::None,
@@ -411,9 +416,10 @@ pub fn secondary_light_disposition(actor: &SecondaryActorState) -> SecondaryLigh
 pub fn secondary_painter_manager_lane(kind: SecondaryActorKind) -> WorldManagerLane {
     use SecondaryActorKind::*;
     match kind {
-        Leviathan | LeviathanAppendage | MovingFire | FirePatch | StormCloud | StormStrike
-        | Earthquake | Golem | GolemDeath | GolemAssemblyDebris | ElectricBurnArc | AcidRain
-        | Comet => WorldManagerLane::Actor,
+        Leviathan | LeviathanAppendage | MovingFire | FirePatch | StormCloud | Earthquake
+        | Golem | GolemDeath | GolemAssemblyDebris | ElectricBurnArc | AcidRain | Comet => {
+            WorldManagerLane::Actor
+        }
         _ => WorldManagerLane::Transient,
     }
 }

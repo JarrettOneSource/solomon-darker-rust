@@ -28,6 +28,7 @@ mod spawns;
 mod status;
 mod step;
 mod stoneskin;
+pub mod storm;
 
 pub use actors::{
     SecondaryActorKind, SecondaryActorState, SecondaryDamageContact, SecondaryDamageKind,

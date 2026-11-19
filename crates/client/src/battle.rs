@@ -1082,6 +1082,7 @@ impl WorldPasses<'_> {
         );
         mod_effects.draw(renderer, camera, spells);
         enemies.draw_late_world(renderer, camera);
+        self.secondary.draw_late_world(renderer, camera);
     }
 
     /// The black strips over the edges an arena shake exposes.

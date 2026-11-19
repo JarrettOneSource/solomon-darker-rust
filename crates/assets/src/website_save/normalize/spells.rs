@@ -103,7 +103,9 @@ pub(super) fn secondary(value: &Value, version: u64, saved_tick: u64) -> Result<
     for (index, value) in array(&value["actors"], "game save secondary actors")?.iter().enumerate()
     {
         let mut actor = record(value, &format!("game save secondary actor {index}"))?.clone();
-        if version < 48 && value["kind"] == "ether-drain-debris" {
+        if (version < 48 && value["kind"] == "ether-drain-debris")
+            || (version < 53 && value["kind"] == "storm-strike")
+        {
             continue;
         }
         if value["kind"] == "ether-drain" {

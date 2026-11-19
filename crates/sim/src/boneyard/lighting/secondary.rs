@@ -44,6 +44,16 @@ pub fn secondary_provider_light_source_at_age(
             return Some(fire_patch_light_source(actor.position, actor.radius, multiple_shadows));
         }
         RingFireExplosion => (fround(2.0 * point_gain.max(0.0)), 1.0, multiple_shadows),
+        StormStrike => {
+            let light =
+                crate::secondary::storm::contact_light(actor, age_ticks.floor().max(0.0) as u64)?;
+            return Some(BoneyardLightSource::new(
+                light.position,
+                light.radius,
+                light.intensity,
+                false,
+            ));
+        }
         ElectricBurnFlare => {
             let mut intensity = fround(1.0);
             for _ in 0..age_ticks.floor().max(0.0) as u64 {

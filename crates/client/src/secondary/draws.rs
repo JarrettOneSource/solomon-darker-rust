@@ -184,31 +184,6 @@ impl SecondaryView {
             );
         }
         if let Some(lightning) = &actor.lightning {
-            if let Some(layers) = &lightning.body {
-                for layer in layers {
-                    self.draw_air_mesh(
-                        renderer,
-                        camera,
-                        plan.root,
-                        &layer.mesh,
-                        layer.texture_record,
-                        rgba(layer.tint, layer.alpha, tint),
-                    );
-                    if let Some(branch) = &layer.branch {
-                        self.draw_air_mesh(
-                            renderer,
-                            camera,
-                            plan.root,
-                            &branch.mesh,
-                            branch.texture_record,
-                            rgba(layer.tint, layer.alpha, tint),
-                        );
-                    }
-                }
-            }
-            if let Some(corona) = &lightning.source_corona {
-                self.draw_air_corona(renderer, camera, plan.root, corona);
-            }
             self.draw_air_corona(renderer, camera, plan.root, &lightning.contact_corona);
         }
         // Equal Z indices draw in creation order: mesh, gradients, quad. Sprites
@@ -228,6 +203,38 @@ impl SecondaryView {
         }
         for draw in &plan.draws {
             self.draw_sprite(renderer, camera, plan.root, draw, tint);
+        }
+    }
+
+    /// Storm bodies and source coronas enter native Region+1E0 after the world queue.
+    pub fn draw_late_world(&self, renderer: &mut Renderer, camera: &Camera) {
+        for actor in &self.actors {
+            let Some(lightning) = &actor.lightning else { continue };
+            if let Some(layers) = &lightning.body {
+                for layer in layers {
+                    self.draw_air_mesh(
+                        renderer,
+                        camera,
+                        actor.plan.root,
+                        &layer.mesh,
+                        layer.texture_record,
+                        rgba(layer.tint, layer.alpha, [1.0; 3]),
+                    );
+                    if let Some(branch) = &layer.branch {
+                        self.draw_air_mesh(
+                            renderer,
+                            camera,
+                            actor.plan.root,
+                            &branch.mesh,
+                            branch.texture_record,
+                            rgba(layer.tint, layer.alpha, [1.0; 3]),
+                        );
+                    }
+                }
+            }
+            if let Some(corona) = &lightning.source_corona {
+                self.draw_air_corona(renderer, camera, actor.plan.root, corona);
+            }
         }
     }
 

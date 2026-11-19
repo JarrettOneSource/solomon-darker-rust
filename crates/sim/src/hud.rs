@@ -140,10 +140,33 @@ pub const fn inventory_item_icon_transform(
     }
 }
 
-/// Values supplied by the local simulation or an authoritative runtime, never invented by
-/// the view. Icon records are stock Skills/Inventory records, not skill identifiers.
+/// The canonical featured boss name and current health accepted by the session.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HudBoss {
+    pub name: String,
+    pub current_health: f64,
+    pub maximum_health: f64,
+}
+
+impl HudBoss {
+    /// Project only the canonical featured identity. Death can leave the slot empty
+    /// while other bosses live; presentation must not choose a replacement.
+    #[must_use]
+    pub fn from_world(world: &crate::enemies::world::EnemyWorld) -> Option<Self> {
+        let id = world.featured_boss_id?;
+        let actor = world.actors.iter().find(|actor| actor.id == id)?;
+        Some(Self {
+            name: actor.config.recipe_name.clone().unwrap_or_default(),
+            current_health: actor.current_health,
+            maximum_health: actor.config.maximum_health,
+        })
+    }
+}
+
+/// The accepted player meters, belt and featured boss supplied to the HUD.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HudState {
+    pub boss: Option<HudBoss>,
     pub current_health: f64,
     pub maximum_health: f64,
     pub current_mana: f64,
@@ -165,6 +188,7 @@ impl HudState {
     #[must_use]
     pub const fn new_game() -> Self {
         Self {
+            boss: None,
             current_health: HUD_BASE_HEALTH,
             maximum_health: HUD_BASE_HEALTH,
             current_mana: HUD_BASE_MANA,

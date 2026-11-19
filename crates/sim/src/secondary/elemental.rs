@@ -724,30 +724,17 @@ fn storm<W: SecondaryWorld>(
                     Vec2::new(fround(target.position.x), fround(target.position.y - 15.0));
                 flash = 1.0;
                 engine.damage(actor, target, damage, Damage::Lightning);
-                let mut strike = super::program::actor(
-                    Kind::StormStrike,
-                    &actor.owner_id,
-                    &actor.world_key,
-                    Some(27),
-                    1,
-                    origin,
-                );
-                strike.enhanced = engine.context.enhanced_effects_for(&actor.owner_id);
-                strike.endpoint = endpoint;
-                strike.lifetime_ticks = 1;
-                strike.midpoint = middle;
-                strike.phase = engine.context.tick as f64;
-                strike.target_id = Some(target.id);
-                strike.id = engine.state.spawn_actor(strike.clone());
-                for cue in [Cue::LightningStart, Cue::Thunder] {
-                    let mut event =
-                        actor_event(&strike, engine.context.tick, Event::Impact, Some(cue));
-                    event.position = endpoint;
-                    engine.state.emit_event(event);
-                }
+                actor.storm_burst = Some(super::storm::StormBurst {
+                    remaining_ticks: 5,
+                    source: origin,
+                    midpoint: middle,
+                    endpoint,
+                    target_id: target.id,
+                });
             }
         }
     }
+    super::storm::emit_pending(engine, actor);
     actor.frame = fround(flash - (0.1_f32 as f64)).max(0.0);
     if engine.state.rng.draw_integer(1000) == 3 {
         engine.state.rng.draw_scaled_float(0.35, false);

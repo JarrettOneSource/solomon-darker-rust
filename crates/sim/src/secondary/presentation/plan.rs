@@ -93,9 +93,14 @@ pub fn secondary_presentation_plan_at_age(
             plan.world_y = actor.position.y + 350.0;
         }
         Kind::StormDrop | Kind::AcidDrop => raindrop(&mut plan, actor),
-        Kind::StormStrike | Kind::ElectricBurnArc => {
-            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic
+        Kind::StormStrike => {
+            plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic;
+            if let Some(light) = crate::secondary::storm::contact_light(actor, whole_age_ticks) {
+                plan.world_y = light.position.y;
+            }
+            plan.sort_bias = 50.0;
         }
+        Kind::ElectricBurnArc => plan.queue_family = SecondaryQueueFamily::OrdinaryDynamic,
         Kind::ElectricBurnFlare => electric_burn_flare(&mut plan, actor),
         Kind::PrismaticWave => {
             plan.draws = prismatic_wave_draws_at_age(actor, whole_age_ticks, frame);

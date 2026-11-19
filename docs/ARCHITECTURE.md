@@ -116,7 +116,7 @@ Harden and elemental effects keep a single update and painter order. A lifecycle
 pass steps each effect once; the children an effect creates enter just behind it
 and take their first step on the next pass. Renderers borrow the same records.
 
-Secondary effect actors are flat records whose Golem, Golem death and Ether Drain
+Secondary effect actors are flat records whose Golem, Golem death, Ether Drain and pending Storm burst
 parts are optional fields. Actors born during the actor pass become live together
 after it. Ability clocks and mana reserves are a `BTreeMap` keyed by player ID, so
 iteration follows sorted player IDs. Target modifiers keep their application
@@ -296,7 +296,7 @@ the publication it belongs to. Checkpoint writes keep one owned pending document
 and coalesce later revisions, preserving the revision needed by a waiting receipt.
 
 Native server files use `assets::save_document` schema 2; schema 1 is rejected.
-Browser/desktop player documents use the separate schema 52 codec with its supported
+Browser/desktop player documents use the separate schema 53 codec with its supported
 migrations. [Save conversion decisions](DECISIONS.md#save-conversion) explain the
 retail container and portable-archive boundary. The hosted artifact also carries
 `solomon-save-check`, which runs stored cloud documents through the host's load path

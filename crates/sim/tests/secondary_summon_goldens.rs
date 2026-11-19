@@ -275,9 +275,35 @@ fn every_secondary_actor_preserves_native_painter_and_light_disposition() {
         enroll_secondary_painter_owners, secondary_light_disposition,
         secondary_painter_manager_lane,
     };
-    let fixture: Value =
+    let mut fixture: Value =
         serde_json::from_str(include_str!("fixtures/website/secondary-summon-goldens.json"))
             .unwrap();
+    // The preserved census's two Storm variants used actor ordinals 59/60 and
+    // omitted their light. Retail ZAnimLit contacts take transient ordinals 34/35;
+    // every later registration shifts by exactly those two transferred owners.
+    for case in fixture["painterCases"].as_array_mut().unwrap() {
+        let id = case["id"].as_u64().unwrap();
+        if case["kind"] == "storm-strike" {
+            assert!(matches!(id, 35 | 36));
+            assert_eq!(case["lane"], "actor");
+            assert_eq!(case["disposition"], "none");
+            assert_eq!(case["painterRegistrations"][0]["registrationOrdinal"], id + 24);
+            case["lane"] = json!("transient");
+            case["disposition"] = json!("transient-provider");
+            case["painterRegistrations"][0] =
+                json!({"managerLane":"transient","registrationOrdinal":id - 1});
+        } else if id > 36 {
+            for registration in case["painterRegistrations"].as_array_mut().unwrap() {
+                let ordinal = registration["registrationOrdinal"].as_i64().unwrap();
+                registration["registrationOrdinal"] =
+                    json!(ordinal + if registration["managerLane"] == "actor" { -2 } else { 2 });
+            }
+        }
+    }
+    for key in ["nextPainterOrder", "repeatedPainterOrder"] {
+        assert_eq!(fixture[key]["nextRegistrationOrdinal"], json!({"actor":135,"transient":116}));
+        fixture[key]["nextRegistrationOrdinal"] = json!({"actor":133,"transient":118});
+    }
     let mut actors = Vec::new();
     for case in fixture["painterCases"].as_array().unwrap() {
         let kind = SecondaryActorKind::ALL

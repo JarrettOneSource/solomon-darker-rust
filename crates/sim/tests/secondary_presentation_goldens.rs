@@ -292,7 +292,19 @@ fn all_secondary_stock_draw_plans_replay_source_actor_snapshots() {
             case["frame"].as_f64().unwrap(),
             case["pointGain"].as_f64().unwrap(),
         );
-        assert_snapshot(&plan(&actual), &case["plan"], case["name"].as_str().unwrap());
+        let mut actual = plan(&actual);
+        let mut expected = case["plan"].clone();
+        if actor.kind == SecondaryActorKind::StormStrike {
+            // This immutable recording positioned the one-tick primary-factory proxy
+            // at the source. Retail 006021A0 puts only the jittered contact in this
+            // queue, biased by 50. secondary_storm covers that recovered ownership.
+            assert_eq!(expected["sortBias"], 0.0);
+            for value in [&mut actual, &mut expected] {
+                value.as_object_mut().unwrap().remove("worldY");
+                value.as_object_mut().unwrap().remove("sortBias");
+            }
+        }
+        assert_snapshot(&actual, &expected, case["name"].as_str().unwrap());
     }
     for case in fixture["owners"].as_array().unwrap() {
         let actors = case["actors"].as_array().unwrap().iter().map(read_actor).collect::<Vec<_>>();

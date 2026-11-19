@@ -10,7 +10,7 @@ use crate::tutorial_scene::TutorialFrame;
 use solomon_protocol::GameCommand;
 use solomon_sim::Vec2;
 use solomon_sim::belt::{BeltEntry, BeltPotionKind, belt_potion_projection};
-use solomon_sim::hud::{HudBeltEntry, HudItemIcon};
+use solomon_sim::hud::{HudBeltEntry, HudBoss, HudItemIcon};
 
 use super::{CommandFeedback, Game};
 
@@ -171,6 +171,11 @@ impl Game {
         self.menu.set_mobile_editor_player(Some(player), self.session.boneyard.is_none());
         self.menu.set_mobile_editor_secondary(secondary);
         let hud = &mut self.hud_state;
+        hud.boss = if player.combat.life_state == solomon_sim::combat::PlayerLifeState::Alive {
+            self.session.boneyard.as_ref().and_then(|world| HudBoss::from_world(&world.enemies))
+        } else {
+            None
+        };
         hud.current_health = player.combat.current_health;
         hud.maximum_health = player.combat.maximum_health;
         hud.current_mana = player.combat.current_mana;

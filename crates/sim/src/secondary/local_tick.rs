@@ -49,7 +49,8 @@ pub(super) fn step<W: SecondaryWorld>(
             }
         }
         Kind::PhaseBurst => actor.alpha = fround(source.alpha - (0.1_f32 as f64)).max(0.0),
-        Kind::IceBlast | Kind::StormStrike | Kind::TurnUndead => {
+        Kind::StormStrike => {}
+        Kind::IceBlast | Kind::TurnUndead => {
             actor.alpha = (actor.alpha - 0.05).max(0.0);
             actor.scale *= 1.1;
         }

@@ -8,7 +8,7 @@ behavior across native and WebAssembly builds.
 Native client saves and authority checkpoints share `solomon-storage`'s existing
 fsync/rename implementation. A separate persistent OS lock file covers every
 revision check and replacement; renaming the data file cannot release the lock.
-The client keeps complete schema52 documents and the established preference
+The client keeps complete schema53 documents and the established preference
 formats. Save I/O runs off the window thread; malformed or stale records fail
 without replacing the prior save. Browser storage still uses its original
 IndexedDB transaction. The previous Electron profile stays intact; the existing
@@ -401,7 +401,7 @@ transfer sequencing and durable save acknowledgements retain their owners.
 Autonomous hosted saves use one concrete encoder owned by the Supervisor. A
 completed authority observation freezes the world, loaded geometry, mod VM export
 and recovery claim together; only plain owned values cross to the worker. The
-worker runs the canonical schema-52 creator, normalization, signing and transport
+worker runs the canonical schema-53 creator, normalization, signing and transport
 preparation. Socket workers continue serving input, acknowledgements and heartbeat
 while that larger operation runs. The native schema-2 file writer remains separate.
 
@@ -539,6 +539,21 @@ count. This avoids treating thousands of surviving death effects as different
 records after an earlier effect retires. The version change requires matched
 host/client builds; complete saved checkpoints and private archives retain their
 existing layout.
+
+Protocol version 5 includes the Storm cloud's pending burst. Each accepted hit
+stores its three points and emits five separate strikes, one per tick, even after
+the target dies or the cloud starts fading. Each strike retains its born quality,
+two-tick ribbon geometry, six-update float32 corona fade and independent contact
+light. Source/body painters use the late region lane; contacts sort at their own
+world point with bias 50. Rendering uses the established actor-ID cosmetic stream
+and does not consume gameplay RNG. The retail constructors and complete bounded
+membership are documented in Website parity ledger 084.
+
+Player documents use schema 53 to retain pending bursts. Earlier documents drop
+obsolete one-tick Storm visuals, whose damage was already applied, and preserve
+their cloud, RNG and progression. The original one-shot recordings stay intact;
+bounded comparisons retain all gameplay/weather values and separate regressions
+cover the recovered visual ownership. Native checkpoint absence remains readable.
 
 ## Deployment identity and recovery
 

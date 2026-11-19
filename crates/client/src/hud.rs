@@ -1,8 +1,10 @@
 //! Stock College and run HUD: health and mana meters, Belt, skill quickbar and menu
 //! buttons. Simulation `hud`/`mobile_ui` kernels own its geometry and meter rules.
 mod quickbar;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests;
 
-use crate::gpu_ui::{StockAtlas, UiFrame};
+use crate::gpu_ui::{StockAtlas, UiFrame, paint_stock_text};
 use crate::hotbar::{HotbarControls, HotbarSelection};
 use solomon_sim::belt::BELT_SLOT_COUNT;
 use solomon_sim::hud::{
@@ -11,6 +13,7 @@ use solomon_sim::hud::{
     mana_hud_presentation,
 };
 use solomon_sim::mobile_ui::{MobileUiElementId, MobileUiLayoutState, default_mobile_ui_geometry};
+use solomon_sim::ui_text::{UiFontName, UiTextSpec, measure_ui_text};
 use std::cell::{Cell, RefCell};
 
 /// A HUD control the player pressed, such as a menu button, Belt slot or quickbar skill,
@@ -562,6 +565,64 @@ impl Hud {
         if self.tutorial_access.quickbar {
             self.paint_belt(frame, ui, state, size, scale, coarse)?;
         }
+        if self.mode == HudMode::Run
+            && let Some(boss) = &state.boss
+        {
+            self.paint_boss(frame, p, boss, size)?;
+        }
+        Ok(())
+    }
+
+    /// Game::RenderHud 0x005D257E: wrapper-6 recipe name and UI records 7/6.
+    fn paint_boss(
+        &self,
+        frame: &UiFrame<'_>,
+        painter: &egui::Painter,
+        boss: &solomon_sim::hud::HudBoss,
+        size: egui::Vec2,
+    ) -> Result<(), String> {
+        let width = measure_ui_text(&boss.name, UiFontName::WorldAndRoster, 1.0) as f32 + 50.0;
+        let left = (size.x - width) / 2.0;
+        let background = egui::Rect::from_min_size(
+            egui::pos2(left - 4.5, size.y - 113.0),
+            egui::vec2(width + 11.0, 20.0),
+        );
+        self.ui.paint_strip(frame, painter, 7, background, egui::Color32::WHITE)?;
+        let fill =
+            egui::Rect::from_min_size(egui::pos2(left, size.y - 109.0), egui::vec2(width, 11.0));
+        let progress = clamp_unit(boss.current_health / boss.maximum_health) as f32;
+        let clip = egui::Rect::from_min_size(fill.min, egui::vec2(width * progress, 11.0));
+        self.ui.paint_strip_clipped(frame, painter, 6, fill, clip, egui::Color32::WHITE)?;
+        for (x, y, tint) in [
+            (0.0, 1.0, 0),
+            (2.0, 1.0, 0),
+            (-2.0, 1.0, 0),
+            (0.0, 2.0, 0),
+            (2.0, 2.0, 0),
+            (-2.0, 2.0, 0),
+            (0.0, 0.0, 0xbfbfbf),
+        ] {
+            paint_stock_text(
+                frame,
+                painter,
+                &UiTextSpec {
+                    tint,
+                    ..UiTextSpec::new(
+                        UiFontName::WorldAndRoster,
+                        &boss.name,
+                        size.x as f64 / 2.0 + x,
+                        size.y as f64 - 118.0 + y,
+                    )
+                },
+            );
+        }
+        let transform = frame.ctx.layer_transform_to_global(painter.layer_id()).unwrap_or_default();
+        frame.record_rect("hud:boss", &boss.name, "progressbar", transform * background, false);
+        frame.record_value(
+            "hud:boss",
+            &format!("{} / {}", boss.current_health.max(0.0), boss.maximum_health),
+            None,
+        );
         Ok(())
     }
     fn paint_meters(

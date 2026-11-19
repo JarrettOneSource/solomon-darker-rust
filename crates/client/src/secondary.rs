@@ -15,7 +15,7 @@ use solomon_sim::hub::painter::PainterLayer;
 use solomon_sim::secondary::electric_burn::{ElectricBurnArcPlan, electric_burn_arc_plan};
 use solomon_sim::secondary::presentation::*;
 use solomon_sim::secondary::{SecondaryActorKind, SecondaryActorState, SecondaryPlayerState};
-use solomon_sim::spells::air::{AirLightningInput, AirLightningPlan, build_air_lightning_plan};
+use solomon_sim::spells::air::AirLightningPlan;
 
 use crate::courtyard::Camera;
 use crate::spells::{SpellView, StockAtlas};
@@ -206,23 +206,10 @@ impl SecondaryView {
                 enhanced_effects,
             );
             let lightning = if actor.kind == SecondaryActorKind::StormStrike {
-                Some(build_air_lightning_plan(AirLightningInput {
-                    chained: false,
-                    enhanced_effects: true,
-                    // The lightning plan takes whole ticks, so the display age is floored.
-                    age_ticks: age_ticks.floor().max(0.0) as u64,
-                    birth_tick: actor.phase as u64,
-                    endpoint: Vec2::new(
-                        actor.endpoint.x - actor.position.x,
-                        actor.endpoint.y - actor.position.y,
-                    ),
-                    id: actor.id,
-                    midpoint: Vec2::new(
-                        actor.midpoint.x - actor.position.x,
-                        actor.midpoint.y - actor.position.y,
-                    ),
-                    underpowered: false,
-                }))
+                Some(solomon_sim::secondary::storm::presentation(
+                    actor,
+                    age_ticks.floor().max(0.0) as u64,
+                ))
             } else {
                 None
             };
