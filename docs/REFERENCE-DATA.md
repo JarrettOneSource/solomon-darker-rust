@@ -59,6 +59,13 @@ implementation. Only those fields are superseded in the named weak cases;
 normal/weak/Over contact behavior. Every other recorded field, random word and
 presentation sample remains checked.
 
+The Spider recording also retains its original bytes. Its movement-scale field
+predates the recovered float32 store at Mod_Webbed's `+0x218`; the comparison
+applies only that storage boundary. `session_spider_recovery` independently
+checks the recovered factor values and public-session movement, partial recovery,
+full restraint, staff escape and saved-game continuation. Every other recorded
+Spider/Silk field remains an exact comparison.
+
 The schema-51 `current-save-continuation-goldens` recording also remains intact.
 Its comparison expects the current export schema and the seven schema-52 Boulder
 guidance fields. The four recorded rocks retain all motion and ownership values:

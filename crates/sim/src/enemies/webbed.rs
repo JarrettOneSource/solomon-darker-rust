@@ -36,7 +36,7 @@ pub fn step_webbed(mut source: WebbedState, velocity: Vec2) -> Option<WebbedStat
 
 #[must_use]
 pub fn webbed_movement_scale(source: Option<&WebbedState>) -> f64 {
-    source.map_or(1.0, |source| (1.0 - source.severity / (2.9_f32 as f64)).max(0.0))
+    source.map_or(1.0, |source| fround((1.0 - source.severity / (2.9_f32 as f64)).max(0.0)))
 }
 
 #[must_use]

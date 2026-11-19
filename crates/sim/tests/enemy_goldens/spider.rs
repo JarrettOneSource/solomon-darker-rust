@@ -329,9 +329,11 @@ fn spider_movement_silk_splines_force_fragments_and_webbed_status_match_the_webs
             web.and_then(|web| step_webbed(web, Vec2::new(1.0, 0.0)))
         };
         assert_json_equal(&webbed_json(web), &sample["state"], "webbed sequence");
+        // This intermediary recording omitted Mod_Webbed's float32 +0x218 store.
+        // Keep its original bytes; independent recovery tests cover the native values.
         assert_json_equal(
             &json!(webbed_movement_scale(web.as_ref())),
-            &sample["scale"],
+            &json!(number(sample, "scale") as f32 as f64),
             "webbed movement scale",
         );
     }

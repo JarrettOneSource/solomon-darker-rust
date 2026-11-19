@@ -33,6 +33,7 @@ use crate::enemies::model::{EnemyBrain, EnemyEvent, EnemyLifeState};
 use crate::enemies::targeting::{boneyard_enemy_actor_flags, boneyard_enemy_collision_radius};
 use crate::enemies::webbed::webbed_movement_scale;
 use crate::enemies::world::EnemyWorld;
+use crate::float::fround;
 use crate::hub::{HubWizardPlan, PLAYER_CHARACTER_RADIUS, plan_hub_wizard_tick};
 use crate::loot::{LOOT_CARRIER_PLACEMENT_RADIUS, LootDropKind};
 use crate::painter::{PainterRegistration, WorldPainterOrder};
@@ -330,11 +331,9 @@ impl BoneyardWorld {
                     .encounter
                     .as_ref()
                     .is_some_and(|encounter| encounter.player_locked(input.player.id));
-            let webbed_scale =
-                webbed_movement_scale(self.enemies.webbed_players.get(input.player.id));
             let velocity = if locked { Vec2::ZERO } else { participant.wizard.velocity };
             let movement = if locked { Vec2::ZERO } else { input.movement };
-            let scale = if locked { 0.0 } else { input.player.movement_scale * webbed_scale };
+            let scale = if locked { 0.0 } else { input.player.movement_scale };
             let mut plan = plan_hub_wizard_tick(velocity, movement, scale);
             plan.face = input.force_movement_facing;
             plans.push(plan);
@@ -376,35 +375,37 @@ impl BoneyardWorld {
         light_camera_bounds: BoneyardBounds,
         hostile_scene_paused: bool,
     ) -> BTreeMap<String, BoneyardMovementStep> {
+        let mut bodies = Vec::new();
         for (participant, plan) in participants.iter().zip(plans) {
             if !participant.input.player.collision_enabled {
                 continue;
             }
+            // PlayerWizard 0x0054B001 applies Webbed to collision travel. The raw plan
+            // still owns modifier recovery, facing, gait and attempted staff movement.
+            let webbed_scale =
+                webbed_movement_scale(self.enemies.webbed_players.get(participant.input.player.id));
+            let delta =
+                Vec2::new(fround(plan.delta.x * webbed_scale), fround(plan.delta.y * webbed_scale));
             let requested = Vec2::new(
-                participant.wizard.position.x + plan.delta.x,
-                participant.wizard.position.y + plan.delta.y,
+                participant.wizard.position.x + delta.x,
+                participant.wizard.position.y + delta.y,
             );
             for leaf in &mut self.gate_leaves {
                 if leaf.touches(requested, PLAYER_CHARACTER_RADIUS) {
-                    leaf.apply_contact(plan.delta);
+                    leaf.apply_contact(delta);
                 }
             }
+            bodies.push(player_body(
+                participant.input.player.id,
+                participant.wizard.position,
+                delta,
+                true,
+            ));
         }
         for leaf in &mut self.gate_leaves {
             leaf.step();
         }
         self.dynamic_collision.set_gate_leaves(&self.gate_leaves);
-        let mut bodies = Vec::new();
-        for (participant, plan) in participants.iter().zip(plans) {
-            if participant.input.player.collision_enabled {
-                bodies.push(player_body(
-                    participant.input.player.id,
-                    participant.wizard.position,
-                    plan.delta,
-                    true,
-                ));
-            }
-        }
         bodies.extend(self.enemy_bodies());
         if let Some(position) = self.lantern_position {
             bodies.push(boneyard_lantern_body(position));
